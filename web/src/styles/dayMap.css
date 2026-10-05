@@ -78,37 +78,6 @@
   text-wrap: pretty;
 }
 .dm-fact-alert { color: var(--coral); }
-.dm-dayclock-bar {
-  position: relative;
-  height: 6px;
-  margin-top: 8px;
-  overflow: hidden;
-  background: var(--accent-tint);
-  border-radius: 3px;
-}
-.dm-dayclock-fill {
-  display: block;
-  height: 100%;
-  background: var(--ink-2);
-  border-right: 2px solid var(--ink);
-}
-.dm-dayclock-labels {
-  position: relative;
-  display: flex;
-  justify-content: space-between;
-  margin-top: 6px;
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  font-weight: 700;
-  color: var(--ink-2);
-}
-.dm-dayclock-now {
-  position: absolute;
-  top: 0;
-  color: var(--ink);
-  white-space: nowrap;
-}
-.dm-dayclock-labels .is-covered { visibility: hidden; }
 
 @media (min-width: 1024px) {
   .dm-head {

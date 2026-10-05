@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openDayMapPage } from "./helpers/today";
 
 // Day map's honest day end (Addendum Y5; 33a, 34c, 37d). Demo mode, so
 // nothing reaches Firebase. The demo sets its focus window to 07:00–02:00, so
@@ -14,7 +15,7 @@ async function openDayMapAt(page, time, viewport = { width: 412, height: 892 }) 
   await expect(page.getByTestId("demo-btn")).toBeVisible({ timeout: 25_000 });
   await page.getByTestId("demo-btn").click();
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
-  await page.getByRole("button", { name: "Day map →" }).click();
+  await openDayMapPage(page);
   await expect(page.getByRole("heading", { name: "Day map" })).toBeVisible({ timeout: 8_000 });
   // Every open Today task is on the route (Q59).
   await expect(page.locator(".dm-stop")).toHaveCount(3);
@@ -101,7 +102,7 @@ test("the next day, moved tasks open tomorrow's route at the top, timed from its
   await expect(list.locator("[data-testid='task-row']:not(:has(.task-tag.is-now))").first()).toContainText(moved);
   await expect(list.locator("[data-testid='task-row']").first().locator(".from-yesterday")).toHaveText("FROM YESTERDAY");
   const oneThing = (await page.locator(".wall-title").innerText()).trim();
-  await page.getByRole("button", { name: "Day map →" }).click();
+  await openDayMapPage(page);
   // Q59: the one thing heads the route at NOW; the moved task comes next,
   // timed from today's start (09:00, after the one thing's 3h and a 5-minute
   // buffer), not left at midnight; FROM YESTERDAY under its title (Q7).
@@ -148,7 +149,7 @@ test("at 00:30 with a window to 02:00, the route starts now and the day has 1h30
   await openDayMapAt(page, "2024-06-15T21:00:00");
   await page.locator(".dm-back").click();
   await page.clock.setFixedTime(new Date("2024-06-16T00:30:00"));
-  await page.getByRole("button", { name: "Day map →" }).click();
+  await openDayMapPage(page);
   // 00:30 plus the 1h30m left is 02:00: the route's day ends there.
   await expect(page.locator(".dm-stop .dm-main").first()).toHaveAttribute("aria-label", /^Now to 00:\d\d, /);
   await expect(page.locator(".dm-dayend")).toContainText("DAY ENDS 02:00");
@@ -177,7 +178,7 @@ async function dayOverAt18(page, { unpin }) {
     await page.locator(".wall-title").click();
     await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
   }
-  await page.getByRole("button", { name: "Day map →" }).click();
+  await openDayMapPage(page);
   await expect(page.locator(".dm-stop.is-over")).toHaveCount(3);
 }
 

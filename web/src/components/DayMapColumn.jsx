@@ -1,38 +1,30 @@
 import React, { useState } from "react";
-import { dayProgress, formatClock24, formatSpan } from "../utils/dayMapPlan";
-import { currentDayMinutes, getEstimate, getTaskId, useDayRoute } from "../hooks/useDayRoute";
+import { formatClock24, formatSpan, formatSpanCaps } from "../utils/dayMapPlan";
+import { currentDayMinutes, getEstimate, getTaskId, routeCut } from "../hooks/useDayRoute";
 import { eventAsks } from "../utils/fixedTime";
 import { laterTodaySlot } from "../utils/dayMapBreaks";
 import { mergeWindowSpans } from "../utils/focusWindows";
-import DayClockBar from "./DayClockBar";
 import DayMapFrom from "./DayMapFrom";
 import DidItHappen from "./DidItHappen";
 import FixTimeSheet from "./FixTimeSheet";
 import { IconLock, IconPin } from "./ui/icons";
 import "../styles/dayMap.css";
 
-// Today's Day map column (54a/c/e): how far over the day is, From, the day
-// clock, the route's stops (every open Today task, Q59) with the one thing at
-// NOW and the DAY ENDS line where it falls, and "Move N to tomorrow". A stop
-// opens that task; the heading opens the Day map page.
-export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpenTask, onDone, onMoveToTomorrow, covered = false }) {
+// Today's Day map view (Q59, 70b): the same list against the clock, behind
+// the List | Day map switch. From (with the Day map page a link away), the
+// route's stops (every open Today task) with the one thing at NOW, the DAY
+// ENDS line where it falls, and Won't fit today with Move N to tomorrow and
+// Park N. A stop opens that task. The route is Today's (useDayRoute there).
+export default function DayMapColumn({ route, onOpenDayMap, onOpenTask, onDone, onMoveToTomorrow, onPark }) {
   const {
     windows, todayStr, scheduledTasks, anchorMinutes, rows, routeTasks, plan,
     setAnchor, applyAndSave, breaks,
-  } = useDayRoute({ payload, savePayload });
+  } = route;
   const [picking, setPicking] = useState(null); // "Did it happen?" → Pick a time…
 
-  const progress = dayProgress(new Date(), windows);
   const nowMins = currentDayMinutes(windows);
   const overIndex = plan.overIndex;
-  const fitting = overIndex === -1 ? routeTasks : routeTasks.slice(0, overIndex);
-  const lastFitting = fitting[fitting.length - 1];
-  // Free from the later of the last stop's end and the route's start: a
-  // fixed stop the day has passed ends before now (Codex review of #421).
-  const free = lastFitting ? plan.dayEnd - Math.max(lastFitting.routeEndMinutes, plan.dayEnd - plan.dayLeft) : 0;
-  const wontFitMinutes = plan.wontFit.reduce((sum, t) => sum + getEstimate(t), 0);
-  // The one thing is never moved from here: a session on it is Today's to end.
-  const movable = plan.wontFit.filter(t => !t.isNowFocus);
+  const { spare, wontFitMinutes, movable } = routeCut(routeTasks, plan);
   const routeIndex = new Map(routeTasks.map((t, i) => [getTaskId(t), i]));
   const firstOnTime = rows.find(r => r.kind === "stop" && !r.late);
   // The line falls before the first row of the first stop that won't fit,
@@ -111,25 +103,11 @@ export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpe
   };
 
   return (
-    // An open task's drawer takes this column's place (52): hidden, not gone,
-    // so Esc can hand focus back to the stop that opened it.
-    <aside className={`today-daymap${covered ? " is-covered" : ""}`} aria-label="Day map" data-flip-column="">
-      <div className="tdm-head">
-        <h2 className="tdm-heading">
-          <button type="button" className="tdm-open" onClick={onOpenDayMap}>Day map</button>
-        </h2>
-        {scheduledTasks.length > 0 && (
-          plan.overBy > 0
-            ? <span className="tdm-status is-over">{formatSpan(plan.overBy)} over</span>
-            : <span className="tdm-status">{formatSpan(plan.planned)} / {formatSpan(plan.dayLeft)}</span>
-        )}
+    <div className="today-daymap" role="region" aria-label="Day map">
+      <div className="tdm-controls">
+        <DayMapFrom anchorMinutes={anchorMinutes} onChangeAnchor={setAnchor} windows={windows} />
+        {onOpenDayMap && <button type="button" className="tdm-page-link" onClick={onOpenDayMap}>Day map page ›</button>}
       </div>
-      {scheduledTasks.length > 0 && (
-        <div className="tdm-controls">
-          <DayMapFrom anchorMinutes={anchorMinutes} onChangeAnchor={setAnchor} windows={windows} />
-        </div>
-      )}
-      {progress && <div className="tdm-clock"><DayClockBar progress={progress} /></div>}
 
       {scheduledTasks.length === 0 ? (
         <p className="tdm-empty">Nothing on Today yet.</p>
@@ -139,20 +117,27 @@ export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpe
             {rows.filter(r => !rowIsOver(r)).map(row)}
           </ol>
           <p className="tdm-dayend">
-            <span>DAY ENDS {formatClock24(plan.dayEnd)}{free > 0 ? ` · ${formatSpan(free)} FREE` : ""}</span>
+            <span>DAY ENDS {formatClock24(plan.dayEnd)}{spare > 0 && plan.wontFit.length === 0 ? ` · ${formatSpanCaps(spare)} SPARE` : ""}</span>
           </p>
           {plan.wontFit.length > 0 && (
-            <>
-              <h3 className="tdm-wontfit">WON’T FIT TODAY · {formatSpan(wontFitMinutes)}</h3>
+            <section className="tdm-wontfit-block" aria-label="Won't fit today">
+              <h3 className="tdm-wontfit">Won’t fit today <span className="tdm-wontfit-sum">{plan.wontFit.length} · {formatSpanCaps(wontFitMinutes)}</span></h3>
               <ol className="tdm-route" aria-label="Won't fit today">
                 {rows.filter(rowIsOver).map(row)}
               </ol>
-            </>
-          )}
-          {movable.length > 0 && (
-            <button type="button" className="tdm-move" onClick={() => onMoveToTomorrow(movable.map(getTaskId))}>
-              Move {movable.length} to tomorrow
-            </button>
+              {movable.length > 0 && (
+                <div className="tdm-wontfit-actions">
+                  <button type="button" className="tdm-wontfit-btn" onClick={() => onMoveToTomorrow(movable.map(getTaskId))}>
+                    Move {movable.length} to tomorrow
+                  </button>
+                  {onPark && (
+                    <button type="button" className="tdm-wontfit-btn" onClick={() => onPark(movable.map(getTaskId))}>
+                      Park {movable.length}
+                    </button>
+                  )}
+                </div>
+              )}
+            </section>
           )}
         </>
       )}
@@ -175,6 +160,6 @@ export default function DayMapColumn({ payload, savePayload, onOpenDayMap, onOpe
           onClose={() => setPicking(null)}
         />
       )}
-    </aside>
+    </div>
   );
 }

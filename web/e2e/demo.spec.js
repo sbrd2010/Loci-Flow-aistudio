@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openDayMapPage } from "./helpers/today";
 
 // All tests run against demo mode — no Firebase auth required.
 // The sign-in screen shows a loading overlay while Firebase Auth initialises,
@@ -186,7 +187,7 @@ test("10. Demo banner is visible and clearly says data is not saved", async ({ p
 
 async function openDayMapWithTasks(page) {
   await enterDemo(page);
-  await page.getByRole("button", { name: "Day map →" }).click();
+  await openDayMapPage(page);
   await expect(page.locator(".day-map-page")).toBeVisible({ timeout: 8_000 });
 }
 

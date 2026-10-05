@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test";
 
-// 54a, 54e: from 1600px the cap is 1760px (2240px from 2200px). With the
-// list shown Today is task 480 · list · Day map 520; with it hidden, the task
-// and a 620px Day map. Below 1600 the list and the Day map trade places.
+// 54a, 54e: from 1600px the cap is 1760px (2240px from 2200px). Q59: no
+// Day map column of its own; the List | Day map switch shows the Day map in
+// the list's place, at every size.
 
 async function enterDemo(page, viewport, time = "2024-06-15T11:35:00") {
   await page.addInitScript(() => {
@@ -17,79 +17,30 @@ async function enterDemo(page, viewport, time = "2024-06-15T11:35:00") {
   await expect(page.getByTestId("today-tasks-list")).toBeVisible();
 }
 
-const column = (page) => page.getByRole("complementary", { name: "Day map" });
+const column = (page) => page.getByRole("region", { name: "Day map" });
 
-// Every open Today task is on the route (Q59): the column lays it out.
+// The Day map view (Q59), with every open Today task on its route.
 async function routeReady(page) {
+  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Day map", exact: true }).click();
   await expect(column(page).locator("button.tdm-stop")).toHaveCount(3);
 }
 
-test("1680: task 480 · list · Day map 520; hiding the list widens the Day map to 620 and keeps it (54a, 54e)", async ({ page }) => {
+test("1680: no third column; the switch shows the Day map in the list's place, and keeps it (Q59)", async ({ page }) => {
   await enterDemo(page, { width: 1680, height: 1000 });
-  await expect(column(page)).toBeVisible();
-
-  const band = await page.locator(".wall-goal").boundingBox();
-  const list = await page.locator("section.today-list").boundingBox();
-  const map = await column(page).boundingBox();
-  expect(Math.round(band.width)).toBe(480);
-  expect(Math.round(map.width)).toBe(520);
-  expect(list.x).toBeGreaterThan(band.x + band.width);
-  expect(map.x).toBeGreaterThan(list.x + list.width);
-  expect(map.x + map.width).toBeLessThanOrEqual(1680 - 40);
-
+  await expect(column(page)).toHaveCount(0);
   await routeReady(page);
+  await expect(page.getByTestId("today-tasks-list")).toHaveCount(0);
   const stops = column(page).getByRole("list", { name: "Today's route" }).getByRole("button");
-  await expect(stops).toHaveCount(3);
   await expect(stops.first()).toHaveAccessibleName(/^Now to /);
-  // From 11:35 exactly (Q35) the route can end on the hour: "13h FREE".
-  await expect(column(page).locator(".tdm-dayend")).toHaveText(/^DAY ENDS 02:00 · \d+h(\d{2}m)? FREE$/);
-
-  // Hiding the list keeps the column (54a): no copy fades out, and it takes
-  // 620px. The toggle runs in the keydown, so a copy would be there at once.
-  const ghosts = await page.evaluate(() => {
-    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "l", bubbles: true }));
-    return document.querySelectorAll("body > .today-daymap[aria-hidden='true']").length;
-  });
-  expect(ghosts).toBe(0);
-  await expect(page.locator("section.today-list")).toBeHidden();
-  await expect(column(page)).toBeVisible();
-  await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
-  expect(Math.round((await column(page).boundingBox()).width)).toBe(620);
-  // Showing the list brings it in; the column, already there, doesn't ride in.
-  await page.keyboard.press("l");
-  await expect(page.locator("section.today-list")).toBeVisible();
-  const delays = await page.evaluate(() => ({
-    list: document.querySelector("section.today-list").getAnimations().map(a => a.effect.getTiming().delay),
-    column: document.querySelector(".today-daymap:not([aria-hidden])").getAnimations().map(a => a.effect.getTiming().delay),
-  }));
-  expect(delays.list).toContain(60);
-  expect(delays.column).toEqual([]);
-
-  // The heading opens the Day map itself.
-  await column(page).getByRole("button", { name: "Day map" }).click();
+  // Nothing past the line: the time to spare.
+  await expect(column(page).locator(".tdm-dayend")).toHaveText(/^DAY ENDS 02:00 · \d+H(\d{2}M)? SPARE$/);
+  // The view is kept: back on Today after the Day map page, still the map.
+  await column(page).getByRole("button", { name: "Day map page ›" }).click();
   await expect(page.locator(".day-map-page")).toBeVisible();
-});
-
-// 54c: on a laptop L swaps the list and the Day map column. The column
-// leaves as a fading copy, as the list does, and rides back in 30ms behind
-// the list's timing.
-test("below 1600 the list and the Day map column trade places (L)", async ({ page }) => {
-  await enterDemo(page, { width: 1599, height: 1000 });
-  await expect(page.getByTestId("today-tasks-list")).toBeVisible();
-  await expect(column(page)).toHaveCount(0);
-  await page.locator("body").click({ position: { x: 5, y: 300 } });
-  await page.keyboard.press("l");
-  await expect(page.locator("section.today-list")).toBeHidden();
+  await page.locator(".dm-back").click();
   await expect(column(page)).toBeVisible();
-  expect(await page.evaluate(() => document.querySelector(".today-daymap:not([aria-hidden])").getAnimations().map(a => a.effect.getTiming().delay))).toEqual([90]);
-  await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
-  const ghosts = await page.evaluate(() => {
-    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "l", bubbles: true }));
-    return document.querySelectorAll("body > .today-daymap[aria-hidden='true']").length;
-  });
-  expect(ghosts).toBe(1);
+  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "List" }).click();
   await expect(page.getByTestId("today-tasks-list")).toBeVisible();
-  await expect(column(page)).toHaveCount(0);
 });
 
 test("2130: the content stops at 1760px and the margins take the rest", async ({ page }) => {
@@ -97,9 +48,6 @@ test("2130: the content stops at 1760px and the margins take the rest", async ({
   const wall = await page.locator(".today-layout").boundingBox();
   expect(Math.round(wall.width)).toBeLessThanOrEqual(1760);
   expect(Math.round(wall.width)).toBeGreaterThanOrEqual(1740);
-  // 1760 − 480 − 520 − two 36px gaps: under 720px, about 72 characters a row.
-  const list = await page.locator("section.today-list").boundingBox();
-  expect(Math.round(list.width)).toBe(688);
   const brand = await page.getByRole("banner").getByRole("button", { name: "Loci" }).boundingBox();
   expect(Math.abs(brand.x - wall.x)).toBeLessThan(2);
 });
@@ -120,21 +68,12 @@ test("2400: the content stops at 2240px, and the list-hidden title is one step u
 });
 
 // Codex review of #422: at the 2240px cap the header keeps the content's
-// left edge, and the drawer takes the Day map column's place, clear of the list.
-test("2400: the header and the drawer follow the 2240px cap", async ({ page }) => {
+// left edge.
+test("2400: the header follows the 2240px cap", async ({ page }) => {
   await enterDemo(page, { width: 2400, height: 1200 });
   const wall = await page.locator(".today-layout").boundingBox();
   const brand = await page.getByRole("banner").getByRole("button", { name: "Loci" }).boundingBox();
   expect(Math.abs(brand.x - wall.x)).toBeLessThan(2);
-  await routeReady(page);
-  const columnBox = await column(page).boundingBox();
-  await column(page).getByRole("list", { name: "Today's route" }).getByRole("button").nth(1).click();
-  const drawer = page.locator(".task-detail.is-drawer");
-  await expect(drawer).toBeVisible();
-  const listBox = await page.locator("section.today-list").boundingBox();
-  const drawerBox = await drawer.boundingBox();
-  expect(drawerBox.x).toBeGreaterThanOrEqual(listBox.x + listBox.width);
-  expect(Math.round(drawerBox.x)).toBe(Math.round(columnBox.x));
 });
 
 test("won't fit: Move N to tomorrow moves the stops past the day's end, with Today's Undo", async ({ page }) => {
@@ -142,56 +81,49 @@ test("won't fit: Move N to tomorrow moves the stops past the day's end, with Tod
   // at 02:00, so it won't fit.
   await enterDemo(page, { width: 1680, height: 1000 }, "2024-06-16T01:00:00");
   await routeReady(page);
-  await expect(column(page).locator(".tdm-status")).toHaveText("25m over");
-  await expect(column(page).getByRole("heading", { name: /^WON’T FIT TODAY · 25m$/ })).toBeVisible();
+  await expect(column(page).getByRole("heading", { name: /^Won’t fit today 1 · 25 MIN$/ })).toBeVisible();
   const late = column(page).getByRole("list", { name: "Won't fit today" }).getByRole("button");
   await expect(late).toHaveCount(1);
   await expect(late).toHaveAccessibleName(/, after the day ends$/);
   const title = (await late.locator(".tdm-title").textContent()).trim();
 
-  const list = page.getByTestId("today-tasks-list");
   await column(page).getByRole("button", { name: "Move 1 to tomorrow" }).click();
   await expect(page.locator(".undo-toast")).toContainText("1 task moved to tomorrow");
   await expect(column(page).getByRole("button", { name: /Move \d+ to tomorrow/ })).toHaveCount(0);
-  await expect(list.locator(".today-task-row", { hasText: title })).toHaveCount(0);
+  await expect(column(page).getByText(title)).toHaveCount(0);
 
   await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
   await expect(column(page).getByRole("button", { name: "Move 1 to tomorrow" })).toBeVisible();
-  await expect(list.getByText(title, { exact: true })).toBeVisible();
+  await expect(column(page).getByText(title)).toBeVisible();
+
+  // Q59 (70d): Park 1, with Undo; the line then shows the time to spare.
+  await column(page).getByRole("button", { name: "Park 1" }).click();
+  await expect(page.locator(".undo-toast")).toContainText("1 parked");
+  await expect(column(page).getByText(title)).toHaveCount(0);
+  await expect(column(page).locator(".tdm-dayend")).toContainText("SPARE");
+  await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
+  await expect(column(page).getByText(title)).toBeVisible();
 });
 
-test("a stop opens its task in a drawer in the map column's place, clear of the list; Esc goes back to the stop", async ({ page }) => {
+test("a stop opens its task in the drawer; Esc goes back to the stop", async ({ page }) => {
   await enterDemo(page, { width: 1680, height: 1000 });
   await routeReady(page);
   const stop = column(page).getByRole("list", { name: "Today's route" }).getByRole("button").nth(1);
-  const columnBox = await column(page).boundingBox();
   await stop.click();
   const drawer = page.locator(".task-detail.is-drawer");
   await expect(drawer).toBeVisible();
-  // 52, 54e: the drawer takes the column's place and its 520px.
-  await expect(column(page)).toBeHidden();
-  const listBox = await page.locator("section.today-list").boundingBox();
-  const drawerBox = await drawer.boundingBox();
-  expect(drawerBox.x).toBeGreaterThanOrEqual(listBox.x + listBox.width);
-  expect(Math.round(drawerBox.x)).toBe(Math.round(columnBox.x));
-  expect(Math.round(drawerBox.width)).toBe(520);
-
   await page.keyboard.press("Escape");
   await expect(drawer).toHaveCount(0);
-  await expect(column(page)).toBeVisible();
   await expect(stop).toBeFocused();
 });
 
-test("1600: the drawer takes the column's 520px, clear of the list, its footer on one row", async ({ page }) => {
+test("1600: the drawer's footer sits on one row", async ({ page }) => {
   await enterDemo(page, { width: 1600, height: 900 });
   await routeReady(page);
   await column(page).getByRole("list", { name: "Today's route" }).getByRole("button").nth(1).click();
   const drawer = page.locator(".task-detail.is-drawer");
   await expect(drawer).toBeVisible();
-  const listBox = await page.locator("section.today-list").boundingBox();
   const drawerBox = await drawer.boundingBox();
-  expect(Math.round(drawerBox.width)).toBe(520);
-  expect(drawerBox.x).toBeGreaterThanOrEqual(listBox.x + listBox.width);
   const actions = await drawer.locator(".detail-action").evaluateAll(els => els.map(el => el.getBoundingClientRect()).map(r => ({ top: r.top, right: r.right })));
   // 52b: three text buttons (Tomorrow · Park · Delete; Done is the circle).
   expect(actions).toHaveLength(3);
@@ -205,7 +137,6 @@ test("1600: the drawer takes the column's 520px, clear of the list, its footer o
 
 test("a stop the Must-do filter hides opens anyway, the filter stays; Show all, and ↑/↓ into the filtered list", async ({ page }) => {
   await enterDemo(page, { width: 1680, height: 1000 });
-  await routeReady(page);
   const list = page.getByTestId("today-tasks-list");
   const drawer = page.locator(".task-detail.is-drawer");
   const kicker = drawer.locator(".detail-kicker").first();
@@ -216,6 +147,7 @@ test("a stop the Must-do filter hides opens anyway, the filter stays; Show all, 
   const mustDo = page.getByRole("button", { name: /^Must-do · \d+$/ });
   await mustDo.click();
   await expect(mustDo).toHaveAttribute("aria-pressed", "true");
+  await routeReady(page);
 
   const hidden = column(page).getByRole("button", { name: /25-minute deep work block/ });
   await hidden.click();
@@ -249,7 +181,7 @@ test("made the one thing, a task moves to NOW on the route; the rest flows after
   const firstBefore = (await stops.first().locator(".tdm-title").textContent()).trim();
   const lastTitle = (await stops.last().locator(".tdm-title").textContent()).trim();
 
-  await page.getByTestId("today-tasks-list").getByText(lastTitle, { exact: true }).click();
+  await stops.last().click();
   await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
   await expect(page.locator(".wall-title")).toHaveText(lastTitle);
   await expect(stops.first()).toHaveAccessibleName(new RegExp(`^Now to \\d\\d:\\d\\d, ${lastTitle}, the one thing`));
@@ -259,4 +191,22 @@ test("made the one thing, a task moves to NOW on the route; the rest flows after
   await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
   await expect(stops.first().locator(".tdm-title")).toHaveText(new RegExp(`^${firstBefore.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
   await expect(stops.last().locator(".tdm-title")).toHaveText(lastTitle);
+});
+
+// Q59 (70a): the List keeps the Day ends line, the rows past it muted, then
+// one line that sorts them in the Day map.
+test("the List shows where the day ends; the row past it is muted, and Sort in Day map › switches the view", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 900 }, "2024-06-16T01:00:00");
+  const list = page.getByTestId("today-tasks-list");
+  const line = list.locator(".today-dayend");
+  await expect(line).toHaveText("DAY ENDS 02:00");
+  await expect(list.locator(".today-row-over")).toHaveCount(1);
+  // The muted row comes after the line.
+  const [lineBox, overBox] = await Promise.all([line.boundingBox(), list.locator(".today-row-over").boundingBox()]);
+  expect(overBox.y).toBeGreaterThan(lineBox.y);
+  const sort = list.locator(".today-wontfit-line");
+  await expect(sort).toHaveText(/^1 won’t fit · 25 min · Sort in Day map ›$/);
+  await sort.getByRole("button", { name: "Sort in Day map ›" }).click();
+  await expect(column(page).getByRole("button", { name: "Move 1 to tomorrow" })).toBeVisible();
+  await expect(column(page).getByRole("button", { name: "Park 1" })).toBeVisible();
 });

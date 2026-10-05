@@ -34,19 +34,51 @@
   gap: 8px 14px;
   margin-left: auto;
 }
-.today-list-link {
-  min-height: 44px;
-  padding: 0;
+/* Q59: List | Day map, a segmented switch (42px; the chosen one tinted,
+   no fill). */
+.today-view-switch {
+  display: inline-flex;
+  align-self: flex-start;
+  margin: 4px 0 8px;
+  padding: 2px;
+  border: 1px solid var(--control-edge);
+  border-radius: 8px;
+}
+.today-view-opt {
+  min-width: 88px;
+  min-height: 42px;
+  padding: 0 14px;
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 700;
-  color: var(--ink);
+  color: var(--ink-2);
   background: none;
   border: 0;
+  border-radius: 6px;
   cursor: pointer;
-  text-decoration: underline;
-  text-decoration-color: var(--accent);
-  text-underline-offset: 4px;
+}
+.today-view-opt[aria-pressed="true"] { color: var(--ink); background: var(--accent-tint); }
+.today-view-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Q59 (70a): where the day runs out, as the Day map has it; the rows past
+   it muted, then one line to sort them in the Day map. */
+.today-dayend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 4px;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--ink);
+}
+.today-dayend::after { content: ""; flex: 1; border-top: 1.5px solid var(--control-edge); }
+.today-row-over .task-title-text,
+.today-row-over .task-row-meta { color: var(--ink-2); }
+.today-wontfit-line {
+  margin: 8px 0 4px;
+  font-size: 0.875rem;
+  color: var(--ink-2);
 }
 .today-list-add,
 .today-list-hide {
@@ -135,6 +167,8 @@
   gap: 0;
   padding: 0 16px 8px;
 }
+.today-list .today-daymap { padding: 0 16px 8px; }
+.today-list .today-view-switch { margin-inline: 16px; }
 .today-list-empty {
   margin: 0;
   padding: 16px 0;
@@ -202,9 +236,10 @@
   }
   /* The Day map link moves under the task (51a) — only when there is one:
      the empty and done walls have no link of their own. */
-  .today-list.is-sheet .today-list-link,
   .today-list-add { display: none; }
-  .today-list .tasks-list { padding: 0 22px 8px; }
+  .today-list .tasks-list,
+  .today-list .today-daymap { padding: 0 22px 8px; }
+  .today-list .today-view-switch { margin-inline: 22px; }
 
   .today-list-addbar {
     position: sticky;

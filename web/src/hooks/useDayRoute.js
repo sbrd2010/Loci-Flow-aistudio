@@ -105,6 +105,24 @@ export function routeIsContiguous(route, breaks = []) {
   return route.every(t => starts.get(t) === Number(t.dayMapStartMinutes));
 }
 
+// Where the route meets the day's end (Q59): the time to spare after the
+// last stop that fits, what won't fit and its minutes, and which of those
+// can be moved or parked (never the one thing: a session on it is Today's
+// to end).
+export function routeCut(routeTasks, plan) {
+  const fitting = plan.overIndex === -1 ? routeTasks : routeTasks.slice(0, plan.overIndex);
+  const last = fitting[fitting.length - 1];
+  // From the later of the last stop's end and the route's start: a fixed
+  // stop the day has passed ends before now (Codex review of #421).
+  const spare = last ? plan.dayEnd - Math.max(last.routeEndMinutes, plan.dayEnd - plan.dayLeft) : 0;
+  return {
+    spare,
+    wontFitMinutes: plan.wontFit.reduce((sum, t) => sum + getEstimate(t), 0),
+    overIds: new Set(plan.wontFit.map(getTaskId)),
+    movable: plan.wontFit.filter(t => !t.isNowFocus),
+  };
+}
+
 export function applyReflow(allTasks, reflowed) {
   const map = new Map(reflowed.map(t => [getTaskId(t), t]));
   return allTasks.map(t => map.has(getTaskId(t)) ? map.get(getTaskId(t)) : t);

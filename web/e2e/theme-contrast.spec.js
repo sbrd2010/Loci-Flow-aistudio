@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openDayMapPage } from "./helpers/today";
 import { openRung } from "./helpers/plan.js";
 import { paintedBackdrop, contrastRatio, parseRgb } from "./helpers/pixels.js";
 import { THEME_CHOICES } from "../src/utils/theme.js";
@@ -108,10 +109,10 @@ for (const theme of THEMES) {
 
     // The list (41a/37b): its quietest text, on the list's own ground.
     for (const [loc, what] of [
-      [page.locator(".today-upnext-hint"), "Up next hint"],
+      [page.locator(".today-view-opt[aria-pressed='false']"), "unselected view"],
       [page.locator(".today-seg-opt[aria-pressed='false']"), "unselected segment"],
       [page.locator(".task-row-priority"), "row priority tag"],
-      [page.locator(".today-list-link"), "Day map link"],
+      [page.locator(".today-dayend"), "Day ends line"],
     ]) {
       await assertLegible(loc.first(), what, theme);
     }
@@ -126,7 +127,7 @@ for (const theme of THEMES) {
     await toast.locator(".undo-toast-btn").click();
     await expect(toast).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Day map →" }).click();
+    await openDayMapPage(page);
 
     // Day map (50f, 52d): its smallest text — the route's times and
     // lengths, and the red DAY ENDS line on the page's ground.

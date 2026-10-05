@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openDayMapPage } from "./helpers/today";
 
 // A Day map stop opens the task sheet (52; the user's pick over the inline
 // panel): the sheet on a phone, the drawer from 1024px, with Fix time in its
@@ -14,7 +15,7 @@ async function openDayMap(page, viewport) {
   await expect(page.getByTestId("demo-btn")).toBeVisible({ timeout: 25_000 });
   await page.getByTestId("demo-btn").click();
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
-  await page.getByRole("button", { name: "Day map →" }).click();
+  await openDayMapPage(page);
   await expect(page.locator(".day-map-page")).toBeVisible();
 }
 
@@ -149,7 +150,7 @@ test("the sheet's estimate is the stop's duration for a task with no estimate", 
   await sheet(page).getByRole("button", { name: /^Estimate/ }).click();
   await sheet(page).getByRole("radio", { name: "None", exact: true }).click();
   await sheet(page).getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("button", { name: "Day map →" }).click();
+  await openDayMapPage(page);
 
   const stop = page.locator(".dm-stop", { hasText: title });
   await expect(stop.locator(".dm-dur")).toHaveText("25m");
@@ -178,7 +179,7 @@ test("moving the one thing off Today from the sheet ends its focus session", asy
   const floating = page.getByRole("region", { name: "Focus session" });
   await expect(floating).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Day map →" }).click();
+  await openDayMapPage(page);
   await expect(floating.getByRole("button", { name: /^Back to focus/ })).toBeVisible();
   await page.locator(".dm-stop .dm-main", { hasText: wallTitle }).click();
   await sheet(page).getByRole("button", { name: /^Horizon/ }).click();
@@ -209,7 +210,7 @@ test("a stop moved off Today and back joins the route again, timed with the rest
   await page.locator(".plan-row", { hasText: before[1] }).click();
   await sheet(page).getByRole("button", { name: "Move to Today" }).click();
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
-  await page.getByRole("button", { name: "Day map →" }).click();
+  await openDayMapPage(page);
 
   // Its slot is the end of Today's list, wherever that falls in the order;
   // it is on the route again, and no two stops share a start.
@@ -238,7 +239,7 @@ test("the one thing moved off Today from its stop's sheet ends its session and l
   const floating = page.getByRole("region", { name: "Focus session" });
   await expect(floating).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Day map →" }).click();
+  await openDayMapPage(page);
   await expect(floating.getByRole("button", { name: /^Back to focus/ })).toBeVisible();
   const before = await titles(page);
   await page.locator(".dm-stop .dm-main", { hasText: wallTitle }).click();

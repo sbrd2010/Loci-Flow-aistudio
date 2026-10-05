@@ -25,6 +25,12 @@ describe("parked", () => {
     expect(back).toMatchObject({ isParked: true, horizonLevel: "month", orderIndex: 1, deferredUntil: "2026-10-02" });
   });
 
+  it("lets go of its old stop, so it joins the route at the end (Q59)", () => {
+    const tasks = [T("p", { isParked: true, dayMapDate: "2026-10-04", dayMapOrder: -1, dayMapStartMinutes: 600, dayMapPeriod: "morning" })];
+    const p = restoreParked(tasks, "p", 9).tasks[0];
+    expect([p.dayMapDate, p.dayMapOrder, p.dayMapStartMinutes, p.dayMapPeriod]).toEqual([undefined, undefined, undefined, undefined]);
+  });
+
   it("undo keeps the parked date, also for a task parked before parkedAt", () => {
     const { tasks: next, before } = restoreParked([T("p", { isParked: true, horizonLevel: "week", lastUpdated: 111 })], "p", 999);
     expect(undoRestoreParked(next, "p", before, 1000)[0].parkedAt).toBe(111);

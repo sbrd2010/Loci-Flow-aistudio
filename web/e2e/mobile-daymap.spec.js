@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openDayMapPage } from "./helpers/today";
 
 // Mobile reliability smoke tests run in demo mode so they never mutate Firebase.
 // They protect the small-screen Day Map path before v0.1 is shared with 5-10 testers.
@@ -27,9 +28,8 @@ async function enterDemo(page, viewport) {
 }
 
 async function openDayMap(page) {
-  const dayMapButton = page.getByRole("button", { name: "Day map →" });
-  await expect(dayMapButton).toBeVisible({ timeout: 8_000 });
-  await dayMapButton.click();
+  await expect(page.getByRole("group", { name: "View" })).toBeVisible({ timeout: 8_000 });
+  await openDayMapPage(page);
   await expect(page.getByRole("heading", { name: "Day map" })).toBeVisible({ timeout: 8_000 });
 }
 
@@ -87,7 +87,7 @@ test("reliability: Day Map route persists after closing and reopening", async ({
   await expectVisibleRouteTimeLabels(page);
 
   await page.getByRole("button", { name: "Back to Today" }).click();
-  await expect(page.getByRole("button", { name: "Day map →" })).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByRole("group", { name: "View" })).toBeVisible({ timeout: 5_000 });
 
   await openDayMap(page);
   await routeReady(page);
