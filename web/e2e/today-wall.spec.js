@@ -961,6 +961,30 @@ test("the front picker opened from the swipe gives focus to the row, not the hid
   expect(title.length).toBeGreaterThan(0);
 });
 
+// Codex review of #478: on a real touch phone ((hover: none)) every row is
+// drag-anywhere, and the swipe must still work. Real touch events, so the
+// drag's long-press listener sees the gesture too.
+test.describe("on a touch phone", () => {
+  test.use({ hasTouch: true, isMobile: true });
+  test("mobile reliability: drag-anywhere rows still swipe right to Done", async ({ page, context }) => {
+    await enterDemo(page);
+    expect(await page.evaluate(() => matchMedia("(hover: none)").matches)).toBe(true);
+    await openSheet(page);
+    await page.locator(".today-sheet-grabber").click();
+    await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
+    const row = listRow(page, "10-minute walk");
+    const r = await row.boundingBox();
+    const cdp = await context.newCDPSession(page);
+    const y = r.y + Math.min(24, r.height / 2);
+    let x = r.x + r.width / 2 - 70;
+    const touch = (type) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: type === "touchEnd" ? [] : [{ x, y }] });
+    await touch("touchStart");
+    for (let i = 0; i < 7; i++) { x += 20; await touch("touchMove"); await page.waitForTimeout(16); }
+    await touch("touchEnd");
+    await expect(page.getByRole("status").filter({ hasText: "Marked done: 10-minute walk" })).toBeVisible();
+  });
+});
+
 test("mobile reliability: a gesture on the drag grip is never a swipe", async ({ page }) => {
   await enterDemoWithPeek(page);
   await page.locator(".today-sheet-grabber").click();
