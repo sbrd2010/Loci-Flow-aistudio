@@ -85,7 +85,7 @@
 .today-list-hide {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 0;
   min-height: 36px;
   padding: 0 14px;
   font: inherit;
@@ -177,7 +177,11 @@
 /* 72: below 1280 the header drops "N DONE" and the switch narrows (150),
    to keep one row. */
 @media (min-width: 840px) and (max-width: 1279px) {
-  .today-list-count { display: none; }
+  .today-list-count,
+  .today-list-add-word { display: none; }
+  .today-list-add { padding: 0 12px; }
+  .today-list .today-list-head { padding-inline: 16px; gap: 6px; }
+  .today-list-head-end { gap: 6px; }
   .today-view-opt { min-width: 0; padding: 0 10px; }
   .today-list-head-end { gap: 8px; }
 }

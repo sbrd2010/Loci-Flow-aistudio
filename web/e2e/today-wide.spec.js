@@ -288,3 +288,22 @@ test("the list hides with an arrow and comes back from the right edge's arrow; +
   await show.click();
   await expect(page.locator(".tasks-section")).toBeVisible();
 });
+
+// 72: the task side from 840px: the goal in one line, NOW · UNTIL, the step
+// as circle · text · "1 / N", one row of buttons, I'm stuck · More, and the
+// footer's "N OF M DONE TODAY".
+test("72: the task side reads goal · NOW · UNTIL · title · step · buttons, and the footer counts the day", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 900 });
+  const goal = page.locator(".wall-goal");
+  expect(Math.round((await goal.boundingBox()).height)).toBe(44);
+  await expect(page.locator(".wall-kicker-wide")).toHaveText(/^NOW · UNTIL \d\d:\d\d$/);
+  await expect(page.locator(".wall-step-count")).toHaveText(/^1 \/ \d+$/);
+  await expect(page.locator(".wall-first-step-label")).toBeHidden();
+  const [start, done] = await Promise.all([page.locator(".wall-start").boundingBox(), page.locator(".wall-action", { hasText: "Mark done" }).boundingBox()]);
+  expect(done.x).toBeGreaterThan(start.x + start.width);
+  await expect(page.locator(".wall-quiet").getByRole("button", { name: "More" })).toBeVisible();
+  await expect(page.locator(".wall-daymap")).toBeHidden();
+  await expect(page.locator(".today-foot-done")).toHaveText(/^0 OF \d+ DONE TODAY$/);
+  await page.getByTestId("today-tasks-list").getByTestId("task-checkbox").first().click();
+  await expect(page.locator(".today-foot-done")).toHaveText(/^1 OF \d+ DONE TODAY$/);
+});

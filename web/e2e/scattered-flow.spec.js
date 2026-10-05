@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openDayMapPage } from "./helpers/today";
 
 // Feeling scattered (45c). Runs in demo mode so it never touches Firebase.
 //
@@ -16,7 +17,6 @@ async function enterDemo(page) {
   await page.addInitScript(() => {
     try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ }
   });
-  // 58.1 takes the scattered link off the phone's Today; it stays from 840px.
   await page.setViewportSize({ width: 900, height: 900 });
   await page.goto("/");
   await page.clock.setFixedTime(new Date("2024-06-15T10:00:00"));
@@ -25,12 +25,13 @@ async function enterDemo(page) {
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
 }
 
-// 52: Plan's "I'm scattered" is gone; Today's link is the door.
+// 72: Today no longer links it (Rescue's "Too much going on" covers that
+// moment); the Day map's "Help me choose", when the day runs over, is the
+// door. At 01:00 the demo's day (to 02:00) can't hold its three tasks.
 async function openScattered(page) {
-  // The link is on the wall, under the list's sheet on a phone.
-  const hide = page.locator(".today-list-hide");
-  if (await hide.isVisible()) await hide.click();
-  await page.locator(".wall-link", { hasText: "Feeling scattered?" }).click();
+  await page.clock.setFixedTime(new Date("2024-06-16T01:00:00"));
+  await openDayMapPage(page);
+  await page.getByRole("button", { name: "Help me choose" }).click();
   await expect(page.locator(".scattered-actions")).toBeVisible({ timeout: 10_000 });
 }
 
@@ -79,13 +80,13 @@ test("at most three picks; the first is ringed and shows its smallest start; tap
 test("Empty my head into Mind Box goes to Mind Box, and Back returns through the door it came in", async ({ page }) => {
   await enterDemo(page);
   await openScattered(page);
-  // From Today, the back link says Today and goes there.
-  await expect(page.locator(".scattered-back")).toHaveText(/Today/);
+  // From the Day map, the back link says Day map and goes there.
+  await expect(page.locator(".scattered-back")).toHaveText(/Day map/);
   await page.locator(".scattered-back").click();
   await expect(page.locator(".scattered")).toHaveCount(0);
-  await expect(page.locator(".wall-link", { hasText: "Feeling scattered?" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Help me choose" })).toBeVisible();
 
-  await openScattered(page);
+  await page.getByRole("button", { name: "Help me choose" }).click();
   await page.getByRole("button", { name: "Empty my head into Mind Box" }).click();
   await expect(page.getByRole("heading", { name: "Mind Box" })).toBeVisible({ timeout: 8_000 });
 });

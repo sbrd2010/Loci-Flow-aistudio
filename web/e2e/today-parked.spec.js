@@ -12,7 +12,8 @@ async function parkTheOneThing(page) {
   await page.getByTestId("demo-btn").click();
   await expect(page.locator(".wall-title")).toBeVisible({ timeout: 10_000 });
   const title = (await page.locator(".wall-title").innerText()).trim();
-  await page.locator(".wall-details").click();
+  // 72: at 840+ the Details link is gone; the title opens the task.
+  await page.locator(".wall-title").click();
   await page.getByTestId("task-detail").getByRole("button", { name: "Park", exact: true }).click();
   await expect(page.getByTestId("task-detail")).toHaveCount(0);
   const showList = page.getByRole("button", { name: "Show list" });
