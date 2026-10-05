@@ -138,3 +138,15 @@ test("1903×940: the Focus page over Today isn't scaled; Today is again after Le
   await expect(page.locator(".focus-mode-overlay")).toHaveCount(0);
   await expect.poll(zoom).toBeCloseTo(1.175, 3);
 });
+
+// Codex review of #494: the screens before the app (here, sign-in) aren't
+// scaled, on a window large enough for Today to be.
+test("1903×940: the sign-in screen isn't scaled; Today is once the app opens", async ({ page }) => {
+  await page.setViewportSize({ width: 1903, height: 940 });
+  await page.goto("/");
+  await expect(page.getByTestId("demo-btn")).toBeVisible({ timeout: 25_000 });
+  expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBe(1);
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".today-wall")).toBeVisible({ timeout: 10_000 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.currentCSSZoom)).toBeCloseTo(1.175, 3);
+});

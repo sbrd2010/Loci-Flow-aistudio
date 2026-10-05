@@ -581,7 +581,12 @@ export default function App() {
   const focusTimer = useFocusTimer(payload?.tasks || [], payload?.config || {}, user?.uid || null, pipActionsRef);
   // Turn 76: Today grows with the window; the Focus page over it doesn't
   // (it isn't redesigned this round), so the scale steps aside while it's open.
-  useAppScale(focusTimer.isFocusMode ? null : activeTab);
+  // Only the main app grows: sign-in, loading, errors and onboarding (the
+  // early returns below) keep their own sizes (Codex review of #494).
+  const mainAppShown = demoMode
+    ? !!payload
+    : !authLoading && !!user && !error && !loading && !!payload && payload.config?.isOnboardingCompleted !== false;
+  useAppScale(mainAppShown && !focusTimer.isFocusMode ? activeTab : null);
   // Live (non-stale) read of focusTimer for effect/promise callbacks that
   // run after an async wait (e.g. the pendingFocusOpen effect's pinPromise
   // handlers below) — those closures capture `focusTimer` from whichever
