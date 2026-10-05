@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { weekTasks, pullFromWeek, undoPullFromWeek } from "./fromWeek";
+import { weekTasks, pullFromWeek, undoPullFromWeek, takesPinFrom } from "./fromWeek";
 
 const t = (uuid, extra = {}) => ({ uuid, title: uuid, horizonLevel: "week", orderIndex: 0, isDeleted: false, isCompleted: false, lastUpdated: 1, ...extra });
 
@@ -36,13 +36,38 @@ describe("pullFromWeek", () => {
 });
 
 describe("undoPullFromWeek", () => {
-  it("puts back only the tasks the move left untouched", () => {
+  // Codex review of #486: the route takes the moved tasks in at once
+  // (joinRoute), giving them route fields and a new lastUpdated.
+  it("puts back tasks the route has since taken in, without their route fields", () => {
+    const { tasks: moved, before } = pullFromWeek([t("a", { orderIndex: 2 })], ["a"], 50);
+    const routed = moved.map(x => ({ ...x, dayMapDate: "2024-06-15", dayMapOrder: 0, lastUpdated: 55 }));
+    const back = undoPullFromWeek(routed, before, 70).find(x => x.uuid === "a");
+    expect(back).toMatchObject({ horizonLevel: "week", orderIndex: 2, isNowFocus: false, lastUpdated: 70 });
+    expect(back.dayMapDate).toBeUndefined();
+    expect(back.dayMapOrder).toBeUndefined();
+  });
+
+  it("puts back the moved tasks still open in Today; a done one stays", () => {
     const tasks = [t("a", { orderIndex: 2 }), t("b", { orderIndex: 3 }), t("c", { orderIndex: 4 })];
     const { tasks: moved, before } = pullFromWeek(tasks, ["a", "b", "c"], 50);
-    const later = moved.map(x => x.uuid === "b" ? { ...x, isCompleted: true, lastUpdated: 60 } : x.uuid === "c" ? { ...x, title: "edited", lastUpdated: 61 } : x);
-    const back = undoPullFromWeek(later, before, 50, 70);
+    const later = moved.map(x => x.uuid === "b" ? { ...x, isCompleted: true, lastUpdated: 60 } : x.uuid === "c" ? { ...x, horizonLevel: "month", lastUpdated: 61 } : x);
+    const back = undoPullFromWeek(later, before, 70);
     expect(back.find(x => x.uuid === "a")).toMatchObject({ horizonLevel: "week", orderIndex: 2, isNowFocus: false, lastUpdated: 70 });
     expect(back.find(x => x.uuid === "b").horizonLevel).toBe("today");
-    expect(back.find(x => x.uuid === "c").horizonLevel).toBe("today");
+    expect(back.find(x => x.uuid === "c").horizonLevel).toBe("month");
+  });
+});
+
+describe("takesPinFrom", () => {
+  it("is true when the held task is ticked, but not first", () => {
+    const tasks = [t("held", { isNowFocus: true }), t("a")];
+    const { tasks: next } = pullFromWeek(tasks, ["a", "held"], 5);
+    expect(takesPinFrom(tasks, next)).toBe(true);
+  });
+  it("is false when the held task is first, or nothing was held", () => {
+    const tasks = [t("held", { isNowFocus: true }), t("a")];
+    expect(takesPinFrom(tasks, pullFromWeek(tasks, ["held", "a"], 5).tasks)).toBe(false);
+    const free = [t("a"), t("b")];
+    expect(takesPinFrom(free, pullFromWeek(free, ["a"], 5).tasks)).toBe(false);
   });
 });

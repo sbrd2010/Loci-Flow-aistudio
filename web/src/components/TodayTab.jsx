@@ -56,7 +56,7 @@ import { routeBreaks } from "../utils/dayMapBreaks";
 import { isEventTask, isFixedStop } from "../utils/dayMapRoute";
 import { bringBack, formatClock24, formatSpanCaps, moveToTomorrow, nextDateStr, restoreSchedule } from "../utils/dayMapPlan";
 import { parkedTasks, parkedSince, restoreParked, undoRestoreParked } from "../utils/parked";
-import { weekTasks, pullFromWeek, undoPullFromWeek } from "../utils/fromWeek";
+import { weekTasks, pullFromWeek, undoPullFromWeek, takesPinFrom } from "../utils/fromWeek";
 import FromWeekSheet from "./FromWeekSheet";
 import { cssZoom, unzoomTransform } from "../utils/cssZoom";
 import { useListChoreography, listMotionMode } from "../hooks/useListChoreography";
@@ -861,15 +861,14 @@ export default function TodayTab({
     if (!ids.length) return;
     const now = Date.now();
     const parked = new Set(ids);
-    savePayload({ ...payload, tasks: tasks.map(t => parked.has(String(t.uuid || t.id))
-      ? { ...t, isParked: true, parkedAt: now, isNowFocus: false, lastUpdated: now } : t) });
+    // Logged like every other park, once the save lands (Codex review of #477).
+    const events = tasks.filter(t => parked.has(String(t.uuid || t.id)) && !t.isParked && !t.isDeleted)
+      .map(t => buildTaskMutationEvent("task_parked", t, { windows, now }));
+    savePayloadAsync({ ...payload, tasks: tasks.map(t => parked.has(String(t.uuid || t.id))
+      ? { ...t, isParked: true, parkedAt: now, isNowFocus: false, lastUpdated: now } : t) })
+      .then(() => { if (events.length) writeActivityEvents(eventsPatch(uid, events)); })
+      .catch(() => {});
     setUndo({ kind: "parkmany", ids, at: now });
-  };
-  // 67i: with no one thing, a pick from the top three, with Undo.
-  const handlePickOneThing = (task) => {
-    if (isEventTask(task) || task.isNowFocus) return;
-    handlePinTask(task);
-    setUndo({ kind: "pick", task, at: Date.now() });
   };
   // 67j/67s: This week tasks into Today, the first as the one thing, with
   // Undo; logged as moves, as the task sheet's Horizon picker logs them.
@@ -880,7 +879,7 @@ export default function TodayTab({
     if (!before.length) return;
     // Whatever held the one thing (Coach can pin a week task) lets go, and
     // its open session ends with it, as handlePinTask does.
-    const endedFocusSession = tasks.some(t => t.isNowFocus && !uuids.includes(t.uuid)) ? endFocusSession("user_abandoned") : null;
+    const endedFocusSession = takesPinFrom(tasks, next) ? endFocusSession("user_abandoned") : null;
     if (endedFocusSession) {
       setIsTimerRunning(false);
       setIsFocusMode(false);
@@ -947,7 +946,7 @@ export default function TodayTab({
       return front ? `Put on ${front.name}: ${title}` : `Off its front: ${title}`;
     }
     if (u.kind === "swap") return u.previous ? `${u.previous.title} is back at the top of the list.` : `${u.fromPlan ? "Moved to Today and made the one thing" : "Made the one thing"}: ${title}`;
-    return `${{ done: "Marked done", delete: "Deleted", tomorrow: "Moved to tomorrow", bringback: "Brought back", park: "Parked", restore: "Restored", unpin: "Unpinned", pick: "Made the one thing" }[u.kind]}: ${title}`;
+    return `${{ done: "Marked done", delete: "Deleted", tomorrow: "Moved to tomorrow", bringback: "Brought back", park: "Parked", restore: "Restored", unpin: "Unpinned" }[u.kind]}: ${title}`;
   };
   const undoText = undo ? undoMessage(undo) : "";
 
@@ -1059,14 +1058,9 @@ export default function TodayTab({
       savePayload({ ...payload, tasks: undoRestoreParked(tasks, task.uuid, undo.before) });
       return;
     }
-    if (kind === "pick") {
-      const current = tasks.find(t => t.uuid === task.uuid && !t.isDeleted);
-      if (current?.isNowFocus) handlePinTask(current);
-      return;
-    }
     if (kind === "fromweek") {
       const now = Date.now();
-      const next = undoPullFromWeek(tasks, undo.before, undo.at, now);
+      const next = undoPullFromWeek(tasks, undo.before, now);
       const back = next.filter(t => t.lastUpdated === now && undo.before.some(b => b.uuid === t.uuid));
       savePayloadAsync({ ...payload, tasks: next })
         .then(() => {
@@ -1080,8 +1074,15 @@ export default function TodayTab({
     if (kind === "parkmany") {
       // Back to Today, only those still parked.
       const ids = new Set(undo.ids);
-      savePayload({ ...payload, tasks: tasks.map(t => ids.has(String(t.uuid || t.id)) && t.isParked && !t.isDeleted
-        ? { ...t, isParked: false, lastUpdated: Date.now() } : t) });
+      const back = tasks.filter(t => ids.has(String(t.uuid || t.id)) && t.isParked && !t.isDeleted);
+      const at = Date.now();
+      const backIds = new Set(back.map(t => String(t.uuid || t.id)));
+      savePayloadAsync({ ...payload, tasks: tasks.map(t => backIds.has(String(t.uuid || t.id))
+        ? { ...t, isParked: false, lastUpdated: at } : t) })
+        .then(() => {
+          if (back.length) writeActivityEvents(eventsPatch(uid, back.map(t => buildTaskMutationEvent("task_unparked", t, { windows, now: at }))));
+        })
+        .catch(() => {});
       return;
     }
     if (kind === "park") {
@@ -1924,7 +1925,9 @@ export default function TodayTab({
           uuid: t.uuid, title: t.title, minutes: Number(t.timeEstimateMinutes) || 0,
         })) : []}
         openCount={remainingTasks.length}
-        onPick={(pick) => { const t = tasks.find(x => x.uuid === pick.uuid); if (t) handlePickOneThing(t); }}
+        // 67i: a pick is "make this the one thing": it moves to NOW on the Day
+        // map too, with that Undo (Codex review of #486).
+        onPick={(pick) => { const t = tasks.find(x => x.uuid === pick.uuid); if (t) handleMakeOneThing(t); }}
         onShowAll={() => {
           sheetRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
           sheetRef.current?.querySelector("[data-testid='task-row']")?.focus({ preventScroll: true });

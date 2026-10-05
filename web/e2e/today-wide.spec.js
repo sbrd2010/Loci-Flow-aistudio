@@ -196,6 +196,28 @@ test("a row is circle · title · how long, with the grip only on hover", async 
   await expect.poll(() => grip.evaluate(el => getComputedStyle(el).opacity)).toBe("1");
 });
 
+// Codex review of #478: the swipe wrapper clipped the grip in the gutter, so
+// it showed (opacity 1) but couldn't be seen or grabbed. With a mouse it
+// takes the pointer and drags the row.
+test("the hover grip is grabbable: a mouse drag by it reorders the list", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 900 }, "2024-06-15T10:00:00");
+  const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']");
+  const titles = async () => (await rows.locator(".task-title-text").allInnerTexts()).map(t => t.trim());
+  const [first, second] = await titles();
+  await rows.nth(1).hover();
+  const grip = rows.nth(1).locator(".task-row-grip");
+  const g = await grip.boundingBox();
+  const x = g.x + g.width / 2, y = g.y + g.height / 2;
+  expect(await page.evaluate(([px, py]) => !!document.elementFromPoint(px, py)?.closest(".task-row-grip"), [x, y])).toBe(true);
+  const target = await rows.nth(0).boundingBox();
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y - 12, { steps: 3 });
+  await page.mouse.move(x, target.y + 4, { steps: 10 });
+  await page.mouse.up();
+  await expect.poll(titles).toEqual([second, first]);
+});
+
 // 69e: past the day's end, Tomorrow · Park take the length's place on hover.
 test("a row past the day's end offers Tomorrow · Park on hover", async ({ page }) => {
   await enterDemo(page, { width: 1280, height: 900 }, "2024-06-16T01:00:00");
@@ -312,4 +334,19 @@ test("1920 (zoom 1.35): a row moved by keyboard drag lands where its copy shows"
   await expect.poll(near(target.y)).toBe(true);
   await page.keyboard.press("Space");
   await expect.poll(titles).toEqual([second, first]);
+});
+
+// Codex review of #486: a pick from "Pick the one thing" goes to NOW on the
+// Day map too, not only to the wall.
+test("no one thing: picking the second task puts it at NOW on the Day map", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 900 }, "2024-06-15T10:00:00");
+  await page.locator(".wall-title").click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
+  await expect(page.locator(".wall-pick")).toBeVisible();
+  const second = (await page.locator(".wall-pick-title").nth(1).innerText()).trim();
+  await page.locator(".wall-pick-row").nth(1).click();
+  await expect(page.locator(".wall-title")).toHaveText(second);
+  await routeReady(page);
+  await expect(column(page).locator("button.tdm-stop .tdm-title").first()).toContainText(second);
+  await expect(column(page).locator("button.tdm-stop .tdm-title").first()).toContainText("THE ONE THING");
 });
