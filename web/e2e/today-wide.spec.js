@@ -44,33 +44,34 @@ test("1680: no third column; the switch shows the Day map in the list's place, a
   await expect(page.getByTestId("today-tasks-list")).toBeVisible();
 });
 
-test("2130: the content stops at 1760px and the margins take the rest", async ({ page }) => {
+// 72: from 1600px the page zooms (1.35 from 1920), so a 2130 screen lays out
+// at 1578px: under the 1760 cap, with 48px margins, scaled.
+test("2130: the page zooms 1.35; the content keeps 48px margins, scaled", async ({ page }) => {
   await enterDemo(page, { width: 2130, height: 1000 });
   const wall = await page.locator(".today-layout").boundingBox();
-  expect(Math.round(wall.width)).toBeLessThanOrEqual(1760);
-  expect(Math.round(wall.width)).toBeGreaterThanOrEqual(1740);
+  expect(Math.abs(wall.x - 48 * 1.35)).toBeLessThan(2);
+  expect(Math.abs(wall.width - (2130 - 2 * 48 * 1.35))).toBeLessThan(3);
   const brand = await page.getByRole("banner").getByRole("button", { name: "Loci" }).boundingBox();
   expect(Math.abs(brand.x - wall.x)).toBeLessThan(2);
 });
 
-// 57b: from 2200px the cap is 2240px and the title is one step up.
-test("2400: the content stops at 2240px, and the list-hidden title is one step up", async ({ page }) => {
+// 72 (72h): from 2400px the whole page zooms 1.78 (root 28.5px) — the
+// 57b cap and title step-ups are gone; the title keeps the laptop's sizes.
+test("2400: the page zooms 1.78, and the title keeps its laptop size, list shown or hidden", async ({ page }) => {
   await enterDemo(page, { width: 2400, height: 1200 });
-  const wall = await page.locator(".today-layout").boundingBox();
-  expect(Math.round(wall.width)).toBe(2240);
+  expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBeCloseTo(1.78125, 3);
   const shown = await page.locator(".wall-title").evaluate(el => [el.dataset.len, parseFloat(getComputedStyle(el).fontSize)]);
   await page.locator("body").click({ position: { x: 5, y: 300 } });
   await page.keyboard.press("l");
   await expect(page.locator("section.today-list")).toBeHidden();
   const hidden = await page.locator(".wall-title").evaluate(el => parseFloat(getComputedStyle(el).fontSize));
-  // Wide sizes with the list shown, one step up with it hidden.
-  const steps = { s: [64, 72], m: [52, 58], l: [42, 48], xl: [36, 40] }[shown[0]];
-  expect([shown[1], hidden]).toEqual(steps);
+  const size = { s: 52, m: 44, l: 36, xl: 32 }[shown[0]];
+  expect([shown[1], hidden]).toEqual([size, size]);
 });
 
-// Codex review of #422: at the 2240px cap the header keeps the content's
+// Codex review of #422: on the widest screens the header keeps the content's
 // left edge.
-test("2400: the header follows the 2240px cap", async ({ page }) => {
+test("2400: the header keeps the content's left edge", async ({ page }) => {
   await enterDemo(page, { width: 2400, height: 1200 });
   const wall = await page.locator(".today-layout").boundingBox();
   const brand = await page.getByRole("banner").getByRole("button", { name: "Loci" }).boundingBox();
@@ -306,4 +307,31 @@ test("72: the task side reads goal · NOW · UNTIL · title · step · buttons, 
   await expect(page.locator(".today-foot-done")).toHaveText(/^0 OF \d+ DONE TODAY$/);
   await page.getByTestId("today-tasks-list").getByTestId("task-checkbox").first().click();
   await expect(page.locator(".today-foot-done")).toHaveText(/^1 OF \d+ DONE TODAY$/);
+});
+
+// 72: from 1600px the page is zoomed (root 16 → 18 / 21.6 / 28.5px). Rects
+// are screen px; dnd-kit's moves are unzoomed (utils/cssZoom.js), so the
+// dragged copy lands on the row it is moved to, not zoom × as far.
+test("1920 (zoom 1.35): a row moved by keyboard drag lands where its copy shows", async ({ page }) => {
+  await enterDemo(page, { width: 1920, height: 1080 }, "2024-06-15T10:00:00");
+  expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBeCloseTo(1.35, 2);
+  const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']");
+  const titles = async () => (await rows.locator(".task-title-text").allInnerTexts()).map(t => t.trim());
+  const [first, second] = await titles();
+  const target = await rows.nth(0).boundingBox();
+  const source = await rows.nth(1).boundingBox();
+  const copyTop = async () => (await page.locator("div[style*='rotate(1deg)']").boundingBox())?.y ?? -1e4;
+  const near = (y) => async () => Math.abs((await copyTop()) - y) < 16;
+  const live = () => page.evaluate(() => [...document.querySelectorAll("[id^='DndLiveRegion']")].map(el => el.textContent).join("|"));
+  await rows.nth(1).focus();
+  await page.keyboard.press("Space");
+  // Picked up: the copy covers the row it came from (unzoomed, it sat about
+  // 0.35 × its top further down).
+  await expect.poll(near(source.y)).toBe(true);
+  const before = await live();
+  await page.keyboard.press("ArrowUp");
+  await expect.poll(live).not.toBe(before);
+  await expect.poll(near(target.y)).toBe(true);
+  await page.keyboard.press("Space");
+  await expect.poll(titles).toEqual([second, first]);
 });

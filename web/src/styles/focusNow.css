@@ -14,7 +14,7 @@
 .focus-now-sheet {
   width: 100%;
   max-width: 620px;
-  max-height: 70vh;
+  max-height: calc(70vh / var(--zoom, 1));
   background: var(--bg-card);
   border: 1px solid rgba(255, 255, 255, 0.10);
   border-bottom: none;

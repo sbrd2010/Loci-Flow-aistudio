@@ -45,6 +45,7 @@ import { frontsFromConfig, frontsOnOffer } from "../utils/fronts";
 import { IconCheck, IconChevronDown, IconChevronLeft, IconLock, IconPin } from "./ui/icons";
 import { useFocusLedger } from "../hooks/useFocusLedger";
 import { dayBar, doneToday, factualLine } from "../utils/dayMapFacts";
+import { unzoomTransform } from "../utils/cssZoom";
 import "../styles/dayMap.css";
 
 // Day map (50e–f, 52d–e). Today's tasks laid end to end from a start time,
@@ -75,7 +76,7 @@ function RouteStop({ task, row, fromYesterday = false, isNow, isOver, isGoal, is
     + (asks ? ", did it happen?" : "");
 
   const style = {
-    transform: CSS.Transform.toString(transform),
+    transform: CSS.Transform.toString(unzoomTransform(transform)),
     transition,
     opacity: isDragging ? 0.55 : undefined,
     zIndex: isDragging ? 5 : undefined,

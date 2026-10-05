@@ -1275,7 +1275,9 @@ test("laptop: no phone-card frame; content capped at 1200px, centred", async ({ 
   expect(Math.round(list.x + list.width)).toBe(1320);
 });
 
-test("wide: from 1600px the cap is 1760px, centred (50k)", async ({ page }) => {
+// 72: from 1600px the page is zoomed instead (1.35 at 1920): it lays out
+// at 1422px, so the 1760 cap isn't reached and the 48px margins scale.
+test("wide: at 1920 the page zooms 1.35 and keeps its 48px margins (72)", async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto("/");
   await page.clock.setFixedTime(new Date("2024-06-15T10:00:00"));
@@ -1284,9 +1286,9 @@ test("wide: from 1600px the cap is 1760px, centred (50k)", async ({ page }) => {
   await expect(page.locator(".tasks-section")).toBeVisible();
   await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
   const [band, list] = await Promise.all([page.locator(".wall-goal").boundingBox(), page.locator(".tasks-section").boundingBox()]);
-  // (1920 − 1760) / 2 = 80 each side.
-  expect(Math.round(band.x)).toBe(80);
-  expect(Math.round(list.x + list.width)).toBe(1840);
+  // 48 × 1.35 ≈ 65 each side.
+  expect(Math.abs(band.x - 48 * 1.35)).toBeLessThan(2);
+  expect(Math.abs(list.x + list.width - (1920 - 48 * 1.35))).toBeLessThan(2);
 });
 
 test("laptop: with the list hidden, the task sits on one left edge, its links and THEN line under it (72c)", async ({ page }) => {

@@ -5,6 +5,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { callAI, getAIKeys, hasAIKey } from "../utils/aiCall";
 import { MAX_STEP_MINUTES, STEP_MINUTE_OPTIONS, evenMinutes, stepsFromSubSteps } from "../utils/splitTask";
 import { safeUUID } from "../utils/uuid";
+import { unzoomTransform } from "../utils/cssZoom";
 import { IconGripVertical, IconPlus, IconX } from "./ui/icons";
 import "../styles/addTask.css";
 import "../styles/splitTask.css";
@@ -25,7 +26,7 @@ function StepRow({ step, index, onText, onMinutes, onRemove, canRemove }) {
     <li
       ref={setNodeRef}
       className={`split-step${isDragging ? " is-dragging" : ""}`}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      style={{ transform: CSS.Transform.toString(unzoomTransform(transform)), transition }}
     >
       <button type="button" ref={setActivatorNodeRef} className="split-grip" aria-label={`Reorder step ${index + 1}`} {...attributes} {...listeners}>
         <IconGripVertical size={16} />

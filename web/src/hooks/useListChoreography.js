@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { flushSync } from "react-dom";
+import { cssZoom } from "../utils/cssZoom";
 
 // Today's show/hide list (turn 51, 51e–f): the only layout motion in the app.
 // FLIP with the Web Animations API, on transform and opacity only: switch the
@@ -30,6 +31,7 @@ function rects(root) {
 // layout that styled it.
 function ghostOf(el) {
   const rect = el.getBoundingClientRect();
+  const z = cssZoom();
   if (!rect.width || !rect.height) return null;
   const copy = el.cloneNode(true);
   const from = [el, ...el.querySelectorAll("*")];
@@ -40,8 +42,8 @@ function ghostOf(el) {
     to[i].removeAttribute("id");
   });
   Object.assign(copy.style, {
-    position: "fixed", left: `${rect.left}px`, top: `${rect.top}px`, margin: "0",
-    width: `${rect.width}px`, height: `${rect.height}px`, pointerEvents: "none", zIndex: "5",
+    position: "fixed", left: `${rect.left / z}px`, top: `${rect.top / z}px`, margin: "0",
+    width: `${rect.width / z}px`, height: `${rect.height / z}px`, pointerEvents: "none", zIndex: "5",
   });
   copy.setAttribute("aria-hidden", "true");
   copy.inert = true;
@@ -104,10 +106,11 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
   // already set it to display: none. The hold is an attribute and custom
   // properties (todayList.css), never the inline styles React owns.
   const holdLeavingList = (el, rect, fromOpacity) => {
-    el.style.setProperty("--leave-left", `${rect.left}px`);
-    el.style.setProperty("--leave-top", `${rect.top}px`);
-    el.style.setProperty("--leave-width", `${rect.width}px`);
-    el.style.setProperty("--leave-height", `${rect.height}px`);
+    const z = cssZoom();
+    el.style.setProperty("--leave-left", `${rect.left / z}px`);
+    el.style.setProperty("--leave-top", `${rect.top / z}px`);
+    el.style.setProperty("--leave-width", `${rect.width / z}px`);
+    el.style.setProperty("--leave-height", `${rect.height / z}px`);
     el.setAttribute("data-leaving", "");
     leaving.current = el;
     const a = el.animate(
@@ -154,6 +157,7 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
     const listWasShown = visible(list);
     const listRect = listWasShown ? list.getBoundingClientRect() : null;
     const listOpacity = listWasShown ? Number(getComputedStyle(list).opacity) : 0;
+    const z = cssZoom();
     const before = rects(root);
     const controlsBefore = [...root.querySelectorAll("[data-flip-controls]")].filter(visible);
     const entersBefore = [...root.querySelectorAll("[data-flip-enter]")].filter(visible);
@@ -185,8 +189,8 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
         const b = before[key];
         const el = root.querySelector(`[data-flip="${key}"]`);
         if (!b || !el || !a.width) continue;
-        const dx = b.left - a.left;
-        const dy = b.top - a.top;
+        const dx = (b.left - a.left) / z;
+        const dy = (b.top - a.top) / z;
         // The title zooms from its old size to its new one; its lines settle
         // in the new layout.
         const titleSize = key === "title" ? Number.parseFloat(getComputedStyle(el).fontSize) : 0;

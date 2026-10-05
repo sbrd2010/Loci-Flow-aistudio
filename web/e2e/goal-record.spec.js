@@ -30,9 +30,11 @@ test("laptop: the band opens a 400px popover under its right edge; Esc and the b
   await expect(record(page).locator(".gr-sentence")).toHaveText("Today: not yet.");
   const b = await band(page).boundingBox();
   const r = await record(page).boundingBox();
-  expect(Math.round(r.width)).toBe(400);
+  // 72: from 1600 the page is zoomed (1.125 here); boxes are screen px.
+  const z = await page.evaluate(() => document.documentElement.currentCSSZoom);
+  expect(Math.round(r.width / z)).toBe(400);
   expect(Math.abs((r.x + r.width) - (b.x + b.width))).toBeLessThanOrEqual(1);
-  expect(Math.round(r.y - (b.y + b.height))).toBe(8);
+  expect(Math.round((r.y - (b.y + b.height)) / z)).toBe(8);
 
   await page.keyboard.press("Escape");
   await expect(record(page)).toHaveCount(0);
