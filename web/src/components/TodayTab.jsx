@@ -860,8 +860,13 @@ export default function TodayTab({
     if (!ids.length) return;
     const now = Date.now();
     const parked = new Set(ids);
-    savePayload({ ...payload, tasks: tasks.map(t => parked.has(String(t.uuid || t.id))
-      ? { ...t, isParked: true, parkedAt: now, isNowFocus: false, lastUpdated: now } : t) });
+    // Logged like every other park, once the save lands (Codex review of #477).
+    const events = tasks.filter(t => parked.has(String(t.uuid || t.id)) && !t.isParked && !t.isDeleted)
+      .map(t => buildTaskMutationEvent("task_parked", t, { windows, now }));
+    savePayloadAsync({ ...payload, tasks: tasks.map(t => parked.has(String(t.uuid || t.id))
+      ? { ...t, isParked: true, parkedAt: now, isNowFocus: false, lastUpdated: now } : t) })
+      .then(() => { if (events.length) writeActivityEvents(eventsPatch(uid, events)); })
+      .catch(() => {});
     setUndo({ kind: "parkmany", ids, at: now });
   };
   // 67i: with no one thing, a pick from the top three, with Undo.
@@ -1079,8 +1084,15 @@ export default function TodayTab({
     if (kind === "parkmany") {
       // Back to Today, only those still parked.
       const ids = new Set(undo.ids);
-      savePayload({ ...payload, tasks: tasks.map(t => ids.has(String(t.uuid || t.id)) && t.isParked && !t.isDeleted
-        ? { ...t, isParked: false, lastUpdated: Date.now() } : t) });
+      const back = tasks.filter(t => ids.has(String(t.uuid || t.id)) && t.isParked && !t.isDeleted);
+      const at = Date.now();
+      const backIds = new Set(back.map(t => String(t.uuid || t.id)));
+      savePayloadAsync({ ...payload, tasks: tasks.map(t => backIds.has(String(t.uuid || t.id))
+        ? { ...t, isParked: false, lastUpdated: at } : t) })
+        .then(() => {
+          if (back.length) writeActivityEvents(eventsPatch(uid, back.map(t => buildTaskMutationEvent("task_unparked", t, { windows, now: at }))));
+        })
+        .catch(() => {});
       return;
     }
     if (kind === "park") {

@@ -267,6 +267,11 @@
   overflow-x: clip;
   overflow-y: visible;
 }
+/* With a mouse the row isn't swiped, and the clip would cut off the hover
+   grip in the left gutter (70f; Codex review of #478). */
+@media (hover: hover) and (pointer: fine) {
+  .task-swipe { overflow-x: visible; }
+}
 .task-swipe > .task-row {
   background: var(--surface);
   touch-action: pan-y;
