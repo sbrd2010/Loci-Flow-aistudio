@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openDayMapPage } from "./helpers/today";
 import { openRung } from "./helpers/plan.js";
 
 // Plan (45h–j): Horizons | Fronts, the horizons as sections — one column on
@@ -39,10 +40,10 @@ test("Plan opens on Horizons, switches to Fronts, and has no Day map door", asyn
 
   // Today is the one door into the Day map, and Back returns there.
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
-  await page.getByRole("button", { name: "Day map →" }).click();
+  await openDayMapPage(page);
   await expect(page.locator(".day-map-page")).toBeVisible();
   await page.locator(".dm-back").click();
-  await expect(page.getByRole("button", { name: "Day map →" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "View" })).toBeVisible();
 });
 
 test("Horizons: on a phone a rung pushes its list; wider, the ladder sits beside it (57)", async ({ page }) => {
@@ -84,7 +85,7 @@ test("Day Map draws no priority tags, and its lengths share one colour", async (
   await page.setViewportSize({ width: 1280, height: 800 });
   await enterDemo(page);
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.getByRole("button", { name: "Day map →" }).click();
+  await openDayMapPage(page);
   await expect(page.locator(".day-map-page")).toBeVisible();
   await expect(page.locator(".dm-stop:not(.is-now)").first()).toBeVisible();
   const colors = await page.locator(".dm-stop:not(.is-now) .dm-dur").evaluateAll(els => els.map(el => getComputedStyle(el).color));

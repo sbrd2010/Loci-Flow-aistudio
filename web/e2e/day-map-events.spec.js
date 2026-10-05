@@ -68,11 +68,14 @@ test("Later today sets it at the next free slot; Pick a time opens the time shee
   await expect(page.getByRole("dialog", { name: "Fix a time: Call with the recruiter" })).toBeVisible();
 });
 
-test("Today's Day map column asks too: Done with Undo (Q47.5)", async ({ page }) => {
+test("Today's Day map view asks too: Done with Undo (Q47.5)", async ({ page }) => {
   await openDayMapWithPastCall(page);
   await page.setViewportSize({ width: 1700, height: 900 });
   await page.keyboard.press("Escape");
-  const column = page.getByRole("complementary", { name: "Day map" });
+  // The list put away, L brings it back, with its switch.
+  await page.keyboard.press("l");
+  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Day map", exact: true }).click();
+  const column = page.getByRole("region", { name: "Day map" });
   const line = column.getByRole("group", { name: "Did it happen? Call with the recruiter" });
   await expect(line).toBeVisible();
   await line.getByRole("button", { name: "Done" }).click();

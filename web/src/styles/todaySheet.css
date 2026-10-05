@@ -146,35 +146,9 @@
   }
 }
 
-/* — Q58 (67c): the phone's Up next sheet: "Up next" and Day map in the
-   header, the next 3 tasks, "All N tasks", then Parked and Done today as
-   folds, and a quiet hint. — */
-.today-upnext-hint,
-.today-upnext-all { display: none; }
+/* — Q58 (67c), Q59 (70a): the phone's Up next sheet: "Up next" and the
+   List | Day map switch, the whole list, then Parked and Done today as
+   folds. — */
 @media (max-width: 839px) {
   .today-list.is-sheet .today-list-count { display: none; }
-  .today-upnext-hint {
-    display: block;
-    order: 10;
-    margin: 12px 0 0;
-    font-size: 0.875rem;
-    color: var(--ink-2);
-  }
-  .today-upnext-all {
-    display: flex;
-    align-items: center;
-    width: 100%;
-    min-height: 52px;
-    padding: 0;
-    border: 0;
-    border-bottom: 1px solid var(--line);
-    background: none;
-    font: inherit;
-    font-size: 0.9375rem;
-    font-weight: 800;
-    color: var(--accent);
-    text-align: left;
-    cursor: pointer;
-  }
-  .today-upnext-all:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 }

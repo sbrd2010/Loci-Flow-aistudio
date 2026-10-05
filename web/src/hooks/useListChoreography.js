@@ -86,7 +86,7 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
     return a;
   };
 
-  const fadeOutGhost = (el, duration, easing, shift = false) => {
+  const fadeOutGhost = (el, duration, easing) => {
     if (!visible(el)) return;
     const g = ghostOf(el);
     if (!g) return;
@@ -95,9 +95,7 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
     // the copy carries that opacity (ghostOf copies computed styles).
     const from = Number.parseFloat(g.style.opacity);
     const a = g.animate(
-      shift
-        ? [{ opacity: Number.isFinite(from) ? from : 1, transform: "none" }, { opacity: 0, transform: "translateX(12px)" }]
-        : [{ opacity: Number.isFinite(from) ? from : 1 }, { opacity: 0 }],
+      [{ opacity: Number.isFinite(from) ? from : 1 }, { opacity: 0 }],
       { duration, easing, fill: "forwards" });
     a.onfinish = () => { g.remove(); ghosts.current = ghosts.current.filter(x => x !== g); };
   };
@@ -162,12 +160,6 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
     const heroBefore = root.querySelector(".wall-hero");
     const titleBefore = root.querySelector('[data-flip="title"]');
     const titleSizeBefore = titleBefore ? Number.parseFloat(getComputedStyle(titleBefore).fontSize) : 0;
-    // The Day map column (54): on a laptop it trades places with the list —
-    // it leaves as the list comes and comes back as it goes; from 1600px it
-    // stays through both.
-    const columnBefore = root.querySelector("[data-flip-column]");
-    const columnWasShown = visible(columnBefore);
-    const columnStays = next ? window.innerWidth >= 1600 : true;
     // The previous toggle's ghosts go; this toggle's are taken before the
     // layout changes, while they still look right, and fade out after it.
     const staleGhosts = ghosts.current;
@@ -175,9 +167,6 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
     if (next) controlsBefore.forEach(el => fadeOutGhost(el, 80, "linear"));
     else entersBefore.forEach(el => fadeOutGhost(el, 80, "linear"));
     if (mode === "rise") fadeOutGhost(heroBefore, 120, EXIT);
-    // React unmounts a leaving column, so a copy of it fades out the way the
-    // list does.
-    if (columnWasShown && !columnStays) fadeOutGhost(columnBefore, 120, EXIT, true);
 
     settle(staleGhosts);
     flushSync(() => setOpen(next));
@@ -206,13 +195,6 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
         play(el,
           [{ transform: `translate(${dx}px, ${dy}px) scale(${scale})` }, { transform: "none" }],
           next ? { duration: 280, easing: GLIDE } : { duration: 240, easing: GLIDE, delay: d(80) });
-      }
-      // A column that arrives rides in 30ms behind the list's timing.
-      const column = root.querySelector("[data-flip-column]");
-      if (!columnWasShown && visible(column)) {
-        play(column,
-          [{ opacity: 0, transform: "translateX(12px)" }, { opacity: 1, transform: "none" }],
-          { duration: 220, easing: ENTER, delay: d(90) });
       }
       if (next) {
         if (visible(list)) {

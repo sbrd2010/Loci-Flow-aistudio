@@ -49,11 +49,11 @@ import { clearMyDay, undoClearMyDay } from "../utils/clearMyDay";
 import { buildGoalRecord, goalStartDay, goalTaskDoneToday, nextGoalTask } from "../utils/goalRecord";
 import { horizonsFromConfig } from "../utils/horizons";
 import { confirmedMinimumDay } from "../utils/minimumDay";
-import { currentDayMinutes, oneThingToNow, restoreRoute, routeFollowsList } from "../hooks/useDayRoute";
+import { currentDayMinutes, getTaskId, oneThingToNow, restoreRoute, routeCut, routeFollowsList, useDayRoute } from "../hooks/useDayRoute";
 import MoreSheet from "./MoreSheet";
 import { routeBreaks } from "../utils/dayMapBreaks";
 import { isEventTask } from "../utils/dayMapRoute";
-import { bringBack, moveToTomorrow, nextDateStr, restoreSchedule } from "../utils/dayMapPlan";
+import { bringBack, formatClock24, formatSpanCaps, moveToTomorrow, nextDateStr, restoreSchedule } from "../utils/dayMapPlan";
 import { parkedTasks, parkedSince, restoreParked, undoRestoreParked } from "../utils/parked";
 import { useListChoreography, listMotionMode } from "../hooks/useListChoreography";
 
@@ -63,11 +63,13 @@ const PencilIcon = () => (
   </svg>
 );
 
-function SortableTaskItem({ id, children }) {
+function SortableTaskItem({ id, isOver = false, children }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
   return (
     <div
       ref={setNodeRef}
+      // Past the Day ends line (Q59): muted, still draggable.
+      className={isOver ? "today-row-over" : undefined}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
@@ -218,8 +220,15 @@ export default function TodayTab({
   // Q58: the phone's More sheet for the one thing (67d).
   const [moreOpen, setMoreOpen] = useState(false);
   const [drawerViewport, setDrawerViewport] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1024);
-  // From 1600px the Day map is Today's third column while the list is open (54e).
-  const [wideViewport, setWideViewport] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1600);
+  // Q59: the list and the Day map are two views of one plan, behind a
+  // List | Day map switch; the view last left is kept (this device).
+  const [listView, setListViewState] = useState(() => {
+    try { return window.localStorage.getItem("loci_today_view") === "daymap" ? "daymap" : "list"; } catch { return "list"; }
+  });
+  const setListView = (v) => {
+    setListViewState(v);
+    try { window.localStorage.setItem("loci_today_view", v); } catch { /* private mode */ }
+  };
   const [detailUuid, setDetailUuid] = useState(null);
   const [rowFocusUuid, setRowFocusUuid] = useState(null);
   // E asks the open task to edit its title: tied to that task, so a task
@@ -227,7 +236,7 @@ export default function TodayTab({
   const [editTitle, setEditTitle] = useState(null); // { uuid, n }
   useEffect(() => { if (!peekOpen) setSheetFull(false); }, [peekOpen]);
   useEffect(() => {
-    const update = () => { setSheetViewport(window.innerWidth < 840); setDrawerViewport(window.innerWidth >= 1024); setWideViewport(window.innerWidth >= 1600); };
+    const update = () => { setSheetViewport(window.innerWidth < 840); setDrawerViewport(window.innerWidth >= 1024); };
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
@@ -907,12 +916,8 @@ export default function TodayTab({
   const [movedOpen, setMovedOpen] = useState(false);
   // Parked (62d): Restore puts the task at the bottom of Today's list.
   const [parkedOpen, setParkedOpen] = useState(false);
-  // 58.6 (67c): the phone's Up next shows the next 3, then "All N tasks",
-  // which opens the rest in place; Done today is a fold.
-  const [upNextAll, setUpNextAll] = useState(false);
+  // 58.6 (67c): on the phone, Done today is a fold.
   const [doneOpen, setDoneOpen] = useState(false);
-  // Each opening starts from the short list again.
-  useEffect(() => { if (!peekOpen) setUpNextAll(false); }, [peekOpen]);
   const handleRestoreParked = (task) => {
     const { tasks: next, before } = restoreParked(tasks, task.uuid);
     if (!before) return;
@@ -921,6 +926,20 @@ export default function TodayTab({
       .then(() => writeActivityEvents(eventPatch(uid, event)))
       .catch(() => {});
     setUndo({ kind: "restore", task, before, at: Date.now() });
+  };
+  // Q59 (70d): Park N from Won't fit today, with one Undo.
+  const handleParkMany = (ids) => {
+    if (!ids.length) return;
+    const now = Date.now();
+    const parked = new Set(ids);
+    // Logged like every other park, once the save lands (Codex review of #477).
+    const events = tasks.filter(t => parked.has(String(t.uuid || t.id)) && !t.isParked && !t.isDeleted)
+      .map(t => buildTaskMutationEvent("task_parked", t, { windows, now }));
+    savePayloadAsync({ ...payload, tasks: tasks.map(t => parked.has(String(t.uuid || t.id))
+      ? { ...t, isParked: true, parkedAt: now, isNowFocus: false, lastUpdated: now } : t) })
+      .then(() => { if (events.length) writeActivityEvents(eventsPatch(uid, events)); })
+      .catch(() => {});
+    setUndo({ kind: "parkmany", ids, at: now });
   };
   const handleParkWithUndo = (task) => {
     setUndo({ kind: "park", task, wasPinned: !!task.isNowFocus, at: Date.now() });
@@ -956,6 +975,7 @@ export default function TodayTab({
 
   const undoMessage = (u) => {
     if (u.count) return `${u.count} ${u.count === 1 ? "task" : "tasks"} moved to tomorrow`;
+    if (u.kind === "parkmany") return `${u.ids.length} parked`;
     if (u.kind === "step") return `Step removed: ${u.step.text}`;
     const title = u.task.title;
     if (u.kind === "move") {
@@ -1079,6 +1099,20 @@ export default function TodayTab({
     }
     if (kind === "restore") {
       savePayload({ ...payload, tasks: undoRestoreParked(tasks, task.uuid, undo.before) });
+      return;
+    }
+    if (kind === "parkmany") {
+      // Back to Today, only those still parked.
+      const ids = new Set(undo.ids);
+      const back = tasks.filter(t => ids.has(String(t.uuid || t.id)) && t.isParked && !t.isDeleted);
+      const at = Date.now();
+      const backIds = new Set(back.map(t => String(t.uuid || t.id)));
+      savePayloadAsync({ ...payload, tasks: tasks.map(t => backIds.has(String(t.uuid || t.id))
+        ? { ...t, isParked: false, lastUpdated: at } : t) })
+        .then(() => {
+          if (back.length) writeActivityEvents(eventsPatch(uid, back.map(t => buildTaskMutationEvent("task_unparked", t, { windows, now: at }))));
+        })
+        .catch(() => {});
       return;
     }
     if (kind === "park") {
@@ -1412,9 +1446,18 @@ export default function TodayTab({
   // gave them the lowest orders) and are then ordinary rows in the one
   // order, tagged FROM YESTERDAY for this Loci day.
   const isFromYesterday = (t) => t.deferredUntil === todayStr;
+  // The list reads in the route's order (Q59): one order, with fixed times
+  // where they fall; a task not on the route yet goes by its own order.
+  const route = useDayRoute({ payload, savePayload });
+  const routeIndex = new Map(route.routeTasks.map((t, i) => [getTaskId(t), i]));
   const remainingTasks = todayTasksFiltered
     .filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid)
-    .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+    .sort((a, b) => ((routeIndex.get(getTaskId(a)) ?? Infinity) - (routeIndex.get(getTaskId(b)) ?? Infinity))
+      || ((a.orderIndex ?? 0) - (b.orderIndex ?? 0)));
+  // Q59 (70a): the Day ends line in the list, the rows past it muted, then
+  // "N won't fit · M min · Sort in Day map ›".
+  const cut = routeCut(route.routeTasks, route.plan);
+  const firstOver = remainingTasks.findIndex(t => cut.overIds.has(getTaskId(t)));
   // 59d, Switch to the next task: the list's first, never one at a set time.
   // The session ends (its minutes are saved); the next task is the one thing,
   // not yet started, and this one heads the list.
@@ -1503,9 +1546,6 @@ export default function TodayTab({
     if (i < 0 && !(detailHidden && task.uuid === detailUuid)) return false;
     const next = i < 0 ? remainingTasks[dir > 0 ? 0 : remainingTasks.length - 1] : remainingTasks[i + dir];
     if (!next) return false;
-    // Up next shows three: stepping past them opens the rest, so the row
-    // focus goes to is there.
-    if (upNext && !upNextAll && remainingTasks.indexOf(next) >= 3) setUpNextAll(true);
     if (detailUuid) setDetailUuid(next.uuid);
     focusRow(next.uuid);
     return true;
@@ -1544,10 +1584,8 @@ export default function TodayTab({
   // showing it here put "0 done" above a list of done rows.
   const parkedList = parkedTasks(tasks);
   const completedTasks = todayTasksFiltered.filter((t) => t.isCompleted && t.dateCompletedString === todayStr);
-  // 58.6: the phone's sheet under the one thing is "Up next": 3, then All N.
+  // 58.6: the phone's sheet under the one thing is "Up next".
   const upNext = sheetViewport && !!pinnedFocusTask;
-  const shownTasks = upNext && !upNextAll ? remainingTasks.slice(0, 3) : remainingTasks;
-  const upNextHidden = remainingTasks.length - shownTasks.length;
   // The wall's two figures are claims about the whole day, so they come from
   // todayTasksAll — the Must-Do and Low Energy filters narrow the LIST below,
   // not the day. Reading them off the filtered list let the wall say "0 more
@@ -1839,10 +1877,6 @@ export default function TodayTab({
   });
 
   const listShown = peekOpen || !pinnedFocusTask;
-  // The Day map column (54): beside the task whenever the list is hidden
-  // from 1024px (54a, 54c) — so L swaps the list and the Day map on a laptop
-  // — and as a third column with the list shown from 1600px (54e).
-  const dayMapColumn = (wideViewport && listShown) || (drawerViewport && !listShown);
 
   const closedView = !!dayClosed && !isFocusMode && !focusSessionActive;
   const doneTodayTasks = closedView ? tasks.filter(t => t.isCompleted && !t.isDeleted && t.dateCompletedString === todayStr) : [];
@@ -1881,7 +1915,7 @@ export default function TodayTab({
           )}
         </section>
       )}
-      <div ref={layoutRef} style={closedView ? { display: "none" } : undefined} className={`today-layout${listShown ? " is-list-open" : ""}${dayMapColumn ? " has-day-map" : ""}`}>
+      <div ref={layoutRef} style={closedView ? { display: "none" } : undefined} className={`today-layout${listShown ? " is-list-open" : ""}`}>
       <div className="today-layout-main" inert={wallCovered ? "" : undefined} aria-hidden={wallCovered ? "true" : undefined}>
       <TodayWall
         task={pinnedFocusTask}
@@ -1977,9 +2011,6 @@ export default function TodayTab({
           <h2 className="today-list-title">{upNext ? "Up next" : "After that"}</h2>
           <span className="today-list-count">{listAllCount} · {listDoneCount} done</span>
           <span className="today-list-head-end">
-            {onOpenDayMap && (
-              <button type="button" className="today-list-link" onClick={onOpenDayMap}>Day map →</button>
-            )}
             {onOpenAddTask && (
               <button type="button" className="today-list-add" onClick={onOpenAddTask}>
                 + Add <kbd className="wall-key" aria-hidden="true">N</kbd>
@@ -2006,7 +2037,21 @@ export default function TodayTab({
         </div>
         </div>
 
-        {upNext && <p className="today-upnext-hint">Tap a task to open it. Drag to reorder.</p>}
+        {/* Q59: List | Day map, two views of one plan. */}
+        <div className="today-view-switch" role="group" aria-label="View">
+          <button type="button" className="today-view-opt" aria-pressed={listView === "list"} onClick={() => setListView("list")}>List</button>
+          <button type="button" className="today-view-opt" aria-pressed={listView === "daymap"} onClick={() => setListView("daymap")}>Day map</button>
+        </div>
+        {listView === "daymap" ? (
+          <DayMapColumn
+            route={route}
+            onOpenDayMap={onOpenDayMap}
+            onOpenTask={openFromDayMap}
+            onDone={(task) => handleToggleComplete(task)}
+            onMoveToTomorrow={handleMoveManyToTomorrow}
+            onPark={handleParkMany}
+          />
+        ) : (<>
         <div className="tasks-list" data-testid="today-tasks-list" onKeyDown={onListKeyDown}>
           {!wallIsAsking && todayTasksAll.length === 0 && (
             <p className="today-list-empty">Nothing else on Today.</p>
@@ -2033,12 +2078,15 @@ export default function TodayTab({
                 onDragCancel={() => setActiveTaskId(null)}
               >
                 <SortableContext
-                  items={shownTasks.map(t => getTaskKey(t))}
+                  items={remainingTasks.map(t => getTaskKey(t))}
                   strategy={verticalListSortingStrategy}
                 >
-                  {shownTasks.map((task, idx) => (
+                  {remainingTasks.map((task, idx) => (
                     <React.Fragment key={getTaskKey(task)}>
-                      <SortableTaskItem id={getTaskKey(task)}>
+                      {idx === firstOver && (
+                        <p className="today-dayend" aria-label={`Day ends at ${formatClock24(route.plan.dayEnd)}`}>DAY ENDS {formatClock24(route.plan.dayEnd)}</p>
+                      )}
+                      <SortableTaskItem id={getTaskKey(task)} isOver={firstOver !== -1 && idx >= firstOver}>
                         {({ dragHandleListeners, dragHandleAttributes, dragActivatorRef }) => (
                           <TaskRow
                             task={task}
@@ -2072,10 +2120,14 @@ export default function TodayTab({
                     </React.Fragment>
                   ))}
                 </SortableContext>
-                {upNextHidden > 0 && (
-                  <button type="button" className="today-upnext-all" onClick={() => setUpNextAll(true)}>
-                    All {remainingTasks.length} tasks
-                  </button>
+                {firstOver === -1 && remainingTasks.length > 0 && route.scheduledTasks.length > 0 && (
+                  <p className="today-dayend">DAY ENDS {formatClock24(route.plan.dayEnd)}{cut.spare > 0 ? ` · ${formatSpanCaps(cut.spare)} SPARE` : ""}</p>
+                )}
+                {firstOver !== -1 && (
+                  <p className="today-wontfit-line">
+                    {cut.overIds.size} won’t fit · {formatSpanCaps(cut.wontFitMinutes).toLowerCase()}
+                    {" · "}<button type="button" className="today-list-empty-link" onClick={() => setListView("daymap")}>Sort in Day map ›</button>
+                  </p>
                 )}
                 <DragOverlay dropAnimation={null}>
                   {activeTaskId ? (() => {
@@ -2168,6 +2220,7 @@ export default function TodayTab({
             </div>
           )}
         </div>
+        </>)}
         {/* Laptop (51a): the list's last line adds to Today. It pins to the
             bottom of the card when the list is longer than the screen. */}
         {onOpenAddTask && (
@@ -2181,17 +2234,6 @@ export default function TodayTab({
           </div>
         )}
       </section>
-      {dayMapColumn && (
-        <DayMapColumn
-          payload={payload}
-          savePayload={savePayload}
-          onOpenDayMap={onOpenDayMap}
-          onOpenTask={openFromDayMap}
-          onDone={(task) => handleToggleComplete(task)}
-          onMoveToTomorrow={handleMoveManyToTomorrow}
-          covered={!!detailTask}
-        />
-      )}
       </div>
 
       {/* ── Momentum (J4). Below the ledger, never beside the hero. Hidden

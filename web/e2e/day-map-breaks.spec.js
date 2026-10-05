@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openDayMapPage } from "./helpers/today";
 
 // The route engine's breaks (turn 57b answer 2): the gap between two focus
 // windows is a break on the route, and a task that runs into it stops for it
@@ -29,7 +30,7 @@ async function openDayMapWithLunch(page, viewport = { width: 412, height: 892 },
   await page.getByRole("textbox", { name: "Break name" }).fill("Lunch");
   await page.getByRole("textbox", { name: "Break name" }).blur();
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
-  await page.getByRole("button", { name: "Day map →" }).click();
+  await openDayMapPage(page);
 }
 
 test("a task that runs into the break stops for it and continues after; the next stop follows it", async ({ page }) => {

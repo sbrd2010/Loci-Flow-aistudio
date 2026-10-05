@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openDayMapPage } from "./helpers/today";
 
 // Day Map reliability smoke tests run in demo mode so they do not mutate Firebase data.
 // They protect the execution route: anchor time, auto-fill, navigation persistence, and reflow.
@@ -22,7 +23,7 @@ async function enterDemo(page, viewport = { width: 375, height: 812 }) {
 }
 
 async function openDayMap(page) {
-  await page.getByRole("button", { name: /Day Map/i }).click();
+  await openDayMapPage(page);
   await expect(page.getByRole("heading", { name: "Day map" })).toBeVisible({ timeout: 8_000 });
 }
 

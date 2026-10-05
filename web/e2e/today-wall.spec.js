@@ -1270,16 +1270,16 @@ test("wide: from 1600px the cap is 1760px, centred (50k)", async ({ page }) => {
   await page.keyboard.press("l");
   await expect(page.locator(".tasks-section")).toBeVisible();
   await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
-  const [band, map] = await Promise.all([page.locator(".wall-goal").boundingBox(), page.locator(".today-daymap").boundingBox()]);
+  const [band, list] = await Promise.all([page.locator(".wall-goal").boundingBox(), page.locator(".tasks-section").boundingBox()]);
   // (1920 − 1760) / 2 = 80 each side.
   expect(Math.round(band.x)).toBe(80);
-  expect(Math.round(map.x + map.width)).toBe(1840);
+  expect(Math.round(list.x + list.width)).toBe(1840);
 });
 
-test("laptop: with the list hidden, the task and the Day map sit side by side on one left edge, with the bottom bar (54c)", async ({ page }) => {
+test("laptop: with the list hidden, the task sits on one left edge, with the bottom bar (54c)", async ({ page }) => {
   await enterLaptop(page);
   // The 51b bug: goal, kicker, title and buttons share one left edge.
-  const [band, anchor, kicker, title, start, done, split, map] = await Promise.all([
+  const [band, anchor, kicker, title, start, done, split] = await Promise.all([
     page.locator(".wall-goal").boundingBox(),
     page.locator(".wall-anchor").boundingBox(),
     page.locator(".wall-kicker").boundingBox(),
@@ -1287,15 +1287,12 @@ test("laptop: with the list hidden, the task and the Day map sit side by side on
     page.locator(".wall-start").boundingBox(),
     page.getByRole("button", { name: /^Mark done/ }).boundingBox(),
     page.getByRole("button", { name: /^Split it/ }).boundingBox(),
-    page.getByRole("complementary", { name: "Day map" }).boundingBox(),
   ]);
   for (const box of [kicker, title, start, done]) expect(Math.abs(box.x - band.x)).toBeLessThan(1);
   expect(Math.round(start.width)).toBe(Math.round(band.width));
   expect(Math.round(split.x + split.width)).toBe(Math.round(band.x + band.width));
   expect(Math.round(done.y)).toBe(Math.round(split.y));
-  // The Day map column is beside the task, and the task block sits at most
-  // 120px under the goal.
-  expect(map.x).toBeGreaterThan(band.x + band.width);
+  // The task block sits at most 120px under the goal.
   expect(kicker.y - (anchor.y + anchor.height)).toBeLessThanOrEqual(121);
   // A tall screen too, where 10% of the height passes the cap.
   await page.setViewportSize({ width: 1280, height: 1400 });
@@ -1710,6 +1707,9 @@ test("the next morning, moved tasks head the list tagged FROM YESTERDAY, for tha
 
   const rerender = async () => {
     await page.getByRole("button", { name: /^Must-do · \d+$/ }).click();
+    // A new week's Monday asks for its review; Later leaves it for the day.
+    const later = page.getByRole("dialog", { name: /ended$/ }).getByRole("button", { name: "Later" }).last();
+    await later.waitFor({ timeout: 1_500 }).then(() => later.click()).catch(() => {});
     await page.getByRole("button", { name: /^All · \d+$/ }).click();
   };
   await page.clock.setFixedTime(new Date("2024-06-16T10:00:00"));
@@ -1845,15 +1845,14 @@ test("the task sheet keeps a P4 task's priority on offer", async ({ page }) => {
 });
 
 // Codex review of #405: with nothing pinned the wall has no Day map link of
-// its own, so on a laptop the list header keeps it.
-test("laptop: with no one thing, the list header still opens the Day map", async ({ page }) => {
+// its own, so on a laptop the list's Day map view keeps the way to the page.
+test("laptop: with no one thing, the list's Day map view still opens the Day map page", async ({ page }) => {
   await enterLaptop(page);
   await page.locator(".wall-title").click();
   await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
   await expect(page.locator(".wall-commit-field")).toBeVisible();
-  const link = page.locator(".today-list-link");
-  await expect(link).toBeVisible();
-  await link.click();
+  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Day map", exact: true }).click();
+  await page.getByRole("button", { name: "Day map page ›" }).click();
   await expect(page.getByRole("heading", { name: /Day map/i }).first()).toBeVisible();
 });
 
@@ -1927,6 +1926,9 @@ test("a moved-from-yesterday task drags like any other row and keeps its tag (Q7
   await page.keyboard.press("t");
   const rerender = async () => {
     await page.getByRole("button", { name: /^Must-do · \d+$/ }).click();
+    // A new week's Monday asks for its review; Later leaves it for the day.
+    const later = page.getByRole("dialog", { name: /ended$/ }).getByRole("button", { name: "Later" }).last();
+    await later.waitFor({ timeout: 1_500 }).then(() => later.click()).catch(() => {});
     await page.getByRole("button", { name: /^All · \d+$/ }).click();
   };
   await page.clock.setFixedTime(new Date("2024-06-16T10:00:00"));

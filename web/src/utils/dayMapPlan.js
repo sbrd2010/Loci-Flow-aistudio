@@ -21,6 +21,12 @@ export function formatSpan(minutes) {
   return r ? `${h}h${String(r).padStart(2, "0")}m` : `${h}h`;
 }
 
+// The same span in the Day map's caps (70): "50 MIN", "1H10M".
+export function formatSpanCaps(minutes) {
+  const m = Math.max(0, Math.round(minutes));
+  return m < 60 ? `${m} MIN` : formatSpan(m).toUpperCase();
+}
+
 // Clock minutes from the route's start to where the day ends: the end of the
 // last focus window (brief: "the day end is the end of the last focus
 // window"). The route runs on the clock, gaps included, so the line must too:
@@ -33,19 +39,6 @@ export function dayLeftFrom(startMinutes, now, windows) {
   const lociStart = getLociNowMinutes(at, windows);
   const lastEnd = Math.max(...mergeWindowSpans(windows).map(([, end]) => end));
   return Math.max(0, Math.round(lastEnd - lociStart));
-}
-
-// The day clock's bar (50e–f): where the Loci day starts and ends, where now
-// sits, and the share of it that has passed (0–1). Loci minutes, so a window
-// past midnight runs on past 1440. Null with no windows.
-export function dayProgress(now, windows) {
-  const spans = mergeWindowSpans(windows);
-  if (!spans.length) return null;
-  const start = spans[0][0];
-  const end = Math.max(...spans.map(([, e]) => e));
-  const at = getLociNowMinutes(now, windows);
-  const passed = end > start ? Math.min(1, Math.max(0, (at - start) / (end - start))) : 1;
-  return { start, end, now: at, passed };
 }
 
 // Where the day ends along the route, and what that means for each stop.

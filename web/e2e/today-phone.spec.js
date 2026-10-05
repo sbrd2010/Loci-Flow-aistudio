@@ -87,8 +87,8 @@ test("phone: a title past three lines is cut, and Full title and details opens i
 });
 
 // 58.1/58.5 (67a): the Next strip sits on the tab bar with the next task; "+"
-// is a 56px circle at its right. 58.6 (67c): it opens Up next, the next 3,
-// then "All N tasks"; done tasks fold under "Done today".
+// is a 56px circle at its right. Q59 (70a): it opens Up next, the whole list
+// with the List | Day map switch; done tasks fold under "Done today".
 test("phone: the Next strip names the next task above the tabs, with a 56px +", async ({ page }) => {
   await enterDemo(page);
   const strip = page.locator(".wall-peek-row");
@@ -100,7 +100,7 @@ test("phone: the Next strip names the next task above the tabs, with a 56px +", 
   expect(Math.round(plus.width)).toBe(56);
 });
 
-test("phone: Up next shows 3, then All N opens the rest; done tasks fold under Done today", async ({ page }) => {
+test("phone: Up next shows the whole list with the List | Day map switch; done tasks fold under Done today", async ({ page }) => {
   await enterDemo(page);
   for (const title of ["Draft the methods outline", "Order printer ink"]) {
     await page.getByRole("button", { name: "Add a task to Today" }).first().click();
@@ -111,10 +111,8 @@ test("phone: Up next shows 3, then All N opens the rest; done tasks fold under D
   if (!(await page.locator(".today-list.is-sheet").isVisible())) await page.locator(".wall-peek").click();
   const sheet = page.locator(".today-list.is-sheet");
   await expect(sheet.locator(".today-list-title")).toHaveText("Up next");
-  await expect(sheet.locator(".today-upnext-hint")).toHaveText("Tap a task to open it. Drag to reorder.");
+  await expect(sheet.getByRole("group", { name: "View" }).getByRole("button")).toHaveText(["List", "Day map"]);
   const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)");
-  await expect(rows).toHaveCount(3);
-  await sheet.getByRole("button", { name: /^All \d+ tasks$/ }).click();
   await expect(rows).toHaveCount(4);
 
   await rows.first().getByTestId("task-checkbox").click();
@@ -165,7 +163,7 @@ test("phone: with no one thing, Feeling scattered isn't offered; I'm stuck is", 
 });
 
 // Codex review of #475: with nothing after the one thing the strip still says
-// what it opens; and ↓ past Up next's three opens the rest, focus following.
+// what it opens.
 test("phone: the Next strip with nothing after the one thing still reads, and opens the list", async ({ page }) => {
   await enterDemo(page);
   await page.locator(".wall-peek").click();
@@ -174,23 +172,4 @@ test("phone: the Next strip with nothing after the one thing still reads, and op
   await page.locator(".today-list.is-sheet").getByRole("button", { name: "Hide list" }).click();
   await expect(page.locator(".wall-peek-next")).toHaveText("Nothing else on Today");
   await expect(page.locator(".wall-peek")).toHaveAccessibleName(/Nothing else on Today/);
-});
-
-test("phone: ↓ past Up next's three opens the rest and focuses the fourth", async ({ page }) => {
-  await enterDemo(page);
-  for (const title of ["Draft the methods outline", "Order printer ink"]) {
-    await page.getByRole("button", { name: "Add a task to Today" }).first().click();
-    await page.getByTestId("add-task-title").fill(title);
-    await page.getByTestId("add-task-submit").click();
-    await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
-  }
-  if (!(await page.locator(".today-list.is-sheet").isVisible())) await page.locator(".wall-peek").click();
-  const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)");
-  await expect(rows).toHaveCount(3);
-  await rows.first().focus();
-  for (let i = 1; i <= 3; i++) {
-    await page.keyboard.press("ArrowDown");
-    await expect(rows.nth(i)).toBeFocused();
-  }
-  await expect(rows).toHaveCount(4);
 });

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openDayMapPage } from "./helpers/today";
 
 // Day map controls (52d, 56a–b): From · Fixed time. Every open Today task is
 // on the route, in Today's list order (Q59): no Unscheduled, Auto-fill or
@@ -14,7 +15,7 @@ async function openDayMap(page, viewport) {
   await expect(page.getByTestId("demo-btn")).toBeVisible({ timeout: 25_000 });
   await page.getByTestId("demo-btn").click();
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
-  await page.getByRole("button", { name: "Day map →" }).click();
+  await openDayMapPage(page);
   await expect(page.locator(".day-map-page")).toBeVisible();
 }
 
@@ -58,7 +59,7 @@ test("the route is Today's list, in its order; a task added to Today joins it at
   expect(list.length).toBe(3);
   expect(list[2]).toBe("Order printer ink");
 
-  await page.getByRole("button", { name: "Day map →" }).click();
+  await openDayMapPage(page);
   // The one thing heads the route at NOW; the list's rows follow, in order.
   await expect.poll(() => stopTitles(page)).toEqual([one, ...list]);
 });

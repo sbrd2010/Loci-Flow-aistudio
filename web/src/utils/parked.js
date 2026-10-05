@@ -12,8 +12,9 @@ export function parkedSince(task) {
   return Number(task.parkedAt) || Number(task.lastUpdated) || 0;
 }
 
-// Restore puts the task at the bottom of Today's list. `before` holds what
-// Undo needs to put it back.
+// Restore puts the task at the bottom of Today's list, and so of the route
+// (Q59): its old stop is let go, and it joins the route anew. `before` holds
+// what Undo needs to put it back.
 export function restoreParked(tasks, uuid, now = Date.now()) {
   const task = tasks.find(t => t.uuid === uuid && t.isParked && !t.isDeleted);
   if (!task) return { tasks, before: null };
@@ -24,9 +25,11 @@ export function restoreParked(tasks, uuid, now = Date.now()) {
   // task parked before parkedAt existed.
   const before = { horizonLevel: task.horizonLevel, orderIndex: task.orderIndex ?? null, deferredUntil: task.deferredUntil ?? null, parkedAt: parkedSince(task) || null };
   return {
-    tasks: tasks.map(t => t.uuid === uuid
-      ? { ...t, isParked: false, horizonLevel: "today", orderIndex: bottom, deferredUntil: null, lastUpdated: now }
-      : t),
+    tasks: tasks.map(t => {
+      if (t.uuid !== uuid) return t;
+      const { dayMapDate, dayMapPeriod, dayMapStartMinutes, dayMapDurationMinutes, dayMapOrder, dayMapFixedMinutes, ...rest } = t;
+      return { ...rest, isParked: false, horizonLevel: "today", orderIndex: bottom, deferredUntil: null, lastUpdated: now };
+    }),
     before,
   };
 }

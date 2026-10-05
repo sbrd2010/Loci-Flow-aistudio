@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bringBack, dayLeftFrom, dayProgress, formatClock24, formatSpan, moveToTomorrow, nextDateStr, planDay, restoreSchedule } from "./dayMapPlan";
+import { bringBack, dayLeftFrom, formatClock24, formatSpan, moveToTomorrow, nextDateStr, planDay, restoreSchedule } from "./dayMapPlan";
 
 const stop = (id, start, dur) => ({ uuid: id, dayMapStartMinutes: start, dayMapDurationMinutes: dur });
 
@@ -178,31 +178,3 @@ describe("bringBack (50h)", () => {
     expect(bringBack(tasks, "a", 2).tasks).toBe(tasks);
   });
 });
-
-describe("dayProgress (50e–f)", () => {
-  const at = (h, m) => new Date(2026, 8, 23, h, m);
-  const win = (startMin, endMin, overnight = false) => ({ startMin, endMin, overnight });
-
-  it("places now between the day's start and end", () => {
-    const p = dayProgress(at(11, 35), [win(9 * 60, 17 * 60 + 15)]);
-    expect(p).toMatchObject({ start: 540, end: 1035, now: 695 });
-    expect(p.passed).toBeCloseTo(155 / 495, 5);
-  });
-
-  it("spans every window, and clamps before the start and after the end", () => {
-    const windows = [win(14 * 60, 18 * 60), win(9 * 60, 12 * 60)];
-    expect(dayProgress(at(7, 0), windows)).toMatchObject({ start: 540, end: 1080, passed: 0 });
-    expect(dayProgress(at(20, 0), windows).passed).toBe(1);
-  });
-
-  it("runs past midnight for a window that does", () => {
-    const p = dayProgress(at(1, 0), [win(20 * 60, 2 * 60, true)]);
-    expect(p).toMatchObject({ start: 1200, end: 1560, now: 1500 });
-    expect(p.passed).toBeCloseTo(300 / 360, 5);
-  });
-
-  it("is null with no windows", () => {
-    expect(dayProgress(at(9, 0), [])).toBeNull();
-  });
-});
-

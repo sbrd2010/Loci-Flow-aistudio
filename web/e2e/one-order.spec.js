@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openDayMapPage } from "./helpers/today";
 
 // One order for the Today list and the Day map (Rohan, 4 Oct 2026): a drag
 // in either is the same reorder in the other. The one thing heads the route
@@ -24,7 +25,7 @@ const announced = (page, re) => page.waitForFunction((src) =>
   [...document.querySelectorAll("[id^='DndLiveRegion']")].some(el => new RegExp(src).test(el.textContent)), re.source);
 
 async function openDayMap(page) {
-  await page.getByRole("button", { name: "Day map →" }).click();
+  await openDayMapPage(page);
   await expect(page.locator(".day-map-page")).toBeVisible();
 }
 async function backToToday(page) {
