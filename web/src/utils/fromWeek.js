@@ -34,6 +34,16 @@ export function pullFromWeek(tasks, uuids, now = Date.now()) {
   };
 }
 
+// Whether the move takes the one thing from a task that held it: then that
+// task's open session has to end (Codex review of #486). The new one thing is
+// the first chosen, so a held task ticked later still loses the pin.
+export function takesPinFrom(tasks, next) {
+  const held = tasks.find(t => t.isNowFocus && !t.isDeleted);
+  if (!held) return false;
+  const now = next.find(t => t.isNowFocus && !t.isDeleted);
+  return !now || now.uuid !== held.uuid;
+}
+
 // Undo: back to This week, where they were — the ones still open in Today.
 // lastUpdated can't tell a user's change from the route taking them in
 // (joinRoute stamps it at once), so it isn't checked; Undo lasts 5 seconds.

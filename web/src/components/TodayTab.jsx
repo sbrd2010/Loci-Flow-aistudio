@@ -55,7 +55,7 @@ import { routeBreaks } from "../utils/dayMapBreaks";
 import { isEventTask, isFixedStop } from "../utils/dayMapRoute";
 import { bringBack, formatClock24, formatSpanCaps, moveToTomorrow, nextDateStr, restoreSchedule } from "../utils/dayMapPlan";
 import { parkedTasks, parkedSince, restoreParked, undoRestoreParked } from "../utils/parked";
-import { weekTasks, pullFromWeek, undoPullFromWeek } from "../utils/fromWeek";
+import { weekTasks, pullFromWeek, undoPullFromWeek, takesPinFrom } from "../utils/fromWeek";
 import FromWeekSheet from "./FromWeekSheet";
 import { cssZoom, unzoomTransform } from "../utils/cssZoom";
 import { useListChoreography, listMotionMode } from "../hooks/useListChoreography";
@@ -878,7 +878,7 @@ export default function TodayTab({
     if (!before.length) return;
     // Whatever held the one thing (Coach can pin a week task) lets go, and
     // its open session ends with it, as handlePinTask does.
-    const endedFocusSession = tasks.some(t => t.isNowFocus && !uuids.includes(t.uuid)) ? endFocusSession("user_abandoned") : null;
+    const endedFocusSession = takesPinFrom(tasks, next) ? endFocusSession("user_abandoned") : null;
     if (endedFocusSession) {
       setIsTimerRunning(false);
       setIsFocusMode(false);

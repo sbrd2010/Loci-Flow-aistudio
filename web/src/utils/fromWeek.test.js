@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { weekTasks, pullFromWeek, undoPullFromWeek } from "./fromWeek";
+import { weekTasks, pullFromWeek, undoPullFromWeek, takesPinFrom } from "./fromWeek";
 
 const t = (uuid, extra = {}) => ({ uuid, title: uuid, horizonLevel: "week", orderIndex: 0, isDeleted: false, isCompleted: false, lastUpdated: 1, ...extra });
 
@@ -55,5 +55,19 @@ describe("undoPullFromWeek", () => {
     expect(back.find(x => x.uuid === "a")).toMatchObject({ horizonLevel: "week", orderIndex: 2, isNowFocus: false, lastUpdated: 70 });
     expect(back.find(x => x.uuid === "b").horizonLevel).toBe("today");
     expect(back.find(x => x.uuid === "c").horizonLevel).toBe("month");
+  });
+});
+
+describe("takesPinFrom", () => {
+  it("is true when the held task is ticked, but not first", () => {
+    const tasks = [t("held", { isNowFocus: true }), t("a")];
+    const { tasks: next } = pullFromWeek(tasks, ["a", "held"], 5);
+    expect(takesPinFrom(tasks, next)).toBe(true);
+  });
+  it("is false when the held task is first, or nothing was held", () => {
+    const tasks = [t("held", { isNowFocus: true }), t("a")];
+    expect(takesPinFrom(tasks, pullFromWeek(tasks, ["held", "a"], 5).tasks)).toBe(false);
+    const free = [t("a"), t("b")];
+    expect(takesPinFrom(free, pullFromWeek(free, ["a"], 5).tasks)).toBe(false);
   });
 });
