@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { isEventTask } from "../utils/dayMapRoute";
+import SectionHead from "./CoachSectionHead";
 
-// Coach's brief (Q51, 62a–b): runs only on "Brief me", keeps only the latest,
-// and every action is a button with Undo (Q50). The groups show only when they
-// have something; on smaller screens the middle ones fold to one line.
+// Coach's brief (Q51, 73a/b): section 01 of Review. A lead sentence from the
+// facts, then label/text rows and a "Do next" card. It runs only on
+// "Brief me", keeps only the latest, and every action is a button with Undo
+// (Q50). Rows show only when they have something; on a phone Patterns and the
+// middle rows fold to one line.
 
 const clock = (ms) => {
   const d = new Date(ms);
@@ -35,24 +38,23 @@ function Group({ kicker, warn = false, folded = false, children }) {
   if (folded) {
     return (
       <details className="br-group br-fold">
-        <summary className={`br-kicker${warn ? " is-warn" : ""}`}>{kicker} ▸</summary>
-        {children}
+        <summary className={`br-label${warn ? " is-warn" : ""}`}>{kicker} ▸</summary>
+        <div className="br-text">{children}</div>
       </details>
     );
   }
   return (
-    <section className="br-group">
-      <h3 className={`br-kicker${warn ? " is-warn" : ""}`}>{kicker}</h3>
-      {children}
-    </section>
+    <div className="br-group">
+      <h3 className={`br-label${warn ? " is-warn" : ""}`}>{kicker}</h3>
+      <div className="br-text">{children}</div>
+    </div>
   );
 }
 
-export default function CoachBrief({ brief, status = "idle", error = "", tasks = [], horizonName = (id) => id, onBriefMe, onAsk, onMove, onMakeOneThing, onSplit, actionsDisabled = false }) {
+export default function CoachBrief({ brief, status = "idle", error = "", lead = null, weekdayLine = null, tasks = [], horizonName = (id) => id, onBriefMe, onAsk, onMove, onMakeOneThing, onSplit, actionsDisabled = false }) {
   // What this session applied, by line: { label, undo }.
   const [done, setDone] = useState({});
   useEffect(() => { setDone({}); }, [brief?.at]);
-  const small = useMedia("(max-width: 1279px)");
   const phone = useMedia("(max-width: 599px)");
 
   const live = (uuid) => tasks.find(t => t.uuid === uuid && !t.isDeleted && !t.isCompleted);
@@ -76,12 +78,14 @@ export default function CoachBrief({ brief, status = "idle", error = "", tasks =
     : <button type="button" className="br-link" disabled={actionsDisabled} onClick={() => apply(k, doneLabel, run)}>{label}</button>);
 
   const head = (
-    <div className="br-head">
-      <h2 className="br-title">Coach’s brief</h2>
-      {brief && status !== "running" && (
-        <span className="br-stamp">{stamp(brief.at)} <button type="button" className="br-link br-refresh" onClick={onBriefMe}>Refresh</button></span>
-      )}
-    </div>
+    <>
+      <SectionHead num="01" title="Coach’s brief">
+        {brief && status !== "running" && (
+          <span className="br-stamp">Read {stamp(brief.at)} <button type="button" className="br-link br-refresh" onClick={onBriefMe}>Refresh</button></span>
+        )}
+      </SectionHead>
+      {lead && <p className="br-lead">{lead}</p>}
+    </>
   );
 
   if (!brief || status === "running") {
@@ -104,35 +108,41 @@ export default function CoachBrief({ brief, status = "idle", error = "", tasks =
   // A split task is gone once split; its line stays to show "✓ Split" and Undo.
   const estimates = (brief.estimates || []).filter(e => (e.action === "split" ? live(e.uuid) : movable(e.uuid, e.action)) || done[`split:${e.uuid}`] || done[`move:${e.uuid}:${e.action}`]);
   const next = brief.next && live(brief.next.uuid) ? brief.next : null;
-  const foldMiddle = small && (tooMuch?.items.length || estimates.length);
+  const foldMiddle = phone && (tooMuch?.items.length || estimates.length);
+  const patterns = [weekdayLine, ...(brief.patterns || [])].filter(Boolean);
 
   return (
     <div className="br">
       {head}
-      <span className="br-read">Read today, 7 and 30 days</span>
       {status === "error" && <p className="br-error" role="alert">{error || "Couldn’t reach Coach. Try again."}</p>}
 
-      {brief.howItWent?.length > 0 && (
-        <Group kicker="How it went">{brief.howItWent.map((l, i) => <p key={i} className="br-line">{l}</p>)}</Group>
-      )}
-      {brief.patterns?.length > 0 && (
-        <Group kicker="Patterns" folded={phone}>{brief.patterns.map((l, i) => <p key={i} className="br-line">{l}</p>)}</Group>
-      )}
-      {foldMiddle ? (
-        <details className="br-group br-fold">
-          <summary className="br-kicker">{[tooMuch?.items.length && "Too much planned", estimates.length && "Estimates"].filter(Boolean).join(" · ")} ▸</summary>
-          {tooMuch?.items.length > 0 && <TooMuch />}
-          {estimates.length > 0 && <Estimates />}
-        </details>
-      ) : (
-        <>
-          {tooMuch?.items.length > 0 && <Group kicker="Too much planned" warn><TooMuch /></Group>}
-          {estimates.length > 0 && <Group kicker="Estimates"><Estimates /></Group>}
-        </>
-      )}
+      <div className="br-groups">
+        {brief.howItWent?.length > 0 && (
+          <Group kicker="How it went"><p className="br-line">{brief.howItWent.join(" ")}</p></Group>
+        )}
+        {patterns.length > 0 && (
+          <Group kicker="Patterns" folded={phone}><p className="br-line">{patterns.join(" ")}</p></Group>
+        )}
+        {foldMiddle ? (
+          <details className="br-group br-fold">
+            <summary className="br-label">{[tooMuch?.items.length && "Too much planned", estimates.length && "Estimates"].filter(Boolean).join(" · ")} ▸</summary>
+            <div className="br-text">
+              {tooMuch?.items.length > 0 && <TooMuch />}
+              {estimates.length > 0 && <Estimates />}
+            </div>
+          </details>
+        ) : (
+          <>
+            {tooMuch?.items.length > 0 && <Group kicker="Too much planned" warn><TooMuch /></Group>}
+            {estimates.length > 0 && <Group kicker="Estimates"><Estimates /></Group>}
+          </>
+        )}
+      </div>
       {next && (
-        <Group kicker="Next">
-          <p className="br-line"><strong>{live(next.uuid).title}</strong>{next.line ? `. ${next.line.replace(/^\.\s*/, "")}` : ""}</p>
+        <div className="br-next">
+          <h3 className="br-next-kicker">Do next</h3>
+          <p className="br-next-title">{live(next.uuid).title}</p>
+          {next.line && <p className="br-next-line">{next.line.replace(/^\.\s*/, "")}</p>}
           <div className="br-next-actions">
             {done[`one:${next.uuid}`]
               ? <Action k={`one:${next.uuid}`} />
@@ -143,7 +153,7 @@ export default function CoachBrief({ brief, status = "idle", error = "", tasks =
                 : <button type="button" className="br-run" disabled={actionsDisabled} onClick={() => apply(`one:${next.uuid}`, `The one thing · ${live(next.uuid).title}`, () => onMakeOneThing(next.uuid))}>Make it the one thing</button>}
             <button type="button" className="br-link br-ask" onClick={() => onAsk(brief)}>Ask about this →</button>
           </div>
-        </Group>
+        </div>
       )}
       {!next && <button type="button" className="br-link br-ask" onClick={() => onAsk(brief)}>Ask about this →</button>}
     </div>

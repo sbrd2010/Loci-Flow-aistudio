@@ -3,7 +3,8 @@
 // review tag, two parked tasks, and more than fits before the day ends at
 // 02:00. Demo mode loads it in place of its sample day (utils/demoData.js).
 // { coach: true } adds a conversation (two 20-word messages from you, two
-// 55-word replies: PART7's 2 + 2 check) and a saved Coach's brief.
+// 55-word replies: PART7's 2 + 2 check), a saved Coach's brief, and a clear
+// best weekday (yesterday).
 export async function loadRealDay(page, { coach = false } = {}) {
   await page.addInitScript((withCoach) => {
     window.__LOCI_DEMO_FIXTURE__ = () => {
@@ -72,6 +73,8 @@ export async function loadRealDay(page, { coach = false } = {}) {
           { isUser: true, at: t0 + 30 * 60_000, text: "I keep jumping between things today and cannot settle down at all. What should I do with the next hour?" },
           { isUser: false, at: t0 + 31 * 60_000, text: "Close every tab except Gmail. Flag that one email, then start the PRINCE2 hour with the timer on and nothing else open. If your mind wanders, park the thought in Mind Box and go back. When the hour ends, tell me what you covered, and we will decide together whether the CV really comes next." },
         ];
+        // Yesterday is the clear best weekday over 30 days (Review, 73a).
+        payload.contributions[0].count = 4;
         const cv = payload.tasks.find(x => x.title.startsWith("Prepare CV"));
         const prince = payload.tasks.find(x => x.title.startsWith("PRINCE2 Fundamentals"));
         payload.config.coachBrief = {

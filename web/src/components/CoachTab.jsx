@@ -41,6 +41,7 @@ import { isOnToday } from "../utils/deferral";
 import { focusBlockSeconds } from "../utils/focusSession";
 import { cssZoom } from "../utils/cssZoom";
 import ClampedReply from "./ClampedReply";
+import { REVIEW_PERIODS } from "../utils/coachReview";
 // 73–74 (Turn 76): Chat and Review, last so they win the cascade.
 import "../styles/coach74.css";
 
@@ -114,7 +115,7 @@ const briefChipLabel = (brief) => {
   return `${d.getDate()} ${d.toLocaleString("en-GB", { month: "short" })} ${clockHHMM(brief.at)}`;
 };
 
-export default function CoachTab({ payload, savePayload, savePayloadAsync, saveSubPath, saveSubPaths, saveSubPathsAsync, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null, chatDraft = "", setChatDraft = () => {}, uid, writeActivityEvents, stuck = null, onClearStuck, onBackToFocus, onOpenPrivacy }) {
+export default function CoachTab({ payload, savePayload, savePayloadAsync, saveSubPath, saveSubPaths, saveSubPathsAsync, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null, chatDraft = "", setChatDraft = () => {}, uid, writeActivityEvents, stuck = null, onClearStuck, onBackToFocus, onOpenPrivacy, onOpenDayMap = null }) {
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
   const windows = getFocusWindows(config);
   // "Today" is the Loci day: a task moved to tomorrow stays off it until the
@@ -153,6 +154,8 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
   // in the kicker and the placeholder.
   const coachName = config.mentorName || "Coach";
   const [coachTab, setCoachTab] = useState("chat");
+  // Review's period lives here: its switch sits in the tab row (73a).
+  const [reviewPeriod, setReviewPeriod] = useState("7d");
 
   const chatInput = chatDraft;
   const setChatInput = setChatDraft;
@@ -1587,8 +1590,22 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     };
   }, [coachTab]);
 
+  // Review scrolls under the app header, which is sticky too: the tab row
+  // sticks just below it (the header's height changes with width and scale).
+  const pageRef = useRef(null);
+  useLayoutEffect(() => {
+    if (coachTab !== "review") return undefined;
+    const header = document.querySelector(".shell-header");
+    const set = () => pageRef.current?.style.setProperty("--coach-sticky-top", `${header ? Math.max(0, header.getBoundingClientRect().height) : 0}px`);
+    set();
+    const ro = header && typeof ResizeObserver === "function" ? new ResizeObserver(set) : null;
+    ro?.observe(header);
+    window.addEventListener("resize", set);
+    return () => { ro?.disconnect(); window.removeEventListener("resize", set); };
+  }, [coachTab]);
+
   return (
-    <div className="coach-page">
+    <div className="coach-page" ref={pageRef}>
       {confirmDialog && <ConfirmDialog {...confirmDialog} />}
 
       {/* Q51: Coach is two tabs, Chat (first) and Review. */}
@@ -1603,6 +1620,13 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
           <button type="button" role="tab" id="coach-tab-chat" aria-controls="coach-panel-chat" aria-selected={coachTab === "chat"} tabIndex={coachTab === "chat" ? 0 : -1} className="coach-tab" onClick={() => setCoachTab("chat")}>Chat</button>
           <button type="button" role="tab" id="coach-tab-review" aria-controls="coach-panel-review" aria-selected={coachTab === "review"} tabIndex={coachTab === "review" ? 0 : -1} className="coach-tab" onClick={() => setCoachTab("review")}>Review</button>
         </div>
+        {coachTab === "review" && (
+          <div className="rv-period" role="radiogroup" aria-label="Period">
+            {REVIEW_PERIODS.map(p => (
+              <button key={p.key} type="button" role="radio" aria-checked={reviewPeriod === p.key} onClick={() => setReviewPeriod(p.key)}>{p.label}</button>
+            ))}
+          </div>
+        )}
         {coachTab === "chat" && (
           <span className="coach-tabs-end">
             <span className="coach-tabs-note">Reads your lists. Changes only what you tap.</span>
@@ -1814,14 +1838,16 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
       </section>
       )}
 
-      {/* Review (Q51): the facts, and Coach's brief beside them. */}
+      {/* Review (73a/b): Coach's brief first, then the numbers behind it. */}
       {coachTab === "review" && (
       <div id="coach-panel-review" role="tabpanel" aria-labelledby="coach-tab-review">
-        <CoachReview payload={payload} uid={uid} renderBrief={({ focusRaw, frontNameOf }) => (
+        <CoachReview payload={payload} uid={uid} period={reviewPeriod} onOpenDayMap={onOpenDayMap} renderBrief={({ focusRaw, frontNameOf, lead, weekdayLine }) => (
           <CoachBrief
             brief={config.coachBrief || null}
             status={briefStatus}
             error={briefError}
+            lead={lead}
+            weekdayLine={weekdayLine}
             tasks={tasks}
             horizonName={(id) => horizonsFromConfig(config, lociDayNow()).find(h => h.id === id)?.name || id}
             onBriefMe={() => handleBriefMe(focusRaw, frontNameOf)}

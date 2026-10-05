@@ -106,7 +106,9 @@
 /* — The phone (74b): the Chat | Review row (56) takes the app header's
    place, "New" at its right; gaps of 20; no key hint. — */
 @media (max-width: 839px) {
-  .shell-header.is-coach { display: none; }
+  /* 74b: on phone Chat the Loci header gives way to the Chat · Review row.
+     Review is a scrolling report and keeps it. */
+  .app-container:has(#coach-panel-chat) .shell-header.is-coach { display: none; }
   .coach-tabs {
     flex-wrap: nowrap;
     align-items: stretch;

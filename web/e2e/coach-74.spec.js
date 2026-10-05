@@ -44,3 +44,21 @@ test("a reply over 4 lines is cut, with Show all in its name row", async ({ page
   await reply.getByRole("button", { name: "Show less" }).click();
   await expect(reply.locator(".coach-reply")).toHaveClass(/is-clamped/);
 });
+
+// 73a: the best-weekday chart is gone; its finding is the first sentence of
+// the brief's Patterns, and the brief comes before the numbers.
+test("Review: the brief comes first, and Patterns opens with the best weekday", async ({ page }) => {
+  await openCoach(page, 1280, 720);
+  await page.getByRole("tab", { name: "Review" }).click();
+  const brief = page.getByRole("region", { name: "Coach's brief" });
+  const yesterday = await page.evaluate(() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toLocaleString("en-GB", { weekday: "long" }); });
+  await expect(brief.locator(".br-group").filter({ hasText: "Patterns" }).locator(".br-line"))
+    .toHaveText(`${yesterday} is your best weekday over the last 30 days. Health has had nothing done in 30 days.`);
+  await expect(brief.getByText("Do next")).toBeVisible();
+  const order = await page.evaluate(() => {
+    const b = document.querySelector('[aria-label="Coach\'s brief"]');
+    const f = document.querySelector('[aria-label="The facts"]');
+    return b.compareDocumentPosition(f) & Node.DOCUMENT_POSITION_FOLLOWING;
+  });
+  expect(order).toBeTruthy();
+});

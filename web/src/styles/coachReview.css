@@ -1,40 +1,35 @@
-/* Coach → Review (Q51, 62a–g). Sizes per breakpoint follow 62a/e/f/g/c. */
+/* Coach → Review (73a/b): one reading order, top to bottom, in a 880px
+   column. Six numbered sections with a hairline between them; mono is for
+   figures only. The phone keeps its sizes (62c), in the same order. */
 .rv {
-  --rv-brief: 420px;
-  --rv-chart: 150px;
-  --rv-bar: 12px;
-  --rv-hero: 54px;
-  position: relative;
+  --rv-chart: 220px;
+  --rv-bar: 40px;
+  --rv-indent: 36px;
   display: flex;
   flex-direction: column;
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;
 }
-.rv-kicker {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
-.rv-kicker.is-quiet { font-size: 11px; color: var(--ink-2); }
-.rv-kicker-split { display: flex; justify-content: space-between; gap: 8px; }
-.rv-kicker-split span { font-weight: 400; color: var(--ink-2); }
+.rv-facts { display: flex; flex-direction: column; }
+.rv-sec { display: flex; flex-direction: column; gap: 28px; padding: 44px 0 48px; border-bottom: 1px solid var(--line); min-width: 0; }
+.rv-facts > .rv-sec:last-child { border-bottom: 0; padding-bottom: 72px; }
+.rv-indent { padding-left: var(--rv-indent); }
 
-/* The period switch sits at the right of the tab row (62a). */
-.rv-period {
-  position: absolute;
-  top: -44px;
-  right: 0;
-  display: flex;
-  border: 1px solid var(--edge);
-  border-radius: 6px;
-  overflow: hidden;
-}
+/* Section heading: gold mono number + sentence-case title, one Lora line. */
+.rv-head { display: flex; flex-direction: column; gap: 8px; }
+.rv-head-row { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.rv-title { display: flex; align-items: baseline; gap: 14px; margin: 0; font-family: var(--font-sans); font-size: 24px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); }
+.rv-title-num { width: 22px; flex: none; font-family: var(--font-mono); font-size: 14px; font-weight: 700; letter-spacing: 0; color: var(--gold-label); }
+.rv-line-text { margin: 0; padding-left: var(--rv-indent); font-family: var(--font-serif); font-size: 16px; line-height: 1.5; color: var(--ink-2); }
+
+/* The period switch sits at the right of the tab row (73a). */
+.rv-period { display: flex; align-self: center; border: 1px solid var(--edge); border-radius: 4px; overflow: hidden; }
 .rv-period button {
-  height: 34px;
+  height: 38px;
   padding: 0 16px;
   font: inherit;
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--ink-2);
   background: none;
@@ -42,26 +37,23 @@
   cursor: pointer;
 }
 .rv-period button + button { border-left: 1px solid var(--edge); }
-.rv-period button[aria-checked="true"] { color: var(--accent-edge); background: var(--accent-tint); }
+.rv-period button[aria-checked="true"] { color: var(--ink); background: var(--accent-tint); }
 .rv-period button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* Review is a report: the page scrolls, the tab row stays. The page's own
+   overflow would make it the sticky container, and it never scrolls. */
+.screen-content.screen-content-coach:has(#coach-panel-review) { overflow: visible; }
+.coach-page:has(#coach-panel-review) .coach-tabs { position: sticky; top: var(--coach-sticky-top, 0px); z-index: 2; width: 100%; max-width: 880px; margin: 0 auto; background: var(--bg); }
 
-.rv-grid { display: grid; grid-template-columns: minmax(0, 1fr) var(--rv-brief); gap: 56px; }
-.rv-facts { display: flex; flex-direction: column; gap: 22px; padding: 24px 0; min-width: 0; }
-.rv-brief { border-left: 1px solid var(--line); padding: 24px 0 24px 32px; min-width: 0; }
+/* 02 · The figures. */
+.rv-numbers { display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); gap: 24px; margin: 0; }
+.rv-numbers > div { display: flex; flex-direction: column-reverse; justify-content: flex-start; gap: 6px; min-width: 0; }
+.rv-numbers dt { font-size: 15px; line-height: 1.3; color: var(--ink-2); }
+.rv-numbers dd { margin: auto 0 0; font-size: 34px; font-weight: 800; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
+.rv-numbers dd small { font-size: 20px; font-weight: 800; color: var(--ink-2); }
+.rv-numbers .rv-hero-fig { font-size: 56px; letter-spacing: -0.04em; }
 
-.rv-hero { display: flex; align-items: flex-end; gap: 48px; flex-wrap: wrap; }
-.rv-hero-main { display: flex; flex-direction: column; gap: 4px; }
-.rv-hero-fig { font-family: var(--font-mono); font-size: var(--rv-hero); font-weight: 700; letter-spacing: -0.04em; line-height: 1; color: var(--ink); }
-.rv-hero-stats { display: flex; gap: 36px; margin: 0; padding-bottom: 2px; }
-.rv-hero-stats div { display: flex; flex-direction: column-reverse; gap: 2px; }
-.rv-hero-stats dt { font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-2); }
-.rv-hero-stats dd { margin: 0; font-family: var(--font-mono); font-size: 24px; font-weight: 700; color: var(--ink); }
-.rv-hero-stats small { font-size: 14px; color: var(--ink-2); }
-.rv-sentence { margin: 0; font-family: var(--font-serif); font-size: 16px; color: var(--ink-2); }
-.rv-sentence strong { color: var(--ink); }
-
-/* Each day: thin rounded bars with the figure above; ticks under the day. */
-.rv-daychart { display: flex; flex-direction: column; gap: 8px; }
+/* 03 · Focus each day: 40px bars, the figure above, day and tasks done under. */
+.rv-daychart { position: relative; display: flex; flex-direction: column; gap: 12px; }
 .rv-bars {
   display: grid;
   grid-template-columns: repeat(var(--rv-cols), 1fr);
@@ -72,103 +64,76 @@
   list-style: none;
   border-bottom: 1px solid var(--edge);
 }
-.rv-bar-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; height: 100%; min-width: 0; }
-.rv-bar-fig { font-family: var(--font-mono); font-size: 11px; color: var(--ink-2); white-space: nowrap; }
-.rv-bar { width: var(--rv-bar); min-height: 2px; background: var(--accent-muted); border-radius: calc(var(--rv-bar) / 2) calc(var(--rv-bar) / 2) 0 0; }
+.rv-bar-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 8px; height: 100%; min-width: 0; }
+.rv-bar-fig { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--ink-2); white-space: nowrap; }
+.rv-bar { width: min(var(--rv-bar), 80%); min-height: 2px; background: var(--accent-muted); border-radius: 3px 3px 0 0; }
 .rv-bar.is-zero { height: 2px; background: var(--line); border-radius: 0; }
 .rv-bar-col.is-today .rv-bar:not(.is-zero) { background: var(--accent); }
-.rv-bar-col.is-today .rv-bar-fig { color: var(--accent); font-weight: 700; }
-.rv-bar-labels {
-  display: grid;
-  grid-template-columns: repeat(var(--rv-cols), 1fr);
-  row-gap: 2px;
-  text-align: center;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--ink-2);
-}
-.rv-bar-labels .is-today { color: var(--accent); font-weight: 700; }
-.rv-bar-labels .is-quiet { color: var(--placeholder); }
-.rv-daychart[data-dense] { --rv-bar: 6px; }
-.rv-daychart[data-dense] .rv-bar-fig { font-size: 9px; }
-.rv-daychart[data-dense] .rv-bar-labels { font-size: 10px; }
+.rv-bar-labels { display: grid; grid-template-columns: repeat(var(--rv-cols), 1fr); text-align: center; }
+.rv-bar-day { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; font-size: 15px; color: var(--ink); }
+.rv-bar-day.is-today { font-weight: 800; }
+.rv-bar-day small { font-size: 13px; font-weight: 400; color: var(--ink-2); white-space: nowrap; }
+.rv-bar-day small.is-quiet { color: var(--placeholder); }
+.rv-chart-note { position: absolute; top: 40%; left: 0; right: 0; margin: 0; text-align: center; font-size: 14px; color: var(--ink-2); pointer-events: none; }
+.rv-daychart[data-dense] { --rv-bar: 12px; }
+.rv-daychart[data-dense] .rv-bar-fig { font-size: 10px; font-weight: 400; }
+.rv-daychart[data-dense] .rv-bar-day { font-size: 13px; }
+.rv-daychart[data-dense] .rv-bar-day small { font-size: 13px; }
 
-/* Four small charts, 2×2. */
-.rv-small { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 48px; padding-top: 18px; border-top: 1px solid var(--line); }
-.rv-card { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.rv-empty { margin: 0; font-size: 13px; color: var(--ink-2); }
-.rv-rows { display: grid; gap: 7px 12px; align-items: center; font-size: 13.5px; color: var(--ink); }
-.rv-rows-front { grid-template-columns: minmax(0, 1fr) 120px 52px; }
-.rv-rows-cat { grid-template-columns: 76px minmax(0, 1fr) 58px; }
+/* 04 | 05: two columns; each row is name and value, an 8px bar under it. */
+.rv-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 56px; }
+.rv-card { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.rv-rows { display: flex; flex-direction: column; gap: 16px; }
+.rv-row { display: flex; flex-direction: column; gap: 8px; }
+.rv-row-top { display: flex; justify-content: space-between; gap: 12px; font-size: 15px; color: var(--ink); }
 .rv-row-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rv-num { font-family: var(--font-mono); font-size: 12px; text-align: right; white-space: nowrap; }
-.rv-line { display: block; height: 6px; }
-.rv-line span { display: block; height: 6px; border-radius: 3px; background: var(--accent); }
-.rv-split { display: flex; gap: 2px; min-width: 0; }
-.rv-split span { height: 6px; min-width: 4px; border-radius: 3px; }
-.rv-split .is-done { background: var(--accent); }
-.rv-split .is-open { background: var(--accent-soft); }
-.rv-dow { display: grid; grid-template-columns: repeat(7, 1fr); align-items: end; height: 44px; border-bottom: 1px solid var(--edge); }
-.rv-dow span { justify-self: center; width: 8px; border-radius: 4px 4px 0 0; background: var(--accent-muted); }
-.rv-dow span.is-best { background: var(--accent); }
-.rv-dow-labels { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-2); }
-.rv-dow-labels .is-best { color: var(--accent); font-weight: 700; }
-.rv-stack { display: flex; gap: 2px; height: 8px; border-radius: 4px; overflow: hidden; background: var(--panel); }
+.rv-num { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; }
+.rv-row-value { color: var(--ink-2); white-space: nowrap; }
+.rv-track { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--panel); }
+.rv-track span { min-width: 4px; height: 100%; }
+.rv-track .is-done { background: var(--accent); border-radius: 4px; }
+.rv-track .is-done + .is-open { border-radius: 0; }
+.rv-track .is-open { background: var(--accent-soft); }
+.rv-empty { margin: 0; font-size: 15px; color: var(--ink-2); }
+.rv-footnote { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+
+/* 06 · Still open: a 12px stacked bar, the legend, and today's plan. */
+.rv-open { display: flex; flex-direction: column; gap: 18px; }
+.rv-stack { display: flex; gap: 2px; height: 12px; border-radius: 4px; overflow: hidden; background: var(--panel); }
 .rv-stack .is-today { background: var(--accent); }
 .rv-stack .is-week, .rv-stack .is-month { background: var(--accent-muted); }
 .rv-stack .is-quarter { background: var(--accent-soft); }
 .rv-stack .is-later { background: var(--accent-tint); }
-.rv-stack-counts { display: flex; flex-wrap: wrap; gap: 4px 16px; font-family: var(--font-mono); font-size: 11px; color: var(--ink-2); }
-.rv-stack-counts strong { color: var(--ink); }
-.rv-planned { margin: 0; font-size: 13px; color: var(--ink); }
-.rv-planned strong { font-family: var(--font-mono); }
+.rv-stack-counts { margin: 0; font-size: 15px; color: var(--ink-2); }
+.rv-planned { margin: 0; font-family: var(--font-serif); font-size: 16px; line-height: 1.6; color: var(--ink); }
+.rv-planned strong { font-family: var(--font-sans); }
 .rv-planned .is-over { color: var(--coral); }
+.rv-link { padding: 0; font: inherit; font-family: var(--font-sans); font-size: 15px; font-weight: 700; color: var(--accent); background: none; border: 0; cursor: pointer; }
+.rv-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* ≥1800 (62e): wider brief, taller chart, thicker bars. */
-@media (min-width: 1800px) {
-  .coach-page { max-width: 1560px; }
-  .rv { --rv-brief: 460px; --rv-chart: 220px; --rv-bar: 16px; --rv-hero: 64px; }
-}
-/* 900–1279 (62f). */
-@media (max-width: 1279px) {
-  .rv { --rv-brief: 340px; --rv-chart: 120px; --rv-bar: 10px; }
-  .rv-grid { gap: 32px; }
-  .rv-brief { padding-left: 24px; }
-}
-/* 600–899 (62g): one column; facts, then the brief at full width. */
-@media (max-width: 899px) {
-  .rv-grid { grid-template-columns: minmax(0, 1fr); gap: 0; }
-  .rv-brief { border-left: 0; border-top: 1px solid var(--line); padding: 24px 0; }
-  .rv-period { position: static; align-self: flex-end; margin-top: 12px; }
-}
-/* <600 (62c): the small charts stack. */
-@media (max-width: 599px) {
-  .rv { --rv-hero: 44px; --rv-chart: 110px; }
-  .rv-small { grid-template-columns: minmax(0, 1fr); }
-  .rv-hero { gap: 20px; }
-  .rv-hero-stats { gap: 24px; }
-  .rv-period { align-self: stretch; }
-  .rv-period button { flex: 1; }
-}
-
-/* Coach's brief (62a–b). */
-.br { display: flex; flex-direction: column; gap: 14px; }
-.br-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.br-title { margin: 0; font-family: var(--font-serif); font-size: 22px; font-weight: 500; color: var(--ink); }
-.br-stamp, .br-read { font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-2); display: flex; gap: 10px; align-items: baseline; }
-.br-read { margin-top: -8px; font-size: 10px; font-weight: 400; color: var(--placeholder); }
-.br-lede, .br-line { margin: 0; font-family: var(--font-serif); font-size: 14.5px; line-height: 1.5; color: var(--ink); }
-.br-lede { color: var(--ink-2); line-height: 1.55; }
+/* 01 · Coach's brief: a Lora lead, label/text rows, and a "Do next" card. */
+.br { display: flex; flex-direction: column; gap: 24px; }
+.br-stamp { display: flex; gap: 14px; align-items: baseline; font-size: 14px; color: var(--ink-2); }
+.br-lead { margin: 0; max-width: 760px; font-family: var(--font-serif); font-size: 23px; line-height: 1.45; color: var(--ink); text-wrap: pretty; }
+.br-lead strong { font-weight: 600; }
+.br-lede { margin: 0; max-width: 760px; font-family: var(--font-serif); font-size: 16px; line-height: 1.6; color: var(--ink-2); }
+.br-groups { display: flex; flex-direction: column; gap: 20px; }
+.br-groups:empty { display: none; }
+.br-group { display: grid; grid-template-columns: 150px minmax(0, 1fr); column-gap: 24px; align-items: baseline; }
+.br-label { margin: 0; font-family: var(--font-sans); font-size: 16px; font-weight: 800; color: var(--ink); }
+.br-label.is-warn { color: var(--coral); }
+.br-text { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.br-line { margin: 0; font-family: var(--font-serif); font-size: 16px; line-height: 1.6; color: var(--ink); }
 .br-line strong { font-family: var(--font-sans); }
-.br-privacy { margin: 0; font-size: 12px; line-height: 1.5; color: var(--placeholder); }
+.br-privacy { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
 .br-status { margin: 0; font-family: var(--font-serif); font-style: italic; color: var(--ink-2); }
-.br-error { margin: 0; font-size: 13px; color: var(--coral); }
+.br-error { margin: 0; font-size: 14px; color: var(--coral); }
 .br-run {
   align-self: flex-start;
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 18px;
   font: inherit;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--accent);
   background: none;
@@ -180,36 +145,56 @@
 .br-link {
   padding: 0;
   font: inherit;
-  font-size: 13.5px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--accent);
   background: none;
   border: 0;
-  border-bottom: 1px solid var(--accent-muted);
   cursor: pointer;
   white-space: nowrap;
   justify-self: end;
 }
-.br-refresh { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; }
-.br-ask { border-bottom: 0; align-self: flex-start; min-height: 36px; }
+.br-refresh { font-size: 14px; }
+.br-ask { align-self: flex-start; min-height: 44px; }
 .br-run:focus-visible, .br-link:focus-visible, .br-fold summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.br-group { display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid var(--line); }
-.br-kicker { margin: 0; font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
-.br-kicker.is-warn { color: var(--coral); }
 .br-fold summary { cursor: pointer; list-style: none; min-height: 32px; display: flex; align-items: center; }
 .br-fold summary::-webkit-details-marker { display: none; }
-.br-fold[open] summary { margin-bottom: 6px; }
-.br-fold > * + * { margin-top: 6px; }
-.br-rows { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; align-items: baseline; font-size: 13.5px; color: var(--ink); }
+.br-rows { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 20px; align-items: baseline; font-family: var(--font-serif); font-size: 16px; line-height: 1.5; color: var(--ink); }
+.br-rows .br-link, .br-rows .br-applied { font-family: var(--font-sans); }
 .br-row-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.br-applied { display: inline-flex; gap: 10px; align-items: baseline; font-size: 13px; font-weight: 700; color: var(--accent); justify-self: end; white-space: nowrap; }
-.br-next-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.br-next-actions .br-run { min-height: 36px; padding: 0 14px; font-size: 13.5px; }
-@media (max-width: 599px) {
-  .br-next-actions .br-run { width: 100%; min-height: 44px; }
-}
 .br-row-name.is-wrap { white-space: normal; overflow: visible; }
-.rv-daychart { position: relative; }
-.rv-chart-note { position: absolute; top: 40%; left: 0; right: 0; margin: 0; text-align: center; font-size: 13px; color: var(--ink-2); pointer-events: none; }
-.rv-footnote { margin: 0; font-size: 11.5px; color: var(--placeholder); }
+.br-row-name strong { font-family: var(--font-sans); font-weight: 700; }
+.br-applied { display: inline-flex; gap: 10px; align-items: baseline; font-size: 14px; font-weight: 700; color: var(--accent); justify-self: end; white-space: nowrap; }
+.br-next { display: flex; flex-direction: column; gap: 12px; max-width: 760px; padding: 22px 24px; border: 1px solid var(--edge); border-radius: 4px; }
+.br-next-kicker { margin: 0; font-size: 14px; font-weight: 800; color: var(--gold-label); }
+.br-next-title { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.015em; color: var(--ink); }
+.br-next-line { margin: 0; font-family: var(--font-serif); font-size: 16px; line-height: 1.6; color: var(--ink-2); }
+.br-next-actions { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; padding-top: 6px; }
 .br-link:disabled, .br-run:disabled { opacity: 0.45; cursor: default; }
+
+/* 600–899: the pair stacks; the brief's labels sit above their text. */
+@media (max-width: 899px) {
+  .rv-pair { grid-template-columns: minmax(0, 1fr); gap: 44px; }
+  .rv-numbers { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 28px; }
+}
+/* <600 (62c sizes): smaller type, no indent, one column throughout. */
+@media (max-width: 599px) {
+  .rv { --rv-chart: 140px; --rv-bar: 20px; --rv-indent: 0px; }
+  .rv-sec { gap: 20px; padding: 28px 0 32px; }
+  .rv-title { font-size: 20px; gap: 10px; }
+  .rv-title-num { width: auto; }
+  .rv-line-text { font-size: 15px; }
+  .rv-numbers .rv-hero-fig { font-size: 44px; }
+  .rv-numbers dd { font-size: 28px; }
+  .rv-numbers dt { font-size: 14px; }
+  .rv-bar-day { font-size: 13px; }
+  .rv-bar-day small { font-size: 12px; }
+  .rv-bar-fig { font-size: 11px; }
+  .br-lead { font-size: 19px; }
+  .br-group { grid-template-columns: minmax(0, 1fr); row-gap: 4px; }
+  .br-fold { display: block; }
+  .br-fold[open] summary { margin-bottom: 6px; }
+  .br-next { padding: 18px 16px; }
+  .br-next-actions .br-run { width: 100%; }
+  .rv-period button { padding: 0 12px; font-size: 13.5px; height: 36px; }
+}
