@@ -29,6 +29,14 @@ describe("pullFromWeek", () => {
     expect(next.find(x => x.uuid === "a").isNowFocus).toBe(true);
   });
 
+  it("skips a task parked since it was ticked", () => {
+    const tasks = [t("a"), t("parked", { isParked: true })];
+    const { tasks: next, before } = pullFromWeek(tasks, ["parked", "a"], 5);
+    expect(before.map(b => b.uuid)).toEqual(["a"]);
+    expect(next.find(x => x.uuid === "parked")).toMatchObject({ horizonLevel: "week", isParked: true });
+    expect(next.find(x => x.uuid === "a").isNowFocus).toBe(true);
+  });
+
   it("ignores tasks that aren't open This week tasks", () => {
     const tasks = [t("a", { horizonLevel: "today" }), t("gone", { isDeleted: true })];
     expect(pullFromWeek(tasks, ["a", "gone", "missing"], 5)).toEqual({ tasks, before: [] });
@@ -69,5 +77,12 @@ describe("takesPinFrom", () => {
     expect(takesPinFrom(tasks, pullFromWeek(tasks, ["held", "a"], 5).tasks)).toBe(false);
     const free = [t("a"), t("b")];
     expect(takesPinFrom(free, pullFromWeek(free, ["a"], 5).tasks)).toBe(false);
+  });
+});
+
+describe("takesPinFrom on Undo", () => {
+  it("is true when Undo sends the one thing back to This week", () => {
+    const { tasks: moved, before } = pullFromWeek([t("a"), t("b")], ["a", "b"], 5);
+    expect(takesPinFrom(moved, undoPullFromWeek(moved, before, 9))).toBe(true);
   });
 });

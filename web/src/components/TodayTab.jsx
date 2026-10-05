@@ -1061,11 +1061,23 @@ export default function TodayTab({
       const now = Date.now();
       const next = undoPullFromWeek(tasks, undo.before, now);
       const back = next.filter(t => t.lastUpdated === now && undo.before.some(b => b.uuid === t.uuid));
+      // Sending the one thing back to This week ends its session, as every
+      // other move off Today does (Codex review of #486).
+      const endedFocusSession = takesPinFrom(tasks, next) ? endFocusSession("user_abandoned") : null;
+      if (endedFocusSession) {
+        setIsTimerRunning(false);
+        setIsFocusMode(false);
+        setFocusSessionActive(false);
+      }
       savePayloadAsync({ ...payload, tasks: next })
         .then(() => {
-          if (back.length) writeActivityEvents(eventsPatch(uid, back.map(t => buildTaskMutationEvent("task_moved", t, {
+          const events = back.map(t => buildTaskMutationEvent("task_moved", t, {
             fromState: { horizonLevel: "today" }, toState: { horizonLevel: t.horizonLevel }, windows, now,
-          }))));
+          }));
+          if (endedFocusSession) {
+            events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
+          }
+          if (events.length) writeActivityEvents(eventsPatch(uid, events));
         })
         .catch(() => {});
       return;

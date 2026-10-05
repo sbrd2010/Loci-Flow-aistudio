@@ -9,7 +9,9 @@ export function weekTasks(tasks = []) {
 }
 
 export function pullFromWeek(tasks, uuids, now = Date.now()) {
-  const chosen = uuids.filter(u => tasks.some(t => t.uuid === u && t.horizonLevel === "week" && !t.isDeleted && !t.isCompleted));
+  // The same tasks the picker lists (weekTasks): one parked meanwhile, say on
+  // another device, is no longer one of them (Codex review of #486).
+  const chosen = uuids.filter(u => tasks.some(t => t.uuid === u && t.horizonLevel === "week" && !t.isDeleted && !t.isCompleted && !t.isParked));
   if (!chosen.length) return { tasks, before: [] };
   const bottom = tasks
     .filter(t => t.horizonLevel === "today" && !t.isDeleted)
