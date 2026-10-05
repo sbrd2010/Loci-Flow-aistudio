@@ -397,7 +397,18 @@ export default function TodayWall({
         {/* The goal band and the anchor stay with nothing committed too: a
             Key Deadline you set always shows (L1). */}
         {top}
-        {picks.length > 0 ? (
+        {openCount > 0 && picks.length === 0 ? (
+          // Only set-time things open (47.6): none can be the one thing.
+          <div className="wall-empty">
+            <h2 className="wall-empty-title">Only set-time things left</h2>
+            {onShowAll && (
+              <button type="button" className="wall-link wall-pick-all" onClick={onShowAll}>
+                All {openCount} {openCount === 1 ? "task" : "tasks"}
+              </button>
+            )}
+            {links}
+          </div>
+        ) : picks.length > 0 ? (
           <div className="wall-empty wall-pick">
             <h2 className="wall-empty-title">Pick the one thing</h2>
             <ul className="wall-pick-list">

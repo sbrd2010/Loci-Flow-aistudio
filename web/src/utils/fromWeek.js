@@ -18,7 +18,7 @@ export function pullFromWeek(tasks, uuids, now = Date.now()) {
     .reduce((max, t) => Math.max(max, Number(t.orderIndex) || 0), -1) + 1;
   const before = chosen.map(u => {
     const t = tasks.find(x => x.uuid === u);
-    return { uuid: u, horizonLevel: t.horizonLevel, orderIndex: t.orderIndex ?? null };
+    return { uuid: u, horizonLevel: t.horizonLevel, orderIndex: t.orderIndex ?? null, deferredUntil: t.deferredUntil ?? null };
   });
   const first = chosen[0];
   return {
@@ -30,7 +30,9 @@ export function pullFromWeek(tasks, uuids, now = Date.now()) {
       }
       // It joins the route anew, as Restore does.
       const { dayMapDate, dayMapPeriod, dayMapStartMinutes, dayMapDurationMinutes, dayMapOrder, dayMapFixedMinutes, ...rest } = t;
-      return { ...rest, horizonLevel: "today", orderIndex: bottom + i, isNowFocus: t.uuid === first, lastUpdated: now };
+      // A deferral left from an earlier "tomorrow" would hide it from Today,
+      // as every other way into Today knows (loopcheck of #486).
+      return { ...rest, horizonLevel: "today", orderIndex: bottom + i, deferredUntil: null, isNowFocus: t.uuid === first, lastUpdated: now };
     }),
     before,
   };
@@ -56,6 +58,6 @@ export function undoPullFromWeek(tasks, before, now = Date.now()) {
     const b = byId.get(t.uuid);
     if (!b || t.isDeleted || t.isCompleted || t.horizonLevel !== "today") return t;
     const { dayMapDate, dayMapPeriod, dayMapStartMinutes, dayMapDurationMinutes, dayMapOrder, dayMapFixedMinutes, ...rest } = t;
-    return { ...rest, horizonLevel: b.horizonLevel, orderIndex: b.orderIndex, isNowFocus: false, lastUpdated: now };
+    return { ...rest, horizonLevel: b.horizonLevel, orderIndex: b.orderIndex, deferredUntil: b.deferredUntil ?? null, isNowFocus: false, lastUpdated: now };
   });
 }

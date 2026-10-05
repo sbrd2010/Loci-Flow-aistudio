@@ -19,7 +19,7 @@ describe("pullFromWeek", () => {
     expect([b.horizonLevel, b.orderIndex, b.isNowFocus, b.lastUpdated]).toEqual(["today", 5, true, 99]);
     expect([a.horizonLevel, a.orderIndex, a.isNowFocus]).toEqual(["today", 6, false]);
     expect(b.dayMapOrder).toBeUndefined();
-    expect(before).toEqual([{ uuid: "b", horizonLevel: "week", orderIndex: 0 }, { uuid: "a", horizonLevel: "week", orderIndex: 0 }]);
+    expect(before).toEqual([{ uuid: "b", horizonLevel: "week", orderIndex: 0, deferredUntil: null }, { uuid: "a", horizonLevel: "week", orderIndex: 0, deferredUntil: null }]);
   });
 
   it("takes the one thing from whatever held it", () => {
@@ -27,6 +27,13 @@ describe("pullFromWeek", () => {
     const { tasks: next } = pullFromWeek(tasks, ["a"], 5);
     expect(next.find(x => x.uuid === "held").isNowFocus).toBe(false);
     expect(next.find(x => x.uuid === "a").isNowFocus).toBe(true);
+  });
+
+  it("clears a deferral left from an earlier tomorrow, and Undo puts it back", () => {
+    const tasks = [t("a", { deferredUntil: "2099-01-01" })];
+    const { tasks: next, before } = pullFromWeek(tasks, ["a"], 5);
+    expect(next[0].deferredUntil).toBeNull();
+    expect(undoPullFromWeek(next, before, 9)[0].deferredUntil).toBe("2099-01-01");
   });
 
   it("skips a task parked since it was ticked", () => {
