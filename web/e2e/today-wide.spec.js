@@ -225,6 +225,28 @@ test("a row is circle · title · how long, with the grip only on hover", async 
   await expect.poll(() => grip.evaluate(el => getComputedStyle(el).opacity)).toBe("1");
 });
 
+// Codex review of #478: the swipe wrapper clipped the grip in the gutter, so
+// it showed (opacity 1) but couldn't be seen or grabbed. With a mouse it
+// takes the pointer and drags the row.
+test("the hover grip is grabbable: a mouse drag by it reorders the list", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 900 }, "2024-06-15T10:00:00");
+  const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']");
+  const titles = async () => (await rows.locator(".task-title-text").allInnerTexts()).map(t => t.trim());
+  const [first, second] = await titles();
+  await rows.nth(1).hover();
+  const grip = rows.nth(1).locator(".task-row-grip");
+  const g = await grip.boundingBox();
+  const x = g.x + g.width / 2, y = g.y + g.height / 2;
+  expect(await page.evaluate(([px, py]) => !!document.elementFromPoint(px, py)?.closest(".task-row-grip"), [x, y])).toBe(true);
+  const target = await rows.nth(0).boundingBox();
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y - 12, { steps: 3 });
+  await page.mouse.move(x, target.y + 4, { steps: 10 });
+  await page.mouse.up();
+  await expect.poll(titles).toEqual([second, first]);
+});
+
 // 69e: past the day's end, Tomorrow · Park take the length's place on hover.
 test("a row past the day's end offers Tomorrow · Park on hover", async ({ page }) => {
   await enterDemo(page, { width: 1280, height: 900 }, "2024-06-16T01:00:00");
