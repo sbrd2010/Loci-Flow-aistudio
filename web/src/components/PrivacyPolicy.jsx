@@ -7,7 +7,7 @@ export default function PrivacyPolicy({ onClose }) {
       onClick={onClose}
     >
       <div
-        style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "20px 20px 0 0", padding: "24px 20px 40px", maxWidth: "520px", width: "100%", maxHeight: "80vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: "14px" }}
+        style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "20px 20px 0 0", padding: "24px 20px 40px", maxWidth: "520px", width: "100%", maxHeight: "calc(80vh / var(--zoom, 1))", overflowY: "auto", display: "flex", flexDirection: "column", gap: "14px" }}
         onClick={e => e.stopPropagation()}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

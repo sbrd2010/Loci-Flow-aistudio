@@ -13,6 +13,7 @@ import LinkifyText from "./LinkifyText";
 import { IconCheck, IconX } from "./ui/icons";
 import { THOUGHTS_MAX } from "../utils/thoughts";
 import "../styles/focusMode.css";
+import { cssZoom } from "../utils/cssZoom";
 
 const PIP_SUPPORTED = "documentPictureInPicture" in window;
 
@@ -150,9 +151,11 @@ export default function FocusModePage({
   const [stuck, setStuck] = useState(false);
   const stuckWasRunningRef = useRef(false);
 
-  const [width, setWidth] = useState(() => (typeof window !== "undefined" ? window.innerWidth : 1280));
+  // The layout's width in CSS px: under the root zoom (Q59, 72) a 1920
+  // screen lays out as 1422, so it gets the laptop layout, scaled.
+  const [width, setWidth] = useState(() => (typeof window !== "undefined" ? window.innerWidth / cssZoom() : 1280));
   useEffect(() => {
-    const onResize = () => setWidth(window.innerWidth);
+    const onResize = () => setWidth(window.innerWidth / cssZoom());
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);

@@ -55,6 +55,7 @@ import { routeBreaks } from "../utils/dayMapBreaks";
 import { isEventTask, isFixedStop } from "../utils/dayMapRoute";
 import { bringBack, formatClock24, formatSpanCaps, moveToTomorrow, nextDateStr, restoreSchedule } from "../utils/dayMapPlan";
 import { parkedTasks, parkedSince, restoreParked, undoRestoreParked } from "../utils/parked";
+import { cssZoom, unzoomTransform } from "../utils/cssZoom";
 import { useListChoreography, listMotionMode } from "../hooks/useListChoreography";
 
 const PencilIcon = () => (
@@ -71,7 +72,7 @@ function SortableTaskItem({ id, isOver = false, disabled = false, children }) {
       // Past the Day ends line (Q59): muted, still draggable.
       className={isOver ? "today-row-over" : undefined}
       style={{
-        transform: CSS.Transform.toString(transform),
+        transform: CSS.Transform.toString(unzoomTransform(transform)),
         transition,
         opacity: isDragging ? 0 : 1,
         position: "relative",
@@ -2097,12 +2098,13 @@ export default function TodayTab({
                     {" · "}<button type="button" className="today-list-empty-link" onClick={() => setListView("daymap")}>Sort in Day map ›</button>
                   </p>
                 )}
-                <DragOverlay dropAnimation={null}>
+                <DragOverlay dropAnimation={null} style={{ zoom: 1 / cssZoom() }}>
                   {activeTaskId ? (() => {
                     const activeTask = remainingTasks.find(t => getTaskKey(t) === activeTaskId);
                     if (!activeTask) return null;
                     return (
                       <div style={{
+                        zoom: cssZoom(),
                         background: "var(--bg-card)",
                         border: "1.5px solid var(--accent)",
                         borderRadius: "12px",

@@ -39,6 +39,7 @@ import rehypeSanitize from "rehype-sanitize";
 import "../styles/coachUI.css";
 import { isOnToday } from "../utils/deferral";
 import { focusBlockSeconds } from "../utils/focusSession";
+import { cssZoom } from "../utils/cssZoom";
 
 // Visible/stored chat history cap (was 20) — the raw window actually sent to
 // the LLM stays at historyLimitForMode's 3/10, unaffected by this; the
@@ -1541,9 +1542,11 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     // Everything above the column, plus the page's own space below it (its
     // bottom padding, which also clears the phone's tab bar).
     const fit = () => {
+      // Rects and scrollY are screen px, scrollHeight is CSS px (cssZoom.js).
+      const z = cssZoom();
       const rect = col.getBoundingClientRect();
-      const below = Math.max(0, document.documentElement.scrollHeight - (rect.bottom + window.scrollY));
-      col.style.setProperty("--coach-chrome", `${Math.round(rect.top + window.scrollY + below)}px`);
+      const below = Math.max(0, document.documentElement.scrollHeight - (rect.bottom + window.scrollY) / z);
+      col.style.setProperty("--coach-chrome", `${Math.round((rect.top + window.scrollY) / z + below)}px`);
     };
     fit();
     // 62h: the newest message sits at the bottom; opening Chat starts there.

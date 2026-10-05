@@ -20,7 +20,7 @@ html[data-theme="dark"] .goal-record { --goal-dot-empty: var(--edge); }
   right: 0;
   z-index: 41;
   width: 400px;
-  max-width: calc(100vw - 32px);
+  max-width: calc(calc(100vw / var(--zoom, 1)) - 32px);
   overflow-y: auto;
   border: 1px solid var(--goal-dot-empty);
   border-radius: 6px;
@@ -37,8 +37,8 @@ html[data-theme="dark"] .goal-record { --goal-dot-empty: var(--edge); }
   right: 0;
   bottom: 0;
   z-index: 150;
-  max-height: 88vh;
-  max-height: 88dvh;
+  max-height: calc(88vh / var(--zoom, 1));
+  max-height: calc(88dvh / var(--zoom, 1));
   border-radius: 14px 14px 0 0;
   box-shadow: var(--shadow-lg);
   padding-bottom: env(safe-area-inset-bottom, 0px);

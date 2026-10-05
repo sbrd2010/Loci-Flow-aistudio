@@ -21,6 +21,7 @@ import TaskDetail, { formatEstimate } from "./TaskDetail";
 import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
 import { IconChevronLeft, IconChevronRight, IconPin, IconPlus } from "./ui/icons";
 import { commitmentKickerFront, frontForCommitment, frontsFromConfig, frontsOnOffer } from "../utils/fronts";
+import { cssZoom, unzoomTransform } from "../utils/cssZoom";
 
 // A horizon row (45h, 52h): the circle marks it done; the title; then a pin
 // if it is pinned, GOAL, and priority · estimate · front, whatever is set
@@ -39,7 +40,7 @@ function SortableRoadmapCard({ id, task, onTaskClick, onDone, isGoal = false, fr
     <div
       ref={setNodeRef}
       style={{
-        transform: CSS.Transform.toString(transform),
+        transform: CSS.Transform.toString(unzoomTransform(transform)),
         transition,
         opacity: isDragging ? 0.35 : 1, // 57c: its place fades
         position: "relative",
@@ -215,9 +216,10 @@ function SortableRoadmapList({ colKey, colTasks, fullColTasks = colTasks, tasks,
           />
         ))}
       </SortableContext>
-      <DragOverlay dropAnimation={null}>
+      <DragOverlay dropAnimation={null} style={{ zoom: 1 / cssZoom() }}>
         {activeTask ? (
           <div style={{
+            zoom: cssZoom(),
             background: "var(--bg-card)",
             border: "1.5px solid var(--accent)",
             borderRadius: "10px",

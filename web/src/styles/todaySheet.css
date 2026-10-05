@@ -18,7 +18,7 @@
     bottom: var(--tabbar-h);
     z-index: 90;
     max-width: 480px;
-    height: var(--sheet-half, 50dvh);
+    height: var(--sheet-half, calc(50dvh / var(--zoom, 1)));
     margin: 0 auto;
     border-bottom: 0;
     border-radius: 14px 14px 0 0;
@@ -28,7 +28,7 @@
   }
   /* Full: up to the header, with the NOW card on top (37c). */
   .today-list.is-sheet.is-full {
-    height: var(--sheet-full, calc(100dvh - var(--tabbar-h) - 64px));
+    height: var(--sheet-full, calc(calc(100dvh / var(--zoom, 1)) - var(--tabbar-h) - 64px));
   }
   /* The whole sheet scrolls — header, toolbar and rows — so the list works
      at any height; only the grabber stays put. Nothing is squashed. */

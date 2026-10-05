@@ -396,7 +396,7 @@
 .set-wide {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
-  min-height: calc(100dvh - 160px);
+  min-height: calc(calc(100dvh / var(--zoom, 1)) - 160px);
 }
 .set-nav {
   display: flex;

@@ -344,7 +344,7 @@
 .coach-chat-col {
   /* The column fills the screen under the header and tabs; the messages
      scroll inside it and the composer stays at its bottom. */
-  --coach-chat-height: calc(100dvh - var(--coach-chrome, 190px) - env(safe-area-inset-bottom, 0px));
+  --coach-chat-height: calc(calc(100dvh / var(--zoom, 1)) - var(--coach-chrome, 190px) - env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   width: 100%;

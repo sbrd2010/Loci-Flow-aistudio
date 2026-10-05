@@ -9,6 +9,7 @@ import { formatReminderLabel } from "../utils/reminders";
 import { notifPermissionState, requestNotifPermission } from "../utils/nativeNotifs";
 import { isEventTask } from "../utils/dayMapRoute";
 import "../styles/taskDetail.css";
+import { cssZoom } from "../utils/cssZoom";
 
 // A task, opened (turn 50, 50a–b). Tapping a row opens it: a full-height
 // bottom sheet on phones, a 480px drawer beside the list on a laptop that is
@@ -64,7 +65,7 @@ export default function TaskDetail({
     if (variant !== "drawer") return undefined;
     const measure = () => {
       const bottom = document.querySelector(".shell-header")?.getBoundingClientRect().bottom;
-      setDrawerTop(Number.isFinite(bottom) ? Math.max(0, bottom) : null);
+      setDrawerTop(Number.isFinite(bottom) ? Math.max(0, bottom / cssZoom()) : null);
     };
     measure();
     window.addEventListener("resize", measure);

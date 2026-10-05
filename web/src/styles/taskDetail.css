@@ -28,7 +28,7 @@
   right: 0;
   bottom: 0;
   width: 480px;
-  max-width: 100vw;
+  max-width: calc(100vw / var(--zoom, 1));
   border-left: 1px solid var(--line);
   box-shadow: -12px 0 30px rgba(15, 31, 22, 0.08);
 }
@@ -416,14 +416,14 @@
    #422). */
 @media (min-width: 1600px) {
   .screen-content-today .task-detail.is-drawer {
-    --wide-margin: max(48px, calc((100vw - 1760px) / 2));
-    left: calc(100vw - var(--wide-margin) - 520px);
+    --wide-margin: max(48px, calc((calc(100vw / var(--zoom, 1)) - 1760px) / 2));
+    left: calc(calc(100vw / var(--zoom, 1)) - var(--wide-margin) - 520px);
     right: auto;
     width: 520px;
   }
 }
 @media (min-width: 2200px) {
-  .screen-content-today .task-detail.is-drawer { --wide-margin: max(48px, calc((100vw - 2240px) / 2)); }
+  .screen-content-today .task-detail.is-drawer { --wide-margin: max(48px, calc((calc(100vw / var(--zoom, 1)) - 2240px) / 2)); }
 }
 /* Under 420px wide (1600–1679) the footer's buttons keep to one row and the
    title wraps: the key hints give way, the keys themselves still work. */
@@ -502,7 +502,7 @@
   .plan-horizons-view .task-detail.is-drawer {
     left: 0;
     right: auto;
-    width: calc(max(48px, (100vw - 1200px) / 2) + 384px);
+    width: calc(max(48px, (calc(100vw / var(--zoom, 1)) - 1200px) / 2) + 384px);
     border-left: 0;
     border-right: 1px solid var(--line);
     box-shadow: 12px 0 30px rgba(15, 31, 22, 0.08);
@@ -510,7 +510,7 @@
 }
 @media (min-width: 1600px) {
   .plan-horizons-view .task-detail.is-drawer {
-    left: calc(100vw - max(48px, (100vw - 1760px) / 2) - 428px);
+    left: calc(calc(100vw / var(--zoom, 1)) - max(48px, (calc(100vw / var(--zoom, 1)) - 1760px) / 2) - 428px);
     right: auto;
     width: 380px;
   }

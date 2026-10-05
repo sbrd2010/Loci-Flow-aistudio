@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import "../styles/goalRecord.css";
+import { cssZoom } from "../utils/cssZoom";
 
 // The goal record (Q57.2, frames 63a–l), opened by tapping Today's gold band:
 // the recent days, one sentence, and the next goal task with "Make it the one
@@ -59,10 +60,12 @@ export default function GoalRecord({ goal, record, weekdays = false, next = null
     const band = bandRef?.current?.getBoundingClientRect();
     const panel = panelRef.current;
     if (!band || !panel) return;
+    // In CSS px: scrollHeight already is; rects and innerHeight are screen px.
+    const z = cssZoom();
     const natural = panel.scrollHeight;
     const headerBottom = document.querySelector(".shell-header")?.getBoundingClientRect().bottom || 0;
-    const below = window.innerHeight - band.bottom - 8 - 12;
-    const aboveRoom = band.bottom - headerBottom - 8 - 12;
+    const below = (window.innerHeight - band.bottom) / z - 8 - 12;
+    const aboveRoom = (band.bottom - headerBottom) / z - 8 - 12;
     if (natural <= below || below >= aboveRoom) {
       setAbove(false);
       setMaxHeight(natural > below ? Math.max(0, below) : null);

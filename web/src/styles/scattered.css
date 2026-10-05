@@ -7,7 +7,7 @@
   flex-direction: column;
   width: 100%;
   max-width: 520px;
-  min-height: calc(100dvh - 190px);
+  min-height: calc(calc(100dvh / var(--zoom, 1)) - 190px);
   margin: 0 auto;
   padding: 4px 0 24px;
   font-family: var(--font-sans);
