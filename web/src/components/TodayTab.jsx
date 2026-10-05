@@ -7,6 +7,7 @@ import TodayWall from "./TodayWall";
 import Momentum from "./Momentum";
 import { LEGACY_DEADLINE_FRONT_ID, frontsFromConfig, frontsOnOffer, commitmentDaysLeft, commitmentKickerFront, frontForCommitment, frontProgress } from "../utils/fronts";
 import { useFocusLedger } from "../hooks/useFocusLedger";
+import { useRescueHint } from "../hooks/useRescueHint";
 import { minutesForTaskOn } from "../utils/focusLedger";
 import { buildMomentum } from "../utils/momentum";
 import { isEveningGuardBlocked } from "../utils/eveningGuard";
@@ -1268,6 +1269,16 @@ export default function TodayTab({
   // A task moved to tomorrow (deferral.js) is not today's until then.
   const todayTasksAll = tasks.filter((t) => isOnToday(t, todayStr) && !t.isDeleted && !t.isParked);
   const pinnedFocusTask = todayTasksAll.find(t => t.isNowFocus && !t.isCompleted && !t.isDeleted) || null;
+  // Q55.2: the Rescue hint — Loci noticing, once a day, that the one thing
+  // isn't moving; never with the day closed.
+  const rescue = useRescueHint({
+    config, saveConfigPatch, todayStr, windows,
+    oneThing: dayClosed ? null : pinnedFocusTask,
+    focusActive: isTimerRunning || isFocusMode || focusSessionActive,
+    ledgerRaw,
+    onOpenRescue: (state) => openRescueMode(state),
+    syncing: isSyncingFromCache,
+  });
   const listMotionActive = () => !!pinnedFocusTask && listMotionMode() !== "none";
 
   // Half height leaves the task and its Start focus in view above the sheet
@@ -1938,7 +1949,8 @@ export default function TodayTab({
         weekCount={wallIsAsking ? weekTasks(tasks).length : 0}
         onFromWeek={() => setWeekPickerOpen(true)}
         onScattered={onScattered}
-        onRescue={openRescueMode}
+        onRescue={() => { rescue.noteStuck(); openRescueMode(); }}
+        rescueHint={rescue.hint}
         nowCount={pinnedFocusTask ? todayTasksAll.filter(t => !t.isCompleted).length : 0}
         nowUntil={pinnedFocusTask ? route.routeTasks.find(t => getTaskId(t) === String(pinnedFocusTask.uuid))?.routeEndMinutes ?? null : null}
         then={pinnedFocusTask && !peekOpen ? (() => {
