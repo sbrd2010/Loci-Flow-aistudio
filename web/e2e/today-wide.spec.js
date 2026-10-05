@@ -136,36 +136,6 @@ test("1600: the drawer's footer sits on one row", async ({ page }) => {
   expect(seg.x + seg.width).toBeLessThanOrEqual(drawerBox.x + drawerBox.width);
 });
 
-test("a stop the Must-do filter hides opens anyway, the filter stays; Show all, and ↑/↓ into the filtered list", async ({ page }) => {
-  await enterDemo(page, { width: 1680, height: 1000 });
-  const list = page.getByTestId("today-tasks-list");
-  const drawer = page.locator(".task-detail.is-drawer");
-  const kicker = drawer.locator(".detail-kicker").first();
-  // One must-do, so the filtered list has a task in it.
-  await list.getByText("10-minute walk between tasks to reset your focus").click();
-  await drawer.getByRole("switch", { name: "Must-do" }).click();
-  await page.keyboard.press("Escape");
-  const mustDo = page.getByRole("button", { name: /^Must-do · \d+$/ });
-  await mustDo.click();
-  await expect(mustDo).toHaveAttribute("aria-pressed", "true");
-  await routeReady(page);
-
-  const hidden = column(page).getByRole("button", { name: /25-minute deep work block/ });
-  await hidden.click();
-  await expect(kicker).toHaveText("TODAY · HIDDEN BY MUST-DO");
-  await expect(mustDo).toHaveAttribute("aria-pressed", "true");
-  await page.keyboard.press("ArrowDown");
-  await expect(kicker).toHaveText("TODAY · 1 OF 1");
-  await expect(drawer.locator(".detail-title")).toHaveText(/10-minute walk/);
-  await page.keyboard.press("Escape");
-
-  await hidden.click();
-  await drawer.getByRole("button", { name: "Show all" }).click();
-  await expect(page.getByRole("button", { name: /^All · \d+$/ })).toHaveAttribute("aria-pressed", "true");
-  await expect(kicker).toHaveText(/^TODAY · \d+ OF \d+$/);
-  await expect(drawer.getByRole("button", { name: "Show all" })).toHaveCount(0);
-});
-
 test("the column's own route controls: From only; no Auto-fill, Clear route or Unscheduled (Q59)", async ({ page }) => {
   await enterDemo(page, { width: 1680, height: 1000 });
   await routeReady(page);
@@ -279,4 +249,20 @@ test("a fixed time shows its span and stays put; a task dropped above it that wo
   await expect(rows.nth(1).locator(".task-title-text")).toHaveText(last);
   await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
   await expect(rows.last().locator(".task-title-text")).toHaveText(last);
+});
+
+// Rohan: Hide list is an arrow, as a chat app's sidebar; with the list away,
+// an arrow at the right edge brings it back. The header reads "+ Add task".
+test("the list hides with an arrow and comes back from the right edge's arrow; + Add task", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 900 });
+  await expect(page.locator(".today-list-add")).toHaveText("+ Add task");
+  await expect(page.locator(".today-list-head")).not.toContainText("Must-do");
+  await page.getByRole("button", { name: "Hide list" }).click();
+  await expect(page.locator(".tasks-section")).toBeHidden();
+  const show = page.getByRole("button", { name: /^Show list · \d+/ });
+  const [box, layout] = await Promise.all([show.boundingBox(), page.locator(".today-layout").boundingBox()]);
+  expect(Math.round(box.width)).toBe(40);
+  expect(Math.abs(box.x + box.width - (layout.x + layout.width))).toBeLessThan(2);
+  await show.click();
+  await expect(page.locator(".tasks-section")).toBeVisible();
 });

@@ -3,7 +3,7 @@ import LinkifyText from "./LinkifyText";
 import { taskSteps } from "../utils/taskSteps";
 import { startLengthOptions, chosenStartOption } from "../utils/focusSession";
 import { formatEstimate } from "./TaskDetail";
-import { IconPin, IconPlus, IconChevronDown, IconCheck } from "./ui/icons";
+import { IconPin, IconPlus, IconChevronDown, IconChevronLeft, IconCheck } from "./ui/icons";
 import { MiniRing } from "./FocusClock";
 import GoalRecord from "./GoalRecord";
 import "../styles/todayWall.css";
@@ -574,6 +574,9 @@ export default function TodayWall({
             aria-expanded={peekOpen}
           >
             <span className="wall-peek-grabber" aria-hidden="true" />
+            {/* The list put away on a laptop: an arrow at the right edge
+                brings it back, as a chat app's sidebar does (Rohan). */}
+            <span className="wall-peek-edge" aria-hidden="true"><IconChevronLeft size={20} /></span>
             {/* 58.1 (67a): the phone's Next strip, "NEXT" and the next task;
                 with none, it still says what it opens. */}
             {!peekOpen && (nextTitle ? (

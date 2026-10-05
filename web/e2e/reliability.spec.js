@@ -124,28 +124,3 @@ test("reliability: a thought survives a tab switch and stays in Mind Box", async
   await expect(row).toBeVisible({ timeout: 5_000 });
 });
 
-test("reliability: All · Must-do filters the list to must-dos and back", async ({ page }) => {
-  await enterDemo(page);
-
-  const tasksList = page.getByTestId("today-tasks-list");
-  const all = page.getByRole("button", { name: /^All · \d+$/ });
-  const must = page.getByRole("button", { name: /^Must-do · \d+$/ });
-  await expect(all).toHaveAttribute("aria-pressed", "true", { timeout: 8_000 });
-  await expect(must).toHaveText("Must-do · 0");
-
-  const title = "10-minute walk";
-  const row = taskRowByTitle(page, title);
-  await row.locator(".task-title-text").click();
-  await page.getByTestId("task-detail").getByRole("switch", { name: "Must-do" }).click();
-  await page.keyboard.press("Escape");
-  await expect(row.locator(".task-tag.is-must")).toHaveText("MUST", { timeout: 5_000 });
-  await expect(must).toHaveText("Must-do · 1");
-
-  await must.click();
-  await expect(must).toHaveAttribute("aria-pressed", "true");
-  await expect(tasksList.getByText(title)).toBeVisible();
-  await expect(tasksList.getByText("25-minute deep work block")).not.toBeVisible();
-
-  await all.click();
-  await expect(tasksList.getByText("25-minute deep work block")).toBeVisible({ timeout: 5_000 });
-});

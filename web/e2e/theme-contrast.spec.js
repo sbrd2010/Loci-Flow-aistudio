@@ -110,7 +110,6 @@ for (const theme of THEMES) {
     // The list (41a/37b): its quietest text, on the list's own ground.
     for (const [loc, what] of [
       [page.locator(".today-view-opt[aria-pressed='false']"), "unselected view"],
-      [page.locator(".today-seg-opt[aria-pressed='false']"), "unselected segment"],
       [page.locator(".task-row-dur"), "row length"],
       [page.locator(".today-dayend"), "Day ends line"],
     ]) {

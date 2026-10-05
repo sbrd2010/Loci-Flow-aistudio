@@ -580,7 +580,7 @@ test("laptop: N opens Add task for Today, L shows and hides the list", async ({ 
   await expect(list).toBeVisible();
   // A tap leaves focus on the control it pressed; the letter keys still work
   // (only Space would also press it).
-  const all = page.getByRole("button", { name: /^All · \d+$/ });
+  const all = page.getByRole("group", { name: "View" }).getByRole("button", { name: "List" });
   await all.click();
   await expect(all).toBeFocused();
   await page.keyboard.press("l");
@@ -638,9 +638,7 @@ test("mobile reliability: the one thing can be let go from its sheet, and Undo p
   // It has no row in the list: "After that" is the rest of the day.
   const list = page.getByTestId("today-tasks-list");
   await expect(list.locator("[data-testid='task-row']", { hasText: title })).toHaveCount(0);
-  const count = await page.locator(".today-list-count").innerText();
-  const rows = await list.locator("[data-testid='task-row']:not(.completed)").count();
-  expect(Number(count.split(" ")[0])).toBe(rows);
+  await expect(list.locator("[data-testid='task-row']:not(.completed)").first()).toBeVisible();
 
   await page.locator(".wall-title").click();
   const detail = page.getByTestId("task-detail");
@@ -1003,7 +1001,9 @@ test("mobile reliability: pinning a longer task with the sheet open re-measures 
   const sheet = page.locator(".tasks-section");
   const halfBefore = parseInt(await sheet.evaluate(el => el.style.getPropertyValue("--sheet-half")), 10);
   const long = "A very long task title that wraps over many lines on a phone, so the wall grows and Start focus moves down";
-  await page.locator(".today-list-add").click();
+  // The sheet covers the wall's +; N opens Add task too.
+  await page.evaluate(() => document.activeElement?.blur?.());
+  await page.keyboard.press("n");
   await page.getByTestId("add-task-title").fill(long);
   await page.getByTestId("add-task-submit").click();
   await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
@@ -1071,14 +1071,6 @@ test("mobile reliability: Escape in the front picker closes the picker, not the 
   await page.keyboard.press("Escape");
   await expect(picker).toHaveCount(0);
   await expect(page.locator(".tasks-section")).toBeVisible();
-});
-
-test("mobile reliability: Must-do filter updates the sheet's announced row count", async ({ page }) => {
-  await enterDemo(page);
-  await openSheet(page);
-  await page.getByRole("button", { name: /^Must-do · \d+$/ }).click();
-  const rows = await page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").count();
-  await expect(page.locator(".tasks-section")).toHaveAttribute("aria-label", `Today's list, ${rows} ${rows === 1 ? "task" : "tasks"}`);
 });
 
 test("mobile reliability: Escape closes the open task before the sheet", async ({ page }) => {
@@ -1300,16 +1292,19 @@ test("laptop: with the list hidden, the task sits on one left edge, with the bot
   expect(kickerTall.y - (anchorTall.y + anchorTall.height)).toBeLessThanOrEqual(121);
   await page.setViewportSize({ width: 1280, height: 800 });
 
-  // The bottom bar: Show list and "+ Add a task" on the left, Rescue on the right.
+  // The bottom bar: "+ Add a task" on the left, Rescue on the right. Show
+  // list is an arrow at the top right edge (Rohan: as a chat app's sidebar).
   const foot = page.locator(".wall-foot");
   const show = page.getByRole("button", { name: /^Show list · \d+/ });
   const add = foot.getByRole("button", { name: "Add a task to Today" });
   await expect(show).toBeVisible();
   await expect(add).toHaveText(/Add a task/);
-  const [showBox, addBox, rescue] = await Promise.all([show.boundingBox(), add.boundingBox(),
-    foot.getByRole("button", { name: "I’m stuck" }).boundingBox()]);
-  expect(Math.round(addBox.y + addBox.height / 2)).toBe(Math.round(showBox.y + showBox.height / 2));
-  expect(addBox.x).toBeGreaterThan(showBox.x + showBox.width);
+  const [showBox, addBox, rescue, layout] = await Promise.all([show.boundingBox(), add.boundingBox(),
+    foot.getByRole("button", { name: "I’m stuck" }).boundingBox(), page.locator(".today-layout").boundingBox()]);
+  expect(Math.round(addBox.y + addBox.height / 2)).toBe(Math.round(rescue.y + rescue.height / 2));
+  expect(Math.abs(showBox.x + showBox.width - (layout.x + layout.width))).toBeLessThan(2);
+  expect(showBox.y).toBeLessThan(band.y + band.height);
+  expect(showBox.x).toBeGreaterThan(band.x + band.width);
   expect(Math.abs(rescue.x + rescue.width - (band.x + band.width))).toBeLessThan(1);
 
   // L swaps the Day map column for the list (54c).
@@ -1322,21 +1317,16 @@ test("laptop: with the list hidden, the task sits on one left edge, with the bot
   await expect(page.locator(".wall-peek")).toBeFocused();
 });
 
-// 51a: no "+ Add" in the list header; the list ends with "Add a task · to
-// Today · N", which opens Add task on Today. The Day map link sits under
-// the task, and M opens it.
-test("laptop: the list's last row adds to Today; the header has no + Add; M opens the Day map (51a)", async ({ page }) => {
+// 72: the list header's "+ Add task" opens Add task on Today (N too); the
+// list has no last row of its own. The Day map link sits under the task, and
+// M opens it.
+test("laptop: the header's + Add task adds to Today; M opens the Day map (72)", async ({ page }) => {
   await enterLaptop(page);
   await page.keyboard.press("l");
   await expect(page.locator(".tasks-section")).toBeVisible();
-  await expect(page.locator(".today-list-add")).toBeHidden();
-  await expect(page.locator(".today-list-link")).toBeHidden();
-  const addRow = page.getByRole("button", { name: "Add a task to Today" }).last();
-  await expect(addRow).toBeVisible();
-  const [row, card] = await Promise.all([addRow.boundingBox(), page.locator(".tasks-section").boundingBox()]);
-  expect(row.y + row.height).toBeLessThanOrEqual(card.y + card.height);
-  expect(Math.round(row.height)).toBe(52);
-  await addRow.click();
+  const add = page.locator(".today-list-add");
+  await expect(add).toHaveText("+ Add task");
+  await add.click();
   await expect(page.getByTestId("add-task-title")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("add-task-title")).toBeHidden();
@@ -1402,27 +1392,23 @@ test("laptop: the leaving controls fade out, and hiding lets the task finish its
   expect(hide.glideState).toBe("running");
 });
 
-// Codex review of #405. The header's five items need about 650px; a laptop
-// list under that (1024–1279) takes two tidy rows — title, count and Hide
-// list, then the filter — never Hide list alone on a third.
-test("laptop: the list header is one row when it fits, two tidy rows when it doesn't", async ({ page }) => {
+// 72: the header is one row: Up next · N DONE · + Add task · List | Day map ·
+// the arrow; below 1280 it drops N DONE to stay one row.
+test("laptop: the list header is one row at 1280 and at 1024", async ({ page }) => {
   const tops = () => page.evaluate(() => Object.fromEntries(
-    [".today-list-title", ".today-list-count", ".today-list-tools", ".today-list-head-end"].map(sel => {
+    [".today-list-title", ".today-list-add", ".today-view-switch", ".today-list-hide"].map(sel => {
       const r = document.querySelector(sel).getBoundingClientRect();
-      return [sel.slice(12), { top: r.top, bottom: r.bottom }];
+      return [sel, { top: r.top, bottom: r.bottom }];
     })));
   const sameRow = (a, b) => a.top < b.bottom && b.top < a.bottom;
   await enterLaptop(page);
   await page.keyboard.press("l");
   await expect(page.locator(".tasks-section")).toBeVisible();
-  let t = await tops();
-  for (const k of ["count", "tools", "head-end"]) expect(sameRow(t.title, t[k]), k).toBe(true);
-
-  await page.setViewportSize({ width: 1024, height: 800 });
-  await expect.poll(async () => { t = await tops(); return sameRow(t.title, t.tools); }).toBe(false);
-  expect(sameRow(t.title, t.count)).toBe(true);
-  expect(sameRow(t.title, t["head-end"])).toBe(true);
-  expect(t.tools.top).toBeGreaterThanOrEqual(t["head-end"].bottom - 1);
+  for (const width of [1280, 1024]) {
+    await page.setViewportSize({ width, height: 800 });
+    const t = await tops();
+    for (const k of [".today-list-add", ".today-view-switch", ".today-list-hide"]) expect(sameRow(t[".today-list-title"], t[k]), `${width} ${k}`).toBe(true);
+  }
 });
 
 // Codex review of #405: if the list must show again during its 120ms fade
@@ -1706,11 +1692,11 @@ test("the next morning, moved tasks head the list tagged FROM YESTERDAY, for tha
   await page.keyboard.press("t");
 
   const rerender = async () => {
-    await page.getByRole("button", { name: /^Must-do · \d+$/ }).click();
+    await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Day map", exact: true }).click();
     // A new week's Monday asks for its review; Later leaves it for the day.
     const later = page.getByRole("dialog", { name: /ended$/ }).getByRole("button", { name: "Later" }).last();
     await later.waitFor({ timeout: 1_500 }).then(() => later.click()).catch(() => {});
-    await page.getByRole("button", { name: /^All · \d+$/ }).click();
+    await page.getByRole("group", { name: "View" }).getByRole("button", { name: "List" }).click();
   };
   await page.clock.setFixedTime(new Date("2024-06-16T10:00:00"));
   await rerender();
@@ -1766,6 +1752,8 @@ test("phone: after a reorder, Up next names the list's new first task", async ({
   await rows.first().focus();
   await page.keyboard.press("Space");
   await announced(/Picked up|was moved over/);
+  // dnd-kit measures the list a frame or two after the pick-up.
+  await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
   await page.keyboard.press("ArrowDown");
   await announced(/Draggable item (\S+) was moved over droppable area (?!\1\b)\S+/);
   await page.keyboard.press("Space");
@@ -1924,11 +1912,11 @@ test("a moved-from-yesterday task drags like any other row and keeps its tag (Q7
   await rows.last().focus();
   await page.keyboard.press("t");
   const rerender = async () => {
-    await page.getByRole("button", { name: /^Must-do · \d+$/ }).click();
+    await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Day map", exact: true }).click();
     // A new week's Monday asks for its review; Later leaves it for the day.
     const later = page.getByRole("dialog", { name: /ended$/ }).getByRole("button", { name: "Later" }).last();
     await later.waitFor({ timeout: 1_500 }).then(() => later.click()).catch(() => {});
-    await page.getByRole("button", { name: /^All · \d+$/ }).click();
+    await page.getByRole("group", { name: "View" }).getByRole("button", { name: "List" }).click();
   };
   await page.clock.setFixedTime(new Date("2024-06-16T10:00:00"));
   await rerender();

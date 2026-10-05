@@ -10,12 +10,13 @@
   border-radius: var(--radius);
 }
 
+/* 72: Up next · N DONE · + Add · List | Day map · Hide list, one row. */
 .today-list-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: 6px 10px;
-  padding: 14px 16px 12px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--line);
 }
 .today-list-title {
@@ -25,7 +26,9 @@
 }
 .today-list-count {
   font-family: var(--font-mono);
-  font-size: 0.71875rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   color: var(--ink-2);
 }
 .today-list-head-end {
@@ -38,16 +41,14 @@
    no fill). */
 .today-view-switch {
   display: inline-flex;
-  align-self: flex-start;
-  margin: 4px 0 8px;
   padding: 2px;
   border: 1px solid var(--control-edge);
   border-radius: 8px;
 }
 .today-view-opt {
-  min-width: 88px;
-  min-height: 42px;
-  padding: 0 14px;
+  min-width: 72px;
+  min-height: 38px;
+  padding: 0 12px;
   font: inherit;
   font-size: 0.875rem;
   font-weight: 700;
@@ -96,44 +97,19 @@
   border-radius: 18px;
   cursor: pointer;
 }
-/* Phones and narrow tablets hide the list with the peek on the wall (37b);
-   the inline list keeps its own "Hide list" from 840px (38i, 32b). */
-.today-list-hide { display: none; }
-
-.today-list-tools {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px 16px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--line);
+/* Hide list is an arrow (Rohan, as a chat app's sidebar): › puts the list
+   away; ‹ at the right edge brings it back. Phones and narrow tablets hide
+   the list with the peek on the wall (37b); the inline list has its arrow
+   from 840px (38i, 32b). */
+.today-list-hide {
+  display: none;
+  justify-content: center;
+  width: 40px;
+  min-height: 40px;
+  padding: 0;
+  border-radius: 50%;
 }
 
-/* All · Must-do */
-.today-seg {
-  display: flex;
-  padding: 3px;
-  background: var(--panel);
-  border-radius: var(--radius-sm);
-}
-.today-seg-opt {
-  min-height: 32px;
-  padding: 6px 12px;
-  font: inherit;
-  font-size: 0.78125rem;
-  font-weight: 700;
-  color: var(--ink-2);
-  background: none;
-  border: 0;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.today-seg-opt[aria-pressed="true"] {
-  color: var(--ink);
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
-}
 
 /* A system switch (37b; brief: 51×31) — the task sheet's Must-do uses it. */
 .today-energy-switch {
@@ -168,7 +144,6 @@
   padding: 0 16px 8px;
 }
 .today-list .today-daymap { padding: 0 16px 8px; }
-.today-list .today-view-switch { margin-inline: 16px; }
 .today-list-empty {
   margin: 0;
   padding: 16px 0;
@@ -188,7 +163,6 @@
 .today-list-empty-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .today-list-head button:focus-visible,
-.today-seg-opt:focus-visible,
 .today-energy-switch:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -200,84 +174,17 @@
   .today-wall.is-open .wall-peek-row { display: none; }
 }
 
-/* Laptop (51a): no "+ Add" in the header and no Day map link (it sits under
-   the task); title, count, the filter and Hide list share one
-   row. The list's last line adds to Today, pinned to the bottom of the card
-   when the list runs past the screen. */
-.today-list-addbar { display: none; }
-
+/* 72: below 1280 the header drops "N DONE" and the switch narrows (150),
+   to keep one row. */
+@media (min-width: 840px) and (max-width: 1279px) {
+  .today-list-count { display: none; }
+  .today-view-opt { min-width: 0; padding: 0 10px; }
+  .today-list-head-end { gap: 8px; }
+}
 @media (min-width: 1024px) {
-  .today-list-top {
-    container-type: inline-size;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px 14px;
-    padding: 12px 22px;
-    border-bottom: 1px solid var(--line);
-  }
-  .today-list-head { display: contents; }
-  /* Too narrow for one row (a 1024–1279 laptop): two rows on purpose —
-     title, count and Hide list, then the filter — rather
-     than letting Hide list wrap onto a line of its own. */
-  .today-list-title { order: 0; }
-  .today-list-count { order: 1; }
-  .today-list-head-end { order: 2; margin-left: auto; }
-  .today-list-tools {
-    order: 3;
-    flex: 1 0 100%;
-    flex-wrap: nowrap;
-    padding: 0;
-    border: 0;
-  }
-  @container (min-width: 680px) {
-    .today-list-tools { order: 2; flex: 0 1 auto; margin-left: auto; }
-    .today-list-head-end { order: 3; margin-left: 0; }
-  }
-  /* The Day map link moves under the task (51a) — only when there is one:
-     the empty and done walls have no link of their own. */
-  .today-list-add { display: none; }
   .today-list .tasks-list,
   .today-list .today-daymap { padding: 0 22px 8px; }
-  .today-list .today-view-switch { margin-inline: 22px; }
-
-  .today-list-addbar {
-    position: sticky;
-    bottom: 0;
-    display: block;
-    margin-top: auto;
-    padding: 8px 12px 12px;
-    background: var(--surface);
-    border-top: 1px solid var(--line);
-    border-radius: 0 0 var(--radius) var(--radius);
-  }
-  .today-list-addrow {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    width: 100%;
-    min-height: 52px;
-    padding: 0 12px;
-    font-family: var(--font-sans);
-    font-size: 0.9375rem;
-    font-weight: 800;
-    color: var(--ink);
-    background: none;
-    border: 0;
-    border-radius: 8px;
-    cursor: pointer;
-  }
-  .today-list-addrow:hover { background: var(--panel); }
-  .today-list-addrow:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
-  .today-list-addrow-where {
-    margin-left: auto;
-    font-size: 0.8125rem;
-    font-weight: 600;
-    color: var(--ink-2);
-  }
+  .today-list-head { padding: 12px 22px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -109,10 +109,8 @@ for (const viewport of PHONE_VIEWPORTS) {
 
     // Every control in the header and toolbar is on screen and none overlap.
     const controls = [
+      page.locator(".today-list-title"),
       page.getByRole("group", { name: "View" }),
-      page.locator(".today-list-add"),
-      page.getByRole("button", { name: /^All · \d+$/ }),
-      page.getByRole("button", { name: /^Must-do · \d+$/ }),
     ];
     const boxes = [];
     for (const control of controls) {
