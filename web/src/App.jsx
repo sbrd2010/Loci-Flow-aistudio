@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { auth, track, setAnalyticsUser } from "./firebase";
+import { getCategoryKeyForTrack } from "./utils/soundLibrary";
 import { computeUserProfile } from "./utils/userProfile";
 import { scheduleAllReminders, scheduleCoachCheckin, cancelCoachCheckin, checkDailyCheckinNotifications, scheduleDailyCheckins, cancelDailyCheckins, cancelAllNativeScheduling, VISIBLE_HEARTBEAT_KEY, DAILY_CHECKIN_SLOTS } from "./utils/reminders";
 import { isNativeApp, refreshNativePermission, addNativeNotificationClickListener, NATIVE_PERMISSION_GRANTED_EVENT } from "./utils/nativeNotifs";
@@ -572,7 +573,7 @@ export default function App() {
 
   // Focus timer state lives here (not in TodayTab) so it survives tab switches
   // and can be surfaced via the floating timer across pages.
-  // pipActionsRef carries the mini window's Done and I'm stuck (59b) into
+  // pipActionsRef carries the mini window's Done, I'm stuck (59b) and Shuffle into
   // the timer hook, which builds that window; they are set below, once the
   // handlers they call exist.
   const pipActionsRef = useRef({});
@@ -1011,6 +1012,8 @@ export default function App() {
   pipActionsRef.current = {
     onDone: () => { focusTimer.setIsTimerRunning(false); handleFocusSessionDone(); },
     onStuck: () => { handleReturnToFocus(); setStuckPending(true); },
+    onShuffle: () => focusAudio.reshuffleTrack(),
+    canShuffle: () => Boolean(getCategoryKeyForTrack(focusAudio.selectedTrack)),
   };
 
 
