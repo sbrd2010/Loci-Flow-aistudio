@@ -261,10 +261,18 @@ test("a fixed time shows its span and stays put; a task dropped above it that wo
   const last = (await rows.last().locator(".task-title-text").innerText()).trim();
   const announced = (re) => page.waitForFunction((src) =>
     [...document.querySelectorAll("[id^='DndLiveRegion']")].some(el => new RegExp(src).test(el.textContent)), re.source);
+  // Each key waits for dnd-kit to say what it did: a key before it has
+  // measured the list is ignored.
+  const live = () => page.evaluate(() => [...document.querySelectorAll("[id^='DndLiveRegion']")].map(el => el.textContent).join("|"));
   await rows.last().focus();
   await page.keyboard.press("Space");
   await announced(/Picked up|was moved over/);
-  for (let i = 0; i < 2; i++) await page.keyboard.press("ArrowUp");
+  await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+  for (let i = 0; i < 2; i++) {
+    const before = await live();
+    await page.keyboard.press("ArrowUp");
+    await expect.poll(live).not.toBe(before);
+  }
   await page.keyboard.press("Space");
   await expect(page.locator(".undo-toast")).toContainText("Doesn’t fit before 12:00 · placed after");
   await expect(rows.first()).toContainText("Call with the recruiter");

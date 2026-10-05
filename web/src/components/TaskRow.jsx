@@ -259,7 +259,7 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
 
       {/* Q1: a fixed time shows its span in --act; else how long it takes. */}
       {!isCompleted && (fixed || minutes != null) && (
-        <span className={`task-row-dur${fixed ? " is-fixed" : ""}`}>
+        <span className={`task-row-dur${fixed ? " is-fixed" : ""}`} aria-label={fixed ? `Fixed at ${formatClock24(fixedAt)}, until ${formatClock24(fixedAt + (minutes || 0))}` : undefined}>
           {fixed ? `${formatClock24(fixedAt)}–${formatClock24(fixedAt + (minutes || 0))}` : formatSpanCaps(minutes)}
         </span>
       )}

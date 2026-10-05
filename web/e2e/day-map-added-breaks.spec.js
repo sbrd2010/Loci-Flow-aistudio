@@ -72,7 +72,7 @@ test("Later… puts the break after what you're doing now; the next stop goes af
   await expect(route(page).locator(".dm-stop.is-continued")).toHaveCount(0);
 });
 
-test("Something else shows its lock and time in Today's list, and is never the one thing", async ({ page }) => {
+test("Something else shows its fixed time in Today's list, and is never the one thing", async ({ page }) => {
   await openDayMap(page);
   await page.getByRole("button", { name: "Fixed time" }).click();
   await page.getByRole("dialog", { name: "Fix a time" }).getByRole("button", { name: /Something else/ }).click();
