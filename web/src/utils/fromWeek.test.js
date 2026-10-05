@@ -46,7 +46,7 @@ describe("pullFromWeek", () => {
 
   it("ignores tasks that aren't open This week tasks", () => {
     const tasks = [t("a", { horizonLevel: "today" }), t("gone", { isDeleted: true })];
-    expect(pullFromWeek(tasks, ["a", "gone", "missing"], 5)).toEqual({ tasks, before: [] });
+    expect(pullFromWeek(tasks, ["a", "gone", "missing"], 5)).toEqual({ tasks, before: [], previousPin: null });
   });
 });
 
@@ -70,6 +70,38 @@ describe("undoPullFromWeek", () => {
     expect(back.find(x => x.uuid === "a")).toMatchObject({ horizonLevel: "week", orderIndex: 2, isNowFocus: false, lastUpdated: 70 });
     expect(back.find(x => x.uuid === "b").horizonLevel).toBe("today");
     expect(back.find(x => x.uuid === "c").horizonLevel).toBe("month");
+  });
+});
+
+// #489: Coach can pin a This week task; Undo gives it the pin back.
+describe("Undo gives the one thing back", () => {
+  const held = () => [t("held", { isNowFocus: true }), t("a"), t("b")];
+
+  it("re-pins the task that held it", () => {
+    const { tasks: moved, before, previousPin } = pullFromWeek(held(), ["a"], 50);
+    expect(previousPin).toBe("held");
+    const back = undoPullFromWeek(moved, before, 70, previousPin);
+    expect(back.filter(x => x.isNowFocus).map(x => x.uuid)).toEqual(["held"]);
+    expect(takesPinFrom(moved, back)).toBe(true);
+  });
+
+  it("re-pins it when it was ticked too, after the first", () => {
+    const { tasks: moved, before, previousPin } = pullFromWeek(held(), ["a", "held"], 50);
+    const back = undoPullFromWeek(moved, before, 70, previousPin);
+    expect(back.find(x => x.uuid === "held")).toMatchObject({ horizonLevel: "week", isNowFocus: true });
+  });
+
+  it("leaves it unpinned when something else was pinned since, or it's done", () => {
+    const { tasks: moved, before, previousPin } = pullFromWeek(held(), ["a"], 50);
+    const repinned = moved.map(x => ({ ...x, isNowFocus: x.uuid === "b" }));
+    expect(undoPullFromWeek(repinned, before, 70, previousPin).filter(x => x.isNowFocus).map(x => x.uuid)).toEqual(["b"]);
+    const done = moved.map(x => (x.uuid === "held" ? { ...x, isCompleted: true } : x));
+    expect(undoPullFromWeek(done, before, 70, previousPin).some(x => x.isNowFocus)).toBe(false);
+  });
+
+  it("has nothing to give back when nothing was pinned, or the pinned task came first", () => {
+    expect(pullFromWeek([t("a")], ["a"], 50).previousPin).toBeNull();
+    expect(pullFromWeek(held(), ["held", "a"], 50).previousPin).toBeNull();
   });
 });
 

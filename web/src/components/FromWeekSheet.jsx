@@ -13,7 +13,12 @@ export default function FromWeekSheet({ tasks, onMove, onOpenPlan, onClose }) {
   useEffect(() => {
     panelRef.current?.focus();
     const opener = openerRef.current;
-    return () => { if (opener?.isConnected) opener.focus(); };
+    // After a move the opener is gone (the wall shows the new one thing):
+    // focus goes to its title instead of falling to the page (#489).
+    return () => {
+      if (opener?.isConnected) opener.focus();
+      else document.querySelector(".wall-title")?.focus();
+    };
   }, []);
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onClose(); } };
