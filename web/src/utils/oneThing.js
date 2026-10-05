@@ -20,7 +20,11 @@ export function makeOneThing(allTasks, uuid, now = Date.now()) {
   const top = (orders.length ? Math.min(...orders) : 0) - 1;
   const tasks = allTasks.map(t => {
     if (key(t) === uuid) return t.isNowFocus && !t.deferredUntil ? t : { ...t, isNowFocus: true, deferredUntil: null, lastUpdated: now };
-    if (previous && key(t) === key(previous)) return { ...t, isNowFocus: false, orderIndex: top, lastUpdated: now };
+    // Only a Today task goes to the top; one pinned in Plan (Coach can pin a
+    // week task) keeps its place there (#489).
+    if (previous && key(t) === key(previous)) {
+      return { ...t, isNowFocus: false, ...(t.horizonLevel === "today" ? { orderIndex: top } : {}), lastUpdated: now };
+    }
     if (t.isNowFocus) return { ...t, isNowFocus: false, lastUpdated: now };
     return t;
   });

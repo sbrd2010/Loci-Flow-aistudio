@@ -377,9 +377,14 @@ test("mobile reliability: nothing in Today: From This week moves the ticked task
   // Ticked second first: the first ticked is the one thing.
   await boxes.nth(1).check();
   await boxes.nth(0).check();
+  // #489: what's behind the sheet is out of reach while it's open.
+  await expect(page.locator(".today-layout")).toHaveAttribute("inert", "");
   await move.click();
   await expect(sheet).toHaveCount(0);
+  await expect(page.locator(".today-layout")).not.toHaveAttribute("inert");
   await expect(page.locator(".wall-title")).toHaveText(names[1]);
+  // The button that opened it is gone: focus goes to the new one thing.
+  await expect(page.locator(".wall-title")).toBeFocused();
   await expect(page.getByRole("status").filter({ hasText: "2 moved to Today" })).toBeVisible();
   await expect(page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { hasText: names[0] })).toHaveCount(1);
   await page.getByRole("button", { name: "Undo" }).click();

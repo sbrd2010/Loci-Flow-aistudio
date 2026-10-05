@@ -875,7 +875,7 @@ export default function TodayTab({
   const [weekPickerOpen, setWeekPickerOpen] = useState(false);
   const handleFromWeek = (uuids) => {
     const now = Date.now();
-    const { tasks: next, before } = pullFromWeek(tasks, uuids, now);
+    const { tasks: next, before, previousPin } = pullFromWeek(tasks, uuids, now);
     if (!before.length) return;
     // Whatever held the one thing (Coach can pin a week task) lets go, and
     // its open session ends with it, as handlePinTask does.
@@ -894,7 +894,7 @@ export default function TodayTab({
     savePayloadAsync({ ...payload, tasks: next })
       .then(() => writeActivityEvents(eventsPatch(uid, events)))
       .catch(() => {});
-    setUndo({ kind: "fromweek", before, moved: before.length, at: now });
+    setUndo({ kind: "fromweek", before, previousPin, moved: before.length, at: now });
   };
   const handleParkWithUndo = (task) => {
     setUndo({ kind: "park", task, wasPinned: !!task.isNowFocus, at: Date.now() });
@@ -945,7 +945,8 @@ export default function TodayTab({
       const front = frontsFromConfig(config).find(f => f.id === u.to);
       return front ? `Put on ${front.name}: ${title}` : `Off its front: ${title}`;
     }
-    if (u.kind === "swap") return u.previous ? `${u.previous.title} is back at the top of the list.` : `${u.fromPlan ? "Moved to Today and made the one thing" : "Made the one thing"}: ${title}`;
+    // A previous one thing in Plan isn't on the list, so the toast names the new one (#489).
+    if (u.kind === "swap") return u.previous?.horizonLevel === "today" ? `${u.previous.title} is back at the top of the list.` : `${u.fromPlan ? "Moved to Today and made the one thing" : "Made the one thing"}: ${title}`;
     return `${{ done: "Marked done", delete: "Deleted", tomorrow: "Moved to tomorrow", bringback: "Brought back", park: "Parked", restore: "Restored", unpin: "Unpinned" }[u.kind]}: ${title}`;
   };
   const undoText = undo ? undoMessage(undo) : "";
@@ -1060,7 +1061,7 @@ export default function TodayTab({
     }
     if (kind === "fromweek") {
       const now = Date.now();
-      const next = undoPullFromWeek(tasks, undo.before, now);
+      const next = undoPullFromWeek(tasks, undo.before, now, undo.previousPin);
       const back = next.filter(t => t.lastUpdated === now && undo.before.some(b => b.uuid === t.uuid));
       // Sending the one thing back to This week ends its session, as every
       // other move off Today does (Codex review of #486).
@@ -1898,7 +1899,8 @@ export default function TodayTab({
           )}
         </section>
       )}
-      <div ref={layoutRef} style={closedView ? { display: "none" } : undefined} className={`today-layout${listShown ? " is-list-open" : ""}`}>
+      {/* From This week is a modal sheet: what's behind it is out of reach (#489). */}
+      <div ref={layoutRef} style={closedView ? { display: "none" } : undefined} className={`today-layout${listShown ? " is-list-open" : ""}`} inert={weekPickerOpen ? "" : undefined}>
       <div className="today-layout-main" inert={wallCovered ? "" : undefined} aria-hidden={wallCovered ? "true" : undefined}>
       <TodayWall
         task={pinnedFocusTask}

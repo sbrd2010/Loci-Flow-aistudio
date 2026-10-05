@@ -24,6 +24,14 @@ describe("makeOneThing (50c–d)", () => {
     expect(next.filter(t => t.isNowFocus)).toHaveLength(1);
   });
 
+  // #489: a one thing pinned in Plan keeps its place in its Plan list.
+  it("leaves an old one thing that isn't on Today where it was", () => {
+    const off = tasks.map(t => ({ ...t, isNowFocus: t.uuid === "week" }));
+    const { tasks: next, previous } = makeOneThing(off, "hale", 100);
+    expect(previous.uuid).toBe("week");
+    expect(next.find(t => t.uuid === "week")).toMatchObject({ isNowFocus: false, orderIndex: -9 });
+  });
+
   it("with nothing pinned just pins, and has nothing to send back", () => {
     const { tasks: next, previous } = makeOneThing(tasks.map(t => ({ ...t, isNowFocus: false })), "hale");
     expect(previous).toBe(null);

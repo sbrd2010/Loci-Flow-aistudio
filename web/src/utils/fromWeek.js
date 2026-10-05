@@ -1,6 +1,7 @@
 // "From This week" (67j, 67s): with nothing in Today, chosen This week tasks
 // move to Today in the order picked, at the bottom of the list (and so of the
-// route), and the first becomes the one thing. `before` holds what Undo needs.
+// route), and the first becomes the one thing. `before` and `previousPin` (the
+// task that held the one thing, if it lost it) hold what Undo needs.
 
 export function weekTasks(tasks = []) {
   return tasks
@@ -12,7 +13,7 @@ export function pullFromWeek(tasks, uuids, now = Date.now()) {
   // The same tasks the picker lists (weekTasks): one parked meanwhile, say on
   // another device, is no longer one of them (Codex review of #486).
   const chosen = uuids.filter(u => tasks.some(t => t.uuid === u && t.horizonLevel === "week" && !t.isDeleted && !t.isCompleted && !t.isParked));
-  if (!chosen.length) return { tasks, before: [] };
+  if (!chosen.length) return { tasks, before: [], previousPin: null };
   const bottom = tasks
     .filter(t => t.horizonLevel === "today" && !t.isDeleted)
     .reduce((max, t) => Math.max(max, Number(t.orderIndex) || 0), -1) + 1;
@@ -21,6 +22,7 @@ export function pullFromWeek(tasks, uuids, now = Date.now()) {
     return { uuid: u, horizonLevel: t.horizonLevel, orderIndex: t.orderIndex ?? null, deferredUntil: t.deferredUntil ?? null };
   });
   const first = chosen[0];
+  const held = tasks.find(t => t.isNowFocus && !t.isDeleted && !t.isCompleted);
   return {
     tasks: tasks.map(t => {
       const i = chosen.indexOf(t.uuid);
@@ -35,6 +37,7 @@ export function pullFromWeek(tasks, uuids, now = Date.now()) {
       return { ...rest, horizonLevel: "today", orderIndex: bottom + i, deferredUntil: null, isNowFocus: t.uuid === first, lastUpdated: now };
     }),
     before,
+    previousPin: held && held.uuid !== first ? held.uuid : null,
   };
 }
 
@@ -51,13 +54,16 @@ export function takesPinFrom(tasks, next) {
 // Undo: back to This week, where they were — the ones still open in Today.
 // lastUpdated can't tell a user's change from the route taking them in
 // (joinRoute stamps it at once), so it isn't checked; Undo lasts 5 seconds.
-// The route fields they picked up go with them.
-export function undoPullFromWeek(tasks, before, now = Date.now()) {
+// The route fields they picked up go with them. The task that held the one
+// thing gets it back, unless something else has been pinned since (#489).
+export function undoPullFromWeek(tasks, before, now = Date.now(), previousPin = null) {
   const byId = new Map(before.map(b => [b.uuid, b]));
-  return tasks.map(t => {
+  const next = tasks.map(t => {
     const b = byId.get(t.uuid);
     if (!b || t.isDeleted || t.isCompleted || t.horizonLevel !== "today") return t;
     const { dayMapDate, dayMapPeriod, dayMapStartMinutes, dayMapDurationMinutes, dayMapOrder, dayMapFixedMinutes, ...rest } = t;
     return { ...rest, horizonLevel: b.horizonLevel, orderIndex: b.orderIndex, deferredUntil: b.deferredUntil ?? null, isNowFocus: false, lastUpdated: now };
   });
+  if (!previousPin || next.some(t => t.isNowFocus && !t.isDeleted && !t.isCompleted)) return next;
+  return next.map(t => (t.uuid === previousPin && !t.isDeleted && !t.isCompleted ? { ...t, isNowFocus: true, lastUpdated: now } : t));
 }
