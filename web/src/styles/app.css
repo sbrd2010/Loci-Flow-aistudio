@@ -57,14 +57,10 @@
   z-index: 2;
 }
 
-/* Q59 (72): on big screens the whole app scales: root 16px → 18 / 21.6 /
-   28.5px at 1600 / 1920 / 2400 (72d, 72e, 72h). The CSS is mostly px, so
-   this is zoom rather than font-size. Viewport units would be zoomed too,
-   so each one divides by --zoom; JS that writes a measured size back
-   divides by cssZoom() (utils/cssZoom.js). */
-@media (min-width: 1600px) { :root { --zoom: 1.125; zoom: 1.125; } }
-@media (min-width: 1920px) { :root { --zoom: 1.35; zoom: 1.35; } }
-@media (min-width: 2400px) { :root { --zoom: 1.78125; zoom: 1.78125; } }
+/* Q59 (72): the app isn't scaled on big screens. 72's steps (1600, 1920,
+   2400) made a 24" 1920 monitor feel oversized, and browser zoom below 100%
+   widens the viewport, so it set them off or, at 80%, undid the zoom out
+   (Rohan, 5 Oct; Codex review of #490). Browser zoom does it instead. */
 
 /* Global Reset & Base */
 * {
