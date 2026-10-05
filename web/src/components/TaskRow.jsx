@@ -61,13 +61,16 @@ export const ROADMAP_HORIZONS = [
 // list moves keyboard focus between rows (one tab stop, ↑/↓). On a laptop the
 // grip shows on hover (70f), and a pin at the right: "Make the one thing · P"
 // (50d); a row past the day's end offers Tomorrow · Park there (69e).
-export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMakeOneThing, tabStop = false, isTinted = false, onBreakdown, isBreakingDown, breakdownError, breakdownNoKey, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic", isGoal = false, isMin = false, fixedAt = null, minutes = null, overActions = null, fromTag = null, fromYesterday = false, onSwipeDone, onSwipeTomorrow, onPutOnFront }) {
+export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMakeOneThing, tabStop = false, isTinted = false, onBreakdown, isBreakingDown, breakdownError, breakdownNoKey, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic", isGoal = false, isMin = false, fixedAt = null, minutes = null, overActions = null, fromYesterday = false, reminderDot = false, onSwipeDone, onSwipeTomorrow, onPutOnFront }) {
   const { title, isCompleted, isNowFocus, subSteps, reminderAt, isMVD } = task;
 
   const hasActions = !isCompleted && !!onOpen;
   const stepsDone = subSteps?.filter(s => s.done).length ?? 0;
   const hasSubSteps = subSteps && subSteps.length > 0;
   const fixed = fixedAt != null && !isCompleted;
+  // 75a: on Today an overdue reminder is a gold dot by the duration, in place
+  // of its line — only where the duration shows, so it's never lost.
+  const reminderAsDot = reminderDot && !!reminderAt && reminderAt < Date.now() && !isCompleted && (fixed || minutes != null);
   const isDragAnywhere = interactionStyle === "dragAnywhere" && !!dragHandleListeners;
   // Swipe (touch only; 37c): right past a threshold marks done; left opens
   // "Tomorrow" and "Front" behind the row (50). The same actions are in the task
@@ -216,20 +219,18 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
 
       <div className="task-middle">
         <span className="task-title-text"><LinkifyText text={title} /></span>
-        {!isCompleted && (hasSubSteps || isNowFocus || isMVD || isGoal || isMin || fromTag || fromYesterday) && (
+        {!isCompleted && (hasSubSteps || isNowFocus || isMVD || isGoal || isMin || fromYesterday) && (
           <span className="task-row-tags">
             {hasSubSteps && <span className="task-row-steps">{stepsDone} / {subSteps.length} steps</span>}
             {isNowFocus && <span className="task-tag is-now" aria-label="Today's one thing">NOW</span>}
             {isMVD && <span className="task-tag is-must" aria-label="Must-do">MUST</span>}
             {isGoal && <span className="task-tag is-goal" aria-label="Goal task">GOAL</span>}
             {isMin && <span className="task-tag is-min" aria-label="Minimum day">MIN</span>}
-            {/* Q44.5: moved here by a horizon review, for the day. */}
-            {fromTag && <span className="task-tag is-from">{fromTag}</span>}
             {/* Q7: moved here from yesterday; the tag lasts the day. */}
             {fromYesterday && <span className="from-yesterday">FROM YESTERDAY</span>}
           </span>
         )}
-        {reminderAt && !isCompleted && (
+        {reminderAt && !isCompleted && !reminderAsDot && (
           <span className={`task-row-meta${reminderAt < Date.now() ? " is-overdue" : ""}`}>
             Reminder · {formatReminderLabel(reminderAt)}{reminderAt < Date.now() ? " (overdue)" : ""}
           </span>
@@ -260,6 +261,9 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
       {/* Q1: a fixed time shows its span in --act; else how long it takes. */}
       {!isCompleted && (fixed || minutes != null) && (
         <span className={`task-row-dur${fixed ? " is-fixed" : ""}`} aria-label={fixed ? `Fixed at ${formatClock24(fixedAt)}, until ${formatClock24(fixedAt + (minutes || 0))}` : undefined}>
+          {reminderAsDot && (
+            <span className="task-row-reminder-dot" role="img" aria-label="Reminder overdue" title={`Reminder overdue · ${formatReminderLabel(reminderAt)}`} />
+          )}
           {fixed ? `${formatClock24(fixedAt)}–${formatClock24(fixedAt + (minutes || 0))}` : formatSpanCaps(minutes)}
         </span>
       )}

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { auth, track, setAnalyticsUser } from "./firebase";
 import { getCategoryKeyForTrack } from "./utils/soundLibrary";
 import { computeUserProfile } from "./utils/userProfile";
+import { useAppScale } from "./hooks/useAppScale";
 import { scheduleAllReminders, scheduleCoachCheckin, cancelCoachCheckin, checkDailyCheckinNotifications, scheduleDailyCheckins, cancelDailyCheckins, cancelAllNativeScheduling, VISIBLE_HEARTBEAT_KEY, DAILY_CHECKIN_SLOTS } from "./utils/reminders";
 import { isNativeApp, refreshNativePermission, addNativeNotificationClickListener, NATIVE_PERMISSION_GRANTED_EVENT } from "./utils/nativeNotifs";
 import { signInWithGoogleNative } from "./utils/nativeAuth";
@@ -578,6 +579,14 @@ export default function App() {
   // handlers they call exist.
   const pipActionsRef = useRef({});
   const focusTimer = useFocusTimer(payload?.tasks || [], payload?.config || {}, user?.uid || null, pipActionsRef);
+  // Turn 76: Today grows with the window; the Focus page over it doesn't
+  // (it isn't redesigned this round), so the scale steps aside while it's open.
+  // Only the main app grows: sign-in, loading, errors and onboarding (the
+  // early returns below) keep their own sizes (Codex review of #494).
+  const mainAppShown = demoMode
+    ? !!payload
+    : !authLoading && !!user && !error && !loading && !!payload && payload.config?.isOnboardingCompleted !== false;
+  useAppScale(mainAppShown && !focusTimer.isFocusMode ? activeTab : null);
   // Live (non-stale) read of focusTimer for effect/promise callbacks that
   // run after an async wait (e.g. the pendingFocusOpen effect's pinPromise
   // handlers below) — those closures capture `focusTimer` from whichever
