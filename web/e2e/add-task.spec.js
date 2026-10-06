@@ -333,3 +333,21 @@ test("a long thought wraps and grows; Shift+Enter adds a line, Enter saves", asy
   await field.press("Enter");
   await expect(page.locator(".add-card")).toHaveCount(0, { timeout: 5_000 });
 });
+
+// Try-out 10: the add sheet's reminder is the same picker — quick picks,
+// the day, a typed time — with no browser time field.
+test("Add task: a reminder from a quick pick, then a typed time", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await page.keyboard.press("n");
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await dialog.getByRole("button", { name: "More details" }).click();
+  await dialog.getByRole("button", { name: "Set a reminder" }).click();
+  await expect(dialog.locator('input[type="time"]')).toHaveCount(0);
+  await dialog.getByRole("group", { name: "Quick reminders" }).getByRole("button", { name: /^Tomorrow/ }).click();
+  await expect(dialog.getByRole("button", { name: /^Remind me:/ })).toHaveText("Remind me: Tomorrow 09:00");
+  const typed = dialog.getByLabel("Reminder time, typed");
+  await typed.fill("1730");
+  await typed.press("Enter");
+  await expect(dialog.getByRole("button", { name: /^Remind me:/ })).toHaveText("Remind me: Tomorrow 17:30");
+  await expect(page.locator(".add-card")).toHaveCount(1);
+});

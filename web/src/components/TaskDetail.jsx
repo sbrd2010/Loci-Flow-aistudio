@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import GrowTextarea from "./ui/GrowTextarea";
+import ReminderPicker from "./ui/ReminderPicker";
 import EstimatePicker from "./EstimatePicker";
 import { formatEstimate } from "../utils/estimates";
 import { IconPin, IconPlus, IconX, IconChevronRight, IconChevronDown, IconCheck } from "./ui/icons";
@@ -207,8 +208,6 @@ export default function TaskDetail({
   // while it is open, as the full editor does, so it can be chosen back.
   const [hadP4] = useState(task.priority === "P4");
   const priorities = ["P1", "P2", "P3", ...(hadP4 ? ["P4"] : [])];
-  // Likewise an estimate the chips don't carry (25m, the app's default, or
-  // one set in the full editor) stays on offer, in order.
 
   const isHorizon = typeof onMoveToToday === "function";
   // Opened from a Day map stop: its footer fixes the stop's time.
@@ -483,10 +482,13 @@ export default function TaskDetail({
               </button>
               {picker === "reminder" && (
                 <div className="detail-options detail-reminder">
-                  <input type="date" className="detail-input" aria-label="Reminder date" value={remind.date} min={localDateTime(Date.now()).date}
-                    onChange={e => saveReminder({ ...remind, date: e.target.value })} />
-                  <input type="time" className="detail-input" aria-label="Reminder time" value={remind.time}
-                    onChange={e => saveReminder({ ...remind, time: e.target.value })} />
+                  <ReminderPicker
+                    idPrefix={`detail-reminder-${task.uuid || task.id}`}
+                    date={remind.date}
+                    time={remind.time}
+                    active={!!task.reminderAt}
+                    onChange={saveReminder}
+                  />
                   {task.reminderAt ? (
                     <button type="button" className="detail-text-btn" onClick={() => { setPicker(null); onPatch({ reminderAt: null }); }}>No reminder</button>
                   ) : (

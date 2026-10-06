@@ -167,9 +167,23 @@ test("More opens Reminder and Category, closed until asked", async ({ page }) =>
   const reminder = sheet(page).getByRole("button", { name: /^Reminder/ });
   await expect(reminder.locator(".detail-value")).toHaveText("None");
   await reminder.click();
-  await sheet(page).getByLabel("Reminder date").fill("2024-06-16");
-  await sheet(page).getByLabel("Reminder time").fill("09:30");
+  // Try-out 10/20: quick picks first, then the day and a typed time — no
+  // browser time picker.
+  await expect(sheet(page).locator('input[type="time"]')).toHaveCount(0);
+  const quick = sheet(page).getByRole("group", { name: "Quick reminders" });
+  await expect(quick.getByRole("button")).toHaveText([/^In 1 hour/, /^This evening 18:00$/, /^Tomorrow 09:00$/, /^Monday 09:00$/]);
+  await quick.getByRole("button", { name: /^Tomorrow/ }).click();
   await expect(reminder.locator(".detail-value")).not.toHaveText("None");
+  await expect(quick.getByRole("button", { name: /^Tomorrow/ })).toHaveAttribute("aria-pressed", "true");
+  await sheet(page).getByLabel("Reminder date").fill("2024-06-16");
+  const typed = sheet(page).getByLabel("Reminder time, typed");
+  await typed.fill("2:30pm");
+  await typed.press("Enter");
+  await expect(typed).toHaveValue("14:30");
+  await expect(reminder.locator(".detail-value")).toContainText("14:30");
+  await typed.fill("25:00");
+  await typed.press("Enter");
+  await expect(sheet(page).getByRole("alert")).toContainText("Type a time");
   await sheet(page).getByRole("button", { name: "No reminder" }).click();
   await expect(reminder.locator(".detail-value")).toHaveText("None");
 });

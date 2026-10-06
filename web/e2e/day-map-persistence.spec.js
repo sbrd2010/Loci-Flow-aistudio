@@ -59,9 +59,13 @@ test("mobile reliability: Day Map auto-fill persists route anchor and reflows du
   await enterDemo(page);
   await openDayMap(page);
 
-  const anchorSelect = page.getByLabel("Route start time");
-  await anchorSelect.selectOption("660");
-  await expect(anchorSelect).toHaveValue("660");
+  // Try-out 19: From is a small panel — Now, quarter-hours, or a typed time.
+  const anchor = page.locator(".dm-from-select");
+  await anchor.click();
+  const typed = page.getByRole("dialog", { name: "Start the route at" }).getByLabel("Route start, typed");
+  await typed.fill("11");
+  await typed.press("Enter");
+  await expect(anchor).toHaveText(/^11:00/);
 
   await expect(taskStops(page).first()).toBeVisible({ timeout: 5_000 });
   await expect.poll(() => taskStops(page).count()).toBeGreaterThanOrEqual(2);
