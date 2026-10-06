@@ -298,7 +298,11 @@ test("the list hides with an arrow and comes back from the right edge's arrow; +
 test("72: the task side reads goal · NOW · UNTIL · title · step · buttons, and the footer counts the day", async ({ page }) => {
   await enterDemo(page, { width: 1280, height: 900 });
   const goal = page.locator(".wall-goal");
-  expect(Math.round((await goal.boundingBox()).height)).toBe(44);
+  // One line, and the Target as a quiet line under it (try-out 26).
+  await expect(goal.locator(".wall-goal-target")).toBeVisible();
+  const h = Math.round((await goal.boundingBox()).height);
+  expect(h).toBeGreaterThanOrEqual(44);
+  expect(h).toBeLessThanOrEqual(52);
   await expect(page.locator(".wall-kicker-wide")).toHaveText(/^NOW · UNTIL \d\d:\d\d$/);
   await expect(page.locator(".wall-step-count")).toHaveText(/^1 \/ \d+$/);
   await expect(page.locator(".wall-first-step-label")).toBeHidden();

@@ -1071,7 +1071,6 @@
   }
   .wall-goal-head,
   .wall-goal-name,
-  .wall-goal-target,
   .wall-goal-track,
   .wall-goal-track.is-rule { display: none; }
   .wall-goal-line {
@@ -1227,7 +1226,6 @@
   }
   .wall-goal-head,
   .wall-goal-name,
-  .wall-goal-target,
   .wall-goal-track,
   .wall-goal-track.is-rule { display: none; }
   .wall-goal-line {
@@ -1371,3 +1369,11 @@
 .wall-hint-later { color: var(--ink-2); }
 .wall-hint-open:focus-visible,
 .wall-hint-later:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Try-out 26: the Key Deadline's Target (the least you'll do each day) is back
+   as a quiet second line under the one-line band, on the phone and from
+   840px: muted, one line, cut with … when long. */
+.wall-goal:has(.wall-goal-target),
+.screen-content-today .wall-goal:has(.wall-goal-target) { flex-wrap: wrap; row-gap: 0; padding-block: 5px; }
+.wall-goal .wall-goal-target { flex: 1 0 100%; min-width: 0; font-size: 13px; line-height: 1.3; }
+.wall-goal .wall-goal-target-label { font-size: 10.5px; letter-spacing: 0.12em; }

@@ -116,7 +116,11 @@ test("mobile reliability: the goal is one gold line on a phone, with its days", 
   await expect(band.locator(".wall-goal-name")).toBeHidden();
   await expect(band.locator(".wall-goal-kicker")).toBeHidden();
   expect(await band.evaluate(el => getComputedStyle(el).backgroundColor)).toBe("rgb(241, 223, 178)");
-  expect(Math.round((await band.boundingBox()).height)).toBe(44);
+  // Try-out 26: the Target is a quiet line under it — one more short line.
+  await expect(band.locator(".wall-goal-target")).toHaveText(/^Target · \S/);
+  const h = Math.round((await band.boundingBox()).height);
+  expect(h).toBeGreaterThanOrEqual(44);
+  expect(h).toBeLessThanOrEqual(64);
 });
 
 // Laptop and wider keep 51's look: the filled gold card, its figures on the
