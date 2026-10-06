@@ -231,6 +231,10 @@
     overflow-y: auto;
     scrollbar-width: thin;
   }
+  /* The Day map's now row bleeds 10px each side (todayWall.css); the
+     scrolling column takes the bleed inside its padding so the tint isn't
+     clipped and nothing scrolls sideways (try-out 28). */
+  .screen-content-today .today-list .today-daymap { margin-inline: -10px; padding: 0 18px 0 10px; }
 
   /* Rows: circle · title (15/400, three lines at most) · how long. One meta
      line at most, mono in gold. Hairline above each. */
@@ -261,8 +265,10 @@
     text-transform: uppercase;
     color: var(--gold-label);
   }
+  /* The tag row sets the type; only its own tags take it (the Day map
+     column inside the list keeps its small mono tag, try-out 28). */
   .screen-content-today .today-list .task-row-steps,
-  .screen-content-today .today-list .from-yesterday {
+  .screen-content-today .today-list .task-row-tags .from-yesterday {
     font: inherit;
     letter-spacing: inherit;
     color: inherit;

@@ -56,7 +56,9 @@
 }
 .coach-show-all:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* A 44px target round the small link, without making the row taller. */
-.coach-show-all::before { content: ""; position: absolute; inset: -13px -10px; }
+/* The hit area grows up, down and to the left only: it sits at the column's
+   right edge, and growing right gave the chat a sideways scrollbar (try-out 16). */
+.coach-show-all::before { content: ""; position: absolute; inset: -13px 0 -13px -10px; }
 
 /* The scroll anchor at the end of the messages adds no gap of its own. */
 .coach-chat-col .chat-window > div:empty:last-child { margin-top: calc(-1 * var(--coach-gap, 20px)); }

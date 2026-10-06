@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { loadRealDay } from "./helpers/realDay";
+import { sidewaysScrollers } from "./helpers/overflow";
 
 // PART7 / 74c: with two 20-word messages and two 55-word replies, all four sit
 // inside the chat window without scrolling, at the laptop, wide and phone sizes.
@@ -26,8 +27,10 @@ for (const [w, h] of [[1280, 720], [1903, 940], [412, 760]]) {
       return win.scrollHeight <= win.clientHeight + 1
         && msgs.every(m => m.top >= r.top - 1 && m.bottom <= r.bottom + 1);
     })).toBe(true);
-    // The page itself never scrolls either.
+    // The page itself never scrolls either, and nothing scrolls sideways
+    // (try-out 16: Show all's hit area once pushed the chat 10px wide).
     expect(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight + 1)).toBe(true);
+    expect(await sidewaysScrollers(page)).toEqual([]);
   });
 }
 

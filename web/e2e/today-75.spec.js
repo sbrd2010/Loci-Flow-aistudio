@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { loadRealDay } from "./helpers/realDay";
+import { sidewaysScrollers } from "./helpers/overflow";
 
 // Today, final (75a–c; PART5, PART8; README Turn 76), on a real day's list:
 // from 1280px the page never scrolls, only Up next's rows do, the footer is
@@ -152,3 +153,25 @@ test("1903×940: the sign-in screen isn't scaled; Today is once the app opens", 
   await expect(page.locator(".today-wall")).toBeVisible({ timeout: 10_000 });
   await expect.poll(() => page.evaluate(() => document.documentElement.currentCSSZoom)).toBeCloseTo(S, 3);
 });
+
+// Try-out 21/28: nothing on Today scrolls sideways — the list, its Day map
+// view (whose now row bleeds past the rows) and the task panel — and the
+// Day map's FROM YESTERDAY stays a small mono tag.
+for (const viewport of [{ width: 1280, height: 720 }, { width: 1903, height: 940 }]) {
+  test(`${viewport.width}×${viewport.height}: nothing on Today scrolls sideways`, async ({ page }) => {
+    await openToday(page, viewport);
+    expect(await sidewaysScrollers(page)).toEqual([]);
+    await page.locator(".today-view-opt", { hasText: "Day map" }).click();
+    await expect(page.locator(".today-daymap .tdm-stop").first()).toBeVisible();
+    expect(await sidewaysScrollers(page)).toEqual([]);
+    const tag = page.locator(".today-daymap .from-yesterday").first();
+    await expect(tag).toBeVisible();
+    const font = await tag.evaluate(el => ({ size: parseFloat(getComputedStyle(el).fontSize), family: getComputedStyle(el).fontFamily }));
+    expect(font.size).toBeLessThanOrEqual(12);
+    expect(font.family).toMatch(/Mono/);
+    await page.locator(".today-view-opt", { hasText: "List" }).click();
+    await page.locator(".today-list .task-title-text").first().click();
+    await expect(page.getByTestId("task-detail")).toBeVisible();
+    expect(await sidewaysScrollers(page)).toEqual([]);
+  });
+}
