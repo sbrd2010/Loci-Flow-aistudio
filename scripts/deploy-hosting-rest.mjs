@@ -12,6 +12,9 @@
 //
 // Required env var: FIREBASE_ACCESS_TOKEN (a Google OAuth2 access token for
 // the deploying service account; never logged).
+// Optional env var: HOSTING_CHANNEL_ID. When set, the build goes to that
+// preview channel (created if missing, its expiry renewed to 14 days) and
+// the live site is left alone. Unset, it releases to live as before.
 
 import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
@@ -19,6 +22,8 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 
 const SITE_ID = "loci-flow";
+const CHANNEL_ID = (process.env.HOSTING_CHANNEL_ID || "").trim();
+const CHANNEL_TTL = "1209600s"; // 14 days
 const HOSTING_API = "https://firebasehosting.googleapis.com/v1beta1";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -101,6 +106,9 @@ async function listFilesRecursive(dir) {
 }
 
 async function main() {
+  if (CHANNEL_ID && (!/^[a-z0-9-]{1,36}$/.test(CHANNEL_ID) || CHANNEL_ID === "live")) {
+    fail(`HOSTING_CHANNEL_ID "${CHANNEL_ID}" is not a preview channel id (lowercase letters, digits and dashes; not "live").`);
+  }
   const accessToken = process.env.FIREBASE_ACCESS_TOKEN;
   if (!accessToken || accessToken.trim().length === 0) {
     fail("FIREBASE_ACCESS_TOKEN is not set or empty (could not obtain an access token).");
@@ -206,8 +214,43 @@ async function main() {
   }
   console.log(`Finalized hosting version: ${versionName} (HTTP ${finalizeResult.status})`);
 
+  let channelUrl = null;
+  if (CHANNEL_ID) {
+    const channelPath = `${HOSTING_API}/sites/${SITE_ID}/channels/${CHANNEL_ID}`;
+    const existing = await fetchJson(channelPath, { method: "GET" }, accessToken);
+    let channel;
+    if (existing.ok) {
+      const renewed = await fetchJson(
+        `${channelPath}?update_mask=ttl`,
+        { method: "PATCH", body: JSON.stringify({ ttl: CHANNEL_TTL }) },
+        accessToken,
+      );
+      if (!renewed.ok) {
+        fail(`Renewing preview channel "${CHANNEL_ID}" failed with HTTP ${renewed.status}. Response: ${renewed.body}`);
+      }
+      channel = renewed.data;
+    } else if (existing.status === 404) {
+      const created = await fetchJson(
+        `${HOSTING_API}/sites/${SITE_ID}/channels?channelId=${encodeURIComponent(CHANNEL_ID)}`,
+        { method: "POST", body: JSON.stringify({ ttl: CHANNEL_TTL }) },
+        accessToken,
+      );
+      if (!created.ok) {
+        fail(`Creating preview channel "${CHANNEL_ID}" failed with HTTP ${created.status}. Response: ${created.body}`);
+      }
+      channel = created.data;
+    } else {
+      fail(`Reading preview channel "${CHANNEL_ID}" failed with HTTP ${existing.status}. Response: ${existing.body}`);
+    }
+    channelUrl = channel.url || null;
+    console.log(`Preview channel "${CHANNEL_ID}" ready, expires ${channel.expireTime || "(unknown)"}.`);
+  }
+
+  const releasesPath = CHANNEL_ID
+    ? `${HOSTING_API}/sites/${SITE_ID}/channels/${CHANNEL_ID}/releases`
+    : `${HOSTING_API}/sites/${SITE_ID}/releases`;
   const releaseResult = await fetchJson(
-    `${HOSTING_API}/sites/${SITE_ID}/releases?versionName=${encodeURIComponent(versionName)}`,
+    `${releasesPath}?versionName=${encodeURIComponent(versionName)}`,
     { method: "POST", body: JSON.stringify({}) },
     accessToken,
   );
@@ -215,6 +258,13 @@ async function main() {
     fail(`Release creation failed with HTTP ${releaseResult.status}. Response: ${releaseResult.body}`);
   }
   console.log(`Created hosting release: ${releaseResult.data.name} (HTTP ${releaseResult.status})`);
+  if (channelUrl) {
+    console.log(`Preview URL: ${channelUrl}`);
+    if (process.env.GITHUB_STEP_SUMMARY) {
+      const { appendFile } = await import("node:fs/promises");
+      await appendFile(process.env.GITHUB_STEP_SUMMARY, `### Preview deployed\n\n${channelUrl}\n`);
+    }
+  }
   console.log("Hosting deploy completed OK.");
 }
 
