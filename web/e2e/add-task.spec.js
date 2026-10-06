@@ -311,3 +311,30 @@ test("Other left empty closes; an AI suggestion after a typed time is what shows
   await expect(other).toHaveAttribute("aria-pressed", "false");
   await expect(dialog.getByLabel("Other time")).toHaveCount(0);
 });
+
+// Codex review of #498: ⌘↵ while typing in Other adds the task with the
+// time as typed, not the one chosen before.
+test("⌘↵ in Other adds the task with the typed time", async ({ page }) => {
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key"); } catch { /* private mode */ }
+  });
+  const bodies = [];
+  await page.route("https://api.groq.com/**", (route) => {
+    bodies.push(route.request().postData() || "");
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content: "One small step." } }] }) });
+  });
+  await enterDemo(page, { width: 1280, height: 800 });
+  await page.keyboard.press("n");
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await dialog.getByTestId("add-task-title").fill("Water the balcony plants");
+  await dialog.getByRole("button", { name: "30m", exact: true }).click();
+  await dialog.getByRole("button", { name: "Other", exact: true }).click();
+  await dialog.getByLabel("Other time").fill("40");
+  await dialog.getByLabel("Other time").press("Control+Enter");
+  await expect(page.locator(".add-card")).toHaveCount(0, { timeout: 5_000 });
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
+  await page.locator(".coach-composer-input").fill("what are my tasks");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect.poll(() => bodies.some(b => b.includes("Water the balcony plants")), { timeout: 8_000 }).toBe(true);
+  expect(bodies.find(b => b.includes("Water the balcony plants"))).toContain("Water the balcony plants (40min)");
+});

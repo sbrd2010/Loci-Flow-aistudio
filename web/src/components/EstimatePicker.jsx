@@ -80,9 +80,17 @@ export default function EstimatePicker({
             onChange={(e) => { setDraft(e.target.value); setError(""); }}
             onBlur={commit}
             onKeyDown={(e) => {
-              // Enter takes the time; it never submits the form around it
-              // (⌘↵ still adds the task).
+              // Enter takes the time; it never submits the form around it.
               if (e.key === "Enter" && !e.metaKey && !e.ctrlKey) { e.preventDefault(); commit(); }
+              // ⌘↵ adds the task with the time as typed: take it first, then
+              // submit once it's in (Codex review of #498). A time that
+              // doesn't read stops it, with the hint.
+              else if (e.key === "Enter" && draft.trim()) {
+                e.preventDefault();
+                e.stopPropagation();
+                const form = e.currentTarget.form;
+                if (commit() && form) setTimeout(() => form.requestSubmit(), 0);
+              }
               else if (e.key === "Escape" && draft) { e.stopPropagation(); setDraft(""); setError(""); }
             }}
           />
