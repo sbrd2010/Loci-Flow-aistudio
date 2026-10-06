@@ -141,19 +141,21 @@ html[data-theme="dark"] .plan-runway-label.is-open .plan-runway-date { color: va
   .plan-horizons-view .plan-rung-date { line-height: 1.2; }
 }
 /* 24″ (76a): content max 1480, centred; the switch shows (no Fronts column
-   beside the list, Rohan 6 Oct); ladder 440, 56 to the list; roomier cards;
-   26 under the runway. */
+   beside the list, Rohan 6 Oct); ladder 440, 56 to the list; roomier cards.
+   Try-out D1 scales the page, so a height-bound window gives about 880 CSS
+   px: the head, the runway's gap and the cards are a little tighter than
+   76a drew them, so all six cards stay on screen. */
 @media (min-width: 1600px) {
   .screen-content.screen-content-plan { padding-inline: max(40px, calc((100% - 1480px) / 2)); }
   .screen-content-plan .plan-head,
   .screen-content-plan .plan-horizons-view { max-width: 1480px; padding-left: 0; padding-right: 0; }
   .screen-content-plan .plan-seg { display: flex; }
-  .screen-content-plan .plan-head { padding-top: 30px; padding-bottom: 22px; }
-  .plan-horizons-view .plan-runway { margin-bottom: 26px; }
+  .screen-content-plan .plan-head { padding-top: 18px; padding-bottom: 14px; }
+  .plan-horizons-view .plan-runway { margin-bottom: 16px; }
   .plan-horizons-view .plan-ladder-grid { grid-template-columns: 440px minmax(0, 1fr); gap: 56px; }
   .plan-horizons-view .plan-ladder { gap: 8px; }
-  .plan-horizons-view .plan-rung { gap: 9px; padding: 14px 18px; }
-  .plan-horizons-view .plan-rung.is-open { padding: 13px 17px; }
+  .plan-horizons-view .plan-rung { gap: 7px; padding: 12px 18px; }
+  .plan-horizons-view .plan-rung.is-open { padding: 11px 17px; }
   .plan-horizons-view .plan-rung-name,
   .plan-horizons-view .plan-rung-date { line-height: normal; }
 }
