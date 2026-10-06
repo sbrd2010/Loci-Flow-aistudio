@@ -158,7 +158,9 @@
 @media (min-width: 840px) {
   .screen-content.screen-content-coach { padding-top: 0; padding-bottom: 0; }
 }
-/* On a phone the chat runs down to the tab bar (64 and the safe area). */
-@media (max-width: 839px) {
+/* Wherever the tab bar shows (under 1024: phones and tablets) the chat
+   runs down to it (64 and the safe area); 840–1023 used to slide the
+   composer under it (try-out, tablet check). */
+@media (max-width: 1023px) {
   .screen-content.screen-content-coach { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
 }

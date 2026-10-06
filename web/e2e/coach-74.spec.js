@@ -109,3 +109,14 @@ for (const [w, h] of [[1280, 720], [1903, 940], [412, 760]]) {
     expect(actions.y + actions.height).toBeLessThanOrEqual(fold);
   });
 }
+
+// Wherever the tab bar shows (under 1024), the composer sits wholly above it;
+// 840–1023 once slid it under the bar (tablet check).
+for (const [w, h] of [[412, 760], [768, 1024], [900, 1200]]) {
+  test(`${w}×${h}: the composer sits above the tab bar`, async ({ page }) => {
+    await openCoach(page, w, h);
+    const [composer, bar] = await Promise.all([page.locator(".coach-composer-wrap").boundingBox(), page.locator(".tab-bar").boundingBox()]);
+    expect(composer.y + composer.height).toBeLessThanOrEqual(bar.y + 1);
+    await expect(page.locator(".coach-send")).toBeVisible();
+  });
+}
