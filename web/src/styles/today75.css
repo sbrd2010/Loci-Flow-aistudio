@@ -180,9 +180,17 @@
     flex-direction: column;
     margin: 0;
     padding: 18px 0 0 28px;
+    /* Try-out 29: Up next stands apart from the task, as in the original
+       app: the lighter surface, from the header to the footer and out to
+       the window's right edge, a 1px edge on the left. A panel, not a
+       floating card. The border image paints the panel and reaches the
+       edge with its outset: it clips nothing (a clip-path here cut off
+       the Fix a time sheet opened from the Day map view) and adds no
+       overflow. */
     background: none;
     border: 0;
-    border-left: 1px solid var(--line);
+    border-left: 1px solid transparent;
+    border-image: linear-gradient(to right, var(--line) 1px, var(--upnext-surface) 1px) fill 0 / 0 / 0 100vmax 0 0;
     border-radius: 0;
     box-shadow: none;
     overflow: hidden;
@@ -231,6 +239,10 @@
     overflow-y: auto;
     scrollbar-width: thin;
   }
+  /* The Day map's now row bleeds 10px each side (todayWall.css); the
+     scrolling column takes the bleed inside its padding so the tint isn't
+     clipped and nothing scrolls sideways (try-out 28). */
+  .screen-content-today .today-list .today-daymap { margin-inline: -10px; padding: 0 18px 0 10px; }
 
   /* Rows: circle · title (15/400, three lines at most) · how long. One meta
      line at most, mono in gold. Hairline above each. */
@@ -248,7 +260,6 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
     font-size: 15px;
-    font-weight: 400;
     line-height: 1.35;
   }
   .screen-content-today .today-list .task-row-tags {
@@ -261,8 +272,10 @@
     text-transform: uppercase;
     color: var(--gold-label);
   }
+  /* The tag row sets the type; only its own tags take it (the Day map
+     column inside the list keeps its small mono tag, try-out 28). */
   .screen-content-today .today-list .task-row-steps,
-  .screen-content-today .today-list .from-yesterday {
+  .screen-content-today .today-list .task-row-tags .from-yesterday {
     font: inherit;
     letter-spacing: inherit;
     color: inherit;
@@ -394,3 +407,15 @@
 @media (min-width: 1280px) {
   .screen-content-today .today-list .tasks-list { margin-left: -24px; padding-left: 24px; }
 }
+
+/* Try-out 27: Today's list titles one weight heavier, in full ink (400 read
+   faint, thinner still when scaled), on every screen. Done and won't-fit
+   rows stay muted; the Day map's stops stay 600, so the views differ. */
+.screen-content-today .today-list .task-title-text { font-weight: 500; color: var(--ink); }
+.screen-content-today .today-list .task-row.completed .task-title-text,
+.screen-content-today .today-list .today-row-over .task-title-text { color: var(--ink-2); }
+
+/* Try-out 29: Up next's panel — white in light (the surface token is too
+   close to the page to read as a panel), the surface tone in dark. */
+.screen-content-today { --upnext-surface: #FFFFFF; }
+html[data-theme="dark"] .screen-content-today { --upnext-surface: var(--surface); }

@@ -180,7 +180,7 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
     // Fitted to the ring as ringGeometry fits it (0.21, or 0.16 with hours),
     // in units of the ring's own size so it scales with it.
     if (tEl) tEl.className = hours ? "is-hours" : "";
-    const labelEl = doc.getElementById("pl");
+    const labelEl = doc.getElementById("pl-text");
     if (labelEl) labelEl.textContent = title;
     const playBtn = doc.getElementById("pip-play");
     if (playBtn) playBtn.textContent = running ? "Pause" : "Resume";
@@ -192,6 +192,9 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
       arc.style.display = seconds > 0 ? "" : "none";
     }
     doc.body.className = running ? "" : "is-paused";
+    // Try-out 35: the clock itself pauses and resumes, at every size.
+    const ringEl = doc.getElementById("ring");
+    if (ringEl) ringEl.setAttribute("aria-label", running ? "Pause the timer" : "Resume the timer");
     const shuffleBtn = doc.getElementById("pip-shuffle");
     if (shuffleBtn) shuffleBtn.hidden = !pipActionsRef?.current?.canShuffle?.();
   };
@@ -240,7 +243,22 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
         #pt.is-hours { font-size: 16cqmin; }
         #pt-secs { font-size: 0.58em; font-weight: 400; opacity: 0.72; }
         #pt-secs.is-last { font-size: 1em; font-weight: 700; opacity: 1; }
-        #pl { max-width: 100%; overflow: hidden; font-size: 14px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
+        /* Try-out 35: a click on the clock (or Space) pauses and resumes; a
+           paused clock dims and says so. */
+        #ring { cursor: pointer; border-radius: 50%; }
+        #ring:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+        body.is-paused #pt { opacity: 0.45; }
+        #pp { display: none; position: absolute; left: 0; right: 0; bottom: 22%; text-align: center;
+          font-family: 'Space Mono', ui-monospace, monospace; font-size: max(10px, 8cqmin); font-weight: 700;
+          letter-spacing: 0.14em; color: var(--ink-2); }
+        body.is-paused #pp { display: block; }
+        /* Try-out 38: the title opens Loci's tab; the mini window stays. */
+        #pl { display: flex; align-items: baseline; gap: 6px; max-width: 100%; padding: 2px 4px; font: inherit;
+          font-size: 14px; font-weight: 700; color: var(--ink); background: none; border: 0; border-radius: 4px; cursor: pointer; }
+        #pl-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+        #pl::after { content: "↗"; flex: none; font-weight: 800; color: var(--accent); }
+        #pl:hover { text-decoration: underline; text-underline-offset: 3px; }
+        #pl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
         #pip-btns { display: flex; gap: 6px; width: 100%; }
         /* 59b (PART11): text buttons, 13/800, 40 tall, 6 apart. */
         #pip-btns button { flex: 1 1 auto; min-height: 40px; padding: 0 8px; font: inherit; font-size: 13px; font-weight: 800;
@@ -262,6 +280,8 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
           body { gap: 8px; padding: 8px 12px; }
           #ring { container-type: normal; width: 100%; height: auto; aspect-ratio: auto; }
           #ring svg, #pl { display: none; }
+          #ring { border-radius: 6px; text-align: center; }
+          #pp { position: static; font-size: 10px; margin-top: 2px; }
           #pt, #pt.is-hours { font-size: clamp(24px, min(34vh, 21vw), 120px); }
           #pip-btns { max-width: 280px; }
           #pip-add5, #pip-shuffle, #pip-stuck { display: none; }
@@ -269,6 +289,9 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
         /* Smaller still: the time alone fills the window. */
         @media (max-height: 139px), (max-width: 139px) {
           body { padding: 4px 8px; }
+          #pp { position: static; margin: 0 0 2px; font-size: 10px; line-height: 1; }
+          #ring { display: flex; flex-direction: column-reverse; align-items: center; }
+          body.is-paused #pt, body.is-paused #pt.is-hours { font-size: clamp(14px, min(52vh, 20vw), 120px); }
           #pip-btns { display: none; }
           #pt, #pt.is-hours { font-size: clamp(16px, min(70vh, 22vw), 140px); }
         }
@@ -301,10 +324,39 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
       secsEl.id = "pt-secs";
       timeEl.append(leadEl, secsEl);
       ring.appendChild(timeEl);
+      const pausedEl = doc.createElement("div");
+      pausedEl.id = "pp";
+      pausedEl.setAttribute("aria-hidden", "true");
+      pausedEl.textContent = "PAUSED";
+      ring.appendChild(pausedEl);
+      // At block end there is nothing to resume: the block-end choices are
+      // the main window's (Codex review of #439).
+      const togglePlay = () => { if (!sessionCompletePendingRef.current) setIsTimerRunning(r => !r); };
+      ring.setAttribute("role", "button");
+      ring.tabIndex = 0;
+      ring.title = "Pause or resume · Space";
+      ring.addEventListener("click", togglePlay);
       doc.body.appendChild(ring);
+      // Space pauses and resumes from anywhere in the window; on a focused
+      // button it presses that button instead.
+      doc.addEventListener("keydown", (e) => {
+        if (e.key !== " " || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+        const t = e.target;
+        if (t && t !== ring && t.closest?.("button")) return;
+        e.preventDefault();
+        togglePlay();
+      });
 
-      const labelEl = doc.createElement("div");
+      // The title opens Loci's tab and leaves the mini window open (the
+      // browser's own "Back to tab" closes it).
+      const labelEl = doc.createElement("button");
       labelEl.id = "pl";
+      labelEl.type = "button";
+      labelEl.title = "Open Loci — this window stays open";
+      labelEl.addEventListener("click", () => { try { window.focus(); } catch (_) {} });
+      const labelText = doc.createElement("span");
+      labelText.id = "pl-text";
+      labelEl.appendChild(labelText);
       doc.body.appendChild(labelEl);
 
       const btnsEl = doc.createElement("div");
@@ -319,9 +371,7 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
         b.addEventListener("click", onClick);
         btnsEl.appendChild(b);
       };
-      // At block end there is nothing to resume: the block-end choices are
-      // the main window's (Codex review of #439).
-      button("pip-play", "Pause", () => { if (!sessionCompletePendingRef.current) setIsTimerRunning(r => !r); });
+      button("pip-play", "Pause", togglePlay);
       button("pip-add5", "+5", () => addTimeToSession(5));
       // Shuffle plays another variation of the sound that's on (as the
       // focus page's "Another" does); hidden when nothing can shuffle.

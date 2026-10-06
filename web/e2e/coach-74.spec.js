@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { loadRealDay } from "./helpers/realDay";
+import { sidewaysScrollers } from "./helpers/overflow";
 
 // PART7 / 74c: with two 20-word messages and two 55-word replies, all four sit
 // inside the chat window without scrolling, at the laptop, wide and phone sizes.
@@ -26,8 +27,10 @@ for (const [w, h] of [[1280, 720], [1903, 940], [412, 760]]) {
       return win.scrollHeight <= win.clientHeight + 1
         && msgs.every(m => m.top >= r.top - 1 && m.bottom <= r.bottom + 1);
     })).toBe(true);
-    // The page itself never scrolls either.
+    // The page itself never scrolls either, and nothing scrolls sideways
+    // (try-out 16: Show all's hit area once pushed the chat 10px wide).
     expect(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight + 1)).toBe(true);
+    expect(await sidewaysScrollers(page)).toEqual([]);
   });
 }
 
@@ -104,5 +107,16 @@ for (const [w, h] of [[1280, 720], [1903, 940], [412, 760]]) {
     });
     const actions = await brief.locator(".br-next-actions").boundingBox();
     expect(actions.y + actions.height).toBeLessThanOrEqual(fold);
+  });
+}
+
+// Wherever the tab bar shows (under 1024), the composer sits wholly above it;
+// 840–1023 once slid it under the bar (tablet check).
+for (const [w, h] of [[412, 760], [768, 1024], [900, 1200]]) {
+  test(`${w}×${h}: the composer sits above the tab bar`, async ({ page }) => {
+    await openCoach(page, w, h);
+    const [composer, bar] = await Promise.all([page.locator(".coach-composer-wrap").boundingBox(), page.locator(".tab-bar").boundingBox()]);
+    expect(composer.y + composer.height).toBeLessThanOrEqual(bar.y + 1);
+    await expect(page.locator(".coach-send")).toBeVisible();
   });
 }

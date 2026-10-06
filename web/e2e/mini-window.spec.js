@@ -107,3 +107,39 @@ test("the mini window's Shuffle shows with Rain, plays another rain, and hides w
   await expect(shuffle).toBeHidden({ timeout: 3_000 });
   expect(await measure(pip)).toMatchObject({ buttons: 4 });
 });
+
+// Try-out 35: the clock pauses and resumes at every size (the Pause button
+// is gone in the smallest), and so does Space; a paused clock dims and says
+// PAUSED. Try-out 38: the title opens Loci's tab and the window stays.
+test("the mini window's clock pauses and resumes at any size; its title leaves it open", async ({ page, context }) => {
+  const pip = await openMiniWindow(page, context);
+  const paused = () => pip.evaluate(() => document.body.classList.contains("is-paused"));
+
+  await pip.setViewportSize({ width: 360, height: 320 });
+  await expect(pip.locator("#pp")).toBeHidden();
+  await pip.locator("#ring").click();
+  await expect.poll(paused).toBe(true);
+  await expect(pip.locator("#pp")).toHaveText("PAUSED");
+  await expect(pip.locator("#pp")).toBeVisible();
+  await expect(pip.locator("#pip-play")).toHaveText("Resume");
+  await expect(pip.locator("#ring")).toHaveAttribute("aria-label", "Resume the timer");
+  await pip.locator("#ring").click();
+  await expect.poll(paused).toBe(false);
+
+  // The time alone: no buttons, the clock still pauses, and says so.
+  await pip.setViewportSize({ width: 140, height: 60 });
+  await expect(pip.locator("#pip-play")).toBeHidden();
+  await pip.locator("#pt").click();
+  await expect.poll(paused).toBe(true);
+  await expect(pip.locator("#pp")).toBeVisible();
+  expect(await pip.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
+  await pip.keyboard.press("Space");
+  await expect.poll(paused).toBe(false);
+
+  await pip.setViewportSize({ width: 360, height: 320 });
+  await expect(pip.locator("#pl")).toHaveAttribute("title", /Open Loci/);
+  await pip.locator("#pl").click();
+  await page.waitForTimeout(300);
+  expect(pip.isClosed()).toBe(false);
+  await expect(pip.locator("#pt")).toBeVisible();
+});

@@ -116,7 +116,16 @@ test("mobile reliability: the goal is one gold line on a phone, with its days", 
   await expect(band.locator(".wall-goal-name")).toBeHidden();
   await expect(band.locator(".wall-goal-kicker")).toBeHidden();
   expect(await band.evaluate(el => getComputedStyle(el).backgroundColor)).toBe("rgb(241, 223, 178)");
-  expect(Math.round((await band.boundingBox()).height)).toBe(44);
+  // Try-out 26: the Target is a quiet line under it: one line (cut with …),
+  // and the band above it keeps its one-line height. Measured against the
+  // font's own line, not a pixel count, so the real fonts pass too.
+  const target = band.locator(".wall-goal-target");
+  await expect(target).toHaveText(/^Target · \S/);
+  const m = await target.evaluate(el => ({ h: el.getBoundingClientRect().height, line: parseFloat(getComputedStyle(el).lineHeight) }));
+  expect(m.h).toBeLessThanOrEqual(m.line * 1.5);
+  const h = (await band.boundingBox()).height;
+  expect(h - m.h).toBeGreaterThanOrEqual(40);
+  expect(h - m.h).toBeLessThanOrEqual(52);
 });
 
 // Laptop and wider keep 51's look: the filled gold card, its figures on the
@@ -1239,8 +1248,9 @@ test("laptop: no phone-card frame; the task and the list run edge to edge with 4
   expect(Math.abs(list.x + list.width - (1440 - gutter))).toBeLessThan(2);
 });
 
-// No cap on a 1920 monitor either: ×1.35 at 1920×1080, gutters 54px.
-test("wide: 1920×1080 is ×1.35 and edge to edge, no 1760px cap (Turn 76)", async ({ page }) => {
+// No cap on a 1920 monitor either: ×1.35 ÷ 1.1 at 1920×1080 (try-out D1),
+// gutters 40px at that scale.
+test("wide: 1920×1080 is ×1.35 ÷ 1.1 and edge to edge, no 1760px cap (Turn 76)", async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto("/");
   await page.clock.setFixedTime(new Date("2024-06-15T10:00:00"));
@@ -1248,10 +1258,11 @@ test("wide: 1920×1080 is ×1.35 and edge to edge, no 1760px cap (Turn 76)", asy
   await page.keyboard.press("l");
   await expect(page.locator(".tasks-section")).toBeVisible();
   await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
-  expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBeCloseTo(1.35, 3);
+  const z = 1.35 / 1.1;
+  expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBeCloseTo(z, 3);
   const [band, list] = await Promise.all([page.locator(".wall-goal").boundingBox(), page.locator(".tasks-section").boundingBox()]);
-  expect(Math.round(band.x)).toBe(54);
-  expect(Math.round(list.x + list.width)).toBe(1920 - 54);
+  expect(Math.abs(band.x - 40 * z)).toBeLessThan(1);
+  expect(Math.abs(list.x + list.width - (1920 - 40 * z))).toBeLessThan(1);
 });
 
 test("laptop: with the list hidden, the task sits on one left edge, its links and THEN line under it (72c)", async ({ page }) => {

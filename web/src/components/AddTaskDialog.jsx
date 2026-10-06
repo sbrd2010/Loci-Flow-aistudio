@@ -10,6 +10,7 @@ import { frontsFromConfig, sortFronts } from "../utils/fronts";
 import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
 import { IconCheck, IconChevronRight, IconPencil, IconX } from "./ui/icons";
 import { THOUGHTS_MAX, addThought } from "../utils/thoughts";
+import EstimatePicker from "./EstimatePicker";
 import "../styles/addTask.css";
 
 function defaultReminderDateTime() {
@@ -173,7 +174,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
       const est = Number(aiSuggestion.estimateMinutes);
       // A value with no chip of its own shows under Other, so it is never
       // chosen without being seen.
-      if ([15,25,45,60,120,240,360].includes(est)) { setEstimateMinutes(est); setEstimatePicked(true); setOtherOpen(![15, 30, 60, 120].includes(est)); }
+      if ([15,25,45,60,120,240,360].includes(est)) { setEstimateMinutes(est); setEstimatePicked(true); }
       // Only a horizon the chips offer: a hidden one would hide the task (Codex review of #443).
       if (horizons.some(h => h.key === aiSuggestion.horizonLevel)) setHorizonLevel(aiSuggestion.horizonLevel);
       if (aiSuggestion.subSteps.length > 0 && subSteps.length === 0) {
@@ -202,16 +203,11 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
     ...shown.filter(h => !SHORT[h.id]).map(h => ({ key: h.id, label: h.name })),
     ...(defaultHorizon === "office" ? [{ key: "office", label: "Work" }] : []),
   ];
-  const hasCustoms = shown.some(h => !SHORT[h.id]);
   const priorities = ["P1", "P2", "P3", ...(priority === "P4" ? ["P4"] : [])];
   const categories = ["Career", "Health", "Work", "Personal"];
   const parsedSubStepDraft = parseManualSubSteps(subStepDraft);
   const hasSubStepDraft = parsedSubStepDraft.length > 0;
   // Time: 15m · 30m · 1h · 2h · Other (45a). Other holds the rest.
-  const timeChips = [{ min: 15, label: "15m" }, { min: 30, label: "30m" }, { min: 60, label: "1h" }, { min: 120, label: "2h" }];
-  const otherTimes = [10, 20, 25, 45, 90, 180, 240, 360];
-  const onChip = timeChips.some(c => c.min === Number(estimateMinutes));
-  const [otherOpen, setOtherOpen] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -436,7 +432,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
           <div className={`add-block${ringOn ? " is-ringed" : ""}`}>
             <div className="add-field" role="group" aria-labelledby="add-horizon-label">
               <span id="add-horizon-label" className="add-label">Horizon</span>
-              <div className={`add-chips${hasCustoms ? " is-scroll" : ""}`}>
+              <div className="add-chips">
                 {horizons.map((h) => (
                   <button key={h.key} type="button" className={chip(horizonLevel === h.key)} aria-pressed={horizonLevel === h.key} onClick={() => setHorizonLevel(h.key)}>
                     {h.label}
@@ -459,31 +455,15 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
           <div className="add-field" role="group" aria-labelledby="add-time-label">
             <span id="add-time-label" className="add-label">Time</span>
             <div className="add-chips">
-              {timeChips.map((c) => (
-                <button
-                  key={c.min}
-                  type="button"
-                  className={chip(!otherOpen && Number(estimateMinutes) === c.min && estimatePicked)}
-                  aria-pressed={!otherOpen && Number(estimateMinutes) === c.min && estimatePicked}
-                  onClick={() => { setEstimateMinutes(c.min); setEstimatePicked(true); setOtherOpen(false); }}
-                >
-                  {c.label}
-                </button>
-              ))}
-              <button type="button" className={chip(otherOpen)} aria-pressed={otherOpen} onClick={() => { setOtherOpen(true); setEstimatePicked(true); }}>Other</button>
+              <EstimatePicker
+                value={estimatePicked ? Number(estimateMinutes) : null}
+                chipClass={chip}
+                inputClass="add-input add-other-input"
+                buttonClass="add-btn-outline add-other-set"
+                idPrefix="add-time"
+                onPick={(m) => { setEstimateMinutes(m); setEstimatePicked(true); }}
+              />
             </div>
-            {otherOpen && (
-              <label className="add-other">
-                Minutes
-                <select
-                  value={onChip ? "" : Number(estimateMinutes)}
-                  onChange={(e) => { setEstimateMinutes(Number(e.target.value)); setEstimatePicked(true); }}
-                >
-                  {onChip && <option value="" disabled>Choose</option>}
-                  {otherTimes.map((m) => <option key={m} value={m}>{m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${m % 60 ? `${m % 60}m` : ""}`}</option>)}
-                </select>
-              </label>
-            )}
           </div>
 
           {fronts.length > 0 && (

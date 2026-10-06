@@ -2350,8 +2350,11 @@ export default function TodayTab({
       {moreOpen && pinnedFocusTask && (
         <MoreSheet
           task={pinnedFocusTask}
-          onSplit={() => setSplitTask(pinnedFocusTask)}
-          onDetails={() => setDetailUuid(pinnedFocusTask.uuid)}
+          // Try-out 31: from 840px Split it is a button beside Mark done
+          // and the title opens the task, so More doesn't repeat them; a
+          // phone's quiet row has neither, so its More keeps both.
+          onSplit={sheetViewport ? () => setSplitTask(pinnedFocusTask) : undefined}
+          onDetails={sheetViewport ? () => setDetailUuid(pinnedFocusTask.uuid) : undefined}
           hiddenHorizons={horizonsFromConfig(config, todayStr).filter(h => h.hidden).map(h => h.id)}
           onMove={(dest) => (dest === "tomorrow" ? actOnTask(pinnedFocusTask, "t") : handleMoveWithUndo(pinnedFocusTask, dest))}
           onPark={() => handleParkWithUndo(pinnedFocusTask)}

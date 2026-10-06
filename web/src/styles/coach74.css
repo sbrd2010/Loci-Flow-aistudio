@@ -56,7 +56,9 @@
 }
 .coach-show-all:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* A 44px target round the small link, without making the row taller. */
-.coach-show-all::before { content: ""; position: absolute; inset: -13px -10px; }
+/* The hit area grows up, down and to the left only: it sits at the column's
+   right edge, and growing right gave the chat a sideways scrollbar (try-out 16). */
+.coach-show-all::before { content: ""; position: absolute; inset: -13px 0 -13px -10px; }
 
 /* The scroll anchor at the end of the messages adds no gap of its own. */
 .coach-chat-col .chat-window > div:empty:last-child { margin-top: calc(-1 * var(--coach-gap, 20px)); }
@@ -156,7 +158,9 @@
 @media (min-width: 840px) {
   .screen-content.screen-content-coach { padding-top: 0; padding-bottom: 0; }
 }
-/* On a phone the chat runs down to the tab bar (64 and the safe area). */
-@media (max-width: 839px) {
+/* Wherever the tab bar shows (under 1024: phones and tablets) the chat
+   runs down to it (64 and the safe area); 840–1023 used to slide the
+   composer under it (try-out, tablet check). */
+@media (max-width: 1023px) {
   .screen-content.screen-content-coach { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
 }

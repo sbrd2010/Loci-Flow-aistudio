@@ -112,14 +112,18 @@
 .mbx-anchor {
   min-height: 40px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
+  padding-block: 8px;
+  box-sizing: border-box;
   font-family: var(--font-serif);
-  font-size: 15px;
+  /* Try-out 42: darker and a little larger (15px --ink-2 read too faint). */
+  font-size: 16.5px;
+  font-weight: 500;
   line-height: 1.4;
-  color: var(--ink-2);
+  color: var(--ink);
 }
-.mbx-anchor::before { content: ""; flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--edge); }
+.mbx-anchor::before { content: ""; flex: none; width: 6px; height: 6px; margin-top: calc(0.7em - 3px); border-radius: 50%; background: var(--accent); }
 
 /* Phone (65e–f): single-line states, 52 tall, with an arrow. */
 @media (max-width: 839px) {
@@ -128,7 +132,7 @@
   .mbx-state::after { content: "→"; font-weight: 700; color: var(--accent); }
 }
 @media (pointer: coarse) { .mbx-hint { display: none; } }
-@media (pointer: fine) { .mbx-anchor { min-height: 34px; } }
+@media (pointer: fine) { .mbx-anchor { min-height: 34px; padding-block: 5px; } }
 @media (max-width: 375px) {
   .mbx-rescue { padding: 20px 16px; }
 }

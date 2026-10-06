@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-// The task sheet follow-up (52a–c, and answer 15): "Details ›" on the wall,
+// The task sheet follow-up (52a–c, and answer 15): the title opens it,
 // steps edited in place (Backspace on an empty one removes it, with Undo),
 // SUGGESTED steps that go in only when taken, and a More row for Reminder
 // and Category. Demo mode, so nothing reaches Firebase.
@@ -18,14 +18,14 @@ async function enterDemo(page, viewport = { width: 1280, height: 800 }) {
 const sheet = (page) => page.getByTestId("task-detail");
 const stepValues = (page) => sheet(page).locator(".detail-step-input").evaluateAll(els => els.map(el => el.value));
 
-// Q58: on a phone Details is in the More sheet; wider, "Details ›" is on the wall.
+// Q58: on a phone Details is in the More sheet; wider, the title opens it
+// (try-out 30: no "Details ›" beside it).
 async function openFromDetails(page) {
-  const more = page.locator(".wall-quiet-link:visible", { hasText: /^More$/ });
-  if (await more.count()) {
-    await more.click();
+  if (page.viewportSize().width < 840) {
+    await page.locator(".wall-quiet-link:visible", { hasText: /^More$/ }).click();
     await page.getByRole("dialog", { name: /^More:/ }).getByRole("button", { name: /^Details/ }).click();
   } else {
-    await page.locator(".wall-details").click();
+    await page.locator(".wall-title").click();
   }
   await expect(sheet(page)).toBeVisible();
 }
@@ -48,7 +48,17 @@ for (const [name, viewport] of [["phone", { width: 375, height: 812 }], ["laptop
   test(`${name}: Details on the one thing opens its sheet, whose footer has no Done`, async ({ page }) => {
     await enterDemo(page, viewport);
     const title = (await page.locator(".wall-title").innerText()).trim();
-    if (name === "laptop") await expect(page.locator(".wall-first-step .wall-details")).toHaveText("Details ›");
+    // Try-out 30/31: one way in on a computer — the title, not a "Details ›"
+    // beside it, nor Details or Split it again in More.
+    if (name === "laptop") {
+      await expect(page.locator(".wall-details")).toHaveCount(0);
+      await page.locator(".wall-quiet").getByRole("button", { name: "More" }).click();
+      const more = page.getByRole("dialog", { name: /^More:/ });
+      await expect(more.getByRole("button", { name: /^Details/ })).toHaveCount(0);
+      await expect(more.getByRole("button", { name: /^Split it/ })).toHaveCount(0);
+      await page.keyboard.press("Escape");
+      await expect(more).toHaveCount(0);
+    }
     await openFromDetails(page);
     await expect(sheet(page)).toHaveAttribute("aria-label", `Task: ${title}`);
     // Done is the title's circle, not a footer action.
@@ -182,14 +192,22 @@ test("a first step stored apart from the steps is step 1, and a change to anothe
   await expect(page.locator(".wall-first-step")).toContainText(first);
 });
 
-// Codex review of #418: the sheet is the only editor, so every length Add
-// task offers can be set here.
-test("an estimate outside the chips can be set from Other", async ({ page }) => {
+// Codex review of #418, try-out 8/9: the same chips as Add task, and any
+// other length typed into Other.
+test("an estimate outside the chips can be typed into Other", async ({ page }) => {
   await enterDemo(page);
   await openFromDetails(page);
   await sheet(page).getByRole("button", { name: /^Estimate/ }).click();
-  await sheet(page).getByLabel("Other length").selectOption("45");
-  await expect(sheet(page).getByRole("button", { name: /^Estimate/ }).locator(".detail-value")).toHaveText("45m");
+  const group = sheet(page).getByRole("radiogroup", { name: "Estimate" });
+  await expect(group.getByRole("radio")).toHaveText(["5m", "15m", "25m", "30m", "45m", "1h", "1h30m", "2h", "3h", "None", "Other"]);
+  await group.getByRole("radio", { name: "Other" }).click();
+  await sheet(page).getByLabel("Other time").fill("1h20");
+  await sheet(page).getByLabel("Other time").press("Enter");
+  await expect(sheet(page).getByRole("button", { name: /^Estimate/ }).locator(".detail-value")).toHaveText("1h20m");
+  // Opened again, Other holds it.
+  await sheet(page).getByRole("button", { name: /^Estimate/ }).click();
+  await expect(group.getByRole("radio", { name: "Other" })).toHaveAttribute("aria-checked", "true");
+  await expect(sheet(page).getByLabel("Other time")).toHaveValue("1h20m");
 });
 
 // Codex review of #418: Plan's drawer can move to another task while the AI

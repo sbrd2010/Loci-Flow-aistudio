@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
+import EstimatePicker from "./EstimatePicker";
+import { formatEstimate } from "../utils/estimates";
 import { IconPin, IconPlus, IconX, IconChevronRight, IconChevronDown, IconCheck } from "./ui/icons";
 import { useAutosave } from "./settings/ui";
 import { ROADMAP_HORIZONS } from "./TaskRow";
@@ -20,10 +22,6 @@ import { cssZoom } from "../utils/cssZoom";
 // Must-do are Today's alone.
 
 const HORIZONS = [{ key: "today", label: "Today" }, ...ROADMAP_HORIZONS];
-const ESTIMATES = [15, 30, 60, 120, 180];
-// Every other length Add task offers, so the sheet — the only editor — can
-// set any of them (Codex review of #418).
-const OTHER_ESTIMATES = [10, 20, 25, 45, 90, 240, 360];
 const CATEGORIES = ["Career", "Health", "Work", "Personal"];
 
 // "YYYY-MM-DD" and "HH:MM" in local time, for the reminder's inputs.
@@ -39,12 +37,7 @@ function nextHour() {
   return d.getTime();
 }
 
-export function formatEstimate(min) {
-  const m = Number(min);
-  if (!Number.isFinite(m) || m <= 0) return "None";
-  if (m < 60) return `${m}m`;
-  return m % 60 ? `${Math.floor(m / 60)}h${m % 60}m` : `${m / 60}h`;
-}
+export { formatEstimate };
 
 export default function TaskDetail({
   task, index = 0, total = 0, variant = "drawer", isGoal = false, fronts = [],
@@ -215,10 +208,6 @@ export default function TaskDetail({
   const priorities = ["P1", "P2", "P3", ...(hadP4 ? ["P4"] : [])];
   // Likewise an estimate the chips don't carry (25m, the app's default, or
   // one set in the full editor) stays on offer, in order.
-  const [openedEstimate] = useState(() => Number(task.timeEstimateMinutes) || null);
-  const estimates = openedEstimate && !ESTIMATES.includes(openedEstimate)
-    ? [...ESTIMATES, openedEstimate].sort((a, b) => a - b)
-    : ESTIMATES;
 
   const isHorizon = typeof onMoveToToday === "function";
   // Opened from a Day map stop: its footer fixes the stop's time.
@@ -372,18 +361,16 @@ export default function TaskDetail({
           {picker === "estimate" && (
             <div className="detail-options is-chips" role="radiogroup" aria-label="Estimate">
               {/* A route stop always has a length, so None is not offered there. */}
-              {(isRoute ? estimates : [...estimates, null]).map(m => (
-                <button key={m || "none"} type="button" role="radio" aria-checked={(Number(task.timeEstimateMinutes) || null) === m} className="detail-chip"
-                  onClick={() => { setPicker(null); onPatch({ timeEstimateMinutes: m }); }}>
-                  {formatEstimate(m)}
-                </button>
-              ))}
-              <select className="detail-input detail-estimate-other" aria-label="Other length"
-                value={OTHER_ESTIMATES.includes(Number(task.timeEstimateMinutes)) ? String(task.timeEstimateMinutes) : ""}
-                onChange={e => { if (!e.target.value) return; setPicker(null); onPatch({ timeEstimateMinutes: Number(e.target.value) }); }}>
-                <option value="">Other…</option>
-                {OTHER_ESTIMATES.map(m => <option key={m} value={m}>{formatEstimate(m)}</option>)}
-              </select>
+              <EstimatePicker
+                value={task.timeEstimateMinutes}
+                allowNone={!isRoute}
+                role="radio"
+                chipClass={() => "detail-chip"}
+                inputClass="detail-input detail-estimate-other"
+                buttonClass="detail-chip"
+                idPrefix={`detail-${task.uuid || task.id}`}
+                onPick={(m) => { setPicker(null); onPatch({ timeEstimateMinutes: m }); }}
+              />
             </div>
           )}
 

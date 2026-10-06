@@ -661,3 +661,10 @@
 .fm-sound-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .fm-sound-chip { min-height: 36px; padding: 0 12px; }
 .fm-sound-chip.is-on { color: var(--on-accent); background: var(--accent); border-color: var(--accent-edge); }
+
+/* Try-out 33: on a computer the session sits in the middle of the window,
+   not under the header with the empty half below (the 120px cap left the
+   24″ top-heavy). The spacer and the ::after row share the free height. */
+@media (min-width: 1024px) {
+  .fm-spacer { max-height: none; }
+}

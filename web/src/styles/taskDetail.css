@@ -200,6 +200,8 @@
   border-bottom: 1px solid var(--line);
 }
 .detail-options.is-chips { flex-direction: row; flex-wrap: wrap; gap: 8px; }
+/* Try-out 8/9: Other's typed time, on its own line under the chips. */
+.detail-options .estimate-other .detail-input { flex: 0 1 200px; min-height: 40px; }
 .detail-option {
   min-height: 44px;
   padding: 0 12px;
@@ -398,10 +400,11 @@
 .detail-suggest:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* A narrow laptop (1024–1279): on the right the drawer would cover nearly
-   all of the list, which must stay usable (50b). It opens on the left
-   instead, over the task column (x 48–468); the list starts at 504. */
+   all of Today's list, which must stay usable (50b). It opens on the left
+   instead, over the task column (x 48–468); the list starts at 504. Plan
+   keeps it on the right (try-out 6) and makes room for it below. */
 @media (min-width: 1024px) and (max-width: 1279px) {
-  .task-detail.is-drawer {
+  .screen-content:not(.screen-content-plan) .task-detail.is-drawer {
     left: 0;
     right: auto;
     border-left: 0;
@@ -492,30 +495,25 @@
 }
 .detail-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* Plan (57, Q46): the drawer never covers the open list. It opens on the
-   left over the ladder, as wide as the ladder column reaches, so the list
-   stays whole and doesn't move.
-   1024–1599 (76c): the page's margin, Plan's 48, the ladder's 340 and 16 of
-   the 48 gap. From 1600 (76a, no Fronts column): the margin to the 1480 cap
-   (at least 40), the ladder's 440 and 24 of the 56 gap. The list's column
-   starts 32 into the gap (its drag grips' gutter), so the drawer stops there. */
-@media (min-width: 1024px) and (max-width: 1599px) {
-  .plan-horizons-view .task-detail.is-drawer {
-    left: 0;
-    right: auto;
-    width: calc(max(48px, (calc(100vw / var(--zoom, 1)) - 1200px) / 2) + 404px);
-    border-left: 0;
-    border-right: 1px solid var(--line);
-    box-shadow: 12px 0 30px rgba(15, 31, 22, 0.08);
-  }
+/* Plan (Q46, try-out 6): the drawer opens on the right, as everywhere
+   else, and never covers the open list: while it's open the Horizons view
+   gives up room on its right (the list keeps its left edge and narrows; the
+   runway re-lays its labels), so the list ends 16px short of the drawer.
+   The view's right margin is the page's: max(48, (W − 1200) / 2) to 1599,
+   max(40, (W − 1480) / 2) from 1600 (76a). On a narrow laptop the drawer is
+   400 wide and the cards 260 (the tablet's width), so the list keeps
+   ~300 at 1100. */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .screen-content-plan .task-detail.is-drawer { width: 400px; }
+  .screen-content-plan .plan-horizons-view.has-detail,
+  .screen-content-plan:has(.plan-horizons-view.has-detail) .plan-head { padding-right: 368px; }
+  .screen-content-plan .plan-horizons-view.has-detail .plan-ladder-grid { grid-template-columns: 260px minmax(0, 1fr); gap: 32px; }
+}
+@media (min-width: 1280px) {
+  .screen-content-plan .plan-horizons-view.has-detail,
+  .screen-content-plan:has(.plan-horizons-view.has-detail) .plan-head { padding-right: max(48px, calc(496px - max(48px, (calc(100vw / var(--zoom, 1)) - 1200px) / 2))); }
 }
 @media (min-width: 1600px) {
-  .plan-horizons-view .task-detail.is-drawer {
-    left: 0;
-    right: auto;
-    width: calc(max(40px, (calc(100vw / var(--zoom, 1)) - 1480px) / 2) + 464px);
-    border-left: 0;
-    border-right: 1px solid var(--line);
-    box-shadow: 12px 0 30px rgba(15, 31, 22, 0.08);
-  }
+  .screen-content-plan .plan-horizons-view.has-detail,
+  .screen-content-plan:has(.plan-horizons-view.has-detail) .plan-head { padding-right: max(0px, calc(496px - max(40px, (calc(100vw / var(--zoom, 1)) - 1480px) / 2))); }
 }

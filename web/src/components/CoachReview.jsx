@@ -114,7 +114,11 @@ export default function CoachReview({ payload = {}, uid, period = "7d", renderBr
           <dl className="rv-numbers rv-indent">
             <div className="rv-num-hero">
               <dt>{facts.focusedMinutes == null && status !== "loading" ? "focus time not read" : "focused"}</dt>
-              <dd className="rv-hero-fig">{facts.focusedMinutes == null ? "—" : formatMinutes(facts.focusedMinutes)}</dd>
+              {/* Try-out 14: while the focus history loads it says so ("…"),
+                  so a dash can't read as "no focus". */}
+              <dd className="rv-hero-fig" aria-busy={status === "loading" || undefined}>
+                {facts.focusedMinutes != null ? formatMinutes(facts.focusedMinutes) : status === "loading" ? <span aria-label="loading">…</span> : "—"}
+              </dd>
             </div>
             <div><dt>tasks done</dt><dd>{facts.completed}</dd></div>
             {period !== "today" && <div><dt>done per day</dt><dd>{facts.pace}</dd></div>}
