@@ -476,7 +476,7 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
   };
 
   return (
-    <div className={`roadmap-container ${frontId ? "plan-front-tasks" : "plan-horizons-view"}`}>
+    <div className={`roadmap-container ${frontId ? "plan-front-tasks" : "plan-horizons-view"}${detailTask && drawerViewport ? " has-detail" : ""}`}>
       {frontId && shownColumns.length === 0 && <p className="plan-empty">Nothing open on this front.</p>}
       {frontId ? (
       <div className="plan-horizons">
