@@ -194,7 +194,14 @@
   .br-group { grid-template-columns: minmax(0, 1fr); row-gap: 4px; }
   .br-fold { display: block; }
   .br-fold[open] summary { margin-bottom: 6px; }
-  .br-next { padding: 18px 16px; }
+  /* The brief, down to Do next, is on the first screen (Rohan, on 73a):
+     the folded rows share a line and the gaps tighten. */
+  .rv-sec.rv-brief { padding-top: 16px; }
+  .br { gap: 16px; }
+  .br-groups { flex-direction: row; flex-wrap: wrap; gap: 12px 24px; }
+  .br-groups > .br-group:not(.br-fold),
+  .br-groups > .br-fold[open] { flex-basis: 100%; }
+  .br-next { padding: 16px; gap: 10px; }
   .br-next-actions .br-run { width: 100%; }
   .rv-period button { padding: 0 12px; font-size: 13.5px; height: 36px; }
 }

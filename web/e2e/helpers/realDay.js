@@ -73,6 +73,14 @@ export async function loadRealDay(page, { coach = false } = {}) {
           { isUser: true, at: t0 + 30 * 60_000, text: "I keep jumping between things today and cannot settle down at all. What should I do with the next hour?" },
           { isUser: false, at: t0 + 31 * 60_000, text: "Close every tab except Gmail. Flag that one email, then start the PRINCE2 hour with the timer on and nothing else open. If your mind wanders, park the thought in Mind Box and go back. When the hour ends, tell me what you covered, and we will decide together whether the CV really comes next." },
         ];
+        // 73a's week: 2h16m of focus, most of it on no front, so Review's
+        // brief opens with its lead sentence.
+        const done = (back, mins, i) => {
+          const d = new Date(); d.setDate(d.getDate() - back);
+          return [ymd(d), { [`e${back}-${i}`]: { type: "focus_completed", focusElapsedSeconds: mins * 60, lociDateString: ymd(d) } }];
+        };
+        const ledger = Object.fromEntries([done(1, 58, 0), done(2, 15, 0), done(3, 25, 0), done(4, 38, 0)]);
+        window.__LOCI_DEMO_FOCUS__ = () => ledger;
         // Yesterday is the clear best weekday over 30 days (Review, 73a).
         payload.contributions[0].count = 4;
         const cv = payload.tasks.find(x => x.title.startsWith("Prepare CV"));

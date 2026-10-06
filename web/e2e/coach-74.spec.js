@@ -88,3 +88,21 @@ test("Review: the brief comes first, and Patterns opens with the best weekday", 
   });
   expect(order).toBeTruthy();
 });
+
+// Rohan's call on 73a: Review scrolls, but the brief, down to the Do next
+// buttons, is on the first screen, with the lead sentence present.
+for (const [w, h] of [[1280, 720], [1903, 940], [412, 760]]) {
+  test(`the brief fits the first screen of Review at ${w}×${h}`, async ({ page }) => {
+    await openCoach(page, w, h);
+    await page.getByRole("tab", { name: "Review" }).click();
+    const brief = page.getByRole("region", { name: "Coach's brief" });
+    await expect(brief.locator(".br-lead")).toContainText("You focused for 2h16m in these 7 days.");
+    const fold = await page.evaluate(() => {
+      const bar = document.querySelector(".tab-bar");
+      const top = bar && getComputedStyle(bar).display !== "none" ? bar.getBoundingClientRect().top : window.innerHeight;
+      return Math.min(top, window.innerHeight);
+    });
+    const actions = await brief.locator(".br-next-actions").boundingBox();
+    expect(actions.y + actions.height).toBeLessThanOrEqual(fold);
+  });
+}
