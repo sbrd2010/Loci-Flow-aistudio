@@ -376,7 +376,6 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
               placeholder="What's on your mind?"
               value={title}
               maxLength={500}
-              allowNewlines
               onEnter={e => e.currentTarget.form?.requestSubmit()}
               onChange={e => { setTitle(e.target.value); setThoughtError(""); }}
               onKeyDown={e => { if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); switchMode("task"); } }}

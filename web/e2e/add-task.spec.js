@@ -315,7 +315,7 @@ test("Other left empty closes; an AI suggestion after a typed time is what shows
 // Try-out 4/3: a long thought wraps and grows instead of scrolling sideways;
 // Shift+Enter adds a line, Enter saves. Typing is marked by the field's own
 // border, not a second box round it.
-test("a long thought wraps and grows; Shift+Enter adds a line, Enter saves", async ({ page }) => {
+test("a long thought wraps and grows, stays one line, and Enter saves", async ({ page }) => {
   await enterDemo(page, { width: 1280, height: 800 });
   await page.keyboard.press("t");
   const dialog = page.getByRole("dialog", { name: "New thought" });
@@ -324,12 +324,15 @@ test("a long thought wraps and grows; Shift+Enter adds a line, Enter saves", asy
   expect(await field.evaluate(el => getComputedStyle(el).outlineStyle)).toBe("none");
   const oneLine = (await field.boundingBox()).height;
   await field.pressSequentially("Ask whether the fixed rate can be extended for another five years before the end of the month");
+  // A thought is kept as one line (Codex review of #499): Shift+Enter adds
+  // no line break; the text wraps instead.
   await field.press("Shift+Enter");
-  await field.pressSequentially("and the fee");
+  await field.pressSequentially(" and the fee");
   const grown = await field.evaluate(el => ({ h: el.getBoundingClientRect().height, sideways: el.scrollWidth > el.clientWidth, value: el.value }));
   expect(grown.sideways).toBe(false);
   expect(grown.h).toBeGreaterThan(oneLine + 20);
-  expect(grown.value).toContain("month\nand the fee");
+  expect(grown.value).toContain("month and the fee");
+  expect(grown.value).not.toContain("\n");
   await field.press("Enter");
   await expect(page.locator(".add-card")).toHaveCount(0, { timeout: 5_000 });
 });

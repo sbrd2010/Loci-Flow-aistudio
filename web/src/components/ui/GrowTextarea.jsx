@@ -2,9 +2,10 @@ import React, { forwardRef, useCallback, useLayoutEffect, useRef } from "react";
 
 // Try-out 4/5/7: a text field that wraps and grows instead of scrolling
 // sideways — a thought, a title, a step. It grows to maxRows lines, then
-// scrolls inside. Enter calls onEnter; with allowNewlines, Shift+Enter
-// adds a line, otherwise the text stays one line that wraps (Shift+Enter
-// does nothing, and a pasted line break becomes a space).
+// scrolls inside. Enter calls onEnter. Thoughts, titles and steps are
+// stored as one line, so by default Shift+Enter does nothing and a pasted
+// line break becomes a space (Codex review of #499); allowNewlines is for
+// a field whose text keeps its lines.
 const GrowTextarea = forwardRef(function GrowTextarea(
   { value, onChange, onEnter, onKeyDown, allowNewlines = false, maxRows = 6, rows = 1, style, ...rest },
   outerRef,

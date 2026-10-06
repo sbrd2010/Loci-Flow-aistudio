@@ -269,11 +269,11 @@ export default function FocusModePage({
         return;
       }
       if (k.isComplete && (e.key === "e" || e.key === "E") && k.onEndSession) { e.preventDefault(); k.openEnd(); return; }
+      // S shuffles here too, with All sounds open (its Shuffle says so).
+      if ((e.key === "s" || e.key === "S") && !k.isComplete && k.canShuffle) { e.preventDefault(); k.reshuffleTrack?.(); return; }
       if (k.isComplete || k.showSoundsDrawer) return;
       if (e.key === " " && !(t && (t.tagName === "BUTTON" || t.tagName === "A"))) { e.preventDefault(); k.onPlayPause?.(); }
       else if (e.key === "d" || e.key === "D") { e.preventDefault(); k.onDone?.(); }
-      // S shuffles the sound that's on, as in the mini window (try-out 37).
-      else if ((e.key === "s" || e.key === "S") && k.canShuffle) { e.preventDefault(); k.reshuffleTrack?.(); }
       else if ((e.key === "e" || e.key === "E") && k.onEndSession) { e.preventDefault(); k.openEnd(); }
       else if ((e.key === "p" || e.key === "P") && PIP_SUPPORTED && !k.pipOpen && k.onOpenPiP) { e.preventDefault(); k.onOpenPiP(); }
     };
@@ -405,7 +405,6 @@ export default function FocusModePage({
         placeholder="A stray thought? Park it here"
         value={dumpText}
         maxRows={4}
-        allowNewlines
         onChange={e => { setDumpText(e.target.value); setDumpFull(false); }}
         onEnter={() => submitDump()}
         aria-label="Capture a thought to Brain Dump"

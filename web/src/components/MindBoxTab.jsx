@@ -693,7 +693,6 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
                   placeholder="What’s on your mind?"
                   value={brainDumpText}
                   maxRows={5}
-                  allowNewlines
                   onEnter={e => e.currentTarget.form?.requestSubmit()}
                   onChange={e => setBrainDumpText(e.target.value)}
                   disabled={dumpCount >= THOUGHTS_MAX}

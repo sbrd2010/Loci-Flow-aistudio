@@ -337,3 +337,20 @@ for (const [w, h] of [[1280, 720], [1903, 940]]) {
     await expect(drawer).not.toHaveClass(/open/);
   });
 }
+
+// Codex review of #499: S shuffles with All sounds open, where its Shuffle
+// shows "Another track (S)".
+test("S shuffles the rain with All sounds open", async ({ page }) => {
+  const tracks = [];
+  page.on("request", (r) => { if (/rain/i.test(r.url()) && /\.mp3/.test(r.url())) tracks.push(r.url()); });
+  const overlay = await openSession(page, { width: 1280, height: 720 });
+  await overlay.getByRole("group", { name: "Sound" }).getByRole("button", { name: /Rain/ }).click();
+  await expect.poll(() => tracks.length).toBeGreaterThan(0);
+  await overlay.getByRole("button", { name: "Open sounds menu" }).click();
+  await expect(page.locator(".focus-sounds-drawer")).toHaveClass(/open/);
+  const before = tracks.at(-1);
+  await page.locator(".focus-sounds-drawer").getByRole("button", { name: "Shuffle sound" }).focus();
+  await page.locator("body").press("s");
+  await expect.poll(() => tracks.at(-1)).not.toBe(before);
+  await expect(page.locator(".focus-sounds-drawer")).toHaveClass(/open/);
+});
