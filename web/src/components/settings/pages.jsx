@@ -248,7 +248,7 @@ export function KeyDeadlinePage({ config, saveConfigPatch, onBack }) {
       {/* Q49: "Target", as the band says it; "minimum" is the Day map's. */}
       <label className="set-field">
         <span className="set-label">Target</span>
-        <input className="set-input" value={daily} onChange={e => setDaily(e.target.value)} onBlur={flushDaily} placeholder="e.g. 3 job apply + PRINCE2" aria-describedby="set-target-note" />
+        <input className="set-input" value={daily} onChange={e => setDaily(e.target.value)} onBlur={flushDaily} placeholder="e.g. 2 applications + 1 study hour" aria-describedby="set-target-note" />
         <span className="set-note" id="set-target-note">The least you'll do each day toward this goal.</span>
       </label>
       {/* The goal record's dots (Q57.2): 7 rolling days, or Mon–Fri with a

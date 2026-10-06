@@ -1404,7 +1404,7 @@ export default function TodayTab({
   const wallDaysLeft = commitmentDaysLeft(wallKickerFront, new Date());
   // The goal band (Addendum M): the same front, with its done/total when it
   // has tasks on it. With no front and no Key Deadline there is no band.
-  // Q49: its Target ("3 job apply + PRINCE2") is the Key Deadline's own, so
+  // Q49: its Target (the least you'll do each day) is the Key Deadline's own, so
   // it shows only when the band is the Key Deadline, not another front.
   const wallGoal = wallKickerFront
     ? {

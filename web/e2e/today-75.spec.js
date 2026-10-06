@@ -75,13 +75,13 @@ test("1903×940: only Up next's rows scroll; its head and the footer stay", asyn
 test("rows: an overdue reminder is a gold dot, and no horizon-review tag (Turn 76)", async ({ page }) => {
   await openToday(page, { width: 1280, height: 720 });
   const list = page.getByTestId("today-tasks-list");
-  const iris = list.locator("[data-testid='task-row']", { hasText: "Iris: Visa extension" });
+  const iris = list.locator("[data-testid='task-row']", { hasText: "Mara: Permit renewal" });
   await expect(iris.getByRole("img", { name: "Reminder overdue" })).toBeVisible();
   await expect(iris).not.toContainText("Reminder ·");
-  const cv = list.locator("[data-testid='task-row']", { hasText: "Prepare CV- Avery denison" });
+  const cv = list.locator("[data-testid='task-row']", { hasText: "Prepare CV- Northwind" });
   await expect(cv).toBeVisible();
   await expect(cv).not.toContainText("FROM WEEK");
-  await expect(list.locator("[data-testid='task-row']", { hasText: "Dad: write letter" })).toContainText("FROM YESTERDAY");
+  await expect(list.locator("[data-testid='task-row']", { hasText: "Mum: write card" })).toContainText("FROM YESTERDAY");
 });
 
 test("the task side: the mantra, NOW · UNTIL, and the goal on up to two lines", async ({ page }) => {
@@ -89,7 +89,7 @@ test("the task side: the mantra, NOW · UNTIL, and the goal on up to two lines",
   await expect(page.locator(".wall-mantra")).toHaveText("ONE task at a time.");
   await expect(page.locator(".wall-kicker-wide")).toHaveText(/^NOW · UNTIL \d\d:\d\d$/);
   const name = page.locator(".wall-goal-line-name");
-  await expect(name).toHaveText("05 Oct: 3 Jobs apply. Need interview in 2 weeks");
+  await expect(name).toHaveText("Send 3 applications. Get an interview in 2 weeks");
   expect(await name.evaluate(el => el.scrollHeight <= el.clientHeight + 1)).toBe(true);
 });
 
