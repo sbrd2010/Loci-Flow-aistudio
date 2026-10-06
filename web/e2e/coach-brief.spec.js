@@ -16,7 +16,7 @@ async function openReview(page) {
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
   await page.getByRole("tab", { name: "Review" }).click();
-  return page.getByRole("complementary", { name: "Coach's brief" });
+  return page.getByRole("region", { name: "Coach's brief" });
 }
 
 test("Brief me shows the groups; buttons apply with Undo; Ask about this goes to Chat", async ({ page }) => {

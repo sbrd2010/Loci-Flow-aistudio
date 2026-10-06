@@ -2109,10 +2109,12 @@ export default function TodayTab({
                     </React.Fragment>
                   ))}
                 </SortableContext>
-                {firstOver === -1 && remainingTasks.length > 0 && route.scheduledTasks.length > 0 && (
+                {cut.overIds.size === 0 && remainingTasks.length > 0 && route.scheduledTasks.length > 0 && (
                   <p className="today-dayend">DAY ENDS {formatClock24(route.plan.dayEnd)}{cut.spare > 0 ? ` · ${formatSpanCaps(cut.spare)} SPARE` : ""}</p>
                 )}
-                {firstOver !== -1 && (
+                {/* Turn 76 (c): the same count and total as the Day map,
+                    even when the only task cut is the pinned one thing. */}
+                {cut.overIds.size > 0 && (
                   <p className="today-wontfit-line">
                     {cut.overIds.size} won’t fit · {formatSpanCaps(cut.wontFitMinutes).toLowerCase()}
                     {" · "}<button type="button" className="today-list-empty-link" onClick={() => setListView("daymap")}>Sort in Day map ›</button>

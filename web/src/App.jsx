@@ -1444,7 +1444,7 @@ export default function App() {
       />
 
       {/* Main Tab Screen Router */}
-      <main className={`screen-content${activeTab === "daymap" ? " screen-content-day-map" : activeTab === "today" ? " screen-content-today" : activeTab === "roadmap" ? " screen-content-plan" : activeTab === "mindbox" ? " screen-content-mindbox" : ""}`}>
+      <main className={`screen-content${activeTab === "daymap" ? " screen-content-day-map" : activeTab === "today" ? " screen-content-today" : activeTab === "roadmap" ? " screen-content-plan" : activeTab === "mindbox" ? " screen-content-mindbox" : activeTab === "coach" ? " screen-content-coach" : ""}`}>
         {syncWarning === "offline" && (
           <div className="offline-banner" role="status">
             <IconWifiOff size={18} />
@@ -1572,7 +1572,7 @@ export default function App() {
           </div>
         )}
         {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveConfigPatch={saveConfigPatch} userProfile={userProfile} initialPanel={mindBoxInitialPanel} onMakeThoughtTask={openThoughtAsTask} onOpenRescue={(state) => { handleTabSelect("today"); setRescueRequest({ at: Date.now(), state: typeof state === "string" ? state : null }); }} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} uid={activityUid} writeActivityEvents={writeActivityEvents} focusTimer={focusTimer} />}
-        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveSubPathsAsync={saveSubPathsAsync} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} uid={activityUid} writeActivityEvents={writeActivityEvents} stuck={coachStuck} onClearStuck={() => setCoachStuck(null)} onBackToFocus={focusTimer.focusSessionActive && focusTimer.activeTask ? handleReturnToFocus : null} onOpenPrivacy={() => { handleTabSelect("settings"); setSettingsInitialPage("privacy"); }} />}
+        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveSubPathsAsync={saveSubPathsAsync} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} uid={activityUid} writeActivityEvents={writeActivityEvents} stuck={coachStuck} onClearStuck={() => setCoachStuck(null)} onBackToFocus={focusTimer.focusSessionActive && focusTimer.activeTask ? handleReturnToFocus : null} onOpenPrivacy={() => { handleTabSelect("settings"); setSettingsInitialPage("privacy"); }} onOpenDayMap={openDayMap} />}
         {activeTab === "settings" && (
           <SettingsTab
             initialPage={settingsInitialPage}

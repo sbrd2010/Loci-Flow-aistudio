@@ -41,7 +41,9 @@ function pastBy(minutes) {
 // while the ledger can't be read (loading, demo, a refused read): then the
 // done part is left out rather than claiming nothing was done.
 // Returns { text, alert, state }: `alert` is the part set in red.
-export function factualLine({ doneMinutes, doneCount = 0, routeEmpty, openTasks, finish, dayEnd, now, left }) {
+// Turn 76 (c): when tasks don't fit (`wontFit`: count and minutes, as on
+// Today), the line says so; the overrun alone only when none is cut.
+export function factualLine({ doneMinutes, doneCount = 0, routeEmpty, openTasks, finish, dayEnd, now, left, wontFit = null }) {
   // All done: nothing open, and something done today, with or without
   // focus minutes (Codex review of #428).
   if (openTasks === 0 && (doneCount > 0 || (doneMinutes || 0) > 0)) {
@@ -65,7 +67,9 @@ export function factualLine({ doneMinutes, doneCount = 0, routeEmpty, openTasks,
     return {
       state: "over",
       text: `${done}Keep this order and you finish at ${formatClock24(finish)}, `,
-      alert: `${pastBy(finish - dayEnd)} past your day end.`,
+      alert: wontFit?.count > 0
+        ? `${wontFit.count} ${wontFit.count === 1 ? "task" : "tasks"} won’t fit · ${formatSpan(wontFit.minutes)}.`
+        : `${pastBy(finish - dayEnd)} past your day end.`,
     };
   }
   return { state: "on-track", text: `${done}On track: done by ${formatClock24(finish)}.`, alert: "" };

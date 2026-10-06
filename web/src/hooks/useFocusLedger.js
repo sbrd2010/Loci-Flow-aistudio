@@ -23,8 +23,16 @@ import { lociDayWindow } from "../utils/focusLedger";
 //   "loading"     — subscribed, first snapshot not in yet
 //   "ready"       — `raw` is what the ledger holds for this window
 //   "unavailable" — no uid, or the read was refused/failed
+// e2e only: demo mode has no uid, so a test can hand it a ledger through
+// window.__LOCI_DEMO_FOCUS__ (as demoData.js takes __LOCI_DEMO_FIXTURE__).
+const demoLedger = () => (typeof window !== "undefined" && typeof window.__LOCI_DEMO_FOCUS__ === "function" ? window.__LOCI_DEMO_FOCUS__() : null);
+
 export function useFocusLedger(uid, days = 7, windows) {
-  const [state, setState] = useState(() => ({ raw: null, status: uid ? "loading" : "unavailable", uid }));
+  const [state, setState] = useState(() => {
+    if (uid) return { raw: null, status: "loading", uid };
+    const demo = demoLedger();
+    return demo ? { raw: demo, status: "ready", uid } : { raw: null, status: "unavailable", uid };
+  });
   // The oldest day in the window, as a plain "YYYY-MM-DD" string. Depending on
   // THIS rather than on `windows` gives both properties at once: a fresh windows
   // array on every render cannot retrigger the subscription (the string is
@@ -36,7 +44,8 @@ export function useFocusLedger(uid, days = 7, windows) {
 
   useEffect(() => {
     if (!uid) {
-      setState({ raw: null, status: "unavailable", uid });
+      const demo = demoLedger();
+      setState(demo ? { raw: demo, status: "ready", uid } : { raw: null, status: "unavailable", uid });
       return undefined;
     }
     // Cleared only when the USER changes, not on every resubscribe: the day
