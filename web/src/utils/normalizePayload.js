@@ -179,6 +179,19 @@ function withNormalizedFronts(config) {
   return { ...config, fronts: normalizeFronts(config.fronts) };
 }
 
+// One thing at a time: at most one open task is the one thing. Two pinned
+// tasks (found in real data, 6 Oct: probably two devices' writes merged)
+// showed one on Today's task side and tagged the other NOW in the list. The
+// most recently updated keeps it; on a tie, the first in the list, which is
+// the one Today already shows. Not re-stamped, so every device settles the
+// same way.
+export function keepOneThing(tasks) {
+  const pinned = tasks.filter(t => t && t.isNowFocus && !t.isDeleted && !t.isCompleted);
+  if (pinned.length < 2) return tasks;
+  const keep = pinned.reduce((a, b) => ((Number(b.lastUpdated) || 0) > (Number(a.lastUpdated) || 0) ? b : a));
+  return tasks.map(t => (pinned.includes(t) && t !== keep ? { ...t, isNowFocus: false } : t));
+}
+
 export function normalizePayload(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     return { tasks: [], config: {}, contributions: [], brainDump: [], brainDumpUpdatedAt: 0 };
@@ -188,7 +201,7 @@ export function normalizePayload(raw) {
   const fallbackUserId = sanitizeString(raw.userId, 200, sanitizeString(config.userId, 200, ""));
   return {
     ...raw,
-    tasks: sanitizeTasksForRules(endLeftReviewMarks(raw.tasks), fallbackUserId),
+    tasks: keepOneThing(sanitizeTasksForRules(endLeftReviewMarks(raw.tasks), fallbackUserId)),
     config,
     contributions: arrayOrEmpty(raw.contributions),
     brainDump,
@@ -411,7 +424,8 @@ export function mergeRemotePayloadWithMeta(remote, local, baseConfig, baseContri
   }
 
   const { tasks, hasLocalContribution: tasksContribution } = mergeTasks(normalized.tasks, local?.tasks);
-  normalized.tasks = tasks;
+  // Each side has one pin, but a task-by-task merge can keep both.
+  normalized.tasks = keepOneThing(tasks);
 
   const { config, localConfigWon } = mergeConfig(normalized.config, local?.config, baseConfig);
   normalized.config = config;
@@ -719,7 +733,7 @@ export function mergeLocalIntoServer(server, local, base) {
   return {
     ...normalizedLocal,
     ...(chatMerge ? { chatHistory: chatMerge.chatHistory } : {}),
-    tasks: mergeTasksForWrite(normalizedServer.tasks, normalizedLocal.tasks),
+    tasks: keepOneThing(mergeTasksForWrite(normalizedServer.tasks, normalizedLocal.tasks)),
     config: mergeConfigForWrite(normalizedServer.config, normalizedLocal.config, base ? base.config : null),
     contributions: mergeContributions(normalizedServer.contributions, normalizedLocal.contributions, base ? arrayOrEmpty(base.contributions) : null).contributions,
     brainDump: brainDumpMerge ? brainDumpMerge.items : (serverBrainDumpIsNewer ? normalizedServer.brainDump : normalizedLocal.brainDump),
