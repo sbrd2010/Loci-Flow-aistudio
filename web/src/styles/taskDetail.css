@@ -200,6 +200,8 @@
   border-bottom: 1px solid var(--line);
 }
 .detail-options.is-chips { flex-direction: row; flex-wrap: wrap; gap: 8px; }
+/* Try-out 8/9: Other's typed time, on its own line under the chips. */
+.detail-options .estimate-other .detail-input { flex: 0 1 200px; min-height: 40px; }
 .detail-option {
   min-height: 44px;
   padding: 0 12px;

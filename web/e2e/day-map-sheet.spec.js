@@ -100,7 +100,7 @@ test("the sheet's estimate is the stop's duration, and the route is timed again"
   await sheet(page).getByRole("button", { name: /^Estimate/ }).click();
   // Codex review of #418: a stop always has a length — no None to pick.
   await expect(sheet(page).getByRole("radio", { name: "None" })).toHaveCount(0);
-  await sheet(page).getByRole("radio", { name: "1h" }).click();
+  await sheet(page).getByRole("radio", { name: "1h", exact: true }).click();
   await expect(page.locator(".dm-stop").nth(0).locator(".dm-dur")).toHaveText("1h");
   const [first, second] = await times(page);
   expect(first).toBe("NOW");

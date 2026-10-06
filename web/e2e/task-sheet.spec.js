@@ -182,14 +182,22 @@ test("a first step stored apart from the steps is step 1, and a change to anothe
   await expect(page.locator(".wall-first-step")).toContainText(first);
 });
 
-// Codex review of #418: the sheet is the only editor, so every length Add
-// task offers can be set here.
-test("an estimate outside the chips can be set from Other", async ({ page }) => {
+// Codex review of #418, try-out 8/9: the same chips as Add task, and any
+// other length typed into Other.
+test("an estimate outside the chips can be typed into Other", async ({ page }) => {
   await enterDemo(page);
   await openFromDetails(page);
   await sheet(page).getByRole("button", { name: /^Estimate/ }).click();
-  await sheet(page).getByLabel("Other length").selectOption("45");
-  await expect(sheet(page).getByRole("button", { name: /^Estimate/ }).locator(".detail-value")).toHaveText("45m");
+  const group = sheet(page).getByRole("radiogroup", { name: "Estimate" });
+  await expect(group.getByRole("radio")).toHaveText(["5m", "15m", "25m", "30m", "45m", "1h", "1h30m", "2h", "3h", "None", "Other"]);
+  await group.getByRole("radio", { name: "Other" }).click();
+  await sheet(page).getByLabel("Other time").fill("1h20");
+  await sheet(page).getByLabel("Other time").press("Enter");
+  await expect(sheet(page).getByRole("button", { name: /^Estimate/ }).locator(".detail-value")).toHaveText("1h20m");
+  // Opened again, Other holds it.
+  await sheet(page).getByRole("button", { name: /^Estimate/ }).click();
+  await expect(group.getByRole("radio", { name: "Other" })).toHaveAttribute("aria-checked", "true");
+  await expect(sheet(page).getByLabel("Other time")).toHaveValue("1h20m");
 });
 
 // Codex review of #418: Plan's drawer can move to another task while the AI

@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { openRung } from "./helpers/plan.js";
+import { sidewaysScrollers } from "./helpers/overflow";
 
 // Add task (45a phone sheet, 45k laptop dialog). Demo mode: nothing reaches
 // Firebase. The horizon defaults to where + was tapped, and the sheet says so.
@@ -126,8 +127,7 @@ test("an AI suggestion of P4 and 45m shows P4 and opens Other at 45m", async ({ 
   await dialog.getByRole("button", { name: "Apply", exact: true }).click();
 
   await expect(dialog.getByRole("button", { name: "Priority 4" })).toHaveAttribute("aria-pressed", "true");
-  await expect(dialog.getByRole("button", { name: "Other", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await expect(dialog.getByLabel("Minutes")).toHaveValue("45");
+  await expect(dialog.getByRole("button", { name: "45m", exact: true })).toHaveAttribute("aria-pressed", "true");
 });
 
 // With no time chosen, nothing is shown as chosen — so nothing is saved: the
@@ -145,7 +145,7 @@ test("a task added without choosing a time is saved with no estimate", async ({ 
   await openFromToday(page);
   const dialog = page.getByRole("dialog", { name: "New task" });
   await dialog.getByTestId("add-task-title").fill("Sort the museum receipts");
-  for (const name of ["15m", "30m", "1h", "2h", "Other"]) {
+  for (const name of ["5m", "15m", "25m", "30m", "45m", "1h", "1h30m", "2h", "3h", "Other"]) {
     await expect(dialog.getByRole("button", { name, exact: true })).toHaveAttribute("aria-pressed", "false");
   }
   await dialog.getByTestId("add-task-submit").click();
@@ -174,7 +174,9 @@ test("⌘↵ pressed again while the sheet says Saved adds the task once", async
   await expect(page.getByTestId("today-tasks-list").getByText("Order the spare lens cap")).toHaveCount(1);
 });
 
-test("opening Other shows 25m chosen, and 25m is what is saved", async ({ page }) => {
+// Try-out 8/9: Other opens a typed time; Enter takes it without adding the
+// task, and that time is what is saved.
+test("Other takes a typed time, and that time is what is saved", async ({ page }) => {
   await page.addInitScript(() => {
     try { window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key"); } catch { /* private mode */ }
   });
@@ -188,7 +190,17 @@ test("opening Other shows 25m chosen, and 25m is what is saved", async ({ page }
   const dialog = page.getByRole("dialog", { name: "New task" });
   await dialog.getByTestId("add-task-title").fill("Label the seed trays");
   await dialog.getByRole("button", { name: "Other", exact: true }).click();
-  await expect(dialog.getByLabel("Minutes")).toHaveValue("25");
+  const other = dialog.getByLabel("Other time");
+  await expect(other).toBeFocused();
+  await other.fill("1h");
+  await other.fill("4 0");
+  await other.press("Enter");
+  await expect(dialog.getByRole("alert")).toHaveText("Try 40m, 1h20 or 1.5h");
+  await other.fill("40");
+  await other.press("Enter");
+  await expect(other).toHaveValue("40m");
+  await expect(page.locator(".add-card")).toHaveCount(1);
+  await expect(dialog.getByRole("button", { name: "Other", exact: true })).toHaveAttribute("aria-pressed", "true");
   await dialog.getByTestId("add-task-submit").click();
   await expect(page.locator(".add-card")).toHaveCount(0, { timeout: 5_000 });
 
@@ -196,7 +208,7 @@ test("opening Other shows 25m chosen, and 25m is what is saved", async ({ page }
   await page.locator(".coach-composer-input").fill("what are my tasks");
   await page.getByRole("button", { name: "Send" }).click();
   await expect.poll(() => bodies.some(b => b.includes("Label the seed trays")), { timeout: 8_000 }).toBe(true);
-  expect(bodies.find(b => b.includes("Label the seed trays"))).toContain("Label the seed trays (25min)");
+  expect(bodies.find(b => b.includes("Label the seed trays"))).toContain("Label the seed trays (40min)");
 });
 
 // Q56.1 (64s–t): Add opens with Task | Thought. T opens on Thought from any
@@ -237,3 +249,27 @@ test("N and + open on Task; the switch is there", async ({ page }) => {
   await dialog.getByRole("radio", { name: "Thought" }).click();
   await expect(page.getByRole("dialog", { name: "New thought" }).getByRole("button", { name: "Save thought" })).toBeDisabled();
 });
+
+// Try-out 2: the sheet never runs past the window. With More details and
+// Other open, its body scrolls and "Add to …" stays in view; nothing scrolls
+// sideways.
+for (const viewport of [{ width: 1280, height: 720 }, { width: 412, height: 760 }]) {
+  test(`${viewport.width}×${viewport.height}: the sheet fits the window, Add to … always in view`, async ({ page }) => {
+    await enterDemo(page, viewport);
+    await openFromToday(page);
+    const dialog = page.getByRole("dialog", { name: "New task" });
+    await dialog.getByRole("button", { name: "Other", exact: true }).click();
+    await dialog.getByRole("button", { name: "More details" }).click();
+    for (const where of ["top", "bottom"]) {
+      await page.locator(".add-card").evaluate((el, w) => { el.scrollTop = w === "top" ? 0 : el.scrollHeight; }, where);
+      const fit = await page.evaluate(() => {
+        const card = document.querySelector(".add-card").getBoundingClientRect();
+        const btn = document.querySelector(".add-submit").getBoundingClientRect();
+        const at = document.elementFromPoint((btn.left + btn.right) / 2, (btn.top + btn.bottom) / 2);
+        return card.bottom <= innerHeight + 1 && btn.bottom <= card.bottom + 1 && !!at?.closest(".add-submit");
+      });
+      expect(fit, where).toBe(true);
+    }
+    expect(await sidewaysScrollers(page)).toEqual([]);
+  });
+}

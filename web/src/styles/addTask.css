@@ -128,9 +128,6 @@
   flex-wrap: wrap;
   gap: 8px;
 }
-/* 57b answer 26: with custom horizons the Horizon row scrolls. */
-.add-chips.is-scroll { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-.add-chips.is-scroll > .add-chip { flex-shrink: 0; }
 .add-chip {
   min-height: 44px;
   padding: 0 16px;
@@ -148,26 +145,23 @@
   background: var(--accent);
   border-color: var(--accent);
 }
-.add-other {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-.add-other select,
 .add-row-select {
   min-height: 44px;
   font: inherit;
   font-size: 0.875rem;
   color: var(--ink);
 }
-.add-other select {
-  padding: 0 10px;
-  background: var(--surface);
-  border: 1px solid var(--control-edge);
-  border-radius: 6px;
+/* Try-out 8/9: Other opens a typed time on its own line under the chips. */
+.estimate-other {
+  display: flex;
+  flex: 1 0 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
+.add-other-input { flex: 0 1 220px; min-height: 44px; }
+.add-btn-outline.add-other-set { flex: 0 0 auto; min-height: 44px; padding: 0 18px; }
+.estimate-other-error { flex: 1 0 100%; font-size: 0.8125rem; color: var(--coral); }
 
 /* Front · More details: a row with the value at the right and a chevron. */
 .add-row {
@@ -313,6 +307,19 @@
   gap: 12px;
   padding-top: 4px;
 }
+/* Try-out 2: the sheet never runs past the window; its body scrolls and
+   "Add to …" stays in view at the bottom (the horizon chips wrap rather
+   than run off the right). */
+.add-body > .add-foot {
+  position: sticky;
+  bottom: calc(-20px - env(safe-area-inset-bottom, 0px));
+  z-index: 1;
+  margin-inline: -20px;
+  padding: 12px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  margin-bottom: calc(-20px - env(safe-area-inset-bottom, 0px));
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+}
 .add-submit {
   flex: 1;
   min-height: 52px;
@@ -361,6 +368,7 @@
   }
   .add-grabber { display: none; }
   .add-kbd { display: inline; }
+  .add-body > .add-foot { bottom: -24px; margin: 0 -28px -24px; padding: 12px 28px 24px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
