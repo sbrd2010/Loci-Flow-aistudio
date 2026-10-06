@@ -18,7 +18,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { formatClock24, formatSpan, moveToTomorrow, restoreSchedule } from "../utils/dayMapPlan";
-import { mergeWindowSpans } from "../utils/focusWindows";
+import { getRemainingFocusMinutes, mergeWindowSpans } from "../utils/focusWindows";
 import { isDeferred } from "../utils/deferral";
 import {
   applyReflow, currentDayMinutes, getEstimate, getTaskId,
@@ -466,8 +466,12 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   // Minimum day (56a–b): today's open tasks in the order they come, the
   // route as it shows.
   const openToday = routeTasks.map(t => scheduledTasks.find(s => getTaskId(s) === getTaskId(t))).filter(Boolean);
-  // Turn 76 (d): only tasks that fit before the day ends are suggested.
-  const minDay = minimumDay({ config: routeConfig, todayStr, ordered: openToday, isGoal, fits: (t) => !fitCut.overIds.has(getTaskId(t)) });
+  // Turn 76 (d): only what fits before the day ends is suggested: the focus
+  // time left, less what's at a set time, whatever the optional tasks take.
+  const routeMinutes = new Map(routeTasks.map(t => [getTaskId(t), Number(t.dayMapDurationMinutes) || 0]));
+  const fixedMinutes = routeTasks.filter(isEventTask).reduce((n, t) => n + (routeMinutes.get(getTaskId(t)) || 0), 0);
+  const minBudget = Math.max(0, Math.min(plan.dayLeft, getRemainingFocusMinutes(new Date(), windows)) - fixedMinutes);
+  const minDay = minimumDay({ config: routeConfig, todayStr, ordered: openToday, isGoal, budget: minBudget, minutesOf: (t) => routeMinutes.get(getTaskId(t)) || 0 });
   const minIds = new Set(minDay.ids);
   const timeOf = (id) => {
     const r = rows.find(x => x.kind === "stop" && getTaskId(x.task) === id);

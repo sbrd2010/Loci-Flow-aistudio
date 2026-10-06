@@ -17,14 +17,16 @@ async function openDayMap(page, viewport = { width: 1280, height: 720 }) {
   await openDayMapPage(page);
 }
 
-// Turn 76 (d): "If today goes wrong" suggests only tasks that fit before the
-// day ends — Electricity (00:20) is, Prof. Anupam (after 02:00) isn't.
-test("If today goes wrong suggests only must-dos that fit before the day ends", async ({ page }) => {
+// Turn 76 (d): "If today goes wrong" suggests only what fits before the day
+// ends, judged on the minimum day itself: the optional tasks are what you'd
+// drop. Prof. Anupam sits behind CleanHYPRO (3h, optional) and past 02:00 on
+// the route, but the two must-dos together fit in the time left, so both are
+// suggested (Rohan's call on loopcheck #495).
+test("If today goes wrong suggests the must-dos that fit once optional tasks are dropped", async ({ page }) => {
   await openDayMap(page);
   const min = page.getByRole("region", { name: "Minimum day" });
-  await expect(min.locator(".dm-min-name")).toHaveText(["Electricity connection: Renew it"]);
-  await expect(min.locator(".dm-min-title")).toHaveText("If today goes wrong, do this one");
-  await expect(min).not.toContainText("Prof. Anupam");
+  await expect(min.locator(".dm-min-name")).toHaveText(["Electricity connection: Renew it", "Prof. Anupam: Reply him URGENT!!"]);
+  await expect(min.locator(".dm-min-title")).toHaveText("If today goes wrong, do these 2");
 });
 
 // Turn 76 (c): one cut for both pages — the same won't-fit count and total
