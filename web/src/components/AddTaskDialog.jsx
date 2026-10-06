@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import GrowTextarea from "./ui/GrowTextarea";
 import { isEveningGuardBlocked } from "../utils/eveningGuard";
 import { callAI, getAIKeys, hasAIKey } from "../utils/aiCall";
 import { safeUUID } from "../utils/uuid";
@@ -367,13 +368,15 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
 
         {mode === "thought" ? (
           <form onSubmit={saveThought} className="add-body add-thought">
-            <input
+            <GrowTextarea
               ref={thoughtRef}
               className="add-thought-input"
               aria-label="Thought"
               placeholder="What's on your mind?"
               value={title}
               maxLength={500}
+              allowNewlines
+              onEnter={e => e.currentTarget.form?.requestSubmit()}
               onChange={e => { setTitle(e.target.value); setThoughtError(""); }}
               onKeyDown={e => { if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); switchMode("task"); } }}
             />
@@ -548,19 +551,19 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
                       <li key={s.id} className="add-step">
                         {editingSubStepId === s.id ? (
                           <>
-                            <input
-                              type="text"
-                              className="add-input"
+                            <GrowTextarea
+                              className="add-input add-step-edit"
                               aria-label={`Edit step ${s.text}`}
                               value={editingSubStepText}
+                              maxRows={4}
                               onChange={(e) => setEditingSubStepText(e.target.value)}
+                              onEnter={() => {
+                                const trimmed = editingSubStepText.trim();
+                                if (trimmed) setSubSteps(prev => prev.map(step => step.id === s.id ? { ...step, text: trimmed } : step));
+                                setEditingSubStepId(null);
+                              }}
                               onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                  const trimmed = editingSubStepText.trim();
-                                  if (trimmed) setSubSteps(prev => prev.map(step => step.id === s.id ? { ...step, text: trimmed } : step));
-                                  setEditingSubStepId(null);
-                                } else if (e.key === "Escape") {
+                                if (e.key === "Escape") {
                                   e.stopPropagation();
                                   setEditingSubStepId(null);
                                 }

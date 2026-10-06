@@ -274,3 +274,20 @@ for (const [name, viewport] of [["phone", { width: 375, height: 812 }], ["laptop
     await expect.poll(() => stepValues(page)).toEqual(before.map((t, j) => (j === 1 ? "Read it slowly, twice" : t)));
   });
 }
+
+// Try-out 7/5: the title being edited wraps instead of scrolling sideways;
+// it stays one line (Shift+Enter adds nothing) and Enter saves it.
+test("the title wraps while edited, stays one line, and Enter saves it", async ({ page }) => {
+  await enterDemo(page);
+  await openFromDetails(page);
+  await sheet(page).locator(".detail-title").click();
+  const field = sheet(page).locator(".detail-title-input");
+  await field.fill("Ask whether the fixed rate can be extended for another five years");
+  await field.press("End");
+  await field.press("Shift+Enter");
+  await field.pressSequentially(" first");
+  expect(await field.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(false);
+  expect(await field.evaluate(el => el.clientHeight)).toBeGreaterThan(50);
+  await field.press("Enter");
+  await expect(sheet(page).locator(".detail-title")).toHaveText("Ask whether the fixed rate can be extended for another five years first");
+});

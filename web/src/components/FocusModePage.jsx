@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import GrowTextarea from "./ui/GrowTextarea";
 import { minutesFromSeconds } from "../utils/focusLedger";
 import { getTimerState } from "../utils/focusSession";
 import { BINAURAL_TRACK_ID } from "../utils/binauralBeat";
@@ -375,14 +376,15 @@ export default function FocusModePage({
   );
   const parkRow = onAddBrainDump && (
     <div className="focus-mode-dump-row">
-      <input
+      <GrowTextarea
         ref={dumpInputRef}
-        type="text"
         className="focus-mode-dump-input"
         placeholder="A stray thought? Park it here"
         value={dumpText}
+        maxRows={4}
+        allowNewlines
         onChange={e => { setDumpText(e.target.value); setDumpFull(false); }}
-        onKeyDown={e => { if (e.key === "Enter") submitDump(); }}
+        onEnter={() => submitDump()}
         aria-label="Capture a thought to Brain Dump"
       />
       <button

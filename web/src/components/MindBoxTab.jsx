@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import GrowTextarea from "./ui/GrowTextarea";
 import { safeUUID } from "../utils/uuid";
 import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
 import { normalizeAiOrganizeSuggestions, buildClearedBrainDump, buildOrganizedTaskSubSteps, CATEGORY_ICONS } from "../utils/taskOps";
@@ -686,11 +687,14 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
                 <p className="mbx-dump-line">Get it out now. Sort it later.</p>
               </div>
               <form className="mbx-field" onSubmit={handleBrainDumpSubmit}>
-                <input
+                <GrowTextarea
                   className="mbx-input"
                   aria-label="Thought"
                   placeholder="What’s on your mind?"
                   value={brainDumpText}
+                  maxRows={5}
+                  allowNewlines
+                  onEnter={e => e.currentTarget.form?.requestSubmit()}
                   onChange={e => setBrainDumpText(e.target.value)}
                   disabled={dumpCount >= THOUGHTS_MAX}
                 />

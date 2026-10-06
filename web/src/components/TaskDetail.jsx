@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import GrowTextarea from "./ui/GrowTextarea";
 import EstimatePicker from "./EstimatePicker";
 import { formatEstimate } from "../utils/estimates";
 import { IconPin, IconPlus, IconX, IconChevronRight, IconChevronDown, IconCheck } from "./ui/icons";
@@ -265,20 +266,23 @@ export default function TaskDetail({
           </button>
           <div className="detail-title-wrap">
             {editingTitle ? (
-              <input
+              <GrowTextarea
                 ref={titleInputRef}
                 className="detail-title-input"
                 value={title}
                 aria-label="Title"
                 maxLength={1000}
+                maxRows={5}
                 onChange={e => setTitle(e.target.value)}
                 onBlur={finishTitle}
+                // Enter and Escape hand focus back to the title, so the
+                // sheet's keys (Esc to close) still reach it.
+                onEnter={() => { finishTitle(); requestAnimationFrame(() => headingRef.current?.focus({ preventScroll: true })); }}
                 onKeyDown={e => {
-                  // Enter and Escape hand focus back to the title, so the
-                  // sheet's keys (Esc to close) still reach it.
-                  const refocus = () => requestAnimationFrame(() => headingRef.current?.focus({ preventScroll: true }));
-                  if (e.key === "Enter") { e.preventDefault(); finishTitle(); refocus(); }
-                  if (e.key === "Escape") { e.stopPropagation(); setTitle(task.title); setEditingTitle(false); refocus(); }
+                  if (e.key === "Escape") {
+                    e.stopPropagation(); setTitle(task.title); setEditingTitle(false);
+                    requestAnimationFrame(() => headingRef.current?.focus({ preventScroll: true }));
+                  }
                 }}
               />
             ) : (
@@ -447,14 +451,15 @@ export default function TaskDetail({
           )}
           <div className="detail-add-step">
             <IconPlus size={18} />
-            <input
+            <GrowTextarea
               className="detail-add-step-input"
               value={newStep}
               placeholder="Add a step…"
               aria-label="Add a step"
               maxLength={300}
+              maxRows={4}
               onChange={e => setNewStep(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addStep(); } }}
+              onEnter={() => addStep()}
               onBlur={() => addStep()}
             />
             <button type="button" className="detail-suggest" onClick={askForSteps} disabled={!!suggested?.loading}>
