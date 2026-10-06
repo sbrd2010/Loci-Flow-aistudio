@@ -116,11 +116,16 @@ test("mobile reliability: the goal is one gold line on a phone, with its days", 
   await expect(band.locator(".wall-goal-name")).toBeHidden();
   await expect(band.locator(".wall-goal-kicker")).toBeHidden();
   expect(await band.evaluate(el => getComputedStyle(el).backgroundColor)).toBe("rgb(241, 223, 178)");
-  // Try-out 26: the Target is a quiet line under it — one more short line.
-  await expect(band.locator(".wall-goal-target")).toHaveText(/^Target · \S/);
-  const h = Math.round((await band.boundingBox()).height);
-  expect(h).toBeGreaterThanOrEqual(44);
-  expect(h).toBeLessThanOrEqual(64);
+  // Try-out 26: the Target is a quiet line under it: one line (cut with …),
+  // and the band above it keeps its one-line height. Measured against the
+  // font's own line, not a pixel count, so the real fonts pass too.
+  const target = band.locator(".wall-goal-target");
+  await expect(target).toHaveText(/^Target · \S/);
+  const m = await target.evaluate(el => ({ h: el.getBoundingClientRect().height, line: parseFloat(getComputedStyle(el).lineHeight) }));
+  expect(m.h).toBeLessThanOrEqual(m.line * 1.5);
+  const h = (await band.boundingBox()).height;
+  expect(h - m.h).toBeGreaterThanOrEqual(40);
+  expect(h - m.h).toBeLessThanOrEqual(52);
 });
 
 // Laptop and wider keep 51's look: the filled gold card, its figures on the

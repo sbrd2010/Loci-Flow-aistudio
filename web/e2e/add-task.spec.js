@@ -273,3 +273,41 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 412, height: 760 
     expect(await sidewaysScrollers(page)).toEqual([]);
   });
 }
+
+// Codex review of #498: Other left empty closes and shows what is really
+// chosen; a length set from outside (an AI suggestion) is what shows.
+test("Other left empty closes; an AI suggestion after a typed time is what shows", async ({ page }) => {
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key"); } catch { /* private mode */ }
+  });
+  await page.route("https://api.groq.com/**", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ choices: [{ message: { content: JSON.stringify({
+      title: "File the June field notes", microStep: "Open the notes folder", priority: "P2",
+      estimateMinutes: 45, horizonLevel: "today", subSteps: [],
+    }) } }] }),
+  }));
+  await enterDemo(page);
+  await openFromToday(page);
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  const other = dialog.getByRole("button", { name: "Other", exact: true });
+  await dialog.getByRole("button", { name: "30m", exact: true }).click();
+  await other.click();
+  await expect(other).toHaveAttribute("aria-pressed", "true");
+  await dialog.getByTestId("add-task-title").click();
+  await expect(other).toHaveAttribute("aria-pressed", "false");
+  await expect(dialog.getByLabel("Other time")).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "30m", exact: true })).toHaveAttribute("aria-pressed", "true");
+
+  await other.click();
+  await dialog.getByLabel("Other time").fill("40");
+  await dialog.getByLabel("Other time").press("Enter");
+  await expect(other).toHaveAttribute("aria-pressed", "true");
+  await dialog.getByTestId("add-task-title").fill("field notes");
+  await dialog.getByRole("button", { name: "Ask AI to improve this" }).click();
+  await dialog.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(dialog.getByRole("button", { name: "45m", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(other).toHaveAttribute("aria-pressed", "false");
+  await expect(dialog.getByLabel("Other time")).toHaveCount(0);
+});

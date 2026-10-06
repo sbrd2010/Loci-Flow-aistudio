@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ESTIMATE_CHIPS, formatEstimate, parseEstimate } from "../utils/estimates";
 
 // Try-out 8/9: one set of time chips wherever a task's length is chosen (Add
@@ -20,10 +20,25 @@ export default function EstimatePicker({
   const [otherOpen, setOtherOpen] = useState(offChips);
   const [draft, setDraft] = useState(offChips ? formatEstimate(current) : "");
   const [error, setError] = useState("");
+  // Codex review of #498: the length can change from outside (an AI
+  // suggestion applied in Add task, a synced edit). Follow it: a chip shows
+  // as chosen and Other closes; another length off the chips shows in Other.
+  useEffect(() => {
+    setError("");
+    if (offChips) { setOtherOpen(true); setDraft(formatEstimate(current)); }
+    else { setOtherOpen(false); setDraft(""); }
+  }, [current, offChips]);
 
   const stateProps = (on) => (role === "radio" ? { role: "radio", "aria-checked": on } : { "aria-pressed": on });
   const commit = () => {
-    if (!draft.trim()) return false;
+    // Left empty, Other closes and what is really chosen shows again — it
+    // never looks chosen while another length is kept (Codex review of #498).
+    if (!draft.trim()) {
+      setError("");
+      if (offChips) setDraft(formatEstimate(current));
+      else setOtherOpen(false);
+      return false;
+    }
     const min = parseEstimate(draft);
     if (min == null) { setError("Try 40m, 1h20 or 1.5h"); return false; }
     setError("");
