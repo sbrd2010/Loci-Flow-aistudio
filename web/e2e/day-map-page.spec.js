@@ -211,3 +211,22 @@ test("From: tap Now or a quarter-hour, or type a time; after midnight works, pas
   await panel.getByRole("button", { name: /^Now/ }).click();
   await expect(from).toHaveText(/^10:00 \(now\)/);
 });
+
+// Codex review of #499: with the start at Now, the minute moving on doesn't
+// wipe a time being typed.
+test("From: a half-typed time survives the clock moving on", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.clock.install({ time: new Date("2024-06-15T10:00:00") });
+  await page.goto("/");
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".wall-title")).toBeVisible({ timeout: 15_000 });
+  await page.keyboard.press("m");
+  await page.locator(".dm-from-select").click();
+  const typed = page.getByRole("dialog", { name: "Start the route at" }).getByLabel("Route start, typed");
+  await typed.fill("11:");
+  await page.clock.runFor(61_000);
+  await expect(typed).toHaveValue("11:");
+  await typed.pressSequentially("15");
+  await typed.press("Enter");
+  await expect(page.locator(".dm-from-select")).toHaveText(/^11:15/);
+});

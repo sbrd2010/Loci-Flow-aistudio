@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { formatHHMM, parseClock } from "../../utils/clockText";
 import "../../styles/pickers.css";
 
@@ -20,7 +20,13 @@ export default function TimePicker({
 }) {
   const [draft, setDraft] = useState(value == null ? "" : formatHHMM(value));
   const [error, setError] = useState("");
-  useEffect(() => { setDraft(value == null ? "" : formatHHMM(value)); setError(""); }, [value]);
+  // Follows the value, but never while it's being typed in: "Now" moves
+  // every minute and must not wipe a half-typed time (Codex review of #499).
+  const inputRef = useRef(null);
+  useEffect(() => {
+    if (inputRef.current && inputRef.current === document.activeElement) return;
+    setDraft(value == null ? "" : formatHHMM(value)); setError("");
+  }, [value]);
 
   const commit = () => {
     if (!draft.trim()) return false;
@@ -52,6 +58,7 @@ export default function TimePicker({
       )}
       <div className="tp-type">
         <input
+          ref={inputRef}
           id={`${idPrefix}-typed`}
           type="text"
           inputMode="text"
