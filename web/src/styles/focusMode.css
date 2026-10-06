@@ -668,3 +668,43 @@
 @media (min-width: 1024px) {
   .fm-spacer { max-height: none; }
 }
+
+/* Try-out 4: a parked thought wraps and grows; Save stays at the top. */
+.focus-mode-dump-row { align-items: flex-start; }
+.focus-mode-dump-input { display: block; min-height: 0; padding: 12px; line-height: 1.4; }
+/* Try-out 3: the field's own border turns green, no second box. */
+.focus-mode-overlay .focus-mode-dump-input:focus-visible { outline: none; border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+
+/* Try-out 37: on a computer All sounds… opens a small panel by its link
+   (420 wide, the list and the volume), not a sheet across the screen; a
+   click outside or Esc closes it. Below 1024 it stays the bottom sheet. */
+@media (min-width: 1024px) {
+  .focus-sounds-backdrop { background: none; }
+  .focus-sounds-drawer {
+    top: var(--sd-top, auto);
+    bottom: var(--sd-bottom, auto);
+    left: var(--sd-left, auto);
+    right: auto;
+    box-sizing: border-box;
+    width: 420px;
+    max-height: min(560px, var(--sd-max, 560px));
+    padding: 12px 20px 18px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    transform: translateY(-6px);
+    opacity: 0;
+    transition: transform 0.16s, opacity 0.16s, visibility 0.16s;
+  }
+  .focus-sounds-drawer.is-up { transform: translateY(6px); }
+  /* One line a sound — its name, then what it is, muted — so the list and
+     the volume fit without scrolling. */
+  .focus-sounds-tiles { margin-top: 2px; }
+  .focus-sounds-drawer .sound-tile { min-height: 40px; padding: 6px 0; }
+  .focus-sounds-drawer .sound-tile-info { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+  .focus-sounds-drawer .sound-tile-title { flex: none; }
+  .focus-sounds-drawer .sound-tile-desc { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .focus-sounds-drawer .sound-tile-shuffle { min-height: 32px; }
+  .focus-sounds-volume-section { margin-top: 12px; }
+  .focus-sounds-drawer.open { transform: none; opacity: 1; }
+}

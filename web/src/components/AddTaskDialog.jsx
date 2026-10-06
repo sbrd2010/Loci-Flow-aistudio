@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import GrowTextarea from "./ui/GrowTextarea";
+import ReminderPicker from "./ui/ReminderPicker";
 import { isEveningGuardBlocked } from "../utils/eveningGuard";
 import { callAI, getAIKeys, hasAIKey } from "../utils/aiCall";
 import { safeUUID } from "../utils/uuid";
@@ -367,13 +369,14 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
 
         {mode === "thought" ? (
           <form onSubmit={saveThought} className="add-body add-thought">
-            <input
+            <GrowTextarea
               ref={thoughtRef}
               className="add-thought-input"
               aria-label="Thought"
               placeholder="What's on your mind?"
               value={title}
               maxLength={500}
+              onEnter={e => e.currentTarget.form?.requestSubmit()}
               onChange={e => { setTitle(e.target.value); setThoughtError(""); }}
               onKeyDown={e => { if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); switchMode("task"); } }}
             />
@@ -512,10 +515,12 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
                   {reminderOn ? `Remind me: ${formatReminderLabel(new Date(`${reminderDate}T${reminderTime}`).getTime())}` : "Set a reminder"}
                 </button>
                 {reminderOn && (
-                  <div className="add-inline">
-                    <input type="date" className="add-input" aria-label="Reminder date" value={reminderDate} min={new Date().toISOString().slice(0, 10)} onChange={e => setReminderDate(e.target.value)} />
-                    <input type="time" className="add-input" aria-label="Reminder time" value={reminderTime} onChange={e => setReminderTime(e.target.value)} />
-                  </div>
+                  <ReminderPicker
+                    idPrefix="add-reminder"
+                    date={reminderDate}
+                    time={reminderTime}
+                    onChange={({ date, time }) => { setReminderDate(date); setReminderTime(time); }}
+                  />
                 )}
               </div>
 
@@ -548,19 +553,19 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
                       <li key={s.id} className="add-step">
                         {editingSubStepId === s.id ? (
                           <>
-                            <input
-                              type="text"
-                              className="add-input"
+                            <GrowTextarea
+                              className="add-input add-step-edit"
                               aria-label={`Edit step ${s.text}`}
                               value={editingSubStepText}
+                              maxRows={4}
                               onChange={(e) => setEditingSubStepText(e.target.value)}
+                              onEnter={() => {
+                                const trimmed = editingSubStepText.trim();
+                                if (trimmed) setSubSteps(prev => prev.map(step => step.id === s.id ? { ...step, text: trimmed } : step));
+                                setEditingSubStepId(null);
+                              }}
                               onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                  const trimmed = editingSubStepText.trim();
-                                  if (trimmed) setSubSteps(prev => prev.map(step => step.id === s.id ? { ...step, text: trimmed } : step));
-                                  setEditingSubStepId(null);
-                                } else if (e.key === "Escape") {
+                                if (e.key === "Escape") {
                                   e.stopPropagation();
                                   setEditingSubStepId(null);
                                 }

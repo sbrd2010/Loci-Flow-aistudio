@@ -61,7 +61,11 @@
   cursor: pointer;
 }
 .mbx-link:disabled { opacity: 0.6; cursor: default; }
-.mbx-state:focus-visible, .mbx-link:focus-visible, .mbx-begin:focus-visible, .mbx-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mbx-state:focus-visible, .mbx-link:focus-visible, .mbx-begin:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Try-out 3: typing is marked by the field's own border thickening, not a
+   second box round it. */
+.mbx-input:focus-visible { outline: none; }
+.mbx-field:focus-within { box-shadow: inset 0 0 0 1px var(--accent); }
 
 /* 2 · Empty your head */
 .mbx-dump { display: flex; flex-direction: column; gap: 14px; }
@@ -163,3 +167,8 @@
   .mbx .mbx-rescue-title { font-size: 42px; }
   .screen-content.screen-content-mindbox { padding-inline: max(64px, calc((100% - 1760px) / 2)); }
 }
+
+/* Try-out 4: the thought wraps and grows (one line looks as before). */
+.mbx-input { display: block; min-height: 0; padding: 15px 0; line-height: 1.45; }
+.mbx-field:has(.mbx-input) { align-items: flex-start; }
+.mbx-field .mbx-hint { align-self: center; }

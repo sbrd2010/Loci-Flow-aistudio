@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import GrowTextarea from "./ui/GrowTextarea";
 import { minutesFromSeconds } from "../utils/focusLedger";
 import { getTimerState } from "../utils/focusSession";
 import { BINAURAL_TRACK_ID } from "../utils/binauralBeat";
@@ -145,6 +146,7 @@ export default function FocusModePage({
   const [dumpFull, setDumpFull] = useState(false);
   const dumpInputRef = useRef(null);
   const [showSoundsDrawer, setShowSoundsDrawer] = useState(false);
+  const [soundsPlace, setSoundsPlace] = useState(null);
   // 59h: the End session question.
   const [ending, setEnding] = useState(false);
   // 59d: I'm stuck, and whether the timer ran when it opened.
@@ -241,7 +243,7 @@ export default function FocusModePage({
   // mini window, Esc leaves. Not while typing, not while Rescue is open, and
   // Esc closes the sounds drawer or the question first. A held key fires once.
   const keysRef = useRef({});
-  keysRef.current = { isComplete, showSoundsDrawer, ending, stuck, backToTimer, onPlayPause, onDone, onExit, onOpenPiP, pipOpen, keysOff, openEnd, onEndSession, breaking: breaking, startBreak, breakOver, startNext };
+  keysRef.current = { isComplete, showSoundsDrawer, ending, stuck, backToTimer, onPlayPause, onDone, onExit, onOpenPiP, pipOpen, keysOff, openEnd, onEndSession, breaking: breaking, startBreak, breakOver, startNext, canShuffle: Boolean(SOUND_CATEGORIES[activeSoundKey]), reshuffleTrack };
   useEffect(() => {
     const onKey = (e) => {
       const k = keysRef.current;
@@ -267,6 +269,8 @@ export default function FocusModePage({
         return;
       }
       if (k.isComplete && (e.key === "e" || e.key === "E") && k.onEndSession) { e.preventDefault(); k.openEnd(); return; }
+      // S shuffles here too, with All sounds open (its Shuffle says so).
+      if ((e.key === "s" || e.key === "S") && !k.isComplete && k.canShuffle) { e.preventDefault(); k.reshuffleTrack?.(); return; }
       if (k.isComplete || k.showSoundsDrawer) return;
       if (e.key === " " && !(t && (t.tagName === "BUTTON" || t.tagName === "A"))) { e.preventDefault(); k.onPlayPause?.(); }
       else if (e.key === "d" || e.key === "D") { e.preventDefault(); k.onDone?.(); }
@@ -366,8 +370,28 @@ export default function FocusModePage({
       <button
         type="button"
         className={`focus-mode-extra-link focus-mode-sounds-btn${showSoundsDrawer ? " active" : ""}`}
-        onClick={() => setShowSoundsDrawer(prev => !prev)}
+        onClick={(e) => {
+          // Try-out 37: on a computer the list is a small panel by this
+          // link (CSS vars, unused on a phone, where it stays a sheet).
+          const r = e.currentTarget.getBoundingClientRect();
+          const z = cssZoom();
+          const vw = window.innerWidth / z;
+          const vh = window.innerHeight / z;
+          const left = Math.max(16, Math.min(r.left / z, vw - 420 - 16));
+          // Below the link if it fits, else above, else from near the top
+          // (the list and the volume always show whole).
+          const need = 440;
+          const below = vh - r.bottom / z - 16;
+          const above = r.top / z - 16;
+          setSoundsPlace(below >= need
+            ? { "--sd-left": `${left}px`, "--sd-top": `${r.bottom / z + 8}px`, "--sd-max": `${below}px` }
+            : above >= need
+              ? { "--sd-left": `${left}px`, "--sd-bottom": `${vh - r.top / z + 8}px`, "--sd-max": `${above}px` }
+              : { "--sd-left": `${left}px`, "--sd-top": "16px", "--sd-max": `${vh - 32}px` });
+          setShowSoundsDrawer(prev => !prev);
+        }}
         aria-label="Open sounds menu"
+        aria-expanded={showSoundsDrawer}
       >
         All sounds…
       </button>
@@ -375,14 +399,14 @@ export default function FocusModePage({
   );
   const parkRow = onAddBrainDump && (
     <div className="focus-mode-dump-row">
-      <input
+      <GrowTextarea
         ref={dumpInputRef}
-        type="text"
         className="focus-mode-dump-input"
         placeholder="A stray thought? Park it here"
         value={dumpText}
+        maxRows={4}
         onChange={e => { setDumpText(e.target.value); setDumpFull(false); }}
-        onKeyDown={e => { if (e.key === "Enter") submitDump(); }}
+        onEnter={() => submitDump()}
         aria-label="Capture a thought to Brain Dump"
       />
       <button
@@ -665,7 +689,7 @@ export default function FocusModePage({
         <div className="focus-sounds-backdrop" onClick={() => setShowSoundsDrawer(false)} />
       )}
 
-      <div className={`focus-sounds-drawer${showSoundsDrawer ? " open" : ""}`} aria-hidden={!showSoundsDrawer}>
+      <div className={`focus-sounds-drawer${showSoundsDrawer ? " open" : ""}${soundsPlace?.["--sd-bottom"] ? " is-up" : ""}`} aria-hidden={!showSoundsDrawer} style={soundsPlace || undefined}>
         <div className="focus-sounds-header">
           <h3>Focus sounds</h3>
           <button
@@ -718,10 +742,11 @@ export default function FocusModePage({
                       type="button"
                       className="sound-tile-shuffle"
                       onClick={() => reshuffleTrack()}
-                      aria-label="Play a different variation"
+                      aria-label="Shuffle sound"
+                      title="Another track (S)"
                       tabIndex={showSoundsDrawer ? 0 : -1}
                     >
-                      Another
+                      Shuffle
                     </button>
                   )}
                 </div>

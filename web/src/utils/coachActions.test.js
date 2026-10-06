@@ -169,13 +169,13 @@ describe("findTaskByTitle", () => {
   it("resolves a title the Today snapshot shortened to start…end, and only when that picks one task", () => {
     const base = "Prepare CV and cover letter for the polymer engineer role, tailored for the interview at ";
     const long = [
-      { uuid: "a", title: `${base}Avery Denison`, isCompleted: false, isDeleted: false, isParked: false },
-      { uuid: "b", title: `${base}Paques Biomaterials`, isCompleted: false, isDeleted: false, isParked: false },
+      { uuid: "a", title: `${base}Northwind Lab`, isCompleted: false, isDeleted: false, isParked: false },
+      { uuid: "b", title: `${base}Contoso Biopolymers`, isCompleted: false, isDeleted: false, isParked: false },
     ];
-    expect(findTaskByTitle(long, "Prepare CV and cover letter for the polymer engineer role,…iew at Avery Denison")).toBe(long[0]);
-    expect(findTaskByTitle(long, "Prepare CV and cover letter for the polymer engineer role,…Paques Biomaterials")).toBe(long[1]);
-    expect(findTaskByTitle([...long, { ...long[0], uuid: "c" }], "Prepare CV and cover letter for the polymer engineer role,…iew at Avery Denison")).toBe(null);
-    expect(matchesUserIntent("COMPLETE_TASK", "I just finished the CV for Avery Denison", "Prepare CV and cover letter for the polymer engineer role,…iew at Avery Denison")).toBe(true);
+    expect(findTaskByTitle(long, "Prepare CV and cover letter for the polymer engineer role,…iew at Northwind Lab")).toBe(long[0]);
+    expect(findTaskByTitle(long, "Prepare CV and cover letter for the polymer engineer role,…Contoso Biopolymers")).toBe(long[1]);
+    expect(findTaskByTitle([...long, { ...long[0], uuid: "c" }], "Prepare CV and cover letter for the polymer engineer role,…iew at Northwind Lab")).toBe(null);
+    expect(matchesUserIntent("COMPLETE_TASK", "I just finished the CV for Northwind Lab", "Prepare CV and cover letter for the polymer engineer role,…iew at Northwind Lab")).toBe(true);
   });
 
   it("resolves a shortened title whose start already had a literal ellipsis", () => {

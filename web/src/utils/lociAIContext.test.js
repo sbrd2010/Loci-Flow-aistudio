@@ -855,11 +855,11 @@ describe("buildLociTodaySnapshotContext (every Coach request)", () => {
   });
   it("keeps the end of a long title, so two titles that differ late stay distinct", () => {
     const base = "Prepare CV and cover letter for the polymer engineer role, tailored for the interview at ";
-    const t = [{ uuid: "a1", title: `${base}Avery Denison`, horizonLevel: "today" }, { uuid: "b2", title: `${base}Paques Biomaterials`, horizonLevel: "today" }];
+    const t = [{ uuid: "a1", title: `${base}Northwind Lab`, horizonLevel: "today" }, { uuid: "b2", title: `${base}Contoso Biopolymers`, horizonLevel: "today" }];
     const out = buildLociTodaySnapshotContext(t, { dayStr: day });
-    expect(out).toContain("…iew at Avery Denison");
-    expect(out).toContain("…Paques Biomaterials");
-    expect(out).toContain("Paques Biomaterials");
+    expect(out).toContain("…iew at Northwind Lab");
+    expect(out).toContain("…Contoso Biopolymers");
+    expect(out).toContain("Contoso Biopolymers");
   });
   it("does not let a title found inside another word take a rescue slot", () => {
     const open = Array.from({ length: 15 }, (_, i) => ({ uuid: `o-${i}`, title: `Open task ${i}`, horizonLevel: "today", orderIndex: i }));

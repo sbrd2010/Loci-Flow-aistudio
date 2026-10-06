@@ -49,8 +49,10 @@ test("laptop: the app header stays with Today current; ‹ Today and Esc go back
   // Esc in the From picker is the picker's own; on the page it goes back.
   const from = page.locator(".dm-from-select");
   await expect(from).toBeVisible();
-  await from.focus();
+  await from.click();
+  await expect(page.getByRole("dialog", { name: "Start the route at" })).toBeVisible();
   await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Start the route at" })).toHaveCount(0);
   await expect(page.locator(".day-map-page")).toBeVisible();
   await page.locator(".dm-heading").click();
   await page.keyboard.press("Escape");
@@ -172,4 +174,59 @@ test("with every task done, Done so far today stays on the page", async ({ page 
   }
   await expect(page.locator(".dm-empty")).toBeVisible();
   await expect(page.getByRole("region", { name: "Done so far today" }).getByRole("button", { name: /^Done so far today · 3/ })).toBeVisible();
+});
+
+// Try-out 19: From is a small panel in place of the browser's long list —
+// Now, the next quarter-hours, or a typed time. With the day running to
+// 02:00, a time typed before now is after midnight; past the day's end it
+// is refused, and says why.
+test("From: tap Now or a quarter-hour, or type a time; after midnight works, past the day's end doesn't", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await page.clock.setFixedTime(new Date("2024-06-15T10:00:00"));
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".wall-title")).toBeVisible({ timeout: 15_000 });
+  await page.keyboard.press("m");
+  const from = page.locator(".dm-from-select");
+  await expect(from).toHaveText(/^10:00 \(now\)/);
+  await expect(page.locator("select")).toHaveCount(0);
+  await from.click();
+  const panel = page.getByRole("dialog", { name: "Start the route at" });
+  await expect(panel.getByRole("button", { name: /^Now · 10:00$/ })).toHaveAttribute("aria-pressed", "true");
+  await panel.getByRole("button", { name: "10:30", exact: true }).click();
+  await expect(panel).toHaveCount(0);
+  await expect(from).toHaveText(/^10:30/);
+  await expect(page.locator(".dm-stop .dm-time").first()).toHaveText("10:30");
+
+  await from.click();
+  const typed = panel.getByLabel("Route start, typed");
+  await typed.fill("1:30");
+  await typed.press("Enter");
+  await expect(from).toHaveText(/^01:30/);
+
+  await from.click();
+  await typed.fill("06:00");
+  await typed.press("Enter");
+  await expect(panel.getByRole("alert")).toHaveText("Pick a time from now until 02:00");
+  await panel.getByRole("button", { name: /^Now/ }).click();
+  await expect(from).toHaveText(/^10:00 \(now\)/);
+});
+
+// Codex review of #499: with the start at Now, the minute moving on doesn't
+// wipe a time being typed.
+test("From: a half-typed time survives the clock moving on", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.clock.install({ time: new Date("2024-06-15T10:00:00") });
+  await page.goto("/");
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".wall-title")).toBeVisible({ timeout: 15_000 });
+  await page.keyboard.press("m");
+  await page.locator(".dm-from-select").click();
+  const typed = page.getByRole("dialog", { name: "Start the route at" }).getByLabel("Route start, typed");
+  await typed.fill("11:");
+  await page.clock.runFor(61_000);
+  await expect(typed).toHaveValue("11:");
+  await typed.pressSequentially("15");
+  await typed.press("Enter");
+  await expect(page.locator(".dm-from-select")).toHaveText(/^11:15/);
 });

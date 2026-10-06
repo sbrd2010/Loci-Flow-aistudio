@@ -62,7 +62,7 @@ test("the mini window's ring and time follow its size, down to the time alone", 
 });
 
 // Shuffle is back (Rohan, 5 Oct): shown only while a sound with variations
-// plays, and it plays another variation of it, as the focus page's "Another".
+// plays, and it plays another variation of it, as the focus page's "Shuffle".
 test("the mini window's Shuffle shows with Rain, plays another rain, and hides with the sound off", async ({ page, context }) => {
   const overlay = page.locator(".focus-mode-overlay");
   const soundRow = overlay.getByRole("group", { name: "Sound" });

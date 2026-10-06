@@ -517,3 +517,8 @@
   .screen-content-plan .plan-horizons-view.has-detail,
   .screen-content-plan:has(.plan-horizons-view.has-detail) .plan-head { padding-right: max(0px, calc(496px - max(40px, (calc(100vw / var(--zoom, 1)) - 1480px) / 2))); }
 }
+
+/* Try-out 5/7: the title and a new step wrap and grow instead of scrolling
+   sideways (one line looks as before). */
+.detail-title-input { box-sizing: border-box; display: block; line-height: 1.25; }
+.detail-add-step-input { display: block; min-height: 0; padding: 9px 0; line-height: 1.45; }

@@ -312,6 +312,49 @@ test("Other left empty closes; an AI suggestion after a typed time is what shows
   await expect(dialog.getByLabel("Other time")).toHaveCount(0);
 });
 
+// Try-out 4/3: a long thought wraps and grows instead of scrolling sideways;
+// Shift+Enter adds a line, Enter saves. Typing is marked by the field's own
+// border, not a second box round it.
+test("a long thought wraps and grows, stays one line, and Enter saves", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await page.keyboard.press("t");
+  const dialog = page.getByRole("dialog", { name: "New thought" });
+  const field = dialog.locator(".add-thought-input");
+  await expect(field).toBeFocused();
+  expect(await field.evaluate(el => getComputedStyle(el).outlineStyle)).toBe("none");
+  const oneLine = (await field.boundingBox()).height;
+  await field.pressSequentially("Ask whether the fixed rate can be extended for another five years before the end of the month");
+  // A thought is kept as one line (Codex review of #499): Shift+Enter adds
+  // no line break; the text wraps instead.
+  await field.press("Shift+Enter");
+  await field.pressSequentially(" and the fee");
+  const grown = await field.evaluate(el => ({ h: el.getBoundingClientRect().height, sideways: el.scrollWidth > el.clientWidth, value: el.value }));
+  expect(grown.sideways).toBe(false);
+  expect(grown.h).toBeGreaterThan(oneLine + 20);
+  expect(grown.value).toContain("month and the fee");
+  expect(grown.value).not.toContain("\n");
+  await field.press("Enter");
+  await expect(page.locator(".add-card")).toHaveCount(0, { timeout: 5_000 });
+});
+
+// Try-out 10: the add sheet's reminder is the same picker — quick picks,
+// the day, a typed time — with no browser time field.
+test("Add task: a reminder from a quick pick, then a typed time", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await page.keyboard.press("n");
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await dialog.getByRole("button", { name: "More details" }).click();
+  await dialog.getByRole("button", { name: "Set a reminder" }).click();
+  await expect(dialog.locator('input[type="time"]')).toHaveCount(0);
+  await dialog.getByRole("group", { name: "Quick reminders" }).getByRole("button", { name: /^Tomorrow/ }).click();
+  await expect(dialog.getByRole("button", { name: /^Remind me:/ })).toHaveText("Remind me: Tomorrow 09:00");
+  const typed = dialog.getByLabel("Reminder time, typed");
+  await typed.fill("1730");
+  await typed.press("Enter");
+  await expect(dialog.getByRole("button", { name: /^Remind me:/ })).toHaveText("Remind me: Tomorrow 17:30");
+  await expect(page.locator(".add-card")).toHaveCount(1);
+});
+
 // Codex review of #498: ⌘↵ while typing in Other adds the task with the
 // time as typed, not the one chosen before.
 test("⌘↵ in Other adds the task with the typed time", async ({ page }) => {
@@ -337,4 +380,21 @@ test("⌘↵ in Other adds the task with the typed time", async ({ page }) => {
   await page.getByRole("button", { name: "Send" }).click();
   await expect.poll(() => bodies.some(b => b.includes("Water the balcony plants")), { timeout: 8_000 }).toBe(true);
   expect(bodies.find(b => b.includes("Water the balcony plants"))).toContain("Water the balcony plants (40min)");
+});
+
+// Codex review of #498 (the same fix): ⌘↵ in the reminder's typed time adds
+// the task with that time.
+test("⌘↵ in the reminder's typed time keeps that time", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await page.keyboard.press("n");
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await dialog.getByTestId("add-task-title").fill("Ring the plumber");
+  await dialog.getByRole("button", { name: "More details" }).click();
+  await dialog.getByRole("button", { name: "Set a reminder" }).click();
+  await dialog.getByRole("group", { name: "Quick reminders" }).getByRole("button", { name: /^Tomorrow/ }).click();
+  await dialog.getByLabel("Reminder time, typed").fill("1730");
+  await dialog.getByLabel("Reminder time, typed").press("Control+Enter");
+  await expect(page.locator(".add-card")).toHaveCount(0, { timeout: 5_000 });
+  const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { hasText: "Ring the plumber" });
+  await expect(row).toContainText("Tomorrow 17:30");
 });

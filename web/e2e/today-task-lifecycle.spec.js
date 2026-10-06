@@ -180,8 +180,8 @@ test("mobile reliability: Add Task accepts manual sub-steps from pasted bullets"
 
   // Editing a step in place (the pencil icon) rewrites its text without removing it.
   await page.getByRole("button", { name: "Edit step Compare flight prices" }).click();
-  await subStepsList.locator("input").fill("Compare flight and train prices");
-  await subStepsList.locator("input").press("Enter");
+  await subStepsList.locator(".add-step-edit").fill("Compare flight and train prices");
+  await subStepsList.locator(".add-step-edit").press("Enter");
   await expect(subStepsList).toContainText("Compare flight and train prices");
   await expect(subStepsList).not.toContainText("Compare flight prices");
 
@@ -216,7 +216,7 @@ test("mobile reliability: Add Task flushes an in-progress sub-step edit on submi
   // Start editing a step but submit the whole dialog (Save/Add Task button)
   // instead of the row-level ✓ or Enter — the pending edit must still land.
   await page.getByRole("button", { name: "Edit step Compare flight prices" }).click();
-  await subStepsList.locator("input").fill("Compare flight and train prices");
+  await subStepsList.locator(".add-step-edit").fill("Compare flight and train prices");
   await page.getByTestId("add-task-submit").click();
 
   await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });

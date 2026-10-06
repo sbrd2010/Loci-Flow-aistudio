@@ -167,9 +167,23 @@ test("More opens Reminder and Category, closed until asked", async ({ page }) =>
   const reminder = sheet(page).getByRole("button", { name: /^Reminder/ });
   await expect(reminder.locator(".detail-value")).toHaveText("None");
   await reminder.click();
-  await sheet(page).getByLabel("Reminder date").fill("2024-06-16");
-  await sheet(page).getByLabel("Reminder time").fill("09:30");
+  // Try-out 10/20: quick picks first, then the day and a typed time — no
+  // browser time picker.
+  await expect(sheet(page).locator('input[type="time"]')).toHaveCount(0);
+  const quick = sheet(page).getByRole("group", { name: "Quick reminders" });
+  await expect(quick.getByRole("button")).toHaveText([/^In 1 hour/, /^This evening 18:00$/, /^Tomorrow 09:00$/, /^Monday 09:00$/]);
+  await quick.getByRole("button", { name: /^Tomorrow/ }).click();
   await expect(reminder.locator(".detail-value")).not.toHaveText("None");
+  await expect(quick.getByRole("button", { name: /^Tomorrow/ })).toHaveAttribute("aria-pressed", "true");
+  await sheet(page).getByLabel("Reminder date").fill("2024-06-16");
+  const typed = sheet(page).getByLabel("Reminder time, typed");
+  await typed.fill("2:30pm");
+  await typed.press("Enter");
+  await expect(typed).toHaveValue("14:30");
+  await expect(reminder.locator(".detail-value")).toContainText("14:30");
+  await typed.fill("25:00");
+  await typed.press("Enter");
+  await expect(sheet(page).getByRole("alert")).toContainText("Type a time");
   await sheet(page).getByRole("button", { name: "No reminder" }).click();
   await expect(reminder.locator(".detail-value")).toHaveText("None");
 });
@@ -274,3 +288,20 @@ for (const [name, viewport] of [["phone", { width: 375, height: 812 }], ["laptop
     await expect.poll(() => stepValues(page)).toEqual(before.map((t, j) => (j === 1 ? "Read it slowly, twice" : t)));
   });
 }
+
+// Try-out 7/5: the title being edited wraps instead of scrolling sideways;
+// it stays one line (Shift+Enter adds nothing) and Enter saves it.
+test("the title wraps while edited, stays one line, and Enter saves it", async ({ page }) => {
+  await enterDemo(page);
+  await openFromDetails(page);
+  await sheet(page).locator(".detail-title").click();
+  const field = sheet(page).locator(".detail-title-input");
+  await field.fill("Ask whether the fixed rate can be extended for another five years");
+  await field.press("End");
+  await field.press("Shift+Enter");
+  await field.pressSequentially(" first");
+  expect(await field.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(false);
+  expect(await field.evaluate(el => el.clientHeight)).toBeGreaterThan(50);
+  await field.press("Enter");
+  await expect(sheet(page).locator(".detail-title")).toHaveText("Ask whether the fixed rate can be extended for another five years first");
+});

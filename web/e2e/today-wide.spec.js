@@ -382,3 +382,19 @@ test("no one thing, only set-time things open: the wall says so", async ({ page 
   await expect(page.locator(".wall-empty-title")).toHaveText("Only set-time things left");
   await expect(page.locator(".wall-pick-all")).toHaveText("All 1 task");
 });
+
+// Try-out 19: the From panel opens in full over Today's Day map view; the
+// scrolling column doesn't cut it off.
+test("Today's Day map view: the From panel opens whole, and a quarter-hour moves the route", async ({ page }) => {
+  await enterDemo(page, { width: 1680, height: 1000 });
+  await routeReady(page);
+  await column(page).locator(".dm-from-select").click();
+  const panel = page.getByRole("dialog", { name: "Start the route at" });
+  const set = panel.getByRole("button", { name: "Set" });
+  await expect(set).toBeVisible();
+  // Nothing covers it: the topmost element at its centre is the button.
+  expect(await set.evaluate(el => { const r = el.getBoundingClientRect(); return document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2) === el; })).toBe(true);
+  await panel.getByRole("button", { name: /^\d\d:\d\d$/ }).first().click();
+  await expect(panel).toHaveCount(0);
+  await expect(column(page).locator(".dm-from-select")).not.toContainText("(now)");
+});

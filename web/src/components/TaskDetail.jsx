@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
+import GrowTextarea from "./ui/GrowTextarea";
+import ReminderPicker from "./ui/ReminderPicker";
 import EstimatePicker from "./EstimatePicker";
 import { formatEstimate } from "../utils/estimates";
 import { IconPin, IconPlus, IconX, IconChevronRight, IconChevronDown, IconCheck } from "./ui/icons";
@@ -206,8 +208,6 @@ export default function TaskDetail({
   // while it is open, as the full editor does, so it can be chosen back.
   const [hadP4] = useState(task.priority === "P4");
   const priorities = ["P1", "P2", "P3", ...(hadP4 ? ["P4"] : [])];
-  // Likewise an estimate the chips don't carry (25m, the app's default, or
-  // one set in the full editor) stays on offer, in order.
 
   const isHorizon = typeof onMoveToToday === "function";
   // Opened from a Day map stop: its footer fixes the stop's time.
@@ -265,20 +265,23 @@ export default function TaskDetail({
           </button>
           <div className="detail-title-wrap">
             {editingTitle ? (
-              <input
+              <GrowTextarea
                 ref={titleInputRef}
                 className="detail-title-input"
                 value={title}
                 aria-label="Title"
                 maxLength={1000}
+                maxRows={5}
                 onChange={e => setTitle(e.target.value)}
                 onBlur={finishTitle}
+                // Enter and Escape hand focus back to the title, so the
+                // sheet's keys (Esc to close) still reach it.
+                onEnter={() => { finishTitle(); requestAnimationFrame(() => headingRef.current?.focus({ preventScroll: true })); }}
                 onKeyDown={e => {
-                  // Enter and Escape hand focus back to the title, so the
-                  // sheet's keys (Esc to close) still reach it.
-                  const refocus = () => requestAnimationFrame(() => headingRef.current?.focus({ preventScroll: true }));
-                  if (e.key === "Enter") { e.preventDefault(); finishTitle(); refocus(); }
-                  if (e.key === "Escape") { e.stopPropagation(); setTitle(task.title); setEditingTitle(false); refocus(); }
+                  if (e.key === "Escape") {
+                    e.stopPropagation(); setTitle(task.title); setEditingTitle(false);
+                    requestAnimationFrame(() => headingRef.current?.focus({ preventScroll: true }));
+                  }
                 }}
               />
             ) : (
@@ -447,14 +450,15 @@ export default function TaskDetail({
           )}
           <div className="detail-add-step">
             <IconPlus size={18} />
-            <input
+            <GrowTextarea
               className="detail-add-step-input"
               value={newStep}
               placeholder="Add a step…"
               aria-label="Add a step"
               maxLength={300}
+              maxRows={4}
               onChange={e => setNewStep(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addStep(); } }}
+              onEnter={() => addStep()}
               onBlur={() => addStep()}
             />
             <button type="button" className="detail-suggest" onClick={askForSteps} disabled={!!suggested?.loading}>
@@ -478,10 +482,13 @@ export default function TaskDetail({
               </button>
               {picker === "reminder" && (
                 <div className="detail-options detail-reminder">
-                  <input type="date" className="detail-input" aria-label="Reminder date" value={remind.date} min={localDateTime(Date.now()).date}
-                    onChange={e => saveReminder({ ...remind, date: e.target.value })} />
-                  <input type="time" className="detail-input" aria-label="Reminder time" value={remind.time}
-                    onChange={e => saveReminder({ ...remind, time: e.target.value })} />
+                  <ReminderPicker
+                    idPrefix={`detail-reminder-${task.uuid || task.id}`}
+                    date={remind.date}
+                    time={remind.time}
+                    active={!!task.reminderAt}
+                    onChange={saveReminder}
+                  />
                   {task.reminderAt ? (
                     <button type="button" className="detail-text-btn" onClick={() => { setPicker(null); onPatch({ reminderAt: null }); }}>No reminder</button>
                   ) : (

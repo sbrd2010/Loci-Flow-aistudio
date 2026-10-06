@@ -27,7 +27,8 @@ test("laptop: the controls sit in the right column as text: From and Fixed time,
   const route = await page.locator(".dm-route-wrap").boundingBox();
   const box = await controls.boundingBox();
   expect(box.x).toBeGreaterThanOrEqual(route.x + route.width);
-  await expect(controls.getByRole("button")).toHaveText(["Fixed time"]);
+  // From is a button that opens its time panel (try-out 19).
+  await expect(controls.getByRole("button")).toHaveText([/^\d\d:\d\d \(now\)/, "Fixed time"]);
   await expect(page.getByRole("button", { name: /Auto-fill|Clear route/ })).toHaveCount(0);
   await expect(page.getByRole("region", { name: /^Unscheduled/ })).toHaveCount(0);
   // Every open Today task is a stop; the NOW stop keeps its Start focus.

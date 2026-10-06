@@ -466,7 +466,7 @@ const SNAPSHOT_MAX_NAMED_EXTRA = 3;
 const oneLine = text => String(text || "").replace(/\s+/g, " ").trim();
 
 // A long title keeps its start and its end: two tasks that differ only late
-// in the title ("… Avery Denison" / "… Paques") must not look the same.
+// in the title ("… Northwind Lab" / "… Contoso") must not look the same.
 const SNAPSHOT_TITLE_TAIL = 20;
 function snapshotTitle(title) {
   // The snapshot's own "…" marks the gap; a literal one in the title is

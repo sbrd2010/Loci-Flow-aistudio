@@ -349,13 +349,20 @@
   color: var(--gold-label);
 }
 
-.add-card button:focus-visible,
-.add-card select:focus-visible,
-.add-card input:focus-visible,
-.add-card textarea:focus-visible {
+.add-card button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+/* Try-out 3: a field being typed in is marked by its own border turning
+   green (2px), not a second box drawn around it. */
+.add-card select:focus-visible,
+.add-card input:focus-visible,
+.add-card textarea:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 0.5px var(--accent);
+}
+.add-card .add-thought-input:focus-visible { box-shadow: none; border-bottom-width: 2px; }
 
 /* Laptop and wide tablet: a 520px dialog, ⌘↵ shown beside the button. */
 @media (min-width: 840px) {
@@ -428,3 +435,9 @@
 @media (max-width: 839px) {
   .add-seg-btn { min-height: 48px; }
 }
+
+/* Try-out 4/5: the thought and a step being edited wrap and grow (one
+   line looks as before; GrowTextarea sets the height). */
+.add-thought-input { box-sizing: border-box; display: block; width: 100%; min-height: 0; padding: 14px 0; line-height: 1.4; }
+.add-step-edit { min-height: 0; padding: 9px 12px; line-height: 1.4; }
+.add-step:has(.add-step-edit) { align-items: flex-start; }

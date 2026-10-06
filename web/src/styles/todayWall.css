@@ -64,7 +64,7 @@
   color: var(--ink);
   overflow-wrap: anywhere;
 }
-/* Q49: "Target · 3 job apply + PRINCE2": the label in the kicker's voice,
+/* Q49: "Target · 2 applications + 1 study hour": the label in the kicker's voice,
    the text at body size, muted, one line. */
 .wall-goal-target {
   overflow: hidden;
