@@ -86,6 +86,19 @@ test("the mini window's Shuffle shows with Rain, plays another rain, and hides w
   const before = rainTracks.at(-1);
   await shuffle.click();
   await expect.poll(() => rainTracks.at(-1)).not.toBe(before);
+  // PART11 (59b): text buttons 40 tall; "Shuffle sound", "Another track (S)";
+  // S shuffles too; under 340 wide Shuffle goes, the rest stay.
+  await expect(shuffle).toHaveAttribute("aria-label", "Shuffle sound");
+  await expect(shuffle).toHaveAttribute("title", "Another track (S)");
+  expect(await pip.evaluate(() => [...document.querySelectorAll("#pip-btns button")].filter(b => b.offsetParent).every(b => Math.round(b.getBoundingClientRect().height) === 40))).toBe(true);
+  const afterClick = rainTracks.at(-1);
+  await pip.keyboard.press("s");
+  await expect.poll(() => rainTracks.at(-1)).not.toBe(afterClick);
+  await pip.setViewportSize({ width: 339, height: 320 });
+  await expect(shuffle).toBeHidden();
+  expect(await measure(pip)).toMatchObject({ buttons: 4, fits: true });
+  await pip.setViewportSize({ width: 360, height: 320 });
+  await expect(shuffle).toBeVisible();
   // Still Rain: Shuffle stays within the sound that's on.
   await expect(soundRow.getByRole("button", { name: /Rain/ })).toHaveAttribute("aria-pressed", "true");
 

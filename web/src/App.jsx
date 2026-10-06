@@ -88,15 +88,9 @@ export default function App() {
   const [roadmapView, setRoadmapView] = useState("horizons");
   // The front whose page (52f–g) is open in Plan's Fronts; null is the list.
   const [planFrontId, setPlanFrontId] = useState(null);
-  // ≥1600 (57a): Horizons and Fronts show together, so there is no switch
-  // and Fronts' view is Horizons with the Fronts column.
-  const [planWide, setPlanWide] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1600);
-  useEffect(() => {
-    const update = () => setPlanWide(window.innerWidth >= 1600);
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, []);
-  const planView = planWide && roadmapView === "plan" ? "horizons" : roadmapView;
+  // Plan 76a (Rohan, 6 Oct): the 24″ shows Horizons and Fronts by the switch,
+  // as the laptop does; 57a's Fronts column beside the list is gone.
+  const planView = roadmapView;
   const [editHorizonsOpen, setEditHorizonsOpen] = useState(false);
   // Feeling scattered has three doors (Today, Day map, Plan); its back link
   // returns through the one it came in by.
@@ -1564,8 +1558,6 @@ export default function App() {
             uid={activityUid}
             writeActivityEvents={writeActivityEvents}
             focusTimer={focusTimer}
-            frontsColumn={planWide ? <PlanTab {...planTabProps} wide /> : null}
-            frontOpen={planWide && !!planFrontId}
             onOpenReview={openReview}
             onCloseFront={() => setPlanFrontId(null)}
           />

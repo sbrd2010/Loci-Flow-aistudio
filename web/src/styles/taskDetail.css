@@ -492,17 +492,18 @@
 }
 .detail-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* Plan (57, Q46): the drawer never covers the open list.
-   1024–1599: it opens on the left over the ladder, as wide as the ladder
-   column reaches (the page's margin, Plan's 48, the ladder's 320, and 16 of
-   the 36 gap), so the list stays whole and doesn't move.
-   From 1600: it takes the Fronts column's place (380, inside Plan's 48 at
-   the right of the 1760 cap), as it takes the Day map column's on Today. */
+/* Plan (57, Q46): the drawer never covers the open list. It opens on the
+   left over the ladder, as wide as the ladder column reaches, so the list
+   stays whole and doesn't move.
+   1024–1599 (76c): the page's margin, Plan's 48, the ladder's 340 and 16 of
+   the 48 gap. From 1600 (76a, no Fronts column): the margin to the 1480 cap
+   (at least 40), the ladder's 440 and 24 of the 56 gap. The list's column
+   starts 32 into the gap (its drag grips' gutter), so the drawer stops there. */
 @media (min-width: 1024px) and (max-width: 1599px) {
   .plan-horizons-view .task-detail.is-drawer {
     left: 0;
     right: auto;
-    width: calc(max(48px, (calc(100vw / var(--zoom, 1)) - 1200px) / 2) + 384px);
+    width: calc(max(48px, (calc(100vw / var(--zoom, 1)) - 1200px) / 2) + 404px);
     border-left: 0;
     border-right: 1px solid var(--line);
     box-shadow: 12px 0 30px rgba(15, 31, 22, 0.08);
@@ -510,8 +511,11 @@
 }
 @media (min-width: 1600px) {
   .plan-horizons-view .task-detail.is-drawer {
-    left: calc(calc(100vw / var(--zoom, 1)) - max(48px, (calc(100vw / var(--zoom, 1)) - 1760px) / 2) - 428px);
+    left: 0;
     right: auto;
-    width: 380px;
+    width: calc(max(40px, (calc(100vw / var(--zoom, 1)) - 1480px) / 2) + 464px);
+    border-left: 0;
+    border-right: 1px solid var(--line);
+    box-shadow: 12px 0 30px rgba(15, 31, 22, 0.08);
   }
 }
