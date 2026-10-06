@@ -7,11 +7,11 @@ import { test, expect } from "@playwright/test";
 // rather than settling for unit tests. Each one fails if the element it names
 // is removed.
 
-async function openSession(page) {
+async function openSession(page, viewport = { width: 375, height: 812 }) {
   await page.addInitScript(() => {
     try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ }
   });
-  await page.setViewportSize({ width: 375, height: 812 });
+  await page.setViewportSize(viewport);
   // install(), not setFixedTime(): these specs need the countdown to actually
   // advance, and a fixed clock pins Date.now() so the interval never moves.
   // The timer is anchored to wall-clock time via a deadline, so both the
@@ -316,3 +316,24 @@ test("the quick Sound row picks Rain and Off, and remembers the last sound used"
   await row.getByRole("button", { name: "Off" }).click();
   await expect(row.getByRole("button", { name: "Off" })).toHaveAttribute("aria-pressed", "true");
 });
+
+// Try-out 37: on a computer All sounds… is a small panel by its link, the
+// whole list and the volume in view; a click outside closes it. On a phone
+// it stays the sheet along the bottom.
+for (const [w, h] of [[1280, 720], [1903, 940]]) {
+  test(`${w}×${h}: All sounds… is a 420 panel with the list and the volume in view`, async ({ page }) => {
+    const overlay = await openSession(page, { width: w, height: h });
+    await overlay.getByRole("button", { name: "Open sounds menu" }).click();
+    const drawer = page.locator(".focus-sounds-drawer");
+    await expect(drawer).toHaveClass(/open/);
+    const fit = await drawer.evaluate(el => {
+      const z = document.documentElement.currentCSSZoom || 1;
+      const r = el.getBoundingClientRect();
+      const vol = el.querySelector(".focus-sounds-volume-slider").getBoundingClientRect();
+      return { width: Math.round(r.width / z), inside: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight, scrolls: el.scrollHeight > el.clientHeight + 1, volIn: vol.bottom <= r.bottom };
+    });
+    expect(fit).toEqual({ width: 420, inside: true, scrolls: false, volIn: true });
+    await page.mouse.click(5, h - 5);
+    await expect(drawer).not.toHaveClass(/open/);
+  });
+}
