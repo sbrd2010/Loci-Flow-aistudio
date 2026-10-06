@@ -180,9 +180,17 @@
     flex-direction: column;
     margin: 0;
     padding: 18px 0 0 28px;
+    /* Try-out 29: Up next stands apart from the task, as in the original
+       app: the lighter surface, from the header to the footer and out to
+       the window's right edge, a 1px edge on the left. A panel, not a
+       floating card. The border image paints the panel and reaches the
+       edge with its outset: it clips nothing (a clip-path here cut off
+       the Fix a time sheet opened from the Day map view) and adds no
+       overflow. */
     background: none;
     border: 0;
-    border-left: 1px solid var(--line);
+    border-left: 1px solid transparent;
+    border-image: linear-gradient(to right, var(--line) 1px, var(--upnext-surface) 1px) fill 0 / 0 / 0 100vmax 0 0;
     border-radius: 0;
     box-shadow: none;
     overflow: hidden;
@@ -406,3 +414,8 @@
 .screen-content-today .today-list .task-title-text { font-weight: 500; color: var(--ink); }
 .screen-content-today .today-list .task-row.completed .task-title-text,
 .screen-content-today .today-list .today-row-over .task-title-text { color: var(--ink-2); }
+
+/* Try-out 29: Up next's panel — white in light (the surface token is too
+   close to the page to read as a panel), the surface tone in dark. */
+.screen-content-today { --upnext-surface: #FFFFFF; }
+html[data-theme="dark"] .screen-content-today { --upnext-surface: var(--surface); }
