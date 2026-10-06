@@ -351,3 +351,47 @@ test("Add task: a reminder from a quick pick, then a typed time", async ({ page 
   await expect(dialog.getByRole("button", { name: /^Remind me:/ })).toHaveText("Remind me: Tomorrow 17:30");
   await expect(page.locator(".add-card")).toHaveCount(1);
 });
+
+// Codex review of #498: ⌘↵ while typing in Other adds the task with the
+// time as typed, not the one chosen before.
+test("⌘↵ in Other adds the task with the typed time", async ({ page }) => {
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key"); } catch { /* private mode */ }
+  });
+  const bodies = [];
+  await page.route("https://api.groq.com/**", (route) => {
+    bodies.push(route.request().postData() || "");
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content: "One small step." } }] }) });
+  });
+  await enterDemo(page, { width: 1280, height: 800 });
+  await page.keyboard.press("n");
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await dialog.getByTestId("add-task-title").fill("Water the balcony plants");
+  await dialog.getByRole("button", { name: "30m", exact: true }).click();
+  await dialog.getByRole("button", { name: "Other", exact: true }).click();
+  await dialog.getByLabel("Other time").fill("40");
+  await dialog.getByLabel("Other time").press("Control+Enter");
+  await expect(page.locator(".add-card")).toHaveCount(0, { timeout: 5_000 });
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
+  await page.locator(".coach-composer-input").fill("what are my tasks");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect.poll(() => bodies.some(b => b.includes("Water the balcony plants")), { timeout: 8_000 }).toBe(true);
+  expect(bodies.find(b => b.includes("Water the balcony plants"))).toContain("Water the balcony plants (40min)");
+});
+
+// Codex review of #498 (the same fix): ⌘↵ in the reminder's typed time adds
+// the task with that time.
+test("⌘↵ in the reminder's typed time keeps that time", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await page.keyboard.press("n");
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await dialog.getByTestId("add-task-title").fill("Ring the plumber");
+  await dialog.getByRole("button", { name: "More details" }).click();
+  await dialog.getByRole("button", { name: "Set a reminder" }).click();
+  await dialog.getByRole("group", { name: "Quick reminders" }).getByRole("button", { name: /^Tomorrow/ }).click();
+  await dialog.getByLabel("Reminder time, typed").fill("1730");
+  await dialog.getByLabel("Reminder time, typed").press("Control+Enter");
+  await expect(page.locator(".add-card")).toHaveCount(0, { timeout: 5_000 });
+  const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { hasText: "Ring the plumber" });
+  await expect(row).toContainText("Tomorrow 17:30");
+});

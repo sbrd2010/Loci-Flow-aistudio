@@ -23,13 +23,14 @@ export default function TimePicker({
   useEffect(() => { setDraft(value == null ? "" : formatHHMM(value)); setError(""); }, [value]);
 
   const commit = () => {
-    if (!draft.trim()) return;
+    if (!draft.trim()) return false;
     const typed = parseClock(draft);
     const next = typed == null ? null : normalize(typed);
-    if (next == null) { setError(hint); return; }
+    if (next == null) { setError(hint); return false; }
     setError("");
     setDraft(formatHHMM(next));
     if (next !== value) onChange(next);
+    return true;
   };
 
   return (
@@ -66,6 +67,15 @@ export default function TimePicker({
           onBlur={commit}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.metaKey && !e.ctrlKey) { e.preventDefault(); commit(); }
+            // ⌘↵ (Add task's shortcut) takes the typed time first, then
+            // submits once it's in, as the time chips' Other does (Codex
+            // review of #498); a time that doesn't read stops it.
+            else if (e.key === "Enter" && draft.trim()) {
+              e.preventDefault();
+              e.stopPropagation();
+              const form = e.currentTarget.form;
+              if (commit() && form) setTimeout(() => form.requestSubmit(), 0);
+            }
           }}
         />
         <button type="button" className="tp-set" onMouseDown={(e) => e.preventDefault()} onClick={commit}>Set</button>
