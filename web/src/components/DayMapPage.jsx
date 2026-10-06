@@ -768,7 +768,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
                 <p className="dm-tomorrow-note">{tomorrowTasks.length} {tomorrowTasks.length === 1 ? "task now starts" : "tasks now start"} tomorrow.</p>
               )}
               {!drawerViewport && openToday.length > 0 && (
-                <MinimumDay state={minDay.state} ids={minDay.ids} tasks={openToday} timeOf={timeOf} onConfirm={confirmMin} />
+                <MinimumDay state={minDay.state} ids={minDay.ids} unfit={minDay.unfit} tasks={openToday} timeOf={timeOf} onConfirm={confirmMin} />
               )}
               {(isOver || plan.overBy > 0) && onHelpChoose && (
                 <button type="button" className="dm-text-btn is-alert dm-help" onClick={onHelpChoose}>Help me choose</button>
@@ -779,7 +779,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
                 above the nav (52d). */}
             <div className="dm-side" style={navHeight ? { "--dm-nav-h": `${navHeight}px` } : undefined}>
               {drawerViewport && openToday.length > 0 && (
-                <MinimumDay state={minDay.state} ids={minDay.ids} tasks={openToday} timeOf={timeOf} onConfirm={confirmMin} />
+                <MinimumDay state={minDay.state} ids={minDay.ids} unfit={minDay.unfit} tasks={openToday} timeOf={timeOf} onConfirm={confirmMin} />
               )}
               {drawerViewport && controls}
               {movable.length > 0 && (drawerViewport ? (

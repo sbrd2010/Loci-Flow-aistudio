@@ -45,6 +45,32 @@ test("a reply over 4 lines is cut, with Show all in its name row", async ({ page
   await expect(reply.locator(".coach-reply")).toHaveClass(/is-clamped/);
 });
 
+// Loopcheck #495: the cut is exactly four of the text's lines at every size
+// (the clamp's height in the text's line height),
+// and Show all brings the reply's head into view rather than leaving the chat
+// pinned to its bottom.
+for (const [w, h] of [[1903, 940], [1280, 720], [412, 760]]) {
+  test(`a cut reply shows exactly four lines at ${w}×${h}`, async ({ page }) => {
+    await openCoach(page, w, h);
+    const lines = await page.locator(".coach-msg.is-coach").last().locator(".coach-reply.is-clamped").evaluate(el => {
+      const lh = parseFloat(getComputedStyle(el.querySelector(".coach-md")).lineHeight);
+      return parseFloat(getComputedStyle(el).maxHeight) / lh;
+    });
+    expect(lines).toBeGreaterThan(3.95);
+    expect(lines).toBeLessThan(4.05);
+  });
+}
+
+test("Show all on an earlier reply keeps its head in view", async ({ page }) => {
+  await openCoach(page, 412, 760);
+  const first = page.locator(".coach-msg.is-coach").first();
+  await first.getByRole("button", { name: "Show all" }).click();
+  const less = first.getByRole("button", { name: "Show less" });
+  await expect(less).toBeInViewport();
+  await page.waitForTimeout(300);
+  await expect(less).toBeInViewport();
+});
+
 // 73a: the best-weekday chart is gone; its finding is the first sentence of
 // the brief's Patterns, and the brief comes before the numbers.
 test("Review: the brief comes first, and Patterns opens with the best weekday", async ({ page }) => {

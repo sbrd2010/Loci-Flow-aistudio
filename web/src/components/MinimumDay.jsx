@@ -6,7 +6,7 @@ import { MINIMUM_DAY_SIZE } from "../utils/minimumDay";
 // line, with Change. Change lists today's open tasks with checkboxes, three
 // at most (fewer is fine). `tasks` is today's open tasks in today's order;
 // `timeOf(id)` is a row's time on the route ("NOW", "14:15") or "".
-export default function MinimumDay({ state, ids, tasks, timeOf, onConfirm }) {
+export default function MinimumDay({ state, ids, tasks, timeOf, onConfirm, unfit = 0 }) {
   const [editing, setEditing] = useState(null); // ids being picked, or null
   const byId = new Map(tasks.map(t => [String(t.uuid || t.id), t]));
   const picked = ids.map(id => byId.get(id)).filter(Boolean);
@@ -54,7 +54,7 @@ export default function MinimumDay({ state, ids, tasks, timeOf, onConfirm }) {
     <section className="dm-min" aria-label="Minimum day">
       <div className="dm-min-head">
         {/* Turn 76 (d): N is how many fit, 1 to 3. */}
-        <h2 className="dm-min-title">If today goes wrong, {picked.length === 1 ? "do this one" : `do these ${picked.length || MINIMUM_DAY_SIZE}`}</h2>
+        <h2 className="dm-min-title">{picked.length === 0 ? "If today goes wrong" : `If today goes wrong, ${picked.length === 1 ? "do this one" : `do these ${picked.length}`}`}</h2>
         <span className="dm-min-kicker">SUGGESTED</span>
       </div>
       {picked.length > 0 ? (
@@ -70,7 +70,7 @@ export default function MinimumDay({ state, ids, tasks, timeOf, onConfirm }) {
           })}
         </ul>
       ) : (
-        <p className="dm-min-empty">No must-dos or goal tasks today. Pick up to three.</p>
+        <p className="dm-min-empty">{unfit > 0 ? "Your must-dos and goal tasks don’t fit before the day ends. Pick up to three." : "No must-dos or goal tasks today. Pick up to three."}</p>
       )}
       <div className="dm-min-actions">
         {picked.length > 0 && <button type="button" className="dm-btn-outline" onClick={() => onConfirm(ids)}>Confirm</button>}

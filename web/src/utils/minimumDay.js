@@ -39,7 +39,10 @@ export function minimumDay({ config, todayStr, ordered, isGoal, fits }) {
     const set = new Set(confirmed);
     return { state: "confirmed", ids: ordered.map(idOf).filter(id => set.has(id)) };
   }
-  return { state: "suggested", ids: suggestMinimumDay(ordered, isGoal, fits) };
+  // The must-dos and goal tasks left out because they don't fit, so an empty
+  // suggestion can say why.
+  const unfit = ordered.filter(t => !isEventTask(t) && (t.isMVD || isGoal(t)) && fits && !fits(t)).length;
+  return { state: "suggested", ids: suggestMinimumDay(ordered, isGoal, fits), unfit };
 }
 
 // The config patch that confirms `ids` for today (at most three).

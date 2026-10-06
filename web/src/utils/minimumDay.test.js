@@ -23,7 +23,13 @@ describe("minimum day (56a–b, 57b answer 6)", () => {
   it("suggests only tasks that fit before the day ends, so maybe fewer than three", () => {
     const fits = (t) => t.uuid !== "hale" && t.uuid !== "cv";
     expect(suggestMinimumDay(ordered, isGoal, fits)).toEqual(["pharm", "prince"]);
-    expect(minimumDay({ config: {}, todayStr: DAY, ordered, isGoal, fits })).toEqual({ state: "suggested", ids: ["pharm", "prince"] });
+    expect(minimumDay({ config: {}, todayStr: DAY, ordered, isGoal, fits })).toEqual({ state: "suggested", ids: ["pharm", "prince"], unfit: 2 });
+  });
+
+  // Loopcheck #495: with none that fit, the page says why rather than "do these 3".
+  it("counts the must-dos and goal tasks left out because none fit", () => {
+    expect(minimumDay({ config: {}, todayStr: DAY, ordered, isGoal, fits: () => false })).toEqual({ state: "suggested", ids: [], unfit: 4 });
+    expect(minimumDay({ config: {}, todayStr: DAY, ordered: [task("dad")], isGoal, fits: () => false })).toEqual({ state: "suggested", ids: [], unfit: 0 });
   });
 
   it("keeps a confirmed pick even if it no longer fits: it's your choice", () => {
@@ -38,7 +44,7 @@ describe("minimum day (56a–b, 57b answer 6)", () => {
 
   it("resets daily: yesterday's pick is a suggestion again", () => {
     const config = confirmMinimumDay({}, "2026-09-27", ["dad"]);
-    expect(minimumDay({ config, todayStr: DAY, ordered, isGoal })).toEqual({ state: "suggested", ids: ["pharm", "hale", "cv"] });
+    expect(minimumDay({ config, todayStr: DAY, ordered, isGoal })).toEqual({ state: "suggested", ids: ["pharm", "hale", "cv"], unfit: 0 });
   });
 
   it("keeps at most three when confirming", () => {

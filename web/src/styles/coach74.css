@@ -89,8 +89,10 @@
   .coach-msg.is-you .coach-msg-text { padding: 12px 18px; font-size: 16px; line-height: 1.5; }
   .coach-msg.is-coach { max-width: 100%; }
   .coach-msg.is-coach .coach-msg-kicker { font-size: 14px; }
-  .coach-msg.is-coach .coach-msg-text.coach-md { font-size: 17px; line-height: 1.6; }
-  .coach-reply.is-clamped { line-height: 1.6; }
+  /* .coach-reply carries the text's size too: its 4lh clamp is measured
+     in its own font, so it cuts at exactly four of the text's lines. */
+  .coach-msg.is-coach .coach-msg-text.coach-md,
+  .coach-msg.is-coach .coach-reply { font-size: 17px; line-height: 1.6; }
   .coach-composer-wrap { padding: 16px 0 20px; }
   .chat-input-row.coach-composer { min-height: 60px; justify-content: center; padding: 8px 8px 8px 18px; }
   .coach-composer-input { font-family: var(--font-serif); font-size: 17px; }
@@ -108,7 +110,7 @@
   .coach-chat-col .chat-window { padding-bottom: 4px; }
   .coach-msg.is-you .coach-msg-text { padding: 10px 16px; font-size: 15px; line-height: 1.45; }
   .coach-msg.is-coach .coach-msg-text.coach-md,
-  .coach-reply.is-clamped { font-size: 16px; line-height: 1.55; }
+  .coach-msg.is-coach .coach-reply { font-size: 16px; line-height: 1.55; }
   .coach-composer-wrap { padding: 10px 0 12px; }
   .chat-input-row.coach-composer { min-height: 52px; padding: 4px 4px 4px 16px; }
 }
@@ -135,7 +137,8 @@
   .coach-msg.is-coach { max-width: 100%; align-self: stretch; }
   .coach-msg.is-you { max-width: 82%; }
   .coach-msg.is-you .coach-msg-text { font-size: 15px; line-height: 1.45; }
-  .coach-msg.is-coach .coach-msg-text.coach-md { font-size: 15.5px; line-height: 1.55; }
+  .coach-msg.is-coach .coach-msg-text.coach-md,
+  .coach-msg.is-coach .coach-reply { font-size: 15.5px; line-height: 1.55; }
   .coach-msg .coach-task-chips,
   .coach-msg .coach-prompt-chips { flex-direction: row; }
   .coach-msg .coach-task-chip,
