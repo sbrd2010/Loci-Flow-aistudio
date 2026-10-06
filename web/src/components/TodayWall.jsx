@@ -496,9 +496,6 @@ export default function TodayWall({
         {clamped && onOpenTask && (
           <button type="button" className="wall-full-title" onClick={onOpenTask}>Full title and details</button>
         )}
-        {/* "Details ›" (52a, 57b answer 15): touch has no hover, so the
-            title's sheet gets a visible way in — at the end of the step
-            line, or under the title when there is no step. */}
         {/* The next step is a checkbox (53, 57b answer 13): ticking it moves
             on to the one after. */}
         {nextStep ? (
@@ -513,16 +510,11 @@ export default function TodayWall({
             />
             <p className="wall-first-step-text">
               <span className="wall-first-step-label">Next step<span className="wall-first-step-dash"> — </span></span><LinkifyText text={nextStep.text} />
-              {onOpenTask && <>{" "}<button type="button" className="wall-details" onClick={onOpenTask}>Details ›</button></>}
             </p>
             {/* 72: where it is in the steps, "1 / 4". */}
             <span className="wall-step-count" aria-hidden="true">{nextIndex + 1} / {steps.length}</span>
           </div>
-        ) : onOpenTask && (
-          <p className="wall-details-line" data-flip="step">
-            <button type="button" className="wall-details" onClick={onOpenTask}>Details ›</button>
-          </p>
-        )}
+        ) : null}
 
         {/* 72: Start, Mark done and Split it share one row from 840px. */}
         <div className="wall-buttons">

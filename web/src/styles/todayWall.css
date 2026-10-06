@@ -183,26 +183,6 @@
   font-weight: 800;
   color: var(--accent);
 }
-.wall-details-line { margin: 0; }
-/* "Details ›" (52a): 15px/700 --ink-2, a 44px hit area. */
-.wall-details {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  margin: -12px 0;
-  padding: 0 4px;
-  font: inherit;
-  font-size: 0.9375rem;
-  font-weight: 700;
-  color: var(--ink-2);
-  vertical-align: middle;
-  background: none;
-  border: 0;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.wall-details:hover { color: var(--ink); }
-.wall-details:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Start and its length chooser (53e): one split button. */
 .wall-start {
@@ -1114,9 +1094,7 @@
   /* Not on the phone in any state: Rescue's "Too much going on" covers it. */
   .wall-link.is-scattered { display: none; }
   .has-quiet .wall-actions,
-  .has-quiet .wall-foot > .wall-links,
-  .has-quiet .wall-details,
-  .has-quiet .wall-details-line { display: none; }
+  .has-quiet .wall-foot > .wall-links { display: none; }
   .wall-quiet {
     display: flex;
     align-items: center;
@@ -1253,7 +1231,6 @@
 
   .wall-kicker-meta,
   .wall-first-step-label,
-  .wall-first-step .wall-details,
   .wall-start-helper,
   .wall-daymap,
   .wall-link.is-scattered { display: none; }
