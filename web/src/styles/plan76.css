@@ -1,0 +1,159 @@
+/* Plan 76 (PART12, turn 77): a readable runway and horizon cards. Only these
+   two change; the open list, the head and the switch stay as built. Loaded
+   after plan.css. */
+.plan-horizons-view {
+  --rw-track: #c9d0c6;
+  --rung-fill: #fbfaf5;
+  --rung-edge: #858b86;
+  --rung-hover: #eef3ef;
+  --rung-open: #e0ece3;
+  --rung-open-edge: var(--accent);
+  --rung-ends: #3e5044;
+  --rung-left: var(--ink);
+  --rung-red: #9a3b26;
+}
+html[data-theme="dark"] .plan-horizons-view {
+  --rw-track: #3a453e;
+  --rung-fill: #191d1a;
+  --rung-edge: #6c756e;
+  --rung-hover: #202722;
+  --rung-open: #1d3a2b;
+  --rung-open-edge: #7fae8e;
+  --rung-ends: #b3bab4;
+  --rung-left: #eef1ec;
+  --rung-red: var(--coral);
+}
+
+/* ── The runway: 78 tall; the line 4px; Today a 14px dot with a halo. ── */
+.plan-horizons-view .plan-runway { position: relative; height: 78px; margin: 0 8px 26px; }
+.plan-runway-line,
+.plan-runway-stretch { position: absolute; left: 0; top: 30px; height: 4px; border-radius: 2px; }
+.plan-horizons-view .plan-runway-line { right: 0; width: auto; background: var(--rw-track); }
+.plan-runway-stretch { background: var(--accent); }
+.plan-horizons-view .plan-runway-dot {
+  position: absolute; left: -7px; top: 25px; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 4px var(--bg);
+}
+/* A tick is a 24×40 button; its mark 2×16 (the open one's 3×20, green). */
+.plan-horizons-view .plan-runway-tick {
+  position: absolute; top: 12px; width: 24px; height: 40px; margin-left: -12px;
+  padding: 0; background: none; border: 0; cursor: pointer;
+}
+.plan-runway-tick::before {
+  content: ""; position: absolute; left: 11px; top: 12px; width: 2px; height: 16px;
+  border-radius: 1px; background: var(--ink-2);
+}
+.plan-runway-tick.is-open::before { left: 10.5px; top: 10px; width: 3px; height: 20px; background: var(--accent); }
+.plan-runway-tick:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-radius: 4px; }
+/* An unlabelled tick tells its name and date on hover or focus. */
+.plan-runway-tick[data-tip]:hover::after,
+.plan-runway-tick[data-tip]:focus-visible::after {
+  content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 4px); transform: translateX(-50%);
+  z-index: 3; padding: 5px 8px; white-space: nowrap; border-radius: 4px;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 700; letter-spacing: 0.06em;
+  color: var(--bg); background: var(--ink);
+}
+/* Labels: the name above the line, the date below; placed by runwayLayout. */
+.plan-horizons-view .plan-runway-label {
+  position: absolute; top: 0; height: 78px; transform: none; pointer-events: none;
+  display: block; font: inherit; letter-spacing: 0; color: var(--ink);
+}
+.plan-runway-label[data-align="center"] { text-align: center; }
+.plan-runway-label[data-align="right"] { text-align: right; }
+.plan-runway-name {
+  position: absolute; left: 0; right: 0; top: 0; white-space: nowrap;
+  font-family: var(--font-sans); font-size: 14px; font-weight: 800; line-height: 18px;
+}
+.plan-runway-date {
+  position: absolute; left: 0; right: 0; top: 50px; white-space: nowrap;
+  font-family: var(--font-mono); font-size: 12.5px; font-weight: 700; letter-spacing: 0.08em; line-height: 18px;
+  color: var(--ink-2);
+}
+.plan-runway-label.is-today,
+.plan-runway-label.is-today .plan-runway-date,
+.plan-runway-label.is-open,
+.plan-runway-label.is-open .plan-runway-date { color: var(--accent); }
+html[data-theme="dark"] .plan-runway-label.is-today,
+html[data-theme="dark"] .plan-runway-label.is-today .plan-runway-date,
+html[data-theme="dark"] .plan-runway-label.is-open,
+html[data-theme="dark"] .plan-runway-label.is-open .plan-runway-date { color: var(--rung-open-edge); }
+.plan-runway-pick {
+  pointer-events: auto; padding: 0; font: inherit; color: inherit; background: none; border: 0; cursor: pointer;
+}
+.plan-runway-pick:hover { text-decoration: underline; text-underline-offset: 3px; }
+.plan-runway-pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+/* ── Horizon cards: closed, hover, open; red at ≤3 days left. ── */
+.plan-horizons-view .plan-ladder { gap: 8px; }
+.plan-horizons-view .plan-rung {
+  gap: 9px; padding: 14px 18px; background: var(--rung-fill);
+  border: 1px solid var(--rung-edge); border-radius: 6px;
+}
+.plan-horizons-view .plan-rung:hover { background: var(--rung-hover); }
+.plan-horizons-view .plan-rung.is-open { padding: 13px 17px; background: var(--rung-open); border: 2px solid var(--rung-open-edge); }
+.plan-horizons-view .plan-rung-name { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
+.plan-horizons-view .plan-rung-count { font-family: var(--font-mono); font-size: 13px; font-weight: 700; letter-spacing: 0; color: var(--ink); }
+.plan-horizons-view .plan-rung-date {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
+}
+.plan-rung-ends { color: var(--rung-ends); }
+.plan-rung-left { color: var(--rung-left); white-space: nowrap; }
+.plan-horizons-view .plan-rung.is-red .plan-rung-ends,
+.plan-horizons-view .plan-rung.is-red .plan-rung-left { color: var(--rung-red); }
+.plan-horizons-view .plan-rung-bar { height: 4px; border-radius: 2px; overflow: hidden; background: var(--line); }
+.plan-horizons-view .plan-rung-bar > span { border-radius: 2px; opacity: 1; background: var(--accent); }
+.plan-horizons-view .plan-rung.is-red .plan-rung-bar > span { background: var(--rung-red); }
+/* Desktop and tablet: the whole card is the button, no chevron row. */
+.plan-horizons-view .plan-ladder-grid:not(.is-phone) .plan-rung-chevron { display: none; }
+
+/* ── Sizes ── */
+/* Tablet 600–1023 (76d): ladder 280 + list, 32 apart; 24 under the runway. */
+@media (min-width: 600px) {
+  .plan-horizons-view .plan-ladder-grid { grid-template-columns: 280px minmax(0, 1fr); gap: 32px; }
+  .plan-horizons-view .plan-runway { margin-bottom: 24px; }
+  .plan-horizons-view .plan-rung { padding: 14px 16px; }
+  .plan-horizons-view .plan-rung.is-open { padding: 13px 15px; }
+}
+/* Laptop 1024–1599 (76c): all six cards on screen at 1280×720; a 7th
+   scrolls the card column only. Ladder 340, 48 to the list. */
+@media (min-width: 1024px) {
+  .app-container:has(.screen-content-plan .plan-horizons-view) {
+    height: calc(100dvh / var(--zoom, 1)); min-height: 0; overflow: hidden;
+  }
+  .screen-content.screen-content-plan:has(.plan-horizons-view) {
+    flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0;
+  }
+  .screen-content-plan > [aria-labelledby="plan-tab-horizons"] { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .screen-content-plan .plan-head { flex-shrink: 0; padding-top: 12px; padding-bottom: 10px; }
+  .screen-content-plan .plan-horizons-view { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: 0; }
+  .plan-horizons-view .plan-runway { flex-shrink: 0; margin-bottom: 10px; }
+  .plan-horizons-view .plan-ladder-grid { flex: 1; min-height: 0; grid-template-columns: 340px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 48px; }
+  .plan-horizons-view .plan-ladder-grid > * { min-height: 0; overflow-y: auto; padding-bottom: 16px; }
+  .plan-horizons-view .plan-ladder { gap: 6px; padding: 2px; margin: -2px; }
+  /* A scrolling column clips what sits outside it: the list's drag grips sit
+     in a gutter to its left (and its focus rings), so the column takes the
+     gutter inside its padding. */
+  .plan-horizons-view .plan-ladder-grid > .plan-open { margin-left: -32px; padding-left: 32px; }
+  .plan-horizons-view .plan-rung { gap: 5px; padding: 8px 14px; }
+  .plan-horizons-view .plan-rung.is-open { padding: 7px 13px; }
+  .plan-horizons-view .plan-rung-name,
+  .plan-horizons-view .plan-rung-date { line-height: 1.2; }
+}
+/* 24″ (76a): ladder 440, 56 to the list; roomier cards; 26 under the runway. */
+@media (min-width: 1600px) {
+  .screen-content-plan .plan-head { padding-top: 30px; padding-bottom: 22px; }
+  .plan-horizons-view .plan-runway { margin-bottom: 26px; }
+  .plan-horizons-view .plan-ladder-grid { grid-template-columns: 440px minmax(0, 1fr); gap: 56px; }
+  .plan-horizons-view .plan-ladder-grid.has-fronts { grid-template-columns: 440px minmax(0, 1fr) 380px; }
+  .plan-horizons-view .plan-ladder { gap: 8px; }
+  .plan-horizons-view .plan-rung { gap: 9px; padding: 14px 18px; }
+  .plan-horizons-view .plan-rung.is-open { padding: 13px 17px; }
+  .plan-horizons-view .plan-rung-name,
+  .plan-horizons-view .plan-rung-date { line-height: normal; }
+}
+/* Phone (76e): full-width cards with the chevron; the page scrolls. */
+@media (max-width: 599px) {
+  .plan-horizons-view .plan-rung { padding: 14px 40px 14px 16px; }
+  .plan-horizons-view .plan-runway { margin-bottom: 18px; }
+}

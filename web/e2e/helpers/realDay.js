@@ -5,8 +5,10 @@
 // { coach: true } adds a conversation (two 20-word messages from you, two
 // 55-word replies: PART7's 2 + 2 check), a saved Coach's brief, and a clear
 // best weekday (yesterday).
-export async function loadRealDay(page, { coach = false } = {}) {
-  await page.addInitScript((withCoach) => {
+// { plan: true } adds 76a's horizons: Career (ends in 5 days) and Work (to
+// the month's end) beside the built-ins, with 3 · 13 · 2 · 6 · 12 · 4 tasks.
+export async function loadRealDay(page, { coach = false, plan = false } = {}) {
+  await page.addInitScript(({ withCoach, withPlan }) => {
     window.__LOCI_DEMO_FIXTURE__ = () => {
       const now = Date.now();
       let payload;
@@ -65,6 +67,22 @@ export async function loadRealDay(page, { coach = false } = {}) {
         brainDump: [],
         timestamp: now,
       };
+      if (withPlan) {
+        const d = new Date();
+        const first = ymd(new Date(d.getFullYear(), d.getMonth(), 1));
+        const monthDays = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+        payload.config.horizons = {
+          career: { id: "career", name: "Career", kind: "custom", startDate: plus(-4), lengthDays: 10 },
+          work76: { id: "work76", name: "Work", kind: "custom", startDate: first, lengthDays: monthDays },
+        };
+        const add = (horizonLevel, titles) => titles.forEach(title => payload.tasks.push(t({ title, horizonLevel, timeEstimateMinutes: 60 })));
+        add("career", ["Prepare CV- ENDURES, Everlam, Grief, UL", "Prep CV- Yaghma, Nouryon, NKT extrusion, Robert Walters, De LAVAL, ALPLA Group", "Prep CV - Amazon + Dupont + Tesla + IFF + Allnex + Galderma"]);
+        add("week", Array.from({ length: 13 }, (_, i) => `This week task ${i + 1}`));
+        add("month", ["Renew the passport photos", "Book the dentist"]);
+        add("work76", Array.from({ length: 6 }, (_, i) => `Work task ${i + 1}`));
+        add("quarter", Array.from({ length: 12 }, (_, i) => `Quarter task ${i + 1}`));
+        add("halfyear", ["Learn Dutch A2", "Plan the summer trip", "Publish the PAP paper", "Run a half marathon"]);
+      }
       if (withCoach) {
         const t0 = now - 40 * 60_000;
         payload.chatHistory = [
@@ -95,5 +113,5 @@ export async function loadRealDay(page, { coach = false } = {}) {
       }
       return payload;
     };
-  }, coach);
+  }, { withCoach: coach, withPlan: plan });
 }

@@ -12,13 +12,6 @@ export function dayLabel(s, today) {
   const year = today && parts(today).y !== p.y ? ` ${p.y}` : "";
   return `${DAYS[p.dow]} ${p.d} ${MONTHS[p.m - 1]}${year}`;
 }
-// "SEP", "Q3", "OCT 4" — the runway's short labels.
-function shortLabel(h, end) {
-  const p = parts(end);
-  if (h.kind === "month") return MONTHS[p.m - 1];
-  if (h.kind === "quarter") return `Q${Math.ceil(p.m / 3)}`;
-  return `${p.d} ${MONTHS[p.m - 1]}`;
-}
 
 export const isOpenPlanTask = (t) => !t.isDeleted && !t.isCompleted && !t.isParked;
 
@@ -68,9 +61,12 @@ export function doneTasks(tasks, id, period) {
     .sort((a, b) => String(a.dateCompletedString || "").localeCompare(String(b.dateCompletedString || "")) || (a.lastUpdated || 0) - (b.lastUpdated || 0));
 }
 
-// The runway (57): today to the furthest end, one tick per end date —
-// horizons ending the same day share it, smallest first ("SEP · Q3", 42.3).
-// Each tick's place is 0–1 along the line.
+// The runway (57, 76): today to the furthest end, one tick per end date —
+// horizons ending the same day share it, smallest first ("This month ·
+// Work", 42.3). 76: a square-root scale, x = √(days ÷ days to the furthest
+// end), so near dates get room and the order stays true. Each tick carries
+// its horizons' ids and names and its date ("31 OCT"; "30 APR 2027" in
+// another year).
 export function runwayTicks(rungs, day) {
   const far = rungs.reduce((m, r) => (r.period.end > m ? r.period.end : m), day);
   const span = Math.max(1, daysBetween(day, far));
@@ -84,26 +80,89 @@ export function runwayTicks(rungs, day) {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([end, rs]) => ({
       end,
-      at: Math.min(1, Math.max(0, daysBetween(day, end) / span)),
-      label: rs.map(r => shortLabel(r, end)).filter((l, i, all) => all.indexOf(l) === i).join(" · "),
+      at: Math.sqrt(Math.min(1, Math.max(0, daysBetween(day, end) / span))),
+      ids: rs.map(r => r.id),
+      names: rs.map(r => r.name),
+      date: dayLabel(end, day).replace(/^[A-Z]{3} /, ""),
       furthest: end === far,
     }));
 }
 
-// Which labels fit: TODAY and the furthest always; the others only 45px or
-// more from the last label shown (57). A phone shows only the two ends (30).
-export function runwayLabelsShown(ticks, widthPx, phone = false) {
-  const shown = new Set();
-  let last = 0; // TODAY sits at 0
-  const far = ticks.find(t => t.furthest);
-  const farX = far ? far.at * widthPx : widthPx;
-  for (const t of ticks) {
-    if (t.furthest) { shown.add(t.end); continue; }
-    if (phone) continue;
-    const x = t.at * widthPx;
-    if (x - last >= 45 && farX - x >= 45) { shown.add(t.end); last = x; }
+// "10–11 OCT"; "30 SEP – 2 OCT"; the later end keeps a year it has.
+function mergedDate(a, b) {
+  const [da, ma, ya] = a.split(" ");
+  const [, mb] = b.split(" ");
+  if (ma === mb && !ya) return `${da}–${b}`;
+  return `${a} – ${b}`;
+}
+
+// 76 (turn 77, 1): which labels the runway shows, from their measured boxes.
+// `nameWidth(text)` and `dateWidth(text)` measure a label's two lines; a
+// label is as wide as the wider. Two neighbours that would come within `gap`
+// px merge into one label centred between their ticks. "Today" (at the left)
+// and the furthest end (at the right) take part but never merge or drop. The
+// open horizon's label always shows; any other label that still collides is
+// dropped (its tick stays, and tells its name on hover or focus). A phone
+// labels only the two ends (57b.30).
+export function runwayLayout(ticks, { width, nameWidth, dateWidth, todayDate, openId = null, phone = false, gap = 12 }) {
+  const boxOf = (l) => {
+    const w = Math.max(nameWidth(l.names.join(" · ")), dateWidth(l.date));
+    if (l.align === "left") return [l.x, l.x + w];
+    if (l.align === "right") return [l.x - w, l.x];
+    const left = Math.min(Math.max(0, l.x - w / 2), Math.max(0, width - w));
+    return [left, left + w];
+  };
+  const clash = (a, b) => a[0] < b[1] + gap && b[0] < a[1] + gap;
+  const today = { key: "today", ends: [], ids: [], names: ["Today"], date: todayDate, x: 0, align: "left", fixed: true, open: false };
+  const farTick = ticks.find(t => t.furthest);
+  const far = farTick && { key: farTick.end, ends: [farTick.end], ids: farTick.ids, names: farTick.names, date: farTick.date, x: width, align: "right", fixed: true, open: farTick.ids.includes(openId) };
+  const middle = phone ? [] : ticks.filter(t => !t.furthest).map(t => ({
+    key: t.end, ends: [t.end], ids: t.ids, names: t.names, date: t.date, x: t.at * width, align: "center", open: t.ids.includes(openId),
+  }));
+
+  // Neighbours that would collide merge, in pairs, left to right.
+  const groups = [];
+  for (let i = 0; i < middle.length; i += 1) {
+    const a = middle[i];
+    const b = middle[i + 1];
+    if (b && clash(boxOf(a), boxOf(b))) {
+      groups.push({
+        key: `${a.key}+${b.key}`, ends: [...a.ends, ...b.ends], ids: [...a.ids, ...b.ids], names: [...a.names, ...b.names],
+        date: mergedDate(a.date, b.date), x: (a.x + b.x) / 2, align: "center", open: a.open || b.open,
+      });
+      i += 1;
+    } else groups.push(a);
   }
-  return shown;
+
+  // Placed in order of right: the two ends, the open one, then left to right.
+  const placed = [today, ...(far ? [far] : [])].map(l => ({ ...l, box: boxOf(l) }));
+  // The open one never gives way to a neighbour, but it can't sit on Today or
+  // the far end, which stay: it drops a merge-partner first, then slides
+  // clear of them as far as the room allows.
+  const fitOpen = (g) => {
+    const ends = placed.map(p => p.box);
+    const free = (box) => !ends.some(e => clash(box, e));
+    if (free(boxOf(g))) return g;
+    const own = g.ends.length > 1 ? middle.find(m => m.open && g.ends.includes(m.key)) : null;
+    if (own && free(boxOf(own))) return { ...own, dropped: g.ends.filter(e => e !== own.key) };
+    const l = own || g;
+    const [b0, b1] = boxOf(l);
+    const lo = placed[0].box[1] + gap;
+    const hi = (far ? placed[1].box[0] : width) - gap;
+    const shift = b0 < lo ? lo - b0 : b1 > hi ? hi - b1 : 0;
+    return { ...l, x: l.x + shift, dropped: own ? g.ends.filter(e => e !== own.key) : [] };
+  };
+  const order = [...groups.filter(g => g.open), ...groups.filter(g => !g.open)];
+  for (const g0 of order) {
+    const g = g0.open ? fitOpen(g0) : g0;
+    const box = boxOf(g);
+    if (g.open || !placed.some(p => clash(box, p.box))) placed.push({ ...g, box });
+  }
+  const labelled = new Set(placed.flatMap(l => l.ends));
+  return {
+    labels: placed.sort((a, b) => a.box[0] - b.box[0]).map(({ box, fixed, dropped, ...l }) => ({ ...l, left: box[0], right: box[1] })),
+    unlabelled: new Set(ticks.filter(t => !labelled.has(t.end)).map(t => t.end)),
+  };
 }
 
 // 42.1: the rung Plan opens on — the last one opened on this device, unless

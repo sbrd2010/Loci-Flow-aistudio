@@ -5,7 +5,7 @@ import { useLociDayStr } from "../hooks/useTodayStr";
 import { horizonsFromConfig, WORK_OLDER_ID } from "../utils/horizons";
 import { leftoverTags, pendingReviews, applySort, undoReviewOrSort } from "../utils/horizonReview";
 import HorizonReview from "./HorizonReview";
-import { dayLabel, doneTasks, horizonChoices, isOpenPlanTask, ladderRungs, listTasks, openingRung, runwayLabelsShown, runwayTicks, workOlderCount } from "../utils/planLadder";
+import { dayLabel, doneTasks, horizonChoices, isOpenPlanTask, ladderRungs, listTasks, openingRung, runwayLayout, runwayTicks, workOlderCount } from "../utils/planLadder";
 import useTaskActions from "../hooks/useTaskActions";
 import {
   DndContext, closestCenter, MouseSensor, TouchSensor, KeyboardSensor,
@@ -132,10 +132,19 @@ function SortableRoadmapCard({ id, task, onTaskClick, onDone, isGoal = false, fr
 // 57c: a row dropped on a rung moves there. The rungs sit outside this
 // list's drag context, so the rung under the pointer is looked up where the
 // drag is (mouse or touch; the keyboard moves with the sheet's picker).
+// 76: the pointer is read where it is, not rebuilt from the drag's start and
+// delta: dnd-kit's delta counts the scroll of the list's own column (which
+// scrolls on its own on a laptop), and would land beside the rung.
+let lastPointer = null;
+const trackPointer = (e) => {
+  const p = e.touches?.[0] || e;
+  if (typeof p?.clientX === "number") lastPointer = { x: p.clientX, y: p.clientY };
+};
 function rungUnderPointer({ activatorEvent, delta }) {
-  const p = activatorEvent?.touches?.[0] || activatorEvent?.changedTouches?.[0] || activatorEvent;
-  if (!p || typeof p.clientX !== "number" || typeof document.elementsFromPoint !== "function") return null;
-  const hit = document.elementsFromPoint(p.clientX + delta.x, p.clientY + delta.y).find(el => el.closest?.(".plan-rung[data-drop]"));
+  const start = activatorEvent?.touches?.[0] || activatorEvent?.changedTouches?.[0] || activatorEvent;
+  const at = lastPointer || (start && typeof start.clientX === "number" ? { x: start.clientX + delta.x, y: start.clientY + delta.y } : null);
+  if (!at || typeof document.elementsFromPoint !== "function") return null;
+  const hit = document.elementsFromPoint(at.x, at.y).find(el => el.closest?.(".plan-rung[data-drop]"));
   return hit ? hit.closest(".plan-rung").dataset.horizon : null;
 }
 
@@ -151,10 +160,16 @@ function SortableRoadmapList({ colKey, colTasks, fullColTasks = colTasks, tasks,
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
+  const stopTracking = () => {
+    window.removeEventListener("pointermove", trackPointer, true);
+    window.removeEventListener("touchmove", trackPointer, true);
+    lastPointer = null;
+  };
   const handleDragEnd = (event) => {
     const { active, over } = event;
     setActiveId(null);
     const rung = onDropOnRung ? rungUnderPointer(event) : null;
+    stopTracking();
     if (rung) {
       onRungHover?.(null);
       const task = colTasks.find(t => getKey(t) === active.id);
@@ -195,10 +210,18 @@ function SortableRoadmapList({ colKey, colTasks, fullColTasks = colTasks, tasks,
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
-      onDragStart={({ active }) => setActiveId(active.id)}
+      onDragStart={({ active, activatorEvent }) => {
+        setActiveId(active.id);
+        if (onDropOnRung) {
+          lastPointer = null;
+          trackPointer(activatorEvent || {});
+          window.addEventListener("pointermove", trackPointer, true);
+          window.addEventListener("touchmove", trackPointer, { capture: true, passive: true });
+        }
+      }}
       onDragMove={onDropOnRung ? (e) => onRungHover?.(rungUnderPointer(e)) : undefined}
       onDragEnd={handleDragEnd}
-      onDragCancel={() => { setActiveId(null); onRungHover?.(null); }}
+      onDragCancel={() => { setActiveId(null); onRungHover?.(null); stopTracking(); }}
     >
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
         {colTasks.map(task => (
@@ -241,34 +264,82 @@ function SortableRoadmapList({ colKey, colTasks, fullColTasks = colTasks, tasks,
 
 // frontId: a front's page (52f–g) — only that front's open tasks, in the
 // horizons that hold any, with no per-horizon + and no Inbox.
-// Plan 57: the runway — a line from today to the furthest horizon's end, a
-// dot at today, a tick at each end; labels where they fit (42.3, 57b.30).
-function Runway({ rungs, day, phone }) {
+// Plan 57, 76: the runway — a 4px line from today to the furthest horizon's
+// end on a square-root scale, the open horizon's stretch in green, a dot at
+// today, a tick per end date with its name above and date below. Labels are
+// measured and merge or drop where they'd collide (planLadder's
+// runwayLayout); an unlabelled tick tells its name on hover or focus.
+// Clicking a tick or a name opens that horizon.
+const NAME_FONT = "800 14px Manrope, system-ui, sans-serif";
+const DATE_FONT = "700 12.5px 'Space Mono', ui-monospace, monospace";
+let measureCtx = null;
+const textWidth = (font, spacingEm = 0, size = 0) => (text) => {
+  measureCtx = measureCtx || (typeof document !== "undefined" ? document.createElement("canvas").getContext("2d") : null);
+  if (!measureCtx) return text.length * 8;
+  measureCtx.font = font;
+  return measureCtx.measureText(text).width + spacingEm * size * text.length;
+};
+const nameWidth = textWidth(NAME_FONT);
+const dateWidth = textWidth(DATE_FONT, 0.08, 12.5);
+
+function Runway({ rungs, day, phone, openId, onPick }) {
   const ref = useRef(null);
   const [width, setWidth] = useState(0);
+  const [, setFontsReady] = useState(false);
   useEffect(() => {
-    const measure = () => setWidth(ref.current?.offsetWidth || 0);
+    const el = ref.current;
+    if (!el) return undefined;
+    const measure = () => setWidth(el.getBoundingClientRect().width / cssZoom());
     measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    // The labels are measured in the page's fonts: once they've loaded.
+    document.fonts?.ready?.then(() => setFontsReady(true));
+    return () => ro?.disconnect();
   }, []);
   const ticks = runwayTicks(rungs, day);
-  const shown = runwayLabelsShown(ticks, width, phone);
+  const { labels, unlabelled } = runwayLayout(ticks, { width, nameWidth, dateWidth, todayDate: dayLabel(day, day), openId, phone });
+  const openTick = !phone && ticks.find(t => t.ids.includes(openId));
+  const nameOf = (id) => rungs.find(r => r.id === id)?.name || id;
   return (
-    <div className="plan-runway" ref={ref} aria-hidden="true">
+    <div className="plan-runway" ref={ref} role="group" aria-label="Runway">
       <span className="plan-runway-line" />
+      {openTick && <span className="plan-runway-stretch" style={{ width: `${openTick.at * 100}%` }} />}
       <span className="plan-runway-dot" />
-      <span className="plan-runway-label is-today">TODAY</span>
-      {ticks.map(t => (
-        <React.Fragment key={t.end}>
-          <span className="plan-runway-tick" style={{ left: `${t.at * 100}%` }} />
-          {shown.has(t.end) && (
-            <span className={`plan-runway-label${t.furthest ? " is-far" : ""}`} style={t.furthest ? undefined : { left: `${t.at * 100}%` }}>
-              {/* The furthest shows its date — unless horizons share it, which keep "SEP · Q3" (Codex review of #441). */}
-              {t.furthest && !t.label.includes(" · ") ? dayLabel(t.end, day).replace(/^[A-Z]{3} /, "") : t.label}
-            </span>
-          )}
-        </React.Fragment>
+      {ticks.map(t => {
+        const open = !phone && t.ids.includes(openId);
+        const tip = `${t.names.join(" · ")} · ${t.date}`;
+        const bare = unlabelled.has(t.end);
+        return (
+          <button
+            key={t.end}
+            type="button"
+            className={`plan-runway-tick${open ? " is-open" : ""}${t.furthest ? " is-far" : ""}`}
+            style={{ left: `${t.at * 100}%` }}
+            aria-label={`Open ${t.names.join(" and ")}, ends ${t.date}`}
+            data-tip={bare ? tip : undefined}
+            tabIndex={bare ? 0 : -1}
+            onClick={() => onPick(t.ids.includes(openId) ? openId : t.ids[0])}
+          />
+        );
+      })}
+      {labels.map(l => (
+        <span
+          key={l.key}
+          className={`plan-runway-label${l.key === "today" ? " is-today" : ""}${l.open ? " is-open" : ""}`}
+          style={{ left: `${l.left}px`, width: `${l.right - l.left}px` }}
+          data-align={l.align}
+        >
+          <span className="plan-runway-name">
+            {l.key === "today" ? "Today" : l.ids.map((id, i) => (
+              <React.Fragment key={id}>
+                {i > 0 && " · "}
+                <button type="button" className="plan-runway-pick" onClick={() => onPick(id)}>{nameOf(id)}</button>
+              </React.Fragment>
+            ))}
+          </span>
+          <span className="plan-runway-date">{l.date}</span>
+        </span>
       ))}
     </div>
   );
@@ -442,7 +513,7 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
       </div>
       ) : (
         <>
-          <Runway rungs={rungs} day={lociDay} phone={narrow} />
+          <Runway rungs={rungs} day={lociDay} phone={narrow} openId={frontOpen || narrow ? null : selected} onPick={pickRung} />
           <div className={`plan-ladder-grid${narrow ? " is-phone" : ""}${narrow && phoneList ? " is-list" : ""}${frontsColumn ? " has-fronts" : ""}`}>
             {/* 57a–e: a rung per horizon — name and open count, its end and
                 days left, the bar of the period gone (red at ≤3 days left). */}
@@ -453,7 +524,7 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
                   type="button"
                   data-horizon={r.id}
                   data-drop={!narrow && r.id !== selected ? "" : undefined}
-                  className={`plan-rung${r.id === selected && !frontOpen ? " is-open" : ""}${r.red ? " is-red" : ""}${r.dotted ? " is-dotted" : ""}${dropRung === r.id ? " is-drop" : ""}`}
+                  className={`plan-rung${r.id === selected && !frontOpen && !narrow ? " is-open" : ""}${r.red ? " is-red" : ""}${r.dotted ? " is-dotted" : ""}${dropRung === r.id ? " is-drop" : ""}`}
                   aria-current={r.id === selected && !frontOpen ? "true" : undefined}
                   onClick={() => pickRung(r.id)}
                 >
@@ -461,15 +532,18 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
                     <span className="plan-rung-name">{r.name}</span>
                     <span className="plan-rung-count">{r.count}</span>
                   </span>
+                  {/* 76: the end on the left, what's left on the right; 6 months
+                      slides, so it has no end and no bar. */}
                   <span className="plan-rung-date">
-                    {r.dotted ? `TO ${dayLabel(r.period.end, lociDay).replace(/^[A-Z]{3} /, "")}` : `ENDS ${dayLabel(r.period.end, lociDay)} · ${r.daysLeft} ${r.daysLeft === 1 ? "DAY" : "DAYS"}`}
+                    <span className="plan-rung-ends">{r.dotted ? `TO ${dayLabel(r.period.end, lociDay).replace(/^[A-Z]{3} /, "")}` : `ENDS ${dayLabel(r.period.end, lociDay)}`}</span>
+                    <span className="plan-rung-left">{r.dotted ? "SLIDES MONTHLY" : `${r.daysLeft} ${r.daysLeft === 1 ? "DAY" : "DAYS"} LEFT`}</span>
                   </span>
-                  <span className="plan-rung-bar"><span style={{ width: `${Math.round(r.elapsed * 100)}%` }} /></span>
+                  {!r.dotted && <span className="plan-rung-bar"><span style={{ width: `${Math.round(r.elapsed * 100)}%` }} /></span>}
                   {(() => {
                     const rv = reviews.find(x => x.id === r.id);
                     return rv && <span className="plan-rung-review">{rv.tasks.length} FROM {rv.from} · REVIEW</span>;
                   })()}
-                  <IconChevronRight size={18} className="plan-rung-chevron" aria-hidden="true" />
+                  <span className="plan-rung-chevron" aria-hidden="true"><IconChevronRight size={18} /></span>
                   {dropRung === r.id && <span className="plan-rung-drop">Drop to move here</span>}
                 </button>
               ))}
@@ -487,7 +561,7 @@ export default function RoadmapTab({ payload, savePayload, savePayloadAsync, onO
                     <span className="plan-rung-count">{olderCount}</span>
                   </span>
                   <span className="plan-rung-date">Give each a horizon, once.</span>
-                  <IconChevronRight size={18} className="plan-rung-chevron" aria-hidden="true" />
+                  <span className="plan-rung-chevron" aria-hidden="true"><IconChevronRight size={18} /></span>
                 </button>
               )}
             </nav>
