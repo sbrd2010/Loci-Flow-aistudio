@@ -162,8 +162,10 @@ test("Horizons ≥1600: no Fronts column; the switch shows Fronts", async ({ pag
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
   await expect(page.locator(".plan-ladder")).toBeVisible();
   await expect(page.locator(".plan-fronts-col")).toHaveCount(0);
+  // 1480 at the page's scale (every page scales since the try-out, D1).
+  const z = await page.evaluate(() => document.documentElement.currentCSSZoom);
   const content = await page.locator(".plan-horizons-view").boundingBox();
-  expect(Math.round(content.width)).toBeLessThanOrEqual(1480);
+  expect(Math.round(content.width)).toBeLessThanOrEqual(Math.ceil(1480 * z));
   expect(Math.abs((content.x + content.width / 2) - 1903 / 2)).toBeLessThanOrEqual(2);
   await page.getByRole("tab", { name: "Fronts" }).click();
   await expect(page.locator(".plan-ladder")).toHaveCount(0);

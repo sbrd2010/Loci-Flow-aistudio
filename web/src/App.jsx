@@ -580,7 +580,7 @@ export default function App() {
   const mainAppShown = demoMode
     ? !!payload
     : !authLoading && !!user && !error && !loading && !!payload && payload.config?.isOnboardingCompleted !== false;
-  useAppScale(mainAppShown && !focusTimer.isFocusMode ? activeTab : null);
+  useAppScale(!mainAppShown ? null : focusTimer.isFocusMode ? "focus" : activeTab);
   // Live (non-stale) read of focusTimer for effect/promise callbacks that
   // run after an async wait (e.g. the pendingFocusOpen effect's pinPromise
   // handlers below) — those closures capture `focusTimer` from whichever
