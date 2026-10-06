@@ -137,6 +137,14 @@ test("1903×940: the Focus page scales as Today does, and Today again after Leav
   await page.locator(".today-wall .wall-primary").click();
   await expect(page.locator(".focus-mode-overlay")).toBeVisible();
   await expect.poll(zoom).toBeCloseTo(S, 3);
+  // Try-out 33: the session sits in the middle of the room under the head,
+  // not just below it (the bottom side counts the page's 40px padding).
+  const gaps = await page.evaluate(() => {
+    const head = document.querySelector(".focus-mode-head").getBoundingClientRect();
+    const body = document.querySelector(".focus-mode-body").getBoundingClientRect();
+    return { above: body.top - head.bottom, below: window.innerHeight - body.bottom };
+  });
+  expect(Math.abs(gaps.above - gaps.below)).toBeLessThanOrEqual(60 * S);
   await page.keyboard.press("Escape");
   await expect(page.locator(".focus-mode-overlay")).toHaveCount(0);
   await expect.poll(zoom).toBeCloseTo(S, 3);
