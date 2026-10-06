@@ -227,7 +227,7 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
           --control-edge: ${token("--control-edge", "#858B86")};
         }
         body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
-          height: 100vh; padding: 16px; font-family: Manrope, system-ui, sans-serif; color: var(--ink);
+          height: 100vh; padding: 16px 12px; font-family: Manrope, system-ui, sans-serif; color: var(--ink);
           background: var(--bg); user-select: none; overflow: hidden; }
         #ring { position: relative; display: grid; place-items: center; flex: 0 0 auto; container-type: size;
           width: clamp(72px, min(calc(100vh - 188px), calc(100vw - 32px)), 320px); aspect-ratio: 1; height: auto; }
@@ -242,12 +242,17 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
         #pt-secs.is-last { font-size: 1em; font-weight: 700; opacity: 1; }
         #pl { max-width: 100%; overflow: hidden; font-size: 14px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
         #pip-btns { display: flex; gap: 6px; width: 100%; }
-        #pip-btns button { flex: 1 1 auto; min-height: 36px; padding: 0 6px; font: inherit; font-size: 12px; font-weight: 700;
+        /* 59b (PART11): text buttons, 13/800, 40 tall, 6 apart. */
+        #pip-btns button { flex: 1 1 auto; min-height: 40px; padding: 0 8px; font: inherit; font-size: 13px; font-weight: 800;
           color: var(--ink); background: var(--surface); border: 1px solid var(--control-edge); border-radius: 6px;
           cursor: pointer; white-space: nowrap; }
         #pip-btns #pip-done { color: var(--on-accent); background: var(--accent); border-color: var(--accent-edge); }
         #pip-btns button[hidden] { display: none; }
         #pip-btns button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        /* Under 340 wide, five don't fit: Shuffle goes first (59b). */
+        @media (max-width: 339px) {
+          #pip-shuffle { display: none; }
+        }
         /* Narrow: Pause and Done only. */
         @media (max-width: 299px) {
           #pip-add5, #pip-shuffle, #pip-stuck { display: none; }
@@ -304,11 +309,13 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
 
       const btnsEl = doc.createElement("div");
       btnsEl.id = "pip-btns";
-      const button = (id, text, onClick) => {
+      const button = (id, text, onClick, { label, tip } = {}) => {
         const b = doc.createElement("button");
         b.id = id;
         b.type = "button";
         b.textContent = text;
+        if (label) b.setAttribute("aria-label", label);
+        if (tip) b.title = tip;
         b.addEventListener("click", onClick);
         btnsEl.appendChild(b);
       };
@@ -318,7 +325,13 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
       button("pip-add5", "+5", () => addTimeToSession(5));
       // Shuffle plays another variation of the sound that's on (as the
       // focus page's "Another" does); hidden when nothing can shuffle.
-      button("pip-shuffle", "Shuffle", () => pipActionsRef?.current?.onShuffle?.());
+      // 59b: restored at Rohan's request; do not remove again.
+      const shuffle = () => { if (pipActionsRef?.current?.canShuffle?.()) pipActionsRef.current.onShuffle?.(); };
+      button("pip-shuffle", "Shuffle", shuffle, { label: "Shuffle sound", tip: "Another track (S)" });
+      // S shuffles from the mini window too (59b), not while typing.
+      doc.addEventListener("keydown", (e) => {
+        if ((e.key === "s" || e.key === "S") && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat) shuffle();
+      });
       // I'm stuck opens the main window on the focus page (its I'm stuck
       // panel, 59d, arrives with 6c).
       button("pip-stuck", "I’m stuck", () => { try { window.focus(); } catch (_) {} pipActionsRef?.current?.onStuck?.(); });
