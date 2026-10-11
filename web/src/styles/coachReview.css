@@ -229,7 +229,8 @@ html[data-theme="dark"] .rv { --rv-brief-surface: var(--surface); }
 }
 @media (max-width: 599px) {
   .br-lead { font-size: 18px; }
-  .rv-sec.rv-brief { margin-top: 12px; padding: 20px 16px 24px; }
+  /* The brief still reaches Do next on the first screen (73a). */
+  .rv-sec.rv-brief { margin-top: 4px; padding: 12px 12px 20px; }
 }
 
 /* Try-out 13: from 1440, Review reads left to right, then down, in about

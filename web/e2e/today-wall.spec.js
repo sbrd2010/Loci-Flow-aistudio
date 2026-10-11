@@ -1342,6 +1342,7 @@ test("laptop: the header's + Add task adds to Today; M opens the Day map (72)", 
 // second L mid-move reverses it and leaves nothing behind.
 test("laptop: show/hide glides with transform and opacity, reverses mid-move and leaves no residue (51e–f)", async ({ page }) => {
   await enterLaptop(page);
+  const wasOpen = await page.locator(".tasks-section").isVisible();
   await page.keyboard.press("l");
   const props = await page.evaluate(() => document.getAnimations().flatMap(a =>
     a.effect.getKeyframes().flatMap(k => Object.keys(k).filter(p => !["offset", "easing", "composite", "computedOffset"].includes(p)))));
@@ -1352,10 +1353,10 @@ test("laptop: show/hide glides with transform and opacity, reverses mid-move and
     return a && { d: a.effect.getTiming().duration, e: a.effect.getTiming().easing, from: a.effect.getKeyframes()[0].transform };
   });
   // 75e: the glide is 480ms; hiding the list takes the title from 46 to 52
-  // (75d), so it zooms from 46/52.
+  // (75d), so it zooms from 46/52 — or back from 52/46 when L shows it.
   expect(titleAnim.d).toBe(480);
   expect(titleAnim.e).toBe("cubic-bezier(0.22, 1, 0.36, 1)");
-  expect(titleAnim.from).toMatch(/^translate\(.+\) scale\(0\.88\d*\)$/);
+  expect(titleAnim.from).toMatch(wasOpen ? /^translate\(.+\) scale\(0\.88\d*\)$/ : /^translate\(.+\) scale\(1\.13\d*\)$/);
   await page.waitForTimeout(120);
   await page.keyboard.press("l");
   await expect(page.locator(".tasks-section")).toBeHidden({ timeout: 2_000 });
