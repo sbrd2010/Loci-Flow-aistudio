@@ -94,3 +94,40 @@ test("Today's Back to focus row goes through block end in place", async ({ page 
   await page.locator(".today-wall").getByRole("button", { name: "Start block 2" }).click();
   await expect(page.locator(".today-wall").getByRole("button", { name: "Pause" })).toBeVisible();
 });
+
+// 75i: on Coach Chat (a computer) the session is a pill in the header — ring,
+// time, Back to focus, F — and the bar gives way; Review keeps the bar.
+test("Coach Chat shows the session as a header pill; Review keeps the bar", async ({ page }) => {
+  await sessionThenPlan(page);
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
+  const pill = page.locator(".shell-header .focus-pill");
+  await expect(pill).toBeVisible();
+  await expect(pill).toContainText(/\d+:\d\d/);
+  await expect(pill).toContainText("Back to focus");
+  await expect(page.getByRole("region", { name: "Focus session" })).toBeHidden();
+  await page.getByRole("tab", { name: "Review" }).click();
+  await expect(pill).toBeHidden();
+  await expect(page.getByRole("region", { name: "Focus session" })).toBeVisible();
+  await page.getByRole("tab", { name: "Chat" }).click();
+  await pill.click();
+  await expect(page.locator(".focus-mode-overlay")).toBeVisible();
+});
+
+// 75h: on the Day map page the bar sits in the footer's slot — Pause, End…
+// (a menu with Mini window and End session…) and Back to focus.
+test("on the Day map the bar takes the footer's place, End… opens a menu", async ({ page }) => {
+  await sessionThenPlan(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
+  await page.evaluate(() => document.activeElement?.blur?.());
+  await page.keyboard.press("m");
+  await expect(page.locator(".day-map-page")).toBeVisible();
+  const bar = page.getByRole("region", { name: "Focus session" });
+  await expect(bar).toBeVisible();
+  const [b, foot] = await Promise.all([bar.boundingBox(), page.locator(".dm-foot").boundingBox()]);
+  expect(b.y).toBeGreaterThanOrEqual(foot.y - 1);
+  expect(b.y + b.height).toBeLessThanOrEqual(foot.y + foot.height + 1);
+  await expect(page.locator(".dm-foot-done")).toBeHidden();
+  await bar.getByRole("button", { name: "End…" }).click();
+  await expect(page.getByRole("menu", { name: "Focus session" }).getByRole("menuitem", { name: "End session…" })).toBeVisible();
+});

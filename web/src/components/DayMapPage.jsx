@@ -44,6 +44,9 @@ import useTaskActions from "../hooks/useTaskActions";
 import { frontsFromConfig, frontsOnOffer } from "../utils/fronts";
 import { IconCheck, IconChevronDown, IconChevronLeft, IconLock, IconPin } from "./ui/icons";
 import { useFocusLedger } from "../hooks/useFocusLedger";
+import Momentum from "./Momentum";
+import { buildMomentum } from "../utils/momentum";
+import { isOnToday } from "../utils/deferral";
 import { dayBar, doneToday, factualLine } from "../utils/dayMapFacts";
 import { unzoomTransform } from "../utils/cssZoom";
 import "../styles/dayMap.css";
@@ -420,7 +423,11 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   // 56a–c: what was done today (focus sessions, and tasks ticked done), the
   // factual line, and the day bar. With no ledger to read (demo, a refused
   // read) the done part is left out rather than read as nothing done.
-  const { raw: ledgerRaw, status: ledgerStatus } = useFocusLedger(uid, 1, windows);
+  // 30 days, for the footer's streak (75f) as on Today.
+  const { raw: ledgerRaw, status: ledgerStatus } = useFocusLedger(uid, 30, windows);
+  const momentum = buildMomentum(ledgerRaw, new Date(), windows);
+  const todayAll = tasks.filter(t => isOnToday(t, todayStr) && !t.isDeleted && !t.isParked);
+  const todayDone = todayAll.filter(t => t.isCompleted && t.dateCompletedString === todayStr).length;
   const done = doneToday(ledgerStatus === "ready" ? ledgerRaw : null, tasks, todayStr, windows);
   const doneMinutes = ledgerStatus === "ready" ? done.reduce((sum, r) => sum + r.minutes, 0) : null;
   // Where the route ends. A fixed stop whose time has passed but is still
@@ -798,17 +805,24 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
               {drawerViewport && openToday.length > 0 && (
                 <MinimumDay state={minDay.state} ids={minDay.ids} unfit={minDay.unfit} tasks={openToday} timeOf={timeOf} onConfirm={confirmMin} />
               )}
-              {drawerViewport && controls}
-              {movable.length > 0 && (drawerViewport ? (
-                <div className="dm-over">
-                  <p className="dm-over-text">
-                    <strong>{wontFitCount <= 10 ? NUMBER_WORDS[wontFitCount] : wontFitCount} {wontFitCount === 1 ? "task won’t" : "tasks won’t"} fit · {formatSpan(wontFit.minutes)}.</strong>
-                  </p>
+              {/* 75f/75g: each panel section opens with a section heading — a
+                  short rule (red for a warning), the heading, one line. */}
+              {movable.length > 0 && drawerViewport && (
+                <section className="dm-sec is-warn dm-over" aria-labelledby="dm-sec-over">
+                  <h2 id="dm-sec-over" className="dm-sec-title">{wontFitCount <= 10 ? NUMBER_WORDS[wontFitCount] : wontFitCount} {wontFitCount === 1 ? "task won’t" : "tasks won’t"} fit</h2>
+                  <p className="dm-sec-line">{formatSpan(wontFit.minutes)} of it falls after your day ends at {dayEndLabel}.</p>
                   <button type="button" className="dm-btn-outline" onClick={moveOverToTomorrow}>Move {movable.length} to tomorrow</button>
-                </div>
-              ) : (
+                </section>
+              )}
+              {drawerViewport && (
+                <section className="dm-sec dm-from-sec" aria-labelledby="dm-sec-from">
+                  <h2 id="dm-sec-from" className="dm-sec-title">Plan from</h2>
+                  {controls}
+                </section>
+              )}
+              {movable.length > 0 && !drawerViewport && (
                 <button type="button" className="dm-move" onClick={moveOverToTomorrow}>Move {movable.length} to tomorrow</button>
-              ))}
+              )}
             </div>
           </div>
           {/* Empty, yet needed: without an overlay, a keyboard drag's drop
@@ -816,6 +830,15 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
           <DragOverlay dropAnimation={null} />
         </DndContext>
       )}
+
+      {/* 75f: the same footer as Today — the streak, and N OF M DONE TODAY.
+          A focus session takes its place (75h). */}
+      <footer className="dm-foot">
+        {routeConfig.momentumEnabled !== false && momentum && (
+          <Momentum bars={momentum.bars} sentence={momentum.sentence} />
+        )}
+        {todayAll.length > 0 && <span className="dm-foot-done">{todayDone} OF {todayAll.length} DONE TODAY</span>}
+      </footer>
 
       {fixing && (
         <FixTimeSheet

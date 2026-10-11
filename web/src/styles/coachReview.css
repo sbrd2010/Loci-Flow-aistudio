@@ -255,3 +255,11 @@ html[data-theme="dark"] .rv { --rv-brief-surface: var(--surface); }
   .rv-facts > .rv-sec:nth-child(4) { grid-column: 1 / -1; grid-row: 3; }
   .rv-numbers { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 28px; }
 }
+
+/* 75g: Review's numbered sections are section headings like the Day map's —
+   20/800, with the 24×2 rule above from 600px (the phone keeps every px for
+   the brief's first screen, 73a). */
+.rv-title { font-size: 20px; }
+@media (min-width: 600px) {
+  .rv-head::before { content: ""; display: block; width: 24px; height: 2px; margin-bottom: 6px; background: var(--accent); }
+}

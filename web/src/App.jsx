@@ -31,6 +31,7 @@ import OnboardingWizard from "./components/OnboardingWizard";
 import PrivacyPolicy from "./components/PrivacyPolicy";
 import DayMapPage from "./components/DayMapPage";
 import FocusBar from "./components/FocusBar";
+import FocusPill from "./components/FocusPill";
 import { endSessionTasks } from "./utils/focusEnd";
 import { minutesFromSeconds } from "./utils/focusLedger";
 import { formatClock24, nextDateStr } from "./utils/dayMapPlan";
@@ -1436,6 +1437,16 @@ export default function App() {
         onTabSelect={handleTabSelect}
         onGoHome={goToday}
         dayClock={dayClock}
+        focusPill={activeTab === "coach" && focusTimer.focusSessionActive && focusTimer.activeTask && !focusTimer.isFocusMode ? (
+          <FocusPill
+            className="is-in-header"
+            secondsLeft={focusTimer.timerSecondsLeft}
+            maxSeconds={focusTimer.timerMaxSeconds}
+            isRunning={focusTimer.isTimerRunning}
+            blockEnd={focusTimer.blockEnd}
+            onBack={handleReturnToFocus}
+          />
+        ) : null}
       />
 
       {/* Main Tab Screen Router */}
@@ -1615,6 +1626,7 @@ export default function App() {
           onStartBreak={focusTimer.startBreak}
           onStartNext={() => focusTimer.startNextBlock()}
           onHoldBlockEnd={focusTimer.setBlockEndHeld}
+          docked={activeTab === "daymap"}
         />
       )}
 

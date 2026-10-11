@@ -63,12 +63,15 @@ test("Talk it through with Coach: a removable chip, Coach waits, the session sta
   const box = page.locator(".chat-input-row textarea");
   await expect(box).toHaveValue("");
   await expect(box).toHaveAttribute("placeholder", "What's in the way?");
-  const bar = page.getByRole("region", { name: "Focus session" });
-  await expect(bar.getByRole("button", { name: "Resume focus timer" })).toBeVisible();
+  // 75k: on phone Chat the session is the pill in the Chat | Review row,
+  // and the bar (it would cover the composer) gives way.
+  const pill = page.locator(".coach-tabs-end .focus-pill");
+  await expect(pill).toContainText("PAUSED");
+  await expect(page.getByRole("region", { name: "Focus session" })).toBeHidden();
   await page.getByRole("button", { name: "Remove the stuck task" }).click();
   await expect(page.locator(".coach-stuck-chip")).toHaveCount(0);
-  // "← Back to focus" returns, still paused.
-  await page.getByRole("button", { name: "← Back to focus" }).click();
+  // The pill returns, still paused.
+  await pill.click();
   const back = page.locator(".focus-mode-overlay");
   await expect(back).toBeVisible();
   // No time has passed, so a paused session offers Start, not Resume.
