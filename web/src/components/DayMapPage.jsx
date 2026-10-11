@@ -139,7 +139,7 @@ function RouteStop({ task, row, fromYesterday = false, isNow, isOver, isGoal, is
   );
 }
 
-export default function DayMapPage({ payload, savePayload, savePayloadAsync, onClose, onStartFocus, onEndFocus, onAddTask, onHelpChoose, onCloseDay, dayClock, flushNow = () => {}, backLabel = "Today", uid, writeActivityEvents, focusTimer }) {
+export default function DayMapPage({ payload, savePayload, savePayloadAsync, onClose, onStartFocus, onEndFocus, onAddTask, onHelpChoose, onCloseDay, dayClock, flushNow = () => {}, backLabel = "Today", uid, writeActivityEvents, focusTimer, isSyncingFromCache = false }) {
   // A stop, opened (52): the task sheet.
   const [detailId, setDetailId] = useState(null);
   // The route's own Undo: { message, before, at } — before is what to put back.
@@ -189,7 +189,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     activeTodayTasks, scheduledTasks, tomorrowTasks,
     anchorMinutes, rows, routeTasks, plan, isGoal, sortableIds, latestTasks, applyAndSave,
     setAnchor, setAddedBreaks,
-  } = useDayRoute({ payload, savePayload });
+  } = useDayRoute({ payload, savePayload, syncing: isSyncingFromCache });
 
   // A drag ends in a click on the row it dropped; that click must not open it.
   const draggingRef = useRef(false);

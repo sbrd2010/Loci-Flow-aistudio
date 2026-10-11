@@ -196,7 +196,8 @@ function SortableRoadmapList({ colKey, colTasks, fullColTasks = colTasks, tasks,
     const reordered = arrayMove([...tier], tierOldIdx, tierNewIdx);
     const orderMap = new Map(reordered.map((t, i) => [getKey(t), i]));
     savePayload({ ...payload, tasks: tasks.map(t =>
-      orderMap.has(getKey(t)) ? { ...t, orderIndex: orderMap.get(getKey(t)), lastUpdated: Date.now() } : t
+      // Sync: only a task whose place changed is stamped (see reflowRoute).
+      orderMap.has(getKey(t)) && t.orderIndex !== orderMap.get(getKey(t)) ? { ...t, orderIndex: orderMap.get(getKey(t)), lastUpdated: Date.now() } : t
     )});
   };
 

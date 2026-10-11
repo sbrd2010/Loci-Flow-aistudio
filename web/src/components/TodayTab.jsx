@@ -1248,7 +1248,8 @@ export default function TodayTab({
     const orderMap = new Map(reordered.map((t, i) => [getTaskKey(t), i]));
     // The Day map follows: one order for both.
     const next = routeFollowsList(tasks.map(t =>
-      orderMap.has(getTaskKey(t)) ? { ...t, orderIndex: orderMap.get(getTaskKey(t)), lastUpdated: Date.now() } : t
+      // Sync: only a task whose place changed is stamped (see reflowRoute).
+      orderMap.has(getTaskKey(t)) && t.orderIndex !== orderMap.get(getTaskKey(t)) ? { ...t, orderIndex: orderMap.get(getTaskKey(t)), lastUpdated: Date.now() } : t
     ), todayStr, { config, nowMinutes: currentDayMinutes(windows), breaks: routeBreaks(windows, config, todayStr) });
     savePayload({ ...payload, tasks: next });
     // Q1 (69c): dropped above a fixed time it can't finish before, a task
@@ -1442,7 +1443,7 @@ export default function TodayTab({
   const isFromYesterday = (t) => t.deferredUntil === todayStr;
   // The list reads in the route's order (Q59): one order, with fixed times
   // where they fall; a task not on the route yet goes by its own order.
-  const route = useDayRoute({ payload, savePayload });
+  const route = useDayRoute({ payload, savePayload, syncing: isSyncingFromCache });
   const routeIndex = new Map(route.routeTasks.map((t, i) => [getTaskId(t), i]));
   const remainingTasks = todayTasksAll
     .filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid)

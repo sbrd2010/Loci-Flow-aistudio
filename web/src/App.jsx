@@ -1499,6 +1499,7 @@ export default function App() {
             focusTimer={focusTimer}
             dayClock={dayClock}
             flushNow={flushNow}
+            isSyncingFromCache={!demoMode && isSyncingFromCache}
           />
         )}
         {activeTab === "roadmap" && (planView === "horizons" || (planView === "plan" && !planFrontId)) && (
