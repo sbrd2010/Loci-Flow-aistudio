@@ -77,6 +77,11 @@ html[data-theme="dark"] .plan-runway-label.is-today,
 html[data-theme="dark"] .plan-runway-label.is-today .plan-runway-date,
 html[data-theme="dark"] .plan-runway-label.is-open,
 html[data-theme="dark"] .plan-runway-label.is-open .plan-runway-date { color: var(--rung-open-edge); }
+/* Try-out 24: the runway is a glance, not a read. Only Today and the open
+   horizon stay bold and green; the others are lighter and grey, so the open
+   list and the cards lead. */
+.plan-runway-label:not(.is-today):not(.is-open) .plan-runway-name { font-weight: 600; color: var(--ink-2); }
+.plan-runway-label:not(.is-today):not(.is-open) .plan-runway-date { font-weight: 500; }
 .plan-runway-pick {
   pointer-events: auto; padding: 0; font: inherit; color: inherit; background: none; border: 0; cursor: pointer;
 }
