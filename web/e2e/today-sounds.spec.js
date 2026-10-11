@@ -60,3 +60,15 @@ test("with Sounds on, the list plays two notes each way and Mark done three", as
   await page.getByRole("button", { name: /^Mark done/ }).first().click();
   await expect.poll(() => notes(page)).toBe(7);
 });
+
+// Codex review of #500: finishing a task from Plan (the shared task actions)
+// follows the same switch.
+test("with Sounds on, marking a task done in Plan plays the three notes too", async ({ page }) => {
+  await enterDemo(page);
+  await page.getByRole("button", { name: "Settings" }).first().click();
+  await page.getByRole("button", { name: "Appearance" }).click();
+  await page.getByRole("switch", { name: /^Sounds/ }).click();
+  await nav(page).getByRole("button", { name: "Plan", exact: true }).click();
+  await page.locator(".plan-row-circle").first().click();
+  await expect.poll(() => notes(page)).toBe(3);
+});
