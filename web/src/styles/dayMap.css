@@ -665,8 +665,17 @@
 @media (prefers-reduced-motion: reduce) { .dm-done-toggle svg { transition: none; } }
 
 /* ── The right column (56a–b): hairline sections, no cards ── */
-.dm-min,
 .dm-over { padding: 14px 0; border-bottom: 1px solid var(--line); }
+/* Try-out 22: the least to do today, so it catches the eye — a soft green
+   card with the now task's thin accent bar; calm, never red. */
+.dm-min {
+  margin: 12px 0;
+  padding: 14px 16px;
+  border-left: 3px solid var(--accent);
+  border-radius: 4px 10px 10px 4px;
+  background: var(--accent-tint);
+}
+.dm-min .dm-min-row { border-top-color: color-mix(in srgb, var(--accent) 22%, transparent); }
 .dm-min-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .dm-min-title { margin: 0; font-size: 1rem; font-weight: 800; }
 .dm-min-kicker,

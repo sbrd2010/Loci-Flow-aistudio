@@ -137,7 +137,7 @@ test("the minimum day: Change picks, Confirm makes it one line with MIN on the r
   const min = page.getByRole("region", { name: "Minimum day" });
   // The demo day has no must-dos or goal tasks: nothing is suggested, and
   // the heading gives no count (loopcheck #495).
-  await expect(min.getByRole("heading")).toHaveText("If today goes wrong");
+  await expect(min.getByRole("heading")).toHaveText("At least these 3");
   await expect(min).toContainText("No must-dos or goal tasks today. Pick up to three.");
 
   await min.getByRole("button", { name: "Change" }).click();

@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { MINIMUM_DAY_SIZE } from "../utils/minimumDay";
 
-// Minimum day (56a–b, 57b answer 6): "If today goes wrong, do these 3".
+// Minimum day (56a–b, 57b answer 6): "At least these 3" (try-out 22: said
+// as the least to do, not a failure plan, on a soft green card).
 // Suggested: the rows with their times, Confirm and Change. Confirmed: one
 // line, with Change. Change lists today's open tasks with checkboxes, three
 // at most (fewer is fine). `tasks` is today's open tasks in today's order;
@@ -15,7 +16,7 @@ export default function MinimumDay({ state, ids, tasks, timeOf, onConfirm, unfit
     const toggle = (id) => setEditing(cur => (cur.includes(id) ? cur.filter(x => x !== id) : cur.length < MINIMUM_DAY_SIZE ? [...cur, id] : cur));
     return (
       <section className="dm-min" aria-label="Minimum day">
-        <h2 className="dm-min-title">If today goes wrong, do these {MINIMUM_DAY_SIZE}</h2>
+        <h2 className="dm-min-title">At least these {MINIMUM_DAY_SIZE}</h2>
         <ul className="dm-min-pick">
           {tasks.map(t => {
             const id = String(t.uuid || t.id);
@@ -54,7 +55,7 @@ export default function MinimumDay({ state, ids, tasks, timeOf, onConfirm, unfit
     <section className="dm-min" aria-label="Minimum day">
       <div className="dm-min-head">
         {/* Turn 76 (d): N is how many fit, 1 to 3. */}
-        <h2 className="dm-min-title">{picked.length === 0 ? "If today goes wrong" : `If today goes wrong, ${picked.length === 1 ? "do this one" : `do these ${picked.length}`}`}</h2>
+        <h2 className="dm-min-title">{picked.length === 0 ? `At least these ${MINIMUM_DAY_SIZE}` : picked.length === 1 ? "At least this one" : `At least these ${picked.length}`}</h2>
         <span className="dm-min-kicker">SUGGESTED</span>
       </div>
       {picked.length > 0 ? (
