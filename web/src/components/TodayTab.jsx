@@ -263,6 +263,15 @@ export default function TodayTab({
     setPeekOpen(false);
     if (hadFocus) requestAnimationFrame(() => document.querySelector(".wall-peek")?.focus());
   };
+  // Every way of putting the list away — its button, Escape, a swipe down —
+  // glides and sounds the same (Codex review of #500); focus left inside the
+  // list goes to the control that brings it back.
+  const hideList = () => {
+    if (!listMotionActive()) { listTone(false); closeSheet(); return; }
+    const hadFocus = sheetRef.current?.contains(document.activeElement);
+    toggleList(false);
+    if (hadFocus) requestAnimationFrame(() => document.querySelector(".wall-peek")?.focus());
+  };
   // Dragging the grabber moves the sheet with the finger (no re-render per
   // move), then settles on the nearest height: up to full, down to half, or
   // far enough down to close. A drag that barely moves is left to the click.
@@ -297,7 +306,7 @@ export default function TodayTab({
       setTimeout(() => { sheetDragRef.current = null; }, 0);
       if (dy < -60) setSheetFull(true);
       else if (wasFull && dy > 60 && dy < 240) setSheetFull(false);
-      else if (dy > (wasFull ? 240 : 80)) closeSheet();
+      else if (dy > (wasFull ? 240 : 80)) hideList();
     };
     const cancel = (ev) => {
       if (ev.pointerId !== pointerId) return;
@@ -1810,7 +1819,7 @@ export default function TodayTab({
       // before this listener runs, so its state already reads "closed".
       if (e.target?.closest?.('[role="dialog"], .modal-card, [data-testid="task-options-menu"]')) return;
       if (isFocusMode || splitTask || isAddTaskDialogOpen || rescueActive || frontPickerTask) return;
-      closeSheet();
+      hideList();
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
@@ -2029,7 +2038,7 @@ export default function TodayTab({
               <button type="button" className="today-view-opt" aria-pressed={listView === "daymap"} onClick={() => setListView("daymap")}>Day map</button>
             </span>
             {pinnedFocusTask && (
-              <button type="button" className="today-list-hide" aria-label="Hide list" title="Hide list · L" onClick={() => { if (listMotionActive()) toggleList(false); else { listTone(false); closeSheet(); } }}>
+              <button type="button" className="today-list-hide" aria-label="Hide list" title="Hide list · L" onClick={hideList}>
                 {/* PART5 §3: an →| glyph, no circle. */}
                 <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M11 4l5 5-5 5M3 3v12" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>
               </button>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
+import FocusPill from "./FocusPill";
 import { auth } from "../firebase";
 import { callAI, describeAIError, getAIKeys, hasAIKey } from "../utils/aiCall";
 import { buildLocalSafetyReply } from "../utils/crisisSafety";
@@ -116,6 +117,9 @@ const briefChipLabel = (brief) => {
 };
 
 export default function CoachTab({ payload, savePayload, savePayloadAsync, saveSubPath, saveSubPaths, saveSubPathsAsync, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null, chatDraft = "", setChatDraft = () => {}, uid, writeActivityEvents, stuck = null, onClearStuck, onBackToFocus, onOpenPrivacy, onOpenDayMap = null }) {
+  // 75i/75k: a session running while Chat is open shows as the focus pill.
+  const sessionPill = !!onBackToFocus && !!focusTimer.activeTask;
+  const [moreOpen, setMoreOpen] = useState(false);
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
   const windows = getFocusWindows(config);
   // "Today" is the Loci day: a task moved to tomorrow stays off it until the
@@ -1628,12 +1632,35 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
           </div>
         )}
         {coachTab === "chat" && (
-          <span className="coach-tabs-end">
+          <span className={`coach-tabs-end${sessionPill ? " has-focus-pill" : ""}`}>
             <span className="coach-tabs-note">Reads your lists. Changes only what you tap.</span>
+            {/* 75k: on a phone a running session takes New's place, as the
+                pill (the header that carries it on a computer is hidden on
+                phone Chat); New moves into the ⋯ menu. */}
+            {sessionPill && (
+              <FocusPill
+                className="is-in-tabs"
+                secondsLeft={focusTimer.timerSecondsLeft}
+                maxSeconds={focusTimer.timerMaxSeconds}
+                isRunning={focusTimer.isTimerRunning}
+                blockEnd={focusTimer.blockEnd}
+                onBack={onBackToFocus}
+              />
+            )}
             {hasConversation && (
               <button type="button" className="coach-new-conversation" aria-label="New conversation" onClick={startNewConversation}>
                 <span className="coach-new-long">New conversation</span><span className="coach-new-short" aria-hidden="true">New</span>
               </button>
+            )}
+            {sessionPill && hasConversation && (
+              <span className="coach-more-wrap">
+                <button type="button" className="coach-more" aria-label="More" aria-haspopup="menu" aria-expanded={moreOpen} onClick={() => setMoreOpen(v => !v)}>⋯</button>
+                {moreOpen && (
+                  <span className="coach-more-menu" role="menu" onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setMoreOpen(false); } }}>
+                    <button type="button" role="menuitem" autoFocus onClick={() => { setMoreOpen(false); startNewConversation(); }}>New conversation</button>
+                  </span>
+                )}
+              </span>
             )}
           </span>
         )}
@@ -1792,9 +1819,6 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
         </div>
 
         <div className="coach-composer-wrap">
-          {onBackToFocus && (
-            <button type="button" className="coach-back-focus" onClick={onBackToFocus}>← Back to focus</button>
-          )}
           <form ref={chatFormRef} onSubmit={handleSendChat} className="chat-input-row coach-composer">
             {briefChip && (
               <span className="coach-stuck-chip">

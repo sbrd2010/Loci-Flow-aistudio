@@ -689,7 +689,7 @@
 }
 .dm-min .dm-min-row { border-top-color: color-mix(in srgb, var(--accent) 22%, transparent); }
 .dm-min-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-.dm-min-title { margin: 0; font-size: 1rem; font-weight: 800; }
+.dm-min-title { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.01em; } /* 75g: a section heading */
 .dm-min-kicker,
 .dm-min-time {
   font-family: var(--font-mono);
@@ -819,4 +819,100 @@
     border-radius: 12px 12px 0 0;
   }
   .dih-item { min-height: 52px; padding: 0 20px; font-size: 0.9375rem; }
+}
+
+/* 75g: a section heading in the side panel — a 24×2 rule (green, red for a
+   warning), the heading at 20/800, one Lora line under it. */
+.dm-sec { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 18px 0; border-bottom: 0; }
+.dm-sec::before { content: ""; width: 24px; height: 2px; margin-bottom: 4px; background: var(--accent); }
+.dm-sec.is-warn::before { background: var(--coral); }
+.dm-sec-title { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.01em; line-height: 1.25; color: var(--ink); }
+.dm-sec-line { margin: 0; font-family: var(--font-serif); font-size: 15px; line-height: 1.5; color: var(--ink-2); }
+.dm-sec .dm-btn-outline { margin-top: 6px; }
+.dm-sec.dm-over { display: flex; padding: 18px 0; }
+.dm-from-sec .dm-controls { align-self: stretch; border-bottom: 0; }
+
+/* The footer is Today's (75f); on a phone the nav takes its place. */
+.dm-foot { display: none; }
+
+/* 75f: from 1280 the Day map has Today's shell — scaled, edge to edge, and
+   the page never scrolls. The head and the day bar stay pinned, the route
+   scrolls under them, the side panel stays put, and the footer closes it. */
+@media (min-width: 1280px) {
+  html[data-scale-route="daymap"] .app-container {
+    height: calc(100dvh / var(--zoom, 1));
+    min-height: 0;
+    overflow: hidden;
+  }
+  .screen-content.screen-content-day-map {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 0 40px;
+    overflow: hidden;
+  }
+  .screen-content-day-map .day-map-page {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    max-width: none;
+    padding: 0;
+  }
+  .day-map-page:has(.dm-side:not(:empty)) { padding-bottom: 0; }
+  /* The head on one row: ‹ Today · Day map · the day in a sentence · Close the day. */
+  .day-map-page > .dm-head {
+    flex-shrink: 0;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    grid-template-areas: "back title fact close";
+    column-gap: 20px;
+    align-items: center;
+    padding: 16px 0 14px;
+    margin-bottom: 0;
+  }
+  .day-map-page > .dm-head .dm-back { margin-left: -6px; }
+  /* 75g: a page title, as on every page that isn't a tab — 26/800. */
+  .day-map-page > .dm-head .dm-heading { font-size: 26px; }
+  .day-map-page > .dm-head .dm-fact { margin: 0; justify-self: start; }
+  .day-map-page > .dm-head .dm-close-day { grid-area: close; }
+  .day-map-page > .dm-layout {
+    flex: 1;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) clamp(400px, 32%, 520px);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    column-gap: 56px;
+    align-items: stretch;
+    padding-top: 16px;
+  }
+  .day-map-page > .dm-layout > .dm-route-wrap {
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    /* The NOW row's tint bleeds 10px; the scroller takes that gutter in. */
+    margin-inline: -10px;
+    padding: 0 10px 16px;
+  }
+  .day-map-page > .dm-layout > .dm-side { min-height: 0; overflow-y: auto; align-self: start; max-height: 100%; }
+  /* An empty day fills the height too, so the footer stays at the bottom
+     (Codex review of #502). */
+  .day-map-page > .dm-empty { flex: 1; min-height: 0; }
+  .day-map-page > .dm-foot {
+    flex: 0 0 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    border-top: 1px solid var(--line);
+  }
+  .day-map-page > .dm-foot .momentum { margin: 0; padding: 0; border: 0; }
+  .day-map-page > .dm-foot .momentum-line { font-size: 14.5px; font-style: italic; }
+  .dm-foot-done {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--ink-2);
+  }
 }

@@ -26,6 +26,7 @@ export default function FocusBar({
   task, secondsLeft, maxSeconds, isRunning, sessionMinutes = 0,
   onPlayPause, onBack, onEnd, pipOpen, onOpenPiP,
   blockEnd = null, blockNumber = 1, onStartBreak, onStartNext, onHoldBlockEnd,
+  docked = false,
 }) {
   const [ending, setEnding] = useState(false);
   const [more, setMore] = useState(false);
@@ -91,7 +92,7 @@ export default function FocusBar({
   return (
     <>
       <div
-        className={`focus-bar${isRunning || phase ? "" : " is-paused"}${phase ? " is-block-end" : ""}`}
+        className={`focus-bar${isRunning || phase ? "" : " is-paused"}${phase ? " is-block-end" : ""}${docked ? " is-docked" : ""}`}
         role="region"
         aria-label="Focus session"
         onPointerDown={startPress}
@@ -132,10 +133,18 @@ export default function FocusBar({
             <button type="button" className="fb-btn" onClick={onPlayPause} aria-label={isRunning ? "Pause focus timer" : "Resume focus timer"}>
               {isRunning ? "Pause" : "Resume"}
             </button>
-            {PIP_SUPPORTED && !pipOpen && onOpenPiP && (
-              <button type="button" className="fb-btn fb-more" onClick={onOpenPiP}>Mini window</button>
+            {/* 75h: docked in the Day map's footer, End… opens a menu that
+                also holds Mini window. */}
+            {docked ? (
+              <button type="button" className="fb-btn fb-more" aria-haspopup="menu" aria-expanded={more} onClick={() => setMore(true)}>End…</button>
+            ) : (
+              <>
+                {PIP_SUPPORTED && !pipOpen && onOpenPiP && (
+                  <button type="button" className="fb-btn fb-more" onClick={onOpenPiP}>Mini window</button>
+                )}
+                <button type="button" className="fb-btn fb-more" onClick={() => setEnding(true)}>End session…</button>
+              </>
             )}
-            <button type="button" className="fb-btn fb-more" onClick={() => setEnding(true)}>End session…</button>
           </>
         )}
         <button type="button" className="fb-back" onClick={onBack}>
@@ -143,10 +152,10 @@ export default function FocusBar({
         </button>
       </div>
 
-      {/* Phone: what a long press offers. */}
+      {/* Phone: what a long press offers; docked (75h), what End… opens. */}
       {more && (
         <div className="fb-menu-scrim" onClick={() => setMore(false)}>
-          <div className="fb-menu" role="menu" aria-label="Focus session" onClick={e => e.stopPropagation()}>
+          <div className={`fb-menu${docked ? " is-docked" : ""}`} role="menu" aria-label="Focus session" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setMore(false); } }}>
             {PIP_SUPPORTED && !pipOpen && onOpenPiP && (
               <button type="button" role="menuitem" className="fb-menu-item" onClick={() => { setMore(false); onOpenPiP(); }}>Mini window</button>
             )}
