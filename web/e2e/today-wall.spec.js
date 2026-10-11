@@ -1351,11 +1351,11 @@ test("laptop: show/hide glides with transform and opacity, reverses mid-move and
     const a = document.getAnimations().find(x => x.effect.target.classList.contains("wall-title"));
     return a && { d: a.effect.getTiming().duration, e: a.effect.getTiming().easing, from: a.effect.getKeyframes()[0].transform };
   });
-  expect(titleAnim.d).toBe(280);
-  expect(titleAnim.e).toBe("cubic-bezier(0.2, 0, 0, 1)");
-  // Both laptop states take the stage scale, so the title glides without a
-  // zoom (from 1600px, where hiding the list takes the wide sizes, it zooms).
-  expect(titleAnim.from).toMatch(/^translate\(.+\) scale\(1\)$/);
+  // 75e: the glide is 480ms; hiding the list takes the title from 46 to 52
+  // (75d), so it zooms from 46/52.
+  expect(titleAnim.d).toBe(480);
+  expect(titleAnim.e).toBe("cubic-bezier(0.22, 1, 0.36, 1)");
+  expect(titleAnim.from).toMatch(/^translate\(.+\) scale\(0\.88\d*\)$/);
   await page.waitForTimeout(120);
   await page.keyboard.press("l");
   await expect(page.locator(".tasks-section")).toBeHidden({ timeout: 2_000 });
@@ -1366,9 +1366,9 @@ test("laptop: show/hide glides with transform and opacity, reverses mid-move and
 });
 
 // Codex review of #405. What leaves fades out as a copy (the hidden-state
-// controls on Show, 80ms): the copy must outlive the layout switch. And the
-// list's own 120ms fade on Hide must not end the task's glide, which runs to
-// 320ms. Both are read in the same task as the click, so timing can't flake.
+// controls on Show): the copy must outlive the layout switch. And the
+// list's own 320ms fade on Hide (75e) must not end the task's glide, which
+// runs to 560ms. Both are read in the same task as the click, so timing can't flake.
 test("laptop: the leaving controls fade out, and hiding lets the task finish its glide (51f)", async ({ page }) => {
   await enterLaptop(page);
   await page.locator(".wall-peek").click();
@@ -1383,7 +1383,7 @@ test("laptop: the leaving controls fade out, and hiding lets the task finish its
     const glide = document.querySelector("[data-flip='title']").getAnimations()[0];
     return { listFade: fade.effect.getTiming().duration, glideState: glide?.playState };
   });
-  expect(hide.listFade).toBe(120);
+  expect(hide.listFade).toBe(320);
   expect(hide.glideState).toBe("running");
 });
 

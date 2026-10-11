@@ -64,7 +64,7 @@ test("a Plan goal task becomes the one thing from the record, and Undo sends it 
   await nav(page).getByRole("button", { name: "Today", exact: true }).click();
   await band(page).click();
   await expect(record(page).locator(".gr-next-title")).toContainText("Push the project");
-  await record(page).getByRole("button", { name: "Make it your now task" }).click();
+  await record(page).getByRole("button", { name: "Do this now" }).click();
   await expect(record(page)).toHaveCount(0);
   await expect(page.locator(".wall-title")).toContainText("Push the project");
 
