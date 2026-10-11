@@ -586,8 +586,14 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   //
   // With no From set, the route starts now: a first stop that starts later
   // than now's quarter hour is a gap too (the stop before it went).
+  //
+  // Only a sheet action is an edit. Tidying a gap someone else's write left
+  // stamps nothing (see reflowRoute), and waits for the server's copy: a
+  // cached one, timed again, would otherwise outrank another device's edits
+  // (Codex review of #501).
   useEffect(() => {
     const pending = pendingReflowRef.current;
+    if (!pending && isSyncingFromCache) return;
     const fromSet = routeConfig.dayMapDate === todayStr && routeConfig.dayMapAnchorMinutes != null;
     const start = fromSet ? anchorMinutes : currentDayMinutes(windows);
     // A fixed stop keeps its own time: the head is the first stop that flows.
@@ -598,8 +604,8 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     const order = (t) => t.dayMapOrder ?? Infinity;
     const route = [...scheduledTasks].sort((a, b) => (order(a) - order(b))
       || ((getTaskId(b) === prefer) - (getTaskId(a) === prefer)));
-    applyAndSave(route, start);
-  }, [scheduledTasks]); // eslint-disable-line react-hooks/exhaustive-deps
+    applyAndSave(route, start, null, { stamp: !!pending });
+  }, [scheduledTasks, isSyncingFromCache]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The sheet on phones and tablets, the drawer from 1024px (as in Plan).
   // Its place is its place on screen (routeTasks: time order), for "N OF M"

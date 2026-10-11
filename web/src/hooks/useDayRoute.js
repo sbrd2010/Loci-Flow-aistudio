@@ -199,9 +199,9 @@ export function routeFollowsList(tasks, todayStr, { config = {}, nowMinutes, bre
   return applyReflow(next, reflowRoute(reordered, routeAnchor(route, config, todayStr, nowMinutes), todayStr, breaks, { stamp }));
 }
 // After a drag on the Day map: the list takes the route's order.
-export function listFollowsRoute(tasks, todayStr) {
+export function listFollowsRoute(tasks, todayStr, { stamp = true } = {}) {
   const members = sharedStops(tasks, todayStr).sort(byRouteOrder);
-  return giveSlots(tasks, members, t => t.orderIndex ?? 0, "orderIndex");
+  return giveSlots(tasks, members, t => t.orderIndex ?? 0, "orderIndex", { stamp });
 }
 
 // Undo of a route change (a one thing moved to NOW): the stops come back
@@ -325,11 +325,13 @@ export function useDayRoute({ payload, savePayload, syncing = false }) {
   const latestTasks = () => payloadRef.current?.tasks || [];
 
   // Reflow ordered tasks from the start and save everything in one write.
-  const applyAndSave = (orderedScheduled, anchor, configPatch = null, { listFollows = false } = {}) => {
-    const reflowed = reflowRoute(orderedScheduled, anchor, todayStr, breaks);
+  // `stamp: false` when the route is only being tidied on its own (see
+  // reflowRoute).
+  const applyAndSave = (orderedScheduled, anchor, configPatch = null, { listFollows = false, stamp = true } = {}) => {
+    const reflowed = reflowRoute(orderedScheduled, anchor, todayStr, breaks, { stamp });
     const p = payloadRef.current;
     const laid = applyReflow(latestTasks(), reflowed);
-    const update = { ...p, tasks: listFollows ? listFollowsRoute(laid, todayStr) : laid, timestamp: Date.now() };
+    const update = { ...p, tasks: listFollows ? listFollowsRoute(laid, todayStr, { stamp }) : laid, timestamp: Date.now() };
     if (configPatch) {
       update.config = { ...(p?.config || {}), ...configPatch, lastUpdated: Date.now() };
     }
