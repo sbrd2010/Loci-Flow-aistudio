@@ -17,6 +17,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import LinkifyText from "./LinkifyText";
+import { taskSteps } from "../utils/taskSteps";
 import TaskDetail, { formatEstimate } from "./TaskDetail";
 import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
 import { IconChevronLeft, IconChevronRight, IconPin, IconPlus } from "./ui/icons";
@@ -39,7 +40,9 @@ function SortableRoadmapCard({ id, task, onTaskClick, onDone, isGoal = false, fr
   // Try-out 11: a task with steps shows them in one line — "1 of 5 steps ·
   // Next: …" — and the count unfolds them all under the row, so a task is
   // recognisable days later without opening it.
-  const steps = Array.isArray(task.subSteps) ? task.subSteps.filter(st => st && String(st.text || "").trim()) : [];
+  // The task sheet's steps: a first step kept only in concreteStep counts
+  // too (Codex review of #500).
+  const steps = taskSteps(task).filter(st => st && String(st.text || "").trim());
   const stepsDone = steps.filter(st => st.done).length;
   const nextStep = steps.find(st => !st.done);
   const [stepsOpen, setStepsOpen] = useState(false);

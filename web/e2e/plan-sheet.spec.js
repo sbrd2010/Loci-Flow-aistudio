@@ -228,8 +228,9 @@ test("Delete, then Restore from Settings → Data → Recently dropped; Settings
 test("a row with steps shows its next step, and the count unfolds them in place", async ({ page }) => {
   await enterDemo(page);
   const row = horizon(page, "This week").locator(".plan-row").first();
-  await expect(row.locator(".plan-row-steps")).toHaveCount(0);
   await row.click();
+  // A first step the task already has counts (it's step 1 in the sheet).
+  const before = (await stepTexts(page)).length;
   for (const text of ["Draft the outline", "Send it"]) {
     await sheet(page).getByLabel("Add a step").fill(text);
     await sheet(page).getByLabel("Add a step").press("Enter");
@@ -240,7 +241,7 @@ test("a row with steps shows its next step, and the count unfolds them in place"
   expect(steps).toBe(0);
   const toggle = row.getByRole("button", { name: /^\d+ of \d+ steps: show them$/ });
   const total = Number((await toggle.innerText()).match(/of (\d+)/)[1]);
-  expect(total).toBeGreaterThanOrEqual(2);
+  expect(total).toBe(before + 2);
   await expect(row.locator(".plan-row-next")).toHaveText(/^· Next: .+/);
   await toggle.click();
   await expect(sheet(page)).toHaveCount(0);
