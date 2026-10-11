@@ -82,3 +82,27 @@ test("a split stop that ends past the day end is under the line, in time order",
   expect(order.indexOf("dm-break")).toBeGreaterThan(order.indexOf("dm-stop"));
   expect(order.indexOf("dm-stop:continued")).toBeGreaterThan(order.indexOf("dm-break"));
 });
+
+// Try-out issue 1: a window added later falls into the order of the day once
+// its edit is done — not while it is typed in.
+test("Settings › Focus windows: a window added at an earlier time moves above once its row is left", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "The day", exact: true }).click();
+  await page.getByRole("button", { name: /^Focus windows/ }).click();
+  await page.getByRole("button", { name: "Remove focus window 1" }).click();
+  await page.getByRole("button", { name: "Add a window" }).click();
+  await page.getByLabel("Focus window 1 start time").fill("11:30");
+  await page.getByLabel("Focus window 1 end time").fill("12:30");
+  await page.getByRole("button", { name: "Add a window" }).click();
+  await page.getByLabel("Focus window 2 start time").fill("10:00");
+  // Still typing in it: it stays where it is.
+  await expect(page.getByLabel("Focus window 2 start time")).toHaveValue("10:00");
+  await page.getByLabel("Focus window 2 end time").fill("11:00");
+  await page.getByLabel("Focus window 2 end time").blur();
+  await expect(page.getByLabel("Focus window 1 start time")).toHaveValue("10:00");
+  await expect(page.getByLabel("Focus window 2 start time")).toHaveValue("11:30");
+});

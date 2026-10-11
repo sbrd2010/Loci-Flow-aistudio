@@ -916,3 +916,28 @@
     color: var(--ink-2);
   }
 }
+
+/* Try-out issue 6: a break reads apart from the tasks at a glance — its own
+   cool, soft shade (never green: green is now and the one action), on the
+   Day map page and in Today's Day map view, light and dark. */
+:root { --break-tint: #E7ECF1; --break-ink: #4A5A68; } /* data-theme is always set (app.css) */
+html[data-theme="dark"] { --break-tint: #1D262D; --break-ink: #A9B6C1; }
+.dm-break,
+.tdm-stop.is-break {
+  margin-inline: -10px;
+  padding-inline: 10px;
+  background: var(--break-tint);
+  border-bottom-color: transparent;
+  border-radius: 6px;
+}
+.dm-break.is-added { padding-inline: 10px; }
+.dm-break + .dm-stop,
+.tdm-stop.is-break + .tdm-stop { border-top: 0; }
+.dm-break .dm-title,
+.dm-break .dm-time,
+.dm-break .dm-dur,
+.tdm-stop.is-break .tdm-title,
+.tdm-stop.is-break .tdm-time,
+.tdm-stop.is-break .tdm-dur { color: var(--break-ink); }
+.dm-break .dm-dash,
+.tdm-stop.is-break .dm-dash { background: var(--break-ink); }

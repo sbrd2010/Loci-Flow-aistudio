@@ -78,9 +78,12 @@ function useCountdown(seconds, running, onEnd) {
   return left;
 }
 
+// Try-out issue 3: someone who is already rattled reads the instruction
+// first; the ring starts only when they press Start (Enter or Space on it).
 function Breathing({ onDone }) {
+  const [started, setStarted] = useState(false);
   const total = PHASES.length * PHASE_S * ROUNDS;
-  const left = useCountdown(total, true, onDone);
+  const left = useCountdown(total, started, onDone);
   const elapsed = total - left;
   const phaseIndex = Math.floor(elapsed / PHASE_S) % PHASES.length;
   const inPhase = elapsed % PHASE_S;
@@ -88,6 +91,21 @@ function Breathing({ onDone }) {
   const r = 88;
   const c = 2 * Math.PI * r;
   const fill = (inPhase + 1) / PHASE_S;
+  if (!started) {
+    return (
+      <div className="rescue-breath-ready">
+        <div className="rescue-breath">
+          <svg className="rescue-ring" viewBox="0 0 200 200" aria-hidden="true">
+            <circle cx="100" cy="100" r={r} className="rescue-ring-track" />
+          </svg>
+          <div className="rescue-breath-text">
+            <span className="rescue-kicker">{ROUNDS} ROUNDS · 1 MIN</span>
+          </div>
+        </div>
+        <button type="button" className="rescue-btn-filled rescue-breath-start" autoFocus onClick={() => setStarted(true)}>Start breathing</button>
+      </div>
+    );
+  }
   return (
     <div className="rescue-breath" role="timer" aria-label={`${PHASES[phaseIndex]}, ${PHASE_S - inPhase} seconds. Round ${round} of ${ROUNDS}`}>
       <svg className="rescue-ring" viewBox="0 0 200 200" aria-hidden="true">

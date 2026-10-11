@@ -19,6 +19,25 @@ export function focusWindowRows(config = {}) {
   return [];
 }
 
+// Try-out issue 1: the windows read in the order of the day, so a window
+// added later at 10:00 sits above 11:30. A window starting before 05:00 is
+// after midnight when the day has a later one, so 23:00 then 00:30 stays in
+// that order. Unfinished rows go last, in their own order.
+const AFTER_MIDNIGHT_BEFORE = 5 * 60;
+export function sortFocusWindowRows(rows) {
+  const minutesOf = (t) => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || ""));
+    return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+  };
+  const starts = rows.map(w => minutesOf(w.start));
+  const hasDaytime = starts.some(m => m != null && m >= AFTER_MIDNIGHT_BEFORE);
+  const key = (m) => (m == null ? Infinity : hasDaytime && m < AFTER_MIDNIGHT_BEFORE ? m + 1440 : m);
+  return rows
+    .map((w, i) => ({ w, i, k: key(starts[i]) }))
+    .sort((a, b) => a.k - b.k || a.i - b.i)
+    .map(x => x.w);
+}
+
 // A time input can briefly be incomplete while a person edits it. Keep that
 // draft when a synchronized config arrives, but replace all complete rows
 // with the latest saved set so the next edit cannot write an old snapshot.

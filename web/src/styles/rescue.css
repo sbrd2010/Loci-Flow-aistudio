@@ -167,3 +167,8 @@
   .rescue-body { padding: 24px 16px; }
 }
 @media (pointer: coarse) { .rescue-leave-key { display: none; } }
+
+/* Try-out issue 3: the ring waits for Start. */
+.rescue-breath-ready { display: flex; flex-direction: column; align-items: center; gap: 20px; align-self: center; }
+.rescue-breath-start { min-height: 48px; padding: 0 24px; font: inherit; font-size: 1rem; font-weight: 800; border-radius: 8px; cursor: pointer; }
+.rescue-breath-start:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }

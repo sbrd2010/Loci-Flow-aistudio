@@ -29,6 +29,11 @@ test("the four steps, Clear my day to This week, and Undo", async ({ page }) => 
   await expect(rescue(page).getByText("STEP 1 OF 3")).toBeVisible();
   await rescue(page).getByRole("button", { name: /^Too much going on/ }).click();
   await expect(rescue(page).getByText("STEP 2 OF 3 · TOO MUCH GOING ON")).toBeVisible();
+  // Try-out issue 3: the instruction first; the ring starts on Start.
+  await expect(rescue(page).getByRole("timer")).toHaveCount(0);
+  const start = rescue(page).getByRole("button", { name: "Start breathing" });
+  await expect(start).toBeFocused();
+  await page.keyboard.press("Enter");
   await expect(rescue(page).getByRole("timer")).toContainText("ROUND 1 OF 4");
   await rescue(page).getByRole("button", { name: "Skip", exact: true }).click();
 
