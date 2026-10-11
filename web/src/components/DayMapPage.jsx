@@ -139,7 +139,7 @@ function RouteStop({ task, row, fromYesterday = false, isNow, isOver, isGoal, is
   );
 }
 
-export default function DayMapPage({ payload, savePayload, savePayloadAsync, onClose, onStartFocus, onEndFocus, onAddTask, onHelpChoose, onCloseDay, dayClock, flushNow = () => {}, backLabel = "Today", uid, writeActivityEvents, focusTimer }) {
+export default function DayMapPage({ payload, savePayload, savePayloadAsync, onClose, onStartFocus, onEndFocus, onAddTask, onHelpChoose, onCloseDay, dayClock, flushNow = () => {}, backLabel = "Today", uid, writeActivityEvents, focusTimer, isSyncingFromCache = false }) {
   // A stop, opened (52): the task sheet.
   const [detailId, setDetailId] = useState(null);
   // The route's own Undo: { message, before, at } — before is what to put back.
@@ -189,7 +189,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     activeTodayTasks, scheduledTasks, tomorrowTasks,
     anchorMinutes, rows, routeTasks, plan, isGoal, sortableIds, latestTasks, applyAndSave,
     setAnchor, setAddedBreaks,
-  } = useDayRoute({ payload, savePayload });
+  } = useDayRoute({ payload, savePayload, syncing: isSyncingFromCache });
 
   // A drag ends in a click on the row it dropped; that click must not open it.
   const draggingRef = useRef(false);
@@ -280,7 +280,9 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     }
     const id = getTaskId(task);
     const before = [...scheduledTasks, ...(scheduledTasks.some(t => getTaskId(t) === id) ? [] : [latestTasks().find(t => getTaskId(t) === id) || task])];
-    const fixed = { ...task, dayMapFixedMinutes: at };
+    // The user's edit: stamped here, as reflowRoute stamps only what it moves
+    // (Codex review of #501).
+    const fixed = { ...task, dayMapFixedMinutes: at, lastUpdated: Date.now() };
     const order = scheduledTasks.some(t => getTaskId(t) === id)
       ? scheduledTasks.map(t => (getTaskId(t) === id ? fixed : t))
       : [...scheduledTasks, fixed];
@@ -363,7 +365,8 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   const unfix = (taskId) => {
     const task = scheduledTasks.find(t => getTaskId(t) === taskId);
     if (!task) return;
-    const { dayMapFixedMinutes, ...flowing } = task;
+    const { dayMapFixedMinutes, ...rest } = task;
+    const flowing = { ...rest, lastUpdated: Date.now() };
     applyAndSave(scheduledTasks.map(t => (getTaskId(t) === taskId ? flowing : t)), anchorMinutes);
     // The WAS badges were about the fix; with it gone they'd point nowhere
     // (Codex review of #425).
@@ -586,8 +589,14 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   //
   // With no From set, the route starts now: a first stop that starts later
   // than now's quarter hour is a gap too (the stop before it went).
+  //
+  // Only a sheet action is an edit. Tidying a gap someone else's write left
+  // stamps nothing (see reflowRoute), and waits for the server's copy: a
+  // cached one, timed again, would otherwise outrank another device's edits
+  // (Codex review of #501).
   useEffect(() => {
     const pending = pendingReflowRef.current;
+    if (!pending && isSyncingFromCache) return;
     const fromSet = routeConfig.dayMapDate === todayStr && routeConfig.dayMapAnchorMinutes != null;
     const start = fromSet ? anchorMinutes : currentDayMinutes(windows);
     // A fixed stop keeps its own time: the head is the first stop that flows.
@@ -598,8 +607,8 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     const order = (t) => t.dayMapOrder ?? Infinity;
     const route = [...scheduledTasks].sort((a, b) => (order(a) - order(b))
       || ((getTaskId(b) === prefer) - (getTaskId(a) === prefer)));
-    applyAndSave(route, start);
-  }, [scheduledTasks]); // eslint-disable-line react-hooks/exhaustive-deps
+    applyAndSave(route, start, null, { stamp: !!pending });
+  }, [scheduledTasks, isSyncingFromCache]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The sheet on phones and tablets, the drawer from 1024px (as in Plan).
   // Its place is its place on screen (routeTasks: time order), for "N OF M"
