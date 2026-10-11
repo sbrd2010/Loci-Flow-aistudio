@@ -580,7 +580,7 @@ export default function TodayWall({
 
         {/* 72c: with the list away, what comes next and where the day ends. */}
         {then && (
-          <p className="wall-then">
+          <p className="wall-then" data-flip-controls="">
             <span className="wall-then-kicker">THEN</span>
             {then.title ? <> {formatClock24(then.at)} · {then.title} · </> : " "}
             DAY ENDS {formatClock24(then.dayEnd)}

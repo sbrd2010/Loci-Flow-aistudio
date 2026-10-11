@@ -155,6 +155,8 @@ export default function SettingsTab({ initialPage = null, payload, savePayload, 
         <span className="set-row-sub">Auto follows your device’s dark mode.</span>
       </div>
       <SwitchRow title="Show momentum" sub="Five bars under Today" checked={config.momentumEnabled !== false} onChange={v => saveConfigPatch({ momentumEnabled: v })} />
+      {/* 75e: off by default. */}
+      <SwitchRow title="Sounds" sub="Soft tones when you hide the list or finish a task" checked={config.uiSounds === true} onChange={v => saveConfigPatch({ uiSounds: v })} />
       <SwitchRow title="Drag anywhere" sub="Reorder a task by dragging anywhere on its row" checked={config.taskRowInteractionStyle === "dragAnywhere"} onChange={v => saveConfigPatch({ taskRowInteractionStyle: v ? "dragAnywhere" : "classic" })} />
     </Group>
   );

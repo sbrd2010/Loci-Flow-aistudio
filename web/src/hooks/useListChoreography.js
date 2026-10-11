@@ -2,13 +2,18 @@ import { useCallback, useEffect, useRef } from "react";
 import { flushSync } from "react-dom";
 import { cssZoom } from "../utils/cssZoom";
 
-// Today's show/hide list (turn 51, 51e–f): the only layout motion in the app.
+// Today's show/hide list (turn 51, 51e–f; timed by 75e): the only layout
+// motion in the app.
 // FLIP with the Web Animations API, on transform and opacity only: switch the
 // layout, measure, invert with a transform, play. A second toggle mid-move
 // measures where things are (a bounding box includes the running transform)
 // and plays from there, so it reverses from where the task is.
 
-const GLIDE = "cubic-bezier(0.2, 0, 0, 1)";
+// 75e: Hide is 560ms. The list slides 64px right and fades (0–320ms,
+// ease-in); the task glides to the centre (80–560ms) and its title grows;
+// then "Show list" and the THEN line fade in (360–560ms). Show runs it back:
+// those fade out, the task glides (0–480ms), the list comes in (240–560ms).
+const GLIDE = "cubic-bezier(0.22, 1, 0.36, 1)";
 const ENTER = "cubic-bezier(0, 0, 0.2, 1)";
 const EXIT = "cubic-bezier(0.4, 0, 1, 1)";
 
@@ -114,12 +119,12 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
     el.setAttribute("data-leaving", "");
     leaving.current = el;
     const a = el.animate(
-      [{ opacity: fromOpacity, transform: "translateX(0)" }, { opacity: 0, transform: "translateX(12px)" }],
-      { duration: 120, easing: EXIT, fill: "forwards" },
+      [{ opacity: fromOpacity, transform: "translateX(0)" }, { opacity: 0, transform: "translateX(64px)" }],
+      { duration: 320, easing: EXIT, fill: "forwards" },
     );
     anims.current.push(a);
-    // Only the list is done at 120ms: the task's glide and the controls'
-    // fade-in run on to 320ms and 380ms.
+    // Only the list is done at 320ms: the task's glide and the controls'
+    // fade-in run on to 560ms.
     a.onfinish = () => {
       if (leaving.current !== el) return;
       releaseLeaving();
@@ -168,8 +173,8 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
     // layout changes, while they still look right, and fade out after it.
     const staleGhosts = ghosts.current;
     ghosts.current = [];
-    if (next) controlsBefore.forEach(el => fadeOutGhost(el, 80, "linear"));
-    else entersBefore.forEach(el => fadeOutGhost(el, 80, "linear"));
+    if (next) controlsBefore.forEach(el => fadeOutGhost(el, 160, EXIT));
+    else entersBefore.forEach(el => fadeOutGhost(el, 160, EXIT));
     if (mode === "rise") fadeOutGhost(heroBefore, 120, EXIT);
 
     settle(staleGhosts);
@@ -198,19 +203,19 @@ export function useListChoreography({ rootRef, listRef, setOpen }) {
         if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5 && Math.abs(scale - 1) < 0.001) continue;
         play(el,
           [{ transform: `translate(${dx}px, ${dy}px) scale(${scale})` }, { transform: "none" }],
-          next ? { duration: 280, easing: GLIDE } : { duration: 240, easing: GLIDE, delay: d(80) });
+          next ? { duration: 480, easing: GLIDE } : { duration: 480, easing: GLIDE, delay: d(80) });
       }
       if (next) {
         if (visible(list)) {
           play(list,
-            [{ opacity: interrupted ? listOpacity : 0, transform: "translateX(12px)" }, { opacity: 1, transform: "none" }],
-            { duration: 220, easing: ENTER, delay: d(60) });
+            [{ opacity: interrupted ? listOpacity : 0, transform: "translateX(64px)" }, { opacity: 1, transform: "none" }],
+            { duration: 320, easing: ENTER, delay: d(240) });
         }
         root.querySelectorAll("[data-flip-enter]").forEach(el => visible(el) && play(el,
-          [{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: ENTER, delay: d(60) }));
+          [{ opacity: 0 }, { opacity: 1 }], { duration: 320, easing: ENTER, delay: d(240) }));
       } else {
         root.querySelectorAll("[data-flip-controls]").forEach(el => visible(el) && play(el,
-          [{ opacity: 0 }, { opacity: 1 }], { duration: 160, easing: ENTER, delay: d(220) }));
+          [{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: ENTER, delay: d(360) }));
       }
     }
 
