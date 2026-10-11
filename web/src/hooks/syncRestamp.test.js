@@ -61,4 +61,14 @@ describe("the route's automatic catch-up never beats a real edit from another de
     const unchanged = reflowRoute([{ ...today[0], dayMapStartMinutes: 600, dayMapOrder: 0, dayMapPeriod: "morning" }], 600, TODAY);
     expect(unchanged[0].lastUpdated).toBe(T0);
   });
+
+  // Codex review of #501: fixing a stop at the start it already has moves
+  // nothing, so the caller stamps its own edit; the reflow keeps that stamp.
+  it("a caller's own stamp survives a reflow that moves nothing", () => {
+    const today = { ...stale[0], dayMapDate: TODAY, dayMapStartMinutes: 600, dayMapOrder: 0, dayMapDurationMinutes: 30, dayMapPeriod: "morning" };
+    const edited = { ...today, dayMapFixedMinutes: 600, lastUpdated: T1 };
+    const [out] = reflowRoute([edited], 600, TODAY, [], { stamp: false });
+    expect(out.dayMapFixedMinutes).toBe(600);
+    expect(out.lastUpdated).toBe(T1);
+  });
 });

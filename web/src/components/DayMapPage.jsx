@@ -280,7 +280,9 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     }
     const id = getTaskId(task);
     const before = [...scheduledTasks, ...(scheduledTasks.some(t => getTaskId(t) === id) ? [] : [latestTasks().find(t => getTaskId(t) === id) || task])];
-    const fixed = { ...task, dayMapFixedMinutes: at };
+    // The user's edit: stamped here, as reflowRoute stamps only what it moves
+    // (Codex review of #501).
+    const fixed = { ...task, dayMapFixedMinutes: at, lastUpdated: Date.now() };
     const order = scheduledTasks.some(t => getTaskId(t) === id)
       ? scheduledTasks.map(t => (getTaskId(t) === id ? fixed : t))
       : [...scheduledTasks, fixed];
@@ -363,7 +365,8 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   const unfix = (taskId) => {
     const task = scheduledTasks.find(t => getTaskId(t) === taskId);
     if (!task) return;
-    const { dayMapFixedMinutes, ...flowing } = task;
+    const { dayMapFixedMinutes, ...rest } = task;
+    const flowing = { ...rest, lastUpdated: Date.now() };
     applyAndSave(scheduledTasks.map(t => (getTaskId(t) === taskId ? flowing : t)), anchorMinutes);
     // The WAS badges were about the fix; with it gone they'd point nowhere
     // (Codex review of #425).
