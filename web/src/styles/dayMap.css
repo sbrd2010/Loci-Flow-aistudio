@@ -107,6 +107,14 @@
   gap: 8px;
 }
 .dm-daybar { grid-area: bar; }
+.dm-min-slot { grid-area: min; }
+/* Try-out 39 (phone): the summary, the least to do, the route with NOW,
+   then the bar and its key, quieter, below it. */
+@media (max-width: 1023px) {
+  .dm-layout { grid-template-areas: "min" "controls" "route" "bar" "side"; }
+  .dm-min-slot .dm-min { margin-top: 4px; }
+  .dm-layout > .dm-daybar { margin-top: 16px; opacity: 0.85; }
+}
 .dm-controls { grid-area: controls; }
 .dm-route-wrap { grid-area: route; min-width: 0; }
 .dm-side { grid-area: side; }
@@ -213,7 +221,9 @@
   border-bottom-color: transparent;
   border-radius: 6px;
 }
-.dm-stop.is-over .dm-time { color: var(--coral); }
+/* Try-out 39: red is one signal — the won't-fit count and the DAY ENDS
+   rule. The rows past the end are muted, not red. */
+.dm-stop.is-over .dm-time { color: var(--ink-2); }
 /* The rail (56a–c): one dot per row, and no blocks. A tick when done, solid
    at NOW, hollow for later, a dash for a break; red past the day end. */
 .dm-rail { display: flex; justify-content: center; align-self: center; }
@@ -229,7 +239,7 @@
   background: var(--bg);
 }
 .dm-dot.is-now { width: 12px; height: 12px; border: 0; background: var(--accent); }
-.dm-dot.is-over { border-color: var(--coral); }
+.dm-dot.is-over { border-style: dashed; }
 .dm-dot.is-done { width: 16px; height: 16px; border: 0; color: var(--on-accent); background: var(--accent); }
 .dm-dash { width: 10px; height: 2px; background: var(--edge); }
 .dm-one-thing {
@@ -393,9 +403,11 @@
 }
 
 @media (min-width: 1024px) {
-  .day-map-page { max-width: 1180px; padding: 0 40px 80px; }
+  /* Try-out 18: the route and the side stretch with the window (up to the
+     24″'s 1480, as Plan) instead of a fixed 1180 block with empty margins. */
+  .day-map-page { max-width: 1480px; padding: 0 40px 80px; }
   .dm-layout {
-    grid-template-columns: minmax(0, 1fr) 420px;
+    grid-template-columns: minmax(0, 1fr) clamp(400px, 34%, 520px);
     grid-template-areas:
       "bar side"
       "controls side"

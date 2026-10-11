@@ -749,6 +749,13 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
           onDragCancel={() => { setTimeout(() => { draggingRef.current = false; }, 0); }}
         >
           <div className="dm-layout">
+            {/* Try-out 39: on a phone the least to do today leads, right
+                under the summary; the bar goes below the route. */}
+            {!drawerViewport && openToday.length > 0 && (
+              <div className="dm-min-slot">
+                <MinimumDay state={minDay.state} ids={minDay.ids} unfit={minDay.unfit} tasks={openToday} timeOf={timeOf} onConfirm={confirmMin} />
+              </div>
+            )}
             {bar && (
               <DayBar bar={bar} now={nowMins} doneMinutes={doneMinutes} plannedMinutes={barPlanned} overBy={barOverBy} wontFitMinutes={wontFit.count > 0 ? wontFit.minutes : null} />
             )}
@@ -771,11 +778,8 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
               {tomorrowTasks.length > 0 && (
                 <p className="dm-tomorrow-note">{tomorrowTasks.length} {tomorrowTasks.length === 1 ? "task now starts" : "tasks now start"} tomorrow.</p>
               )}
-              {!drawerViewport && openToday.length > 0 && (
-                <MinimumDay state={minDay.state} ids={minDay.ids} unfit={minDay.unfit} tasks={openToday} timeOf={timeOf} onConfirm={confirmMin} />
-              )}
               {(isOver || plan.overBy > 0) && onHelpChoose && (
-                <button type="button" className="dm-text-btn is-alert dm-help" onClick={onHelpChoose}>Help me choose</button>
+                <button type="button" className="dm-text-btn dm-help" onClick={onHelpChoose}>Help me choose</button>
               )}
             </div>
 

@@ -466,6 +466,28 @@
 .plan-row-figures.plan-row-front { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .plan-row-pin { display: inline-flex; flex-shrink: 0; color: var(--ink-2, var(--text-secondary)); }
 .plan-row-meta .task-tag { flex-shrink: 0; }
+/* Try-out 11: the steps line under a row, and the steps unfolded. */
+.plan-row-steps { display: flex; align-items: baseline; gap: 6px; min-width: 0; font-size: 0.8125rem; color: var(--ink-2); }
+.plan-row-steps-toggle {
+  flex-shrink: 0;
+  min-height: 28px;
+  margin: -4px 0;
+  padding: 0 6px;
+  margin-left: -6px;
+  font: inherit;
+  font-weight: 700;
+  color: var(--ink-2);
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.plan-row-steps-toggle:hover { color: var(--ink); background: var(--panel); }
+.plan-row-steps-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.plan-row-next { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-row-step-list { margin: 2px 0 0; padding-left: 20px; font-size: 0.8125rem; line-height: 1.45; color: var(--ink); }
+.plan-row-step-list li { overflow-wrap: anywhere; }
+.plan-row-step-list li.is-done { color: var(--ink-2); text-decoration: line-through; }
 /* The open task's row (52h): tinted, with the focus ring. */
 .roadmap-task-card.plan-row.is-open {
   margin: 0 -8px;

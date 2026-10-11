@@ -106,6 +106,15 @@
     text-transform: none;
   }
 }
+/* Try-out 15: a 24″ screen — a wider column (~860) and a step larger text,
+   so Chat fills more of the screen at a readable line length. */
+@media (min-width: 1600px) {
+  .coach-chat-col { max-width: 860px; }
+  .coach-msg.is-you .coach-msg-text { font-size: 16.5px; }
+  .coach-msg.is-coach .coach-msg-text.coach-md,
+  .coach-msg.is-coach .coach-reply { font-size: 18px; }
+  .coach-composer-input { font-size: 18px; }
+}
 /* A short laptop screen (1280×720): two 55-word replies in Lora run four
    lines each, so the text and the composer tighten to keep 2 + 2 in view. */
 @media (min-width: 840px) and (max-height: 760px) {
