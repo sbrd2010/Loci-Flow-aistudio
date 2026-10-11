@@ -109,7 +109,7 @@ test("a task marked done shows in the folded Done so far today, and the line say
   await openDayMapByKey(page);
   await expect(page.locator(".dm-fact")).toHaveText(/^On track: done by \d{2}:\d{2}\.$/);
   // The one thing, at NOW, until its stop ends.
-  await expect(page.locator(".dm-stop.is-now .dm-one-thing")).toHaveText(/^THE ONE THING · UNTIL \d{2}:\d{2}$/);
+  await expect(page.locator(".dm-stop.is-now .dm-one-thing")).toHaveText(/^NOW · UNTIL \d{2}:\d{2}$/);
 
   const first = page.locator(".dm-stop .dm-main").first();
   const title = (await page.locator(".dm-stop .dm-title").first().innerText()).trim();
@@ -137,7 +137,7 @@ test("the minimum day: Change picks, Confirm makes it one line with MIN on the r
   const min = page.getByRole("region", { name: "Minimum day" });
   // The demo day has no must-dos or goal tasks: nothing is suggested, and
   // the heading gives no count (loopcheck #495).
-  await expect(min.getByRole("heading")).toHaveText("If today goes wrong");
+  await expect(min.getByRole("heading")).toHaveText("At least these 3");
   await expect(min).toContainText("No must-dos or goal tasks today. Pick up to three.");
 
   await min.getByRole("button", { name: "Change" }).click();

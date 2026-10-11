@@ -21,6 +21,7 @@ import { buildParkTaskTasks } from "../utils/coachActions";
 import { shouldStopFocusOnComplete, focusBlockSeconds, chosenStartOption } from "../utils/focusSession";
 import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
 import { celebrate } from "../utils/celebrations";
+import { playListTone, uiSoundsOn } from "../utils/uiSounds";
 import { track } from "../firebase";
 import { cancelReminder } from "../utils/reminders";
 import { getLociDayStr } from "../utils/dailyAnchors";
@@ -253,7 +254,10 @@ export default function TodayTab({
   peekOpenRef.current = peekOpen;
   // From 840px the list shows and hides with the 51 choreography; phones
   // keep the sheet.
-  const toggleList = useListChoreography({ rootRef: layoutRef, listRef: sheetRef, setOpen: setPeekOpen });
+  const toggleListMotion = useListChoreography({ rootRef: layoutRef, listRef: sheetRef, setOpen: setPeekOpen });
+  // 75e: a soft tone as the list hides or shows, when Settings › Sounds is on.
+  const listTone = (shown) => { if (uiSoundsOn(config)) playListTone(shown); };
+  const toggleList = (next) => { listTone(next); toggleListMotion(next); };
   const closeSheet = () => {
     const hadFocus = sheetRef.current?.contains(document.activeElement);
     setPeekOpen(false);
@@ -419,7 +423,7 @@ export default function TodayTab({
     }
     if (isCompleted) setUndo({ kind: "done", task, wasPinned: !!task.isNowFocus, at: actionAt });
     if (isCompleted) {
-      celebrate();
+      celebrate({ sound: uiSoundsOn(config) });
       track("task_completed", { horizon: task.horizonLevel });
     }
     let nextContributions = [...contributions];
@@ -947,7 +951,7 @@ export default function TodayTab({
       return front ? `Put on ${front.name}: ${title}` : `Off its front: ${title}`;
     }
     // A previous one thing in Plan isn't on the list, so the toast names the new one (#489).
-    if (u.kind === "swap") return u.previous?.horizonLevel === "today" ? `${u.previous.title} is back at the top of the list.` : `${u.fromPlan ? "Moved to Today and made the one thing" : "Made the one thing"}: ${title}`;
+    if (u.kind === "swap") return u.previous?.horizonLevel === "today" ? `${u.previous.title} is back at the top of the list.` : `${u.fromPlan ? "Moved to Today as your now task" : "Your now task"}: ${title}`;
     return `${{ done: "Marked done", delete: "Deleted", tomorrow: "Moved to tomorrow", bringback: "Brought back", park: "Parked", restore: "Restored", unpin: "Unpinned" }[u.kind]}: ${title}`;
   };
   const undoText = undo ? undoMessage(undo) : "";
@@ -1848,7 +1852,7 @@ export default function TodayTab({
       }
       if (key === "l") {
         if (listMotionActive()) toggleList(!peekOpenRef.current);
-        else setPeekOpen(v => !v);
+        else { listTone(!peekOpenRef.current); setPeekOpen(v => !v); }
       } else if (key === " ") {
         e.preventDefault();
         startWallFocus(pinnedFocusTask);
@@ -1916,7 +1920,7 @@ export default function TodayTab({
         startChoice={config.focusStartChoice}
         onChooseStart={(choice) => saveConfigPatch({ focusStartChoice: choice })}
         peekOpen={peekOpen}
-        onTogglePeek={() => (listMotionActive() ? toggleList(!peekOpen) : setPeekOpen(v => !v))}
+        onTogglePeek={() => { if (listMotionActive()) toggleList(!peekOpen); else { listTone(!peekOpen); setPeekOpen(v => !v); } }}
         onAdd={onOpenAddTask}
         onOpenDayMap={onOpenDayMap}
         onOpenTask={() => pinnedFocusTask && setDetailUuid(pinnedFocusTask.uuid)}
@@ -2025,7 +2029,7 @@ export default function TodayTab({
               <button type="button" className="today-view-opt" aria-pressed={listView === "daymap"} onClick={() => setListView("daymap")}>Day map</button>
             </span>
             {pinnedFocusTask && (
-              <button type="button" className="today-list-hide" aria-label="Hide list" title="Hide list · L" onClick={() => (listMotionActive() ? toggleList(false) : closeSheet())}>
+              <button type="button" className="today-list-hide" aria-label="Hide list" title="Hide list · L" onClick={() => { if (listMotionActive()) toggleList(false); else { listTone(false); closeSheet(); } }}>
                 {/* PART5 §3: an →| glyph, no circle. */}
                 <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M11 4l5 5-5 5M3 3v12" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>
               </button>

@@ -26,7 +26,7 @@ test("If today goes wrong suggests the must-dos that fit once optional tasks are
   await openDayMap(page);
   const min = page.getByRole("region", { name: "Minimum day" });
   await expect(min.locator(".dm-min-name")).toHaveText(["Internet contract: Renew it", "Dr. Keller: Reply to her URGENT!!"]);
-  await expect(min.locator(".dm-min-title")).toHaveText("If today goes wrong, do these 2");
+  await expect(min.locator(".dm-min-title")).toHaveText("At least these 2");
 });
 
 // Turn 76 (c): one cut for both pages — the same won't-fit count and total

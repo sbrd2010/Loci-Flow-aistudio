@@ -1,6 +1,6 @@
-// Minimum day (56a–b, 57b answer 6, Q33.1): "If today goes wrong, do these
-// 3". Loci suggests up to three of today's open tasks — must-dos first, then
-// goal tasks, each in the order they come today — and you Confirm or Change
+// Minimum day (56a–b, 57b answer 6, Q33.1): "At least these 3" (try-out
+// 22; was "If today goes wrong, do these 3"). Loci suggests up to three
+// of today's open tasks — must-dos first, then goal tasks, each in the order they come today — and you Confirm or Change
 // them. Confirmed, they carry MIN on Today's list and the Day map. It resets
 // daily: stored as config.minimumDay = { date, ids } for one Loci day only.
 

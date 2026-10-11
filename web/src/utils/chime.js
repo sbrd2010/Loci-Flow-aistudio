@@ -8,7 +8,8 @@
 // one made per chime would never be closed (Codex review of #433).
 let ctx = null;
 
-function getCtx() {
+// Shared with Today's soft tones (uiSounds.js), so one unlock wakes both.
+export function getCtx() {
   if (ctx) return ctx;
   const Ctx = typeof window !== "undefined" ? (window.AudioContext || window.webkitAudioContext) : null;
   if (!Ctx) return null;

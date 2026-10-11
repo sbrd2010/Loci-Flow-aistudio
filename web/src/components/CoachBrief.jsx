@@ -149,8 +149,8 @@ export default function CoachBrief({ brief, status = "idle", error = "", lead = 
               : isEventTask(live(next.uuid))
                 ? null
                 : live(next.uuid).isNowFocus
-                ? <span className="br-applied">It’s the one thing now</span>
-                : <button type="button" className="br-run" disabled={actionsDisabled} onClick={() => apply(`one:${next.uuid}`, `The one thing · ${live(next.uuid).title}`, () => onMakeOneThing(next.uuid))}>Make it the one thing</button>}
+                ? <span className="br-applied">It’s your now task</span>
+                : <button type="button" className="br-run" disabled={actionsDisabled} onClick={() => apply(`one:${next.uuid}`, `Now · ${live(next.uuid).title}`, () => onMakeOneThing(next.uuid))}>Make it your now task</button>}
             <button type="button" className="br-link br-ask" onClick={() => onAsk({ ...brief, patterns })}>Ask about this →</button>
           </div>
         </div>

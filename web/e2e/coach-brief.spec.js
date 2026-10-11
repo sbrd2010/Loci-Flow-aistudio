@@ -50,10 +50,10 @@ test("Brief me shows the groups; buttons apply with Undo; Ask about this goes to
   expect(Object.keys(sent)).toEqual(expect.arrayContaining(["today", "last7", "last30", "tasks"]));
   expect(sent.tasks.length).toBeLessThanOrEqual(10);
 
-  await brief.getByRole("button", { name: "Make it the one thing" }).click();
-  await expect(brief.locator(".br-applied").first()).toContainText("✓ The one thing ·");
+  await brief.getByRole("button", { name: "Make it your now task" }).click();
+  await expect(brief.locator(".br-applied").first()).toContainText("✓ Now ·");
   await brief.getByRole("button", { name: "Undo" }).click();
-  await expect(brief.getByRole("button", { name: "Make it the one thing" })).toBeVisible();
+  await expect(brief.getByRole("button", { name: "Make it your now task" })).toBeVisible();
 
   await brief.getByRole("button", { name: "This week" }).click();
   await expect(brief).toContainText("✓ Moved to This week");

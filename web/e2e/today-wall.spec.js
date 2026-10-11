@@ -301,7 +301,7 @@ test("mobile reliability: ticking the next step on the wall moves to the step af
 // and its sheet lets it go.
 async function unpinFromList(page) {
   await page.locator(".wall-title").click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Not now$/ }).click();
 }
 
 // The task sheet, for the wall's one thing: its title opens it (52: the sheet
@@ -326,7 +326,7 @@ async function makeOneThing(page, title) {
   await dialog.getByTestId("add-task-submit").click();
   await expect(dialog).toHaveCount(0);
   await page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { hasText: title }).locator(".task-title-text").click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Do this now/ }).click();
   await expect(page.locator(".wall-title")).toContainText(title, { timeout: 8_000 });
 }
 
@@ -344,7 +344,7 @@ async function emptyTheWall(page) {
 // one tap from being the one thing, with Undo. No Start.
 test("mobile reliability: no one thing: pick from the top three, with Undo", async ({ page }) => {
   await emptyTheWall(page);
-  await expect(page.locator(".wall-empty-title")).toHaveText("Pick the one thing");
+  await expect(page.locator(".wall-empty-title")).toHaveText("Pick what to do now");
   // The Key Deadline's band stays (L1); no Start while nothing is chosen.
   await expect(page.locator(".today-wall.is-empty .wall-goal-name")).toHaveText("Project launch");
   await expect(page.locator(".today-wall .wall-primary")).toHaveCount(0);
@@ -357,7 +357,7 @@ test("mobile reliability: no one thing: pick from the top three, with Undo", asy
   const second = listTitles[1];
   await picks.nth(1).click();
   await expect(page.locator(".wall-title")).toHaveText(second);
-  await expect(page.getByRole("status").filter({ hasText: `Made the one thing: ${second}` })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: `Your now task: ${second}` })).toBeVisible();
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.locator(".wall-pick")).toBeVisible({ timeout: 8_000 });
 });
@@ -617,8 +617,8 @@ test("mobile reliability: the one thing can be let go from its sheet, and Undo p
 
   await page.locator(".wall-title").click();
   const detail = page.getByTestId("task-detail");
-  await expect(detail.locator(".detail-kicker").first()).toHaveText("TODAY · THE ONE THING");
-  await detail.getByRole("button", { name: /^Not the one thing now/ }).click();
+  await expect(detail.locator(".detail-kicker").first()).toHaveText("TODAY · NOW");
+  await detail.getByRole("button", { name: /^Not now$/ }).click();
   await expect(page.locator(".wall-pick")).toBeVisible({ timeout: 8_000 });
   await expect(page.getByRole("status").filter({ hasText: `Unpinned: ${title}` })).toBeVisible();
 
@@ -1008,7 +1008,7 @@ test("mobile reliability: pinning a longer task with the sheet open re-measures 
   await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
   const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { hasText: "A very long task title" });
   await row.locator(".task-title-text").click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Do this now/ }).click();
   await expect(page.getByTestId("task-detail")).toHaveCount(0);
   await expect(page.locator(".wall-title")).toHaveText(long);
   await expect(sheet).toBeVisible();
@@ -1342,6 +1342,7 @@ test("laptop: the header's + Add task adds to Today; M opens the Day map (72)", 
 // second L mid-move reverses it and leaves nothing behind.
 test("laptop: show/hide glides with transform and opacity, reverses mid-move and leaves no residue (51e–f)", async ({ page }) => {
   await enterLaptop(page);
+  const wasOpen = await page.locator(".tasks-section").isVisible();
   await page.keyboard.press("l");
   const props = await page.evaluate(() => document.getAnimations().flatMap(a =>
     a.effect.getKeyframes().flatMap(k => Object.keys(k).filter(p => !["offset", "easing", "composite", "computedOffset"].includes(p)))));
@@ -1351,11 +1352,11 @@ test("laptop: show/hide glides with transform and opacity, reverses mid-move and
     const a = document.getAnimations().find(x => x.effect.target.classList.contains("wall-title"));
     return a && { d: a.effect.getTiming().duration, e: a.effect.getTiming().easing, from: a.effect.getKeyframes()[0].transform };
   });
-  expect(titleAnim.d).toBe(280);
-  expect(titleAnim.e).toBe("cubic-bezier(0.2, 0, 0, 1)");
-  // Both laptop states take the stage scale, so the title glides without a
-  // zoom (from 1600px, where hiding the list takes the wide sizes, it zooms).
-  expect(titleAnim.from).toMatch(/^translate\(.+\) scale\(1\)$/);
+  // 75e: the glide is 480ms; hiding the list takes the title from 46 to 52
+  // (75d), so it zooms from 46/52 — or back from 52/46 when L shows it.
+  expect(titleAnim.d).toBe(480);
+  expect(titleAnim.e).toBe("cubic-bezier(0.22, 1, 0.36, 1)");
+  expect(titleAnim.from).toMatch(wasOpen ? /^translate\(.+\) scale\(0\.88\d*\)$/ : /^translate\(.+\) scale\(1\.13\d*\)$/);
   await page.waitForTimeout(120);
   await page.keyboard.press("l");
   await expect(page.locator(".tasks-section")).toBeHidden({ timeout: 2_000 });
@@ -1366,9 +1367,9 @@ test("laptop: show/hide glides with transform and opacity, reverses mid-move and
 });
 
 // Codex review of #405. What leaves fades out as a copy (the hidden-state
-// controls on Show, 80ms): the copy must outlive the layout switch. And the
-// list's own 120ms fade on Hide must not end the task's glide, which runs to
-// 320ms. Both are read in the same task as the click, so timing can't flake.
+// controls on Show): the copy must outlive the layout switch. And the
+// list's own 320ms fade on Hide (75e) must not end the task's glide, which
+// runs to 560ms. Both are read in the same task as the click, so timing can't flake.
 test("laptop: the leaving controls fade out, and hiding lets the task finish its glide (51f)", async ({ page }) => {
   await enterLaptop(page);
   await page.locator(".wall-peek").click();
@@ -1383,7 +1384,7 @@ test("laptop: the leaving controls fade out, and hiding lets the task finish its
     const glide = document.querySelector("[data-flip='title']").getAnimations()[0];
     return { listFade: fade.effect.getTiming().duration, glideState: glide?.playState };
   });
-  expect(hide.listFade).toBe(120);
+  expect(hide.listFade).toBe(320);
   expect(hide.glideState).toBe("running");
 });
 
@@ -1504,7 +1505,7 @@ test("Make this the one thing: the old one goes back to the top of the list, tin
   await laptopListOpen(page);
   const oldTitle = (await page.locator(".wall-title").innerText()).trim();
   await listRow(page, "10-minute walk").locator(".task-title-text").click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Do this now/ }).click();
   await expect(page.locator(".wall-title")).toHaveText(/10-minute walk/);
   const firstRow = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']").first();
   await expect(firstRow.locator(".task-title-text")).toHaveText(oldTitle);
@@ -1539,7 +1540,7 @@ test("keyboard on a row: P makes it the one thing, T moves it to tomorrow, ⌫ d
 test("laptop: hovering a row shows the pin, which makes it the one thing (50d)", async ({ page }) => {
   await laptopListOpen(page);
   const row = listRow(page, "10-minute walk");
-  const pin = row.getByRole("button", { name: /^Make the one thing/ });
+  const pin = row.getByRole("button", { name: /^Do this now/ });
   await expect(pin).toBeHidden();
   await row.hover();
   await expect(pin).toBeVisible();
@@ -1604,9 +1605,9 @@ test("mobile reliability: making the one thing on an empty wall offers Undo", as
   const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").first();
   const title = (await row.locator(".task-title-text").innerText()).trim();
   await row.locator(".task-title-text").click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Do this now/ }).click();
   await expect(page.locator(".wall-title")).toHaveText(title);
-  await expect(page.getByRole("status").filter({ hasText: `Made the one thing: ${title}` })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: `Your now task: ${title}` })).toBeVisible();
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.locator(".wall-pick")).toBeVisible({ timeout: 8_000 });
 });
@@ -1831,7 +1832,7 @@ test("the task sheet keeps a P4 task's priority on offer", async ({ page }) => {
 test("laptop: with no one thing, the list's Day map view still opens the Day map page", async ({ page }) => {
   await enterLaptop(page);
   await page.locator(".wall-title").click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Not now$/ }).click();
   await expect(page.locator(".wall-pick")).toBeVisible();
   await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Day map", exact: true }).click();
   await page.getByRole("button", { name: "Day map page ›" }).click();

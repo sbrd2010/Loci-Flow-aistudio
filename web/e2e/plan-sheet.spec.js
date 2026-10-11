@@ -32,7 +32,7 @@ test("a row opens the sheet: its horizon and place, no Must-do or one thing, and
   await expect(sheet(page).locator(".detail-kicker").first()).toHaveText(`THIS WEEK · 2 OF ${n}`);
   await expect(rows.nth(1)).toHaveClass(/is-open/);
   await expect(sheet(page).getByRole("switch", { name: "Must-do" })).toHaveCount(0);
-  await expect(sheet(page).getByRole("button", { name: /Make this the one thing/ })).toHaveCount(0);
+  await expect(sheet(page).getByRole("button", { name: /Do this now/ })).toHaveCount(0);
   await expect(sheet(page).getByRole("button", { name: "Tomorrow" })).toHaveCount(0);
   const foot = sheet(page).locator(".detail-foot");
   await expect(foot.getByRole("button")).toHaveText(["Move to Today", "Pin to top", "Park", "Delete"]);
@@ -221,4 +221,33 @@ test("Delete, then Restore from Settings → Data → Recently dropped; Settings
 
   await main.getByRole("button", { name: "Plan", exact: true }).click();
   await expect(horizon(page, "This week").getByText(title, { exact: true })).toBeVisible();
+});
+
+// Try-out 11: a row with steps says how far it is and the next step; the
+// count unfolds every step under the row without opening the task.
+test("a row with steps shows its next step, and the count unfolds them in place", async ({ page }) => {
+  await enterDemo(page);
+  const row = horizon(page, "This week").locator(".plan-row").first();
+  await row.click();
+  // A first step the task already has counts (it's step 1 in the sheet).
+  const before = (await stepTexts(page)).length;
+  for (const text of ["Draft the outline", "Send it"]) {
+    await sheet(page).getByLabel("Add a step").fill(text);
+    await sheet(page).getByLabel("Add a step").press("Enter");
+  }
+  await page.keyboard.press("Escape");
+  await expect(sheet(page)).toHaveCount(0);
+  const steps = await page.evaluate(() => document.querySelectorAll(".plan-row")[0].querySelectorAll(".plan-row-step-list li").length);
+  expect(steps).toBe(0);
+  const toggle = row.getByRole("button", { name: /^\d+ of \d+ steps: show them$/ });
+  const total = Number((await toggle.innerText()).match(/of (\d+)/)[1]);
+  expect(total).toBe(before + 2);
+  await expect(row.locator(".plan-row-next")).toHaveText(/^· Next: .+/);
+  await toggle.click();
+  await expect(sheet(page)).toHaveCount(0);
+  await expect(row.locator(".plan-row-step-list li")).toHaveCount(total);
+  await expect(row.locator(".plan-row-step-list li").last()).toHaveText("Send it");
+  await expect(row.locator(".plan-row-next")).toHaveCount(0);
+  await row.getByRole("button", { name: /steps: hide them$/ }).click();
+  await expect(row.locator(".plan-row-step-list")).toHaveCount(0);
 });

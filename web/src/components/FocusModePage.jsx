@@ -314,7 +314,7 @@ export default function FocusModePage({
     setCustomEstimate("");
   };
   const stageKicker = [
-    task.isNowFocus ? "TODAY, ONE THING" : "FOCUS",
+    task.isNowFocus ? "TODAY, NOW" : "FOCUS",
     estimate > 0 ? `${spanLabel(estimate)} TASK` : null,
     doneToday >= 1 ? `${spanLabel(doneToday)} DONE` : null,
   ].filter(Boolean).join(" · ");
@@ -599,17 +599,6 @@ export default function FocusModePage({
                 </button>
               )}
             </div>
-            {onRestart && (
-              <div className="fm-restart" role="group" aria-label="Restart with a new length">
-                <span className="fm-restart-label">Restart with a new length</span>
-                {RESTART_LENGTHS.map(m => (
-                  <button key={m} type="button" className="focus-mode-dur-btn" onClick={() => onRestart(m)}>{m}m</button>
-                ))}
-                {estimate > 0 && (
-                  <button type="button" className="focus-mode-dur-btn" onClick={() => onRestart(estimate)}>Whole task</button>
-                )}
-              </div>
-            )}
           </div>
         ) : (
           <div className="focus-mode-actions">
@@ -665,6 +654,26 @@ export default function FocusModePage({
             {parkRow}
           </>
         ))}
+        {/* 59g: while paused, a fresh block of a new length. Try-out 36: it
+            sits under sound and parking, and while running its place is
+            kept (hidden), so pausing changes only the buttons. */}
+        {!isComplete && onRestart && (
+          <div
+            className={`fm-restart fm-restart-row${paused ? "" : " is-reserve"}`}
+            role={paused ? "group" : undefined}
+            aria-label={paused ? "Restart with a new length" : undefined}
+            aria-hidden={paused ? undefined : "true"}
+            inert={paused ? undefined : ""}
+          >
+            <span className="fm-restart-label">Restart with a new length</span>
+            {RESTART_LENGTHS.map(m => (
+              <button key={m} type="button" className="focus-mode-dur-btn" onClick={() => onRestart(m)}>{m}m</button>
+            ))}
+            {estimate > 0 && (
+              <button type="button" className="focus-mode-dur-btn" onClick={() => onRestart(estimate)}>Whole task</button>
+            )}
+          </div>
+        )}
       </main>
 
       {/* 59h: ending asks first. The minutes are saved either way; the task

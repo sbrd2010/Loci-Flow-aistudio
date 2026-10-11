@@ -32,7 +32,7 @@ test("a stop's sheet: Fix time, Park, Delete; no Remove from route, no Today-onl
   await stops(page).nth(1).click();
   await expect(sheet(page).locator(".detail-kicker").first()).toHaveText("DAY MAP · 2 OF 3");
   await expect(sheet(page).getByRole("button", { name: "Remove from route" })).toHaveCount(0);
-  await expect(sheet(page).getByRole("button", { name: /Make this the one thing/ })).toHaveCount(0);
+  await expect(sheet(page).getByRole("button", { name: /Do this now/ })).toHaveCount(0);
   await expect(sheet(page).getByRole("button", { name: /^Tomorrow/ })).toHaveCount(0);
   await expect(sheet(page).getByRole("button", { name: "Fix time" })).toBeVisible();
   await expect(sheet(page).getByRole("button", { name: "Park" })).toBeVisible();

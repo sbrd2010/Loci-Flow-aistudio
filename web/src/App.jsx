@@ -46,6 +46,7 @@ import { applyClose, closeLineDue, isDayClosed, leftovers, pinFirstThing, reopen
 import { makeOneThing } from "./utils/oneThing";
 import { shouldShowFloatingTimer, buildFocusCompletionPayload, EXPIRY_REASONS } from "./utils/focusSession";
 import { celebrate } from "./utils/celebrations";
+import { uiSoundsOn } from "./utils/uiSounds";
 import { migrateStoredTheme, resolveTheme, watchColorScheme } from "./utils/theme";
 import { buildDayClock } from "./utils/dayClock";
 import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch, activityEventPath } from "./utils/activityLog";
@@ -993,7 +994,7 @@ export default function App() {
     const task = (sessionUuid && (payload?.tasks || []).find(t => t.uuid === sessionUuid && !t.isDeleted)) || focusTimer.activeTask;
     focusTimer.dismissSessionComplete();
     if (!task) return;
-    celebrate();
+    celebrate({ sound: uiSoundsOn(payload?.config) });
     const now = new Date();
     const ended = focusTimer.endFocusSession("completed_task");
     const windows = getFocusWindows(payload?.config || {});

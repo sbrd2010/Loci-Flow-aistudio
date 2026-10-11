@@ -102,8 +102,8 @@ function getLastFullTaskTime(userId) {
 
 const NO_MESSAGES = [];
 // Q50: the button under a reply, and what it reads once applied.
-const COACH_ACTION_LABELS = { COMPLETE_TASK: "Mark done", SET_NOW_FOCUS: "Make it the one thing", START_FOCUS: "Start focus", ADD_TASK: "Add to Today", PARK_TASK: "Park" };
-const COACH_ACTION_DONE = { COMPLETE_TASK: "Marked done", SET_NOW_FOCUS: "The one thing", START_FOCUS: "Focus started", ADD_TASK: "Added", PARK_TASK: "Parked" };
+const COACH_ACTION_LABELS = { COMPLETE_TASK: "Mark done", SET_NOW_FOCUS: "Make it your now task", START_FOCUS: "Start focus", ADD_TASK: "Add to Today", PARK_TASK: "Park" };
+const COACH_ACTION_DONE = { COMPLETE_TASK: "Marked done", SET_NOW_FOCUS: "Your now task", START_FOCUS: "Focus started", ADD_TASK: "Added", PARK_TASK: "Parked" };
 const clockHHMM = (ms) => {
   const d = new Date(ms);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -1760,9 +1760,9 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
                 // Q36.3: something at a set time is never the focus.
                 if (isEventTask(task)) { /* no focus chip */ }
                 else if (isOnToday(task, lociDayNow()) && !task.isNowFocus)
-                  phaseB.push({ action: 'focus',       label: 'Make it the one thing' });
+                  phaseB.push({ action: 'focus',       label: 'Make it your now task' });
                 else if (!isOnToday(task, lociDayNow()) && !task.isNowFocus)
-                  phaseB.push({ action: 'focus+today', label: 'Today, as the one thing' });
+                  phaseB.push({ action: 'focus+today', label: 'Today, as your now task' });
                 if (!isOnToday(task, lociDayNow()))
                   phaseB.push({ action: 'today',       label: 'Move to Today' });
                 if (!task.isParked)

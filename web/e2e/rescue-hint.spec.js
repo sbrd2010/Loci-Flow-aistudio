@@ -85,7 +85,7 @@ test("the no-start clock restarts when the one thing is cleared and chosen again
   await expect(hint(page)).toHaveCount(0);
   const title = (await page.locator(".wall-title").innerText()).trim();
   await page.locator(".wall-title").click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Not now$/ }).click();
   await expect(page.locator(".wall-pick")).toBeVisible();
   await page.locator(".wall-pick-row", { hasText: title }).click();
   await expect(page.locator(".wall-title")).toHaveText(title);

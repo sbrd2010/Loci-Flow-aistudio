@@ -419,3 +419,58 @@
    close to the page to read as a panel), the surface tone in dark. */
 .screen-content-today { --upnext-surface: #FFFFFF; }
 html[data-theme="dark"] .screen-content-today { --upnext-surface: var(--surface); }
+
+/* 75d (try-out 43): from 1280, with the list hidden the task moves to the
+   centre — the goal card, the anchor and the task share one centred
+   47.5rem column, so their left edges line up; the text inside stays left.
+   The title goes up a step (46 → 52), "Show list · N · L" is a pill pinned
+   top right, and the THEN line sits under a hairline. */
+@media (min-width: 1280px) {
+  .screen-content-today .today-wall:not(.is-open):not(.is-done):not(.is-empty) { padding-right: 0; }
+  .screen-content-today .today-wall:not(.is-open) .wall-goal-wrap,
+  .screen-content-today .today-wall:not(.is-open) .wall-anchor,
+  .screen-content-today .today-wall:not(.is-open):not(.is-done):not(.is-empty) .wall-hero,
+  .screen-content-today .today-wall:not(.is-open) .wall-foot {
+    width: 100%;
+    max-width: 47.5rem;
+    margin-inline: auto;
+  }
+  .screen-content-today .today-wall:not(.is-open):not(.is-done):not(.is-empty) .wall-hero { padding-bottom: 32px; }
+  .screen-content-today .today-wall:not(.is-open) .wall-title { font-size: 52px; }
+  .screen-content-today .today-wall:not(.is-open) .wall-title[data-len="l"] { font-size: 40px; }
+  .screen-content-today .today-wall:not(.is-open) .wall-title[data-len="xl"] { font-size: 36px; }
+  .screen-content-today .today-wall:not(.is-open) .wall-then {
+    margin-top: 10px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+  }
+  .screen-content-today .today-wall:not(.is-open) .wall-peek {
+    flex-direction: row;
+    align-items: center;
+    white-space: nowrap;
+    gap: 8px;
+    width: auto;
+    padding: 0 14px 0 8px;
+    border-radius: 999px;
+    background: var(--upnext-surface);
+  }
+  .screen-content-today .today-wall:not(.is-open) .wall-peek:hover { background: var(--panel); }
+  .screen-content-today .today-wall:not(.is-open) .wall-peek-wide {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+    font-size: 14px;
+    font-weight: 700;
+  }
+}
+/* A short window (1280×720) keeps the 46 title and a tighter THEN line, so
+   the hidden-list task still fits without scrolling. */
+@media (min-width: 1280px) and (max-height: 760px) {
+  .screen-content-today .today-wall:not(.is-open):not(.is-done):not(.is-empty) .wall-hero { padding-bottom: 16px; }
+  .screen-content-today .today-wall:not(.is-open) .wall-title { font-size: 46px; }
+  .screen-content-today .today-wall:not(.is-open) .wall-title[data-len="l"] { font-size: 36px; }
+  .screen-content-today .today-wall:not(.is-open) .wall-title[data-len="xl"] { font-size: 32px; }
+  .screen-content-today .today-wall:not(.is-open) .wall-then { margin-top: 4px; padding-top: 10px; }
+}

@@ -124,7 +124,7 @@ function RouteStop({ task, row, fromYesterday = false, isNow, isOver, isGoal, is
         </span>
         <span className="dm-dur">{formatSpan(end - start)}</span>
         {/* 56a: the one thing, at NOW, until the end of its stop. */}
-        {until != null && <span className="dm-one-thing"><IconPin size={12} />THE ONE THING · UNTIL {formatClock24(until)}</span>}
+        {until != null && <span className="dm-one-thing"><IconPin size={12} />NOW · UNTIL {formatClock24(until)}</span>}
       </div>
       {/* Q36.3: still open 5 minutes after it ended, it asks (Q47.5). */}
       {asks && <DidItHappen title={task.title} {...asks} />}
@@ -758,6 +758,13 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
           onDragCancel={() => { setTimeout(() => { draggingRef.current = false; }, 0); }}
         >
           <div className="dm-layout">
+            {/* Try-out 39: on a phone the least to do today leads, right
+                under the summary; the bar goes below the route. */}
+            {!drawerViewport && openToday.length > 0 && (
+              <div className="dm-min-slot">
+                <MinimumDay state={minDay.state} ids={minDay.ids} unfit={minDay.unfit} tasks={openToday} timeOf={timeOf} onConfirm={confirmMin} />
+              </div>
+            )}
             {bar && (
               <DayBar bar={bar} now={nowMins} doneMinutes={doneMinutes} plannedMinutes={barPlanned} overBy={barOverBy} wontFitMinutes={wontFit.count > 0 ? wontFit.minutes : null} />
             )}
@@ -780,11 +787,8 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
               {tomorrowTasks.length > 0 && (
                 <p className="dm-tomorrow-note">{tomorrowTasks.length} {tomorrowTasks.length === 1 ? "task now starts" : "tasks now start"} tomorrow.</p>
               )}
-              {!drawerViewport && openToday.length > 0 && (
-                <MinimumDay state={minDay.state} ids={minDay.ids} unfit={minDay.unfit} tasks={openToday} timeOf={timeOf} onConfirm={confirmMin} />
-              )}
               {(isOver || plan.overBy > 0) && onHelpChoose && (
-                <button type="button" className="dm-text-btn is-alert dm-help" onClick={onHelpChoose}>Help me choose</button>
+                <button type="button" className="dm-text-btn dm-help" onClick={onHelpChoose}>Help me choose</button>
               )}
             </div>
 

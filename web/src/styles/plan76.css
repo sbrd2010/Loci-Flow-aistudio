@@ -77,6 +77,11 @@ html[data-theme="dark"] .plan-runway-label.is-today,
 html[data-theme="dark"] .plan-runway-label.is-today .plan-runway-date,
 html[data-theme="dark"] .plan-runway-label.is-open,
 html[data-theme="dark"] .plan-runway-label.is-open .plan-runway-date { color: var(--rung-open-edge); }
+/* Try-out 24: the runway is a glance, not a read. Only Today and the open
+   horizon stay bold and green; the others are lighter and grey, so the open
+   list and the cards lead. */
+.plan-runway-label:not(.is-today):not(.is-open) .plan-runway-name { font-weight: 600; color: var(--ink-2); }
+.plan-runway-label:not(.is-today):not(.is-open) .plan-runway-date { font-weight: 500; }
 .plan-runway-pick {
   pointer-events: auto; padding: 0; font: inherit; color: inherit; background: none; border: 0; cursor: pointer;
 }
@@ -158,6 +163,21 @@ html[data-theme="dark"] .plan-runway-label.is-open .plan-runway-date { color: va
   .plan-horizons-view .plan-rung.is-open { padding: 11px 17px; }
   .plan-horizons-view .plan-rung-name,
   .plan-horizons-view .plan-rung-date { line-height: normal; }
+}
+/* Try-out 12: from 1024 the cards fit the column's height instead of
+   scrolling it — roomy when there's space (they grow, their content centred,
+   up to a cap), compact when tight (down to 4px above and below). Only many
+   horizons on a short window scroll, and then with no visible bar. */
+@media (min-width: 1024px) {
+  .plan-horizons-view .plan-ladder-grid:not(.is-phone) > .plan-ladder { padding-bottom: 16px; scrollbar-width: none; }
+  .plan-horizons-view .plan-ladder-grid:not(.is-phone) > .plan-ladder::-webkit-scrollbar { display: none; }
+  .plan-horizons-view .plan-ladder-grid:not(.is-phone) .plan-rung {
+    flex: 1 1 auto; max-height: 92px; align-content: center; padding-block: 4px;
+  }
+  .plan-horizons-view .plan-ladder-grid:not(.is-phone) .plan-rung.is-open { padding-block: 3px; }
+}
+@media (min-width: 1600px) {
+  .plan-horizons-view .plan-ladder-grid:not(.is-phone) .plan-rung { max-height: 104px; }
 }
 /* Phone (76e): full-width cards with the chevron; the page scrolls. */
 @media (max-width: 599px) {

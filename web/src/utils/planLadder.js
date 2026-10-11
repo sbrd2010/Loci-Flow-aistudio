@@ -150,7 +150,13 @@ export function runwayLayout(ticks, { width, nameWidth, dateWidth, todayDate, op
     const lo = placed[0].box[1] + gap;
     const hi = (far ? placed[1].box[0] : width) - gap;
     const shift = b0 < lo ? lo - b0 : b1 > hi ? hi - b1 : 0;
-    return { ...l, x: l.x + shift, dropped: own ? g.ends.filter(e => e !== own.key) : [] };
+    const moved = { ...l, x: l.x + shift, dropped: own ? g.ends.filter(e => e !== own.key) : [] };
+    // A centred label held at the edge moves less than its tick: on a day a
+    // horizon ends (Sunday's This week) it would still sit on Today's date.
+    const [m0, m1] = boxOf(moved);
+    if (m0 < lo) moved.x += lo - m0;
+    else if (m1 > hi) moved.x -= m1 - hi;
+    return moved;
   };
   const order = [...groups.filter(g => g.open), ...groups.filter(g => !g.open)];
   for (const g0 of order) {

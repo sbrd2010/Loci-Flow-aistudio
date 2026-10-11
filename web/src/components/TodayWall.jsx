@@ -413,7 +413,7 @@ export default function TodayWall({
           </div>
         ) : picks.length > 0 ? (
           <div className="wall-empty wall-pick">
-            <h2 className="wall-empty-title">Pick the one thing</h2>
+            <h2 className="wall-empty-title">Pick what to do now</h2>
             <ul className="wall-pick-list">
               {picks.map(t => (
                 <li key={t.uuid}>
@@ -580,7 +580,7 @@ export default function TodayWall({
 
         {/* 72c: with the list away, what comes next and where the day ends. */}
         {then && (
-          <p className="wall-then">
+          <p className="wall-then" data-flip-controls="">
             <span className="wall-then-kicker">THEN</span>
             {then.title ? <> {formatClock24(then.at)} · {then.title} · </> : " "}
             DAY ENDS {formatClock24(then.dayEnd)}

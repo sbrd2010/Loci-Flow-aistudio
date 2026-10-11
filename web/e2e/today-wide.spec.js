@@ -59,7 +59,7 @@ test("2130×1000: ×1.25 ÷ 1.1, edge to edge with 40px gutters (no 1760 cap)", 
 });
 
 // 75a: the title is 46 (its length steps below that), list shown or hidden.
-test("2400×1200: ×1.5 ÷ 1.1, and the title keeps its size, list shown or hidden", async ({ page }) => {
+test("2400×1200: ×1.5 ÷ 1.1, and the title goes a step up with the list hidden (75d)", async ({ page }) => {
   await enterDemo(page, { width: 2400, height: 1200 });
   expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBeCloseTo(1.5 / 1.1, 3);
   const shown = await page.locator(".wall-title").evaluate(el => [el.dataset.len, parseFloat(getComputedStyle(el).fontSize)]);
@@ -68,7 +68,8 @@ test("2400×1200: ×1.5 ÷ 1.1, and the title keeps its size, list shown or hidd
   await expect(page.locator("section.today-list")).toBeHidden();
   const hidden = await page.locator(".wall-title").evaluate(el => parseFloat(getComputedStyle(el).fontSize));
   const size = { s: 46, m: 46, l: 36, xl: 32 }[shown[0]];
-  expect([shown[1], hidden]).toEqual([size, size]);
+  const up = { s: 52, m: 52, l: 40, xl: 36 }[shown[0]];
+  expect([shown[1], hidden]).toEqual([size, up]);
 });
 
 // Codex review of #422: on the widest screens the header keeps the content's
@@ -156,10 +157,10 @@ test("made the one thing, a task moves to NOW on the route; the rest flows after
   const lastTitle = (await stops.last().locator(".tdm-title").textContent()).trim();
 
   await stops.last().click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Do this now/ }).click();
   await expect(page.locator(".wall-title")).toHaveText(lastTitle);
-  await expect(stops.first()).toHaveAccessibleName(new RegExp(`^Now to \\d\\d:\\d\\d, ${lastTitle}, the one thing`));
-  await expect(stops.first().locator(".tdm-one-thing")).toHaveText(/^THE ONE THING · UNTIL \d\d:\d\d$/);
+  await expect(stops.first()).toHaveAccessibleName(new RegExp(`^Now to \\d\\d:\\d\\d, ${lastTitle}, your now task`));
+  await expect(stops.first().locator(".tdm-one-thing")).toHaveText(/^NOW · UNTIL \d\d:\d\d$/);
   await expect(stops).toHaveCount(3);
 
   await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
@@ -278,7 +279,7 @@ test("a fixed time shows its span and stays put; a task dropped above it that wo
 
 // Rohan: Hide list is an arrow, as a chat app's sidebar; with the list away,
 // an arrow at the right edge brings it back. The header reads "+ Add task".
-test("the list hides with an arrow and comes back from the right edge's arrow; + Add task", async ({ page }) => {
+test("the list hides with an arrow and comes back from the Show list pill at the top right (75d); + Add task", async ({ page }) => {
   await enterDemo(page, { width: 1280, height: 900 });
   await expect(page.locator(".today-list-add")).toHaveText("+ Add task");
   await expect(page.locator(".today-list-head")).not.toContainText("Must-do");
@@ -286,7 +287,8 @@ test("the list hides with an arrow and comes back from the right edge's arrow; +
   await expect(page.locator(".tasks-section")).toBeHidden();
   const show = page.getByRole("button", { name: /^Show list · \d+/ });
   const [box, layout] = await Promise.all([show.boundingBox(), page.locator(".today-layout").boundingBox()]);
-  expect(Math.round(box.width)).toBe(40);
+  await expect(show).toContainText(/Show list · \d+/);
+  expect(box.height).toBeLessThan(48);
   expect(Math.abs(box.x + box.width - (layout.x + layout.width))).toBeLessThan(2);
   await show.click();
   await expect(page.locator(".tasks-section")).toBeVisible();
@@ -345,14 +347,14 @@ test("2880: a row moved by keyboard drag lands where its copy shows", async ({ p
 test("no one thing: picking the second task puts it at NOW on the Day map", async ({ page }) => {
   await enterDemo(page, { width: 1280, height: 900 }, "2024-06-15T10:00:00");
   await page.locator(".wall-title").click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Not now$/ }).click();
   await expect(page.locator(".wall-pick")).toBeVisible();
   const second = (await page.locator(".wall-pick-title").nth(1).innerText()).trim();
   await page.locator(".wall-pick-row").nth(1).click();
   await expect(page.locator(".wall-title")).toHaveText(second);
   await routeReady(page);
   await expect(column(page).locator("button.tdm-stop .tdm-title").first()).toContainText(second);
-  await expect(column(page).locator("button.tdm-stop .tdm-title").first()).toContainText("THE ONE THING");
+  await expect(column(page).locator("button.tdm-stop .tdm-title").first()).toContainText("NOW · UNTIL");
 });
 
 // Loopcheck of #486: with only set-time things open (a call can't be the one
@@ -370,7 +372,7 @@ test("no one thing, only set-time things open: the wall says so", async ({ page 
   await step2.getByRole("button", { name: "Fix at 12:00" }).click();
   await page.locator(".dm-back").click();
   await page.locator(".wall-title").click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Not now$/ }).click();
   const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)");
   const others = rows.filter({ hasNotText: "Call with the recruiter" });
   while (await others.count()) {

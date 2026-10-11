@@ -205,3 +205,53 @@
   .br-next-actions .br-run { width: 100%; }
   .rv-period button { padding: 0 12px; font-size: 13.5px; height: 36px; }
 }
+
+/* Try-out 41: one type scale across Coach — Review's reading text is Chat's
+   reply size, so switching tabs doesn't change the size of the words. Only
+   the real headlines (the brief's lead, the big figures) are larger. */
+.coach-page { --coach-body: 15.5px; }
+@media (min-width: 840px) { .coach-page { --coach-body: 17px; } }
+@media (min-width: 1600px) { .coach-page { --coach-body: 18px; } }
+@media (min-width: 840px) and (max-height: 760px) { .coach-page { --coach-body: 16px; } }
+.br-lede, .br-line, .br-rows, .br-next-line, .rv-planned { font-size: var(--coach-body); }
+
+/* Try-out 40: the brief is the message, on its own soft surface (from
+   "Coach's brief" to "Ask about this"); 02–06 are the evidence, on the
+   plain page. White in light, the surface tone in dark. */
+.rv { --rv-brief-surface: #FFFFFF; }
+html[data-theme="dark"] .rv { --rv-brief-surface: var(--surface); }
+.rv-sec.rv-brief {
+  margin-top: 24px;
+  padding: 32px 32px 36px;
+  background: var(--rv-brief-surface);
+  border: 0;
+  border-radius: 8px;
+}
+@media (max-width: 599px) {
+  .br-lead { font-size: 18px; }
+  /* The brief still reaches Do next on the first screen (73a). */
+  .rv-sec.rv-brief { margin-top: 4px; padding: 12px 12px 20px; }
+}
+
+/* Try-out 13: from 1440, Review reads left to right, then down, in about
+   a screen and a third instead of three — the brief (60%) beside the week
+   in numbers as a 2×2 block; Focus each day beside Where the time went and
+   By category, stacked; Still open across the bottom. Laptops and phones
+   keep the one column. */
+@media (min-width: 1440px) {
+  .rv {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    column-gap: 56px;
+    align-items: start;
+    max-width: 1480px;
+  }
+  .coach-page:has(#coach-panel-review) .coach-tabs { max-width: 1480px; }
+  .rv-facts { display: contents; }
+  .rv-brief { grid-column: 1; grid-row: 1; }
+  .rv-facts > .rv-sec:nth-child(1) { grid-column: 2; grid-row: 1; }
+  .rv-facts > .rv-sec:nth-child(2) { grid-column: 1; grid-row: 2; }
+  .rv-facts > .rv-sec.rv-pair { grid-column: 2; grid-row: 2; grid-template-columns: minmax(0, 1fr); gap: 44px; }
+  .rv-facts > .rv-sec:nth-child(4) { grid-column: 1 / -1; grid-row: 3; }
+  .rv-numbers { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 28px; }
+}
