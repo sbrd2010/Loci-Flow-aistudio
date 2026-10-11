@@ -151,7 +151,11 @@
   html[data-scale-route="daymap"] .focus-bar.is-docked .fb-back { min-height: 38px; }
   body:has(.focus-bar.is-docked) .dm-foot > * { visibility: hidden; }
 }
-.fb-menu.is-docked { left: auto; right: max(16px, calc(50% - 320px)); width: 240px; bottom: 76px; }
+/* Its End… menu sits above it, at the bar's right (Codex review of #502:
+   only where the bar is docked). */
+@media (min-width: 1280px) {
+  .fb-menu.is-docked { left: auto; right: max(16px, calc(50% - 320px)); width: 240px; bottom: 76px; }
+}
 
 /* 75i / 75k: the focus pill on Coach Chat — one button, 40 tall, green
    outline, no fill, no shadow: ring · time · Back to focus · F. The bar it

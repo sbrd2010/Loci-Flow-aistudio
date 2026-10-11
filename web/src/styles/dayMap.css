@@ -894,6 +894,9 @@
     padding: 0 10px 16px;
   }
   .day-map-page > .dm-layout > .dm-side { min-height: 0; overflow-y: auto; align-self: start; max-height: 100%; }
+  /* An empty day fills the height too, so the footer stays at the bottom
+     (Codex review of #502). */
+  .day-map-page > .dm-empty { flex: 1; min-height: 0; }
   .day-map-page > .dm-foot {
     flex: 0 0 56px;
     display: flex;
