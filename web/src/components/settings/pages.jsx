@@ -96,9 +96,10 @@ export function FocusWindowsPage({ config, saveConfigPatch, onBack, backLabel })
     });
   };
   const change = (i, field, value) => save(rows.map((w, j) => j === i ? { ...w, [field]: value } : w));
-  // Try-out issue 1: once a window's edit is done (focus leaves its row),
-  // the list falls into the order of the day — never while it is typed in,
-  // or the row would move out from under the cursor.
+  // Try-out issue 1: once you are done with the windows (focus leaves the
+  // list), they fall into the order of the day. Not when focus only moves
+  // to another row: rows are keyed by index, so a sort then would hand the
+  // input or Remove you chose to another window (Codex review, round 2).
   const sortOnLeave = (e) => {
     if (e.currentTarget.contains(e.relatedTarget)) return;
     const sorted = sortFocusWindowRows(rows);
@@ -117,12 +118,12 @@ export function FocusWindowsPage({ config, saveConfigPatch, onBack, backLabel })
       backLabel={backLabel}
       lede="When you want to focus. The Day map plans inside these, and the last one sets when your day ends."
     >
-      <div className="set-list">
+      <div className="set-list" onBlur={sortOnLeave}>
         {rows.map((w, i) => {
           const hint = hints[i] || {};
           const suspect = !!hint.meridiemFix;
           return (
-            <div key={i} className="set-window" onBlur={sortOnLeave}>
+            <div key={i} className="set-window">
               <div className="set-window-row">
                 <input type="time" className={`set-time${suspect ? " is-suspect" : ""}`} value={w.start || ""} aria-label={`Focus window ${i + 1} start time`} onChange={e => change(i, "start", e.target.value)} />
                 <span className="set-window-dash" aria-hidden="true">–</span>

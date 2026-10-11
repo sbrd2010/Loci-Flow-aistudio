@@ -106,3 +106,39 @@ test("Settings › Focus windows: a window added at an earlier time moves above 
   await expect(page.getByLabel("Focus window 1 start time")).toHaveValue("10:00");
   await expect(page.getByLabel("Focus window 2 start time")).toHaveValue("11:30");
 });
+
+// Codex round 2 on the issue 1 sort: moving from one row straight into another
+// (its time, or its Remove) must act on the window you chose. The list sorts
+// only once you leave it.
+test("Settings › Focus windows: going from an edited row into another row edits and removes the one you chose", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "The day", exact: true }).click();
+  await page.getByRole("button", { name: /^Focus windows/ }).click();
+  await page.getByRole("button", { name: "Remove focus window 1" }).click();
+  for (const [n, s, e] of [[1, "11:30", "12:30"], [2, "13:00", "14:00"], [3, "15:00", "16:00"]]) {
+    await page.getByRole("button", { name: "Add a window" }).click();
+    await page.getByLabel(`Focus window ${n} start time`).fill(s);
+    await page.getByLabel(`Focus window ${n} end time`).fill(e);
+  }
+  const starts = () => page.locator(".set-window input[aria-label$='start time']").evaluateAll(els => els.map(e => e.value));
+  await page.locator(".set-facts").click();
+  await expect.poll(starts).toEqual(["11:30", "13:00", "15:00"]);
+
+  // Window 1 now belongs last; straight into window 2's start, then its Remove.
+  await page.getByLabel("Focus window 1 start time").fill("15:30");
+  await page.getByLabel("Focus window 1 end time").fill("16:30");
+  await page.getByLabel("Focus window 2 start time").click();
+  await expect.poll(starts).toEqual(["15:30", "13:00", "15:00"]);
+  await page.getByLabel("Focus window 2 start time").fill("13:15");
+  await expect.poll(starts).toEqual(["15:30", "13:15", "15:00"]);
+  await page.getByRole("button", { name: "Remove focus window 2" }).click();
+  await expect.poll(starts).toEqual(["15:30", "15:00"]);
+
+  // Leaving the list puts it in the order of the day.
+  await page.locator(".set-facts").click();
+  await expect.poll(starts).toEqual(["15:00", "15:30"]);
+});
