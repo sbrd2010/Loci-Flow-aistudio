@@ -126,6 +126,14 @@ describe("the runway", () => {
     expect([...unlabelled]).toEqual(["b"]);
   });
 
+  it("an open label on Today's own day (a Sunday's This week) clears Today's date", () => {
+    const ticks = [tick("w", 0.01, "This week", "11 OCT"), tick("z", 1, "6 months", "30 APR 2027", true)];
+    const { labels } = layout(ticks, { todayDate: "SUN 11 OCT", openId: "w" });
+    const today = labels.find(l => l.key === "today");
+    const open = labels.find(l => l.key === "w");
+    expect(open.left).toBeGreaterThanOrEqual(today.right + 12);
+  });
+
   it("a phone labels only the two ends (57b.30)", () => {
     const ticks = [tick("a", 0.5, "This week", "11 OCT"), tick("z", 1, "6 months", "30 APR 2027", true)];
     const { labels, unlabelled } = layout(ticks, { phone: true });
