@@ -413,7 +413,7 @@ export default function TodayWall({
           </div>
         ) : picks.length > 0 ? (
           <div className="wall-empty wall-pick">
-            <h2 className="wall-empty-title">Pick the one thing</h2>
+            <h2 className="wall-empty-title">Pick what to do now</h2>
             <ul className="wall-pick-list">
               {picks.map(t => (
                 <li key={t.uuid}>

@@ -98,7 +98,7 @@ test("reliability: pinning a task sets Now Focus", async ({ page }) => {
   await expect(row).toBeVisible({ timeout: 8_000 });
 
   await row.locator(".task-title-text").click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Do this now/ }).click();
 
   // The task becomes the wall's one thing — the overlay does not auto-open on pin
   const pinnedSection = page.locator(".today-wall");

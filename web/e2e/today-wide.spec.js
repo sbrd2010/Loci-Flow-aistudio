@@ -156,10 +156,10 @@ test("made the one thing, a task moves to NOW on the route; the rest flows after
   const lastTitle = (await stops.last().locator(".tdm-title").textContent()).trim();
 
   await stops.last().click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Do this now/ }).click();
   await expect(page.locator(".wall-title")).toHaveText(lastTitle);
-  await expect(stops.first()).toHaveAccessibleName(new RegExp(`^Now to \\d\\d:\\d\\d, ${lastTitle}, the one thing`));
-  await expect(stops.first().locator(".tdm-one-thing")).toHaveText(/^THE ONE THING · UNTIL \d\d:\d\d$/);
+  await expect(stops.first()).toHaveAccessibleName(new RegExp(`^Now to \\d\\d:\\d\\d, ${lastTitle}, your now task`));
+  await expect(stops.first().locator(".tdm-one-thing")).toHaveText(/^NOW · UNTIL \d\d:\d\d$/);
   await expect(stops).toHaveCount(3);
 
   await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
@@ -345,14 +345,14 @@ test("2880: a row moved by keyboard drag lands where its copy shows", async ({ p
 test("no one thing: picking the second task puts it at NOW on the Day map", async ({ page }) => {
   await enterDemo(page, { width: 1280, height: 900 }, "2024-06-15T10:00:00");
   await page.locator(".wall-title").click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Not now$/ }).click();
   await expect(page.locator(".wall-pick")).toBeVisible();
   const second = (await page.locator(".wall-pick-title").nth(1).innerText()).trim();
   await page.locator(".wall-pick-row").nth(1).click();
   await expect(page.locator(".wall-title")).toHaveText(second);
   await routeReady(page);
   await expect(column(page).locator("button.tdm-stop .tdm-title").first()).toContainText(second);
-  await expect(column(page).locator("button.tdm-stop .tdm-title").first()).toContainText("THE ONE THING");
+  await expect(column(page).locator("button.tdm-stop .tdm-title").first()).toContainText("NOW · UNTIL");
 });
 
 // Loopcheck of #486: with only set-time things open (a call can't be the one
@@ -370,7 +370,7 @@ test("no one thing, only set-time things open: the wall says so", async ({ page 
   await step2.getByRole("button", { name: "Fix at 12:00" }).click();
   await page.locator(".dm-back").click();
   await page.locator(".wall-title").click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Not now$/ }).click();
   const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)");
   const others = rows.filter({ hasNotText: "Call with the recruiter" });
   while (await others.count()) {

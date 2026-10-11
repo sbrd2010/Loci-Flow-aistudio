@@ -109,7 +109,7 @@ test("a task marked done shows in the folded Done so far today, and the line say
   await openDayMapByKey(page);
   await expect(page.locator(".dm-fact")).toHaveText(/^On track: done by \d{2}:\d{2}\.$/);
   // The one thing, at NOW, until its stop ends.
-  await expect(page.locator(".dm-stop.is-now .dm-one-thing")).toHaveText(/^THE ONE THING · UNTIL \d{2}:\d{2}$/);
+  await expect(page.locator(".dm-stop.is-now .dm-one-thing")).toHaveText(/^NOW · UNTIL \d{2}:\d{2}$/);
 
   const first = page.locator(".dm-stop .dm-main").first();
   const title = (await page.locator(".dm-stop .dm-title").first().innerText()).trim();

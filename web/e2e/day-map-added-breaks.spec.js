@@ -86,5 +86,5 @@ test("Something else shows its fixed time in Today's list, and is never the one 
   await page.getByRole("button", { name: /^Show list/ }).click();
   const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { hasText: "Call with the recruiter" });
   await expect(row.getByLabel("Fixed at 12:30")).toBeVisible();
-  await expect(row.getByRole("button", { name: /^Make the one thing/ })).toHaveCount(0);
+  await expect(row.getByRole("button", { name: /^Do this now/ })).toHaveCount(0);
 });

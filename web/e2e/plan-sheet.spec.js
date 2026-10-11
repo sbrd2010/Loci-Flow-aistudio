@@ -32,7 +32,7 @@ test("a row opens the sheet: its horizon and place, no Must-do or one thing, and
   await expect(sheet(page).locator(".detail-kicker").first()).toHaveText(`THIS WEEK · 2 OF ${n}`);
   await expect(rows.nth(1)).toHaveClass(/is-open/);
   await expect(sheet(page).getByRole("switch", { name: "Must-do" })).toHaveCount(0);
-  await expect(sheet(page).getByRole("button", { name: /Make this the one thing/ })).toHaveCount(0);
+  await expect(sheet(page).getByRole("button", { name: /Do this now/ })).toHaveCount(0);
   await expect(sheet(page).getByRole("button", { name: "Tomorrow" })).toHaveCount(0);
   const foot = sheet(page).locator(".detail-foot");
   await expect(foot.getByRole("button")).toHaveText(["Move to Today", "Pin to top", "Park", "Delete"]);

@@ -242,7 +242,7 @@ export default function TaskDetail({
       <div className="detail-top">
         {/* A Day map stop the Must-do filter hides (52): it opens anyway,
             and the filter stays the user's to change. */}
-        <span className="detail-kicker">{kicker || (isNow ? "TODAY · THE ONE THING" : `TODAY · ${index + 1} OF ${total}`)}</span>
+        <span className="detail-kicker">{kicker || (isNow ? "TODAY · NOW" : `TODAY · ${index + 1} OF ${total}`)}</span>
         {isDrawer && !isNow && (
           <span className="detail-keys" aria-hidden="true">
             <kbd className="wall-key detail-key">↑ ↓</kbd><kbd className="wall-key detail-key">Esc</kbd>
@@ -545,12 +545,12 @@ export default function TaskDetail({
         {/* Q31: something at a set time is never the one thing. */}
         {!task.isNowFocus && !isEventTask(task) && (
           <button type="button" className="detail-one" onClick={onMakeOneThing}>
-            <IconPin size={18} /> Make this the one thing {kbd("P")}
+            <IconPin size={18} /> Do this now {kbd("P")}
           </button>
         )}
         {task.isNowFocus && onLetGo && (
           <button type="button" className="detail-one is-quiet" onClick={onLetGo}>
-            Not the one thing now
+            Not now
           </button>
         )}
         <div className="detail-actions">

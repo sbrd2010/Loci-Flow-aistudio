@@ -182,7 +182,7 @@ async function dayOverAt18(page, { unpin }) {
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
   if (unpin) {
     await page.locator(".wall-title").click();
-    await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
+    await page.getByTestId("task-detail").getByRole("button", { name: /^Not now$/ }).click();
   }
   await openDayMapPage(page);
   await expect(page.locator(".dm-stop.is-over")).toHaveCount(3);

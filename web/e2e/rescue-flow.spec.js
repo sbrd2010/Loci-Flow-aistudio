@@ -37,7 +37,7 @@ test("the four steps, Clear my day to This week, and Undo", async ({ page }) => 
   await clear.click();
   await expect(clear).toHaveAttribute("aria-expanded", "true");
   await expect(rescue(page).getByRole("radio", { name: "This week" })).toHaveAttribute("aria-checked", "true");
-  await expect(rescue(page).getByRole("checkbox", { name: /as the one thing/ })).toBeChecked();
+  await expect(rescue(page).getByRole("checkbox", { name: /as your now task/ })).toBeChecked();
   const move = rescue(page).getByRole("button", { name: /^Move \d+ to This week$/ });
   const n = Number((await move.innerText()).match(/\d+/)[0]);
   expect(n).toBeGreaterThan(0);
@@ -60,7 +60,7 @@ test("after Clear my day moves the one thing away, Back to it doesn't offer it",
   await rescue(page).getByRole("button", { name: /^Too much going on/ }).click();
   await rescue(page).getByRole("button", { name: "Skip", exact: true }).click();
   await rescue(page).getByRole("button", { name: /^Clear my day/ }).click();
-  await rescue(page).getByRole("checkbox", { name: /as the one thing/ }).uncheck();
+  await rescue(page).getByRole("checkbox", { name: /as your now task/ }).uncheck();
   await rescue(page).getByRole("button", { name: /^Move \d+ to This week$/ }).click();
   await expect(rescue(page).getByRole("heading", { name: "Where to now?" })).toBeVisible();
   await expect(rescue(page).getByRole("button", { name: /^Back to it/ })).toHaveCount(0);

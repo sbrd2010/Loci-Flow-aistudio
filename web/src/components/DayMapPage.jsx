@@ -124,7 +124,7 @@ function RouteStop({ task, row, fromYesterday = false, isNow, isOver, isGoal, is
         </span>
         <span className="dm-dur">{formatSpan(end - start)}</span>
         {/* 56a: the one thing, at NOW, until the end of its stop. */}
-        {until != null && <span className="dm-one-thing"><IconPin size={12} />THE ONE THING · UNTIL {formatClock24(until)}</span>}
+        {until != null && <span className="dm-one-thing"><IconPin size={12} />NOW · UNTIL {formatClock24(until)}</span>}
       </div>
       {/* Q36.3: still open 5 minutes after it ended, it asks (Q47.5). */}
       {asks && <DidItHappen title={task.title} {...asks} />}

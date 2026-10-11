@@ -222,7 +222,7 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
         {!isCompleted && (hasSubSteps || isNowFocus || isMVD || isGoal || isMin || fromYesterday) && (
           <span className="task-row-tags">
             {hasSubSteps && <span className="task-row-steps">{stepsDone} / {subSteps.length} steps</span>}
-            {isNowFocus && <span className="task-tag is-now" aria-label="Today's one thing">NOW</span>}
+            {isNowFocus && <span className="task-tag is-now" aria-label="Today's now task">NOW</span>}
             {isMVD && <span className="task-tag is-must" aria-label="Must-do">MUST</span>}
             {isGoal && <span className="task-tag is-goal" aria-label="Goal task">GOAL</span>}
             {isMin && <span className="task-tag is-min" aria-label="Minimum day">MIN</span>}
@@ -280,8 +280,8 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
           type="button"
           className="task-row-pin"
           tabIndex={-1}
-          aria-label={`Make the one thing: ${title}`}
-          title="Make the one thing · P"
+          aria-label={`Do this now: ${title}`}
+          title="Do this now · P"
           onClick={e => { e.stopPropagation(); onMakeOneThing(task); }}
           onMouseDown={e => e.stopPropagation()}
           onTouchStart={e => e.stopPropagation()}

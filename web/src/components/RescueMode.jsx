@@ -26,8 +26,8 @@ const OPTIONS = {
   ],
   tired: [
     { id: "break", title: "10-minute break", min: "10 MIN", sub: "Water, stand up, look away from the screen." },
-    { id: "focus5", title: "Make the step 5 minutes", min: "5 MIN", sub: "Five minutes on the one thing. Stop after if you need to." },
-    { id: "easiest", title: "Pick the easiest task", min: "1 MIN", sub: "The smallest open task becomes the one thing. A quick win first." },
+    { id: "focus5", title: "Make the step 5 minutes", min: "5 MIN", sub: "Five minutes on your now task. Stop after if you need to." },
+    { id: "easiest", title: "Pick the easiest task", min: "1 MIN", sub: "The smallest open task becomes your now task. A quick win first." },
   ],
   anxious: [
     { id: "worry", title: "Write the worry down", min: "2 MIN", sub: "Put it in words. It goes to Mind Box, out of your head." },
@@ -36,7 +36,7 @@ const OPTIONS = {
   ],
   distracted: [
     { id: "park", title: "Park the thought", min: "1 MIN", sub: "Whatever pulled you away goes to Mind Box for later." },
-    { id: "focus10", title: "10-minute restart", min: "10 MIN", sub: "Ten minutes on the one thing, then decide." },
+    { id: "focus10", title: "10-minute restart", min: "10 MIN", sub: "Ten minutes on your now task, then decide." },
     { id: "checklist", title: "Close everything but the task", min: "1 MIN", sub: "Other tabs, your phone, notifications." },
   ],
 };
@@ -348,7 +348,7 @@ export default function RescueMode({
     if (id === "tiny") { setDraft(""); setStep("tiny"); return; }
     if (id === "easiest") {
       const picked = onPickEasiest?.();
-      toWhere(picked ? `DONE · ${picked.title.toUpperCase()} IS THE ONE THING` : "NOTHING EASIER WAITING");
+      toWhere(picked ? `DONE · ${picked.title.toUpperCase()} IS YOUR NOW TASK` : "NOTHING EASIER WAITING");
       return;
     }
     if (WRITE[id]) { setWriteKind(id); setWritten([]); setDraft(""); setStep("write"); }
@@ -446,7 +446,7 @@ export default function RescueMode({
         {task?.isNowFocus && (
           <label className="rescue-keep">
             <input type="checkbox" checked={keepOne} onChange={e => setKeepOne(e.target.checked)} />
-            <span>Keep <strong>{task.title}</strong> as the one thing</span>
+            <span>Keep <strong>{task.title}</strong> as your now task</span>
           </label>
         )}
         <p className="rescue-note">Fixed times{plan.fixedCount ? ` (${plan.fixedCount} today)` : ""} and done tasks stay. Nothing is deleted.</p>
@@ -569,7 +569,7 @@ export default function RescueMode({
   if (step === "breakOver") return shell(<>
     <span className="rescue-kicker">BREAK · 0:00</span>
     {heading("Break’s over. Ready?")}
-    <p className="rescue-line">{task ? `${task.title} is still the one thing. Ten minutes, then decide.` : "Ten minutes, then decide."}</p>
+    <p className="rescue-line">{task ? `${task.title} is still your now task. Ten minutes, then decide.` : "Ten minutes, then decide."}</p>
     <div className="rescue-where">
       {task && <button type="button" className="rescue-btn-filled is-big" onClick={() => startFocus(10)}>Start 10 minutes</button>}
       {!moreAsked && (

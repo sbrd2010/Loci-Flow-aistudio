@@ -314,7 +314,7 @@ export default function FocusModePage({
     setCustomEstimate("");
   };
   const stageKicker = [
-    task.isNowFocus ? "TODAY, ONE THING" : "FOCUS",
+    task.isNowFocus ? "TODAY, NOW" : "FOCUS",
     estimate > 0 ? `${spanLabel(estimate)} TASK` : null,
     doneToday >= 1 ? `${spanLabel(doneToday)} DONE` : null,
   ].filter(Boolean).join(" · ");

@@ -74,7 +74,7 @@ export default function DayMapColumn({ route, onOpenDayMap, onOpenTask, onDone, 
           type="button"
           className={`tdm-stop${isNow ? " is-now" : ""}${oneThing ? " is-one-thing" : ""}${late ? " is-late" : ""}${isOver ? " is-over" : ""}`}
           aria-label={`${isNow || late ? "Now" : formatClock24(r.start)} to ${formatClock24(r.end)}, ${task.title}`
-            + `${oneThing ? ", the one thing" : ""}${r.fixed ? ", fixed time" : ""}${r.continued ? ", continued after the break" : ""}${isOver ? ", after the day ends" : ""}${asks ? ", did it happen?" : ""}`}
+            + `${oneThing ? ", your now task" : ""}${r.fixed ? ", fixed time" : ""}${r.continued ? ", continued after the break" : ""}${isOver ? ", after the day ends" : ""}${asks ? ", did it happen?" : ""}`}
           onClick={() => onOpenTask(task)}
         >
           <span className="tdm-time">{isNow ? "NOW" : late ? "now" : formatClock24(r.start)}</span>
@@ -83,7 +83,7 @@ export default function DayMapColumn({ route, onOpenDayMap, onOpenTask, onDone, 
             {r.fixed && <span className="dm-lock"><IconLock size={13} /></span>}
             {task.deferredUntil === todayStr && !r.continued && <span className="from-yesterday">FROM YESTERDAY</span>}
             {oneThing && (
-              <span className="tdm-one-thing"><IconPin size={12} />THE ONE THING · UNTIL {formatClock24(until)}</span>
+              <span className="tdm-one-thing"><IconPin size={12} />NOW · UNTIL {formatClock24(until)}</span>
             )}
           </span>
           <span className="tdm-dur">{formatSpan(r.end - r.start)}</span>

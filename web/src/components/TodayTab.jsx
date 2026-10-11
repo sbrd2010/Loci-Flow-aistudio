@@ -947,7 +947,7 @@ export default function TodayTab({
       return front ? `Put on ${front.name}: ${title}` : `Off its front: ${title}`;
     }
     // A previous one thing in Plan isn't on the list, so the toast names the new one (#489).
-    if (u.kind === "swap") return u.previous?.horizonLevel === "today" ? `${u.previous.title} is back at the top of the list.` : `${u.fromPlan ? "Moved to Today and made the one thing" : "Made the one thing"}: ${title}`;
+    if (u.kind === "swap") return u.previous?.horizonLevel === "today" ? `${u.previous.title} is back at the top of the list.` : `${u.fromPlan ? "Moved to Today as your now task" : "Your now task"}: ${title}`;
     return `${{ done: "Marked done", delete: "Deleted", tomorrow: "Moved to tomorrow", bringback: "Brought back", park: "Parked", restore: "Restored", unpin: "Unpinned" }[u.kind]}: ${title}`;
   };
   const undoText = undo ? undoMessage(undo) : "";

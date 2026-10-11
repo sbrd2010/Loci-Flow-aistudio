@@ -124,7 +124,7 @@ test("mobile reliability: Today task can be added, edited, focused, completed, r
 
   // Pinning makes it the wall's one thing; the overlay does not auto-open.
   await openTaskMenu(page, editedTitle);
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Do this now/ }).click();
   const wallTitle = page.locator(".wall-title");
   await expect(wallTitle).toHaveText(editedTitle, { timeout: 5_000 });
   // The list is a sheet over the wall on a phone; put it away before using
@@ -277,7 +277,7 @@ test("mobile reliability: editing the wall's task off Today clears its focus/pin
 
   // Pin it — isNowFocus: true, the same state a running session leaves.
   await openTaskMenu(page, title);
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Do this now/ }).click();
   await expect(page.locator(".wall-title")).toHaveText(title, { timeout: 5_000 });
 
   // The sheet's Horizon picker can move the task off Today. The one thing
