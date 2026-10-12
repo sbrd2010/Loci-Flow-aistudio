@@ -474,3 +474,18 @@ html[data-theme="dark"] .screen-content-today { --upnext-surface: var(--surface)
   .screen-content-today .today-wall:not(.is-open) .wall-title[data-len="xl"] { font-size: 32px; }
   .screen-content-today .today-wall:not(.is-open) .wall-then { margin-top: 4px; padding-top: 10px; }
 }
+
+/* 12 Oct try-out (24″ at 90% zoom): with the scale held to ×1.1 (#512) the
+   row is about 1860px, the list stopped at 680 and the hero at 720, so the
+   task sat beside a 400px empty band. From 1700px both may grow a little
+   further; a 16″ laptop (about 1536px) is unchanged. */
+@media (min-width: 1700px) {
+  .screen-content-today .today-layout.is-list-open {
+    grid-template-columns: minmax(0, 1fr) clamp(480px, 42%, 760px);
+  }
+  .screen-content-today .today-wall .wall-hero,
+  .screen-content-today .today-wall:not(.is-open):not(.is-done):not(.is-empty) .wall-hero,
+  .screen-content-today .today-wall:not(.is-done):not(.is-empty) .wall-hero {
+    max-width: 840px;
+  }
+}
