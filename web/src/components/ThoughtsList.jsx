@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { THOUGHTS_MAX, THOUGHTS_NOTE_AT, newestThoughtsFirst } from "../utils/thoughts";
+import { THOUGHTS_MAX, THOUGHTS_NOTE_AT, newestThoughtsFirst, thoughtText } from "../utils/thoughts";
 import { parseThought } from "../utils/thoughtFormat";
 import { IconSquareCheck, IconX } from "./ui/icons";
 
@@ -106,7 +106,7 @@ export default function ThoughtsList({
             onKeyDown={(e) => rowKeys(e, t)}
             onClick={(e) => { if (!e.target.closest("button")) setPicked(p => (p === t.id ? null : t.id)); }}
           >
-            <span className="thought-text"><ThoughtText text={t.text} /></span>
+            <span className="thought-text"><ThoughtText text={thoughtText(t)} /></span>
             <span className="thought-age">{thoughtAge(t.createdAt, now)}</span>
             <span className="thought-actions">
               <button type="button" className="thought-btn is-make" onClick={() => onMakeTask(t)}>
