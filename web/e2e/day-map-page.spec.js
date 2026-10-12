@@ -260,3 +260,25 @@ test("24″: a stop dragged onto the middle of the row above or below moves one 
   await drag(0, 1);
   await expect.poll(async () => (await titles()).indexOf(moved)).toBe(at);
 });
+
+// 12 Oct try-out: a held stop is a card under the pointer and the route holds
+// still; a line marks where it lands (above the stop it goes before).
+test("holding a stop shows a card and a drop line; the other stops stay put", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await openDayMapByKey(page);
+  const stops = page.locator(".dm-stop[data-task-uuid]:not(.is-now)");
+  await expect(stops).toHaveCount(2);
+  const s = await stops.nth(1).boundingBox(), t = await stops.nth(0).boundingBox();
+  const x = s.x + s.width / 2;
+  await page.mouse.move(x, s.y + s.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(x, s.y + s.height / 2 - 10, { steps: 3 });
+  await page.mouse.move(x, t.y + t.height / 2, { steps: 10 });
+  await expect(page.locator(".dm-drag-card")).toBeVisible();
+  await expect(stops.nth(0)).toHaveClass(/is-drop-before/);
+  // The stop it would go before has not moved.
+  expect((await stops.nth(0).boundingBox()).y).toBeCloseTo(t.y, 0);
+  await page.mouse.up();
+  await expect(page.locator(".dm-drag-card")).toHaveCount(0);
+  await expect(page.locator(".is-drop-before, .is-drop-after")).toHaveCount(0);
+});
