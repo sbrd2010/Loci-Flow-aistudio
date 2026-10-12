@@ -483,9 +483,9 @@ html[data-theme="dark"] .screen-content-today { --upnext-surface: var(--surface)
   .screen-content-today .today-layout.is-list-open {
     grid-template-columns: minmax(0, 1fr) clamp(480px, 42%, 760px);
   }
-  .screen-content-today .today-wall .wall-hero,
-  .screen-content-today .today-wall:not(.is-open):not(.is-done):not(.is-empty) .wall-hero,
-  .screen-content-today .today-wall:not(.is-done):not(.is-empty) .wall-hero {
+  /* Only beside the list: with the list closed the goal, the task and the
+     THEN line share one centred 47.5rem column and must stay aligned. */
+  .screen-content-today .today-wall.is-open:not(.is-done):not(.is-empty) .wall-hero {
     max-width: 840px;
   }
 }

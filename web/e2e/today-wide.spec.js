@@ -418,5 +418,11 @@ for (const [width, height, min, max, hero] of [[1536, 864, 600, 625, 720], [2133
     expect(w).toBeLessThanOrEqual(max + 1);
     const heroMax = await page.locator(".wall-hero").evaluate(el => parseFloat(getComputedStyle(el).maxWidth));
     expect(heroMax).toBe(hero);
+    // List closed: the goal band and the task share one column, edges aligned.
+    await page.keyboard.press("l");
+    await expect(list).toBeHidden();
+    await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
+    const [goal, heroBox] = await Promise.all([page.locator(".wall-goal").boundingBox(), page.locator(".wall-hero").boundingBox()]);
+    expect(Math.abs(goal.x - heroBox.x)).toBeLessThan(2);
   });
 }
