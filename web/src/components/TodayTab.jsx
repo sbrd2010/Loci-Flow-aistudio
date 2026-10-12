@@ -95,7 +95,7 @@ function SortableTaskItem({ id, isOver = false, disabled = false, children }) {
 }
 
 export default function TodayTab({
-  payload, savePayload, savePayloadAsync, saveConfigPatch, onOpenDayMap, onOpenPlan, onOpenCoach, onScattered, onOpenAddTask,
+  payload, savePayload, savePayloadAsync, saveConfigPatch, onOpenDayMap, onOpenPlan, onOpenCoach, onScattered, onOpenAddTask, onOpenAddThought,
   // 57f: "September ended · 2 left · Review" until the review is done.
   reviewLine = null,
   // 55d–e, Q47: "Day ends 17:30 · Close the day"; and the closed day.
@@ -1968,6 +1968,7 @@ export default function TodayTab({
         onFromWeek={() => setWeekPickerOpen(true)}
         onScattered={onScattered}
         onRescue={() => { rescue.noteStuck(); openRescueMode(); }}
+        onThought={onOpenAddThought}
         rescueHint={rescue.hint}
         nowCount={pinnedFocusTask ? todayTasksAll.filter(t => !t.isCompleted).length : 0}
         nowUntil={pinnedFocusTask ? route.routeTasks.find(t => getTaskId(t) === String(pinnedFocusTask.uuid))?.routeEndMinutes ?? null : null}

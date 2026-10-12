@@ -173,3 +173,14 @@
 @media (max-width: 1023px) {
   .screen-content.screen-content-coach { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
 }
+
+/* 12 Oct try-out: on a laptop the conversation sits on its own surface, so
+   the eye stays on the chat rather than the page's cream ground. */
+@media (min-width: 840px) {
+  .chat-window.coach-chat {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding-inline: 20px;
+  }
+}

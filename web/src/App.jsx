@@ -1479,6 +1479,7 @@ export default function App() {
             syncWarning={syncWarning}
             saveConfigPatch={saveConfigPatch}
             onOpenAddTask={() => openAddTask("today", "Today")}
+            onOpenAddThought={openAddThought}
             onOpenDayMap={openDayMap}
             onOpenPlan={() => handleTabSelect("roadmap")}
             // 59d / Q39.1: Talk it through arrives with its chip.
