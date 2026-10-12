@@ -764,7 +764,11 @@
   margin-left: auto; min-height: 44px; padding: 0 14px; font: inherit; font-size: 0.875rem; font-weight: 700;
   color: var(--ink-2, var(--text-secondary)); background: none; border: 1px solid var(--line, var(--border)); border-radius: var(--radius-sm, 8px); cursor: pointer;
 }
-@media (max-width: 599px) { .dm-close-day { border: 0; padding: 0 4px; } }
+/* Try-out 12 Oct: a real action, so a soft green fill; solid green stays for
+   Start focus. */
+.dm-close-day { background: var(--accent-tint); border-color: transparent; color: var(--accent); }
+.dm-close-day:hover { border-color: var(--accent); }
+@media (max-width: 599px) { .dm-close-day { border: 0; padding: 0 10px; } }
 .dm-close-day:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .today-closed { display: flex; flex-direction: column; gap: 14px; padding: 24px 0; }
 .today-closed-title { margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }

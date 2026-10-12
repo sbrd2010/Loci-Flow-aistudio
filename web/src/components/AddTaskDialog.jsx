@@ -384,9 +384,8 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
               onSubmit={saveThought}
               onKeyDown={e => { if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); switchMode("task"); } }}
             />
-            <p className="add-thought-note">Goes to Mind Box › Brain dump. No date, nothing to decide now.</p>
+            <p className="add-thought-note">Goes to Mind Box › Brain dump.</p>
             {thoughtError && <p className="add-error-line" role="alert">{thoughtError}</p>}
-            <p className="add-thought-hint" aria-hidden="true">ENTER SAVES · SHIFT+ENTER NEW LINE · TAB SWITCHES · ESC CLOSES</p>
           </div>
         ) : (
         <form ref={formRef} onSubmit={handleSubmit} className="add-body">

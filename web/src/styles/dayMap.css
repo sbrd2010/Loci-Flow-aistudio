@@ -975,3 +975,15 @@ html[data-theme="dark"] { --break-tint: #1D262D; --break-ink: #A9B6C1; }
 .tdm-stop.is-break .tdm-dur { color: var(--break-ink); }
 .dm-break .dm-dash,
 .tdm-stop.is-break .dm-dash { background: var(--break-ink); }
+
+/* Try-out 12 Oct: the route is the page's one white card, so the eye stays
+   on it; the cream page and the green side panels sit around it. */
+@media (min-width: 1280px) {
+  .day-map-page > .dm-layout > .dm-route-wrap {
+    margin-inline: 0;
+    padding: 6px 12px 16px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface);
+  }
+}
