@@ -1230,7 +1230,7 @@ test("Split a task: rows are locked while the AI works, and an answer outside tw
 // From 1280px (75a–b, Turn 76) Today runs edge to edge with 40px gutters —
 // no centred cap — and the page grows with the window by the smaller of
 // width ÷ 1422 and height ÷ 800, so the gutters grow with it.
-const scaleOf = (w, h) => Math.min(28.5 / 16, Math.max(1, Math.min(w / 1422, h / 800)));
+const scaleOf = (w, h) => Math.min(1.1, Math.max(1, Math.min(w / 1422, h / 800)));
 
 test("laptop: no phone-card frame; the task and the list run edge to edge with 40px gutters", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1080 });
@@ -1248,9 +1248,9 @@ test("laptop: no phone-card frame; the task and the list run edge to edge with 4
   expect(Math.abs(list.x + list.width - (1440 - gutter))).toBeLessThan(2);
 });
 
-// No cap on a 1920 monitor either: ×1.35 ÷ 1.1 at 1920×1080 (try-out D1),
-// gutters 40px at that scale.
-test("wide: 1920×1080 is ×1.35 ÷ 1.1 and edge to edge, no 1760px cap (Turn 76)", async ({ page }) => {
+// No width cap on a 1920 monitor either: ×1.35 ÷ 1.1 at 1920×1080 (try-out
+// D1), held to ×1.1 (try-out issue 4); gutters 40px at that scale.
+test("wide: 1920×1080 is ×1.1 and edge to edge, no 1760px cap (Turn 76)", async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto("/");
   await page.clock.setFixedTime(new Date("2024-06-15T10:00:00"));
@@ -1258,7 +1258,7 @@ test("wide: 1920×1080 is ×1.35 ÷ 1.1 and edge to edge, no 1760px cap (Turn 76
   await page.keyboard.press("l");
   await expect(page.locator(".tasks-section")).toBeVisible();
   await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
-  const z = 1.35 / 1.1;
+  const z = 1.1;
   expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBeCloseTo(z, 3);
   const [band, list] = await Promise.all([page.locator(".wall-goal").boundingBox(), page.locator(".tasks-section").boundingBox()]);
   expect(Math.abs(band.x - 40 * z)).toBeLessThan(1);

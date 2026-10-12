@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { appScale } from "./useAppScale";
+import { appScale, SCALE_MAX } from "./useAppScale";
 
 describe("appScale (Turn 76)", () => {
   it("is 1 on a laptop and below", () => {
@@ -12,15 +12,19 @@ describe("appScale (Turn 76)", () => {
     expect(appScale(1903, 940)).toBeCloseTo(1.175 / 1.1, 5);
   });
   it("takes the smaller of width and height", () => {
-    expect(appScale(1800, 1000)).toBeCloseTo(1.25 / 1.1, 5);
-    expect(appScale(2560, 1305)).toBeCloseTo(1305 / 800 / 1.1, 5);
+    expect(appScale(1650, 1000)).toBeCloseTo(1650 / 1422 / 1.1, 5);
+    expect(appScale(2560, 900)).toBeCloseTo(900 / 800 / 1.1, 5);
     expect(appScale(1700, 2000)).toBeCloseTo(1700 / 1422 / 1.1, 5);
   });
   it("is 1 until the window is a tenth past 1422×800", () => {
     expect(appScale(1500, 850)).toBe(1);
   });
-  it("stops at 28.5/16", () => {
-    expect(appScale(5120, 2880)).toBe(28.5 / 16);
+  // Try-out issue 4: a taller 24″ and a zoomed-out browser stop at ×1.1.
+  it("stops at ×1.1", () => {
+    expect(SCALE_MAX).toBe(1.1);
+    expect(appScale(2120, 1150)).toBe(1.1); // a 1920×1200 24″ at 90% browser zoom
+    expect(appScale(2560, 1305)).toBe(1.1);
+    expect(appScale(5120, 2880)).toBe(1.1);
   });
   it("is 1 for a missing size", () => {
     expect(appScale(0, 0)).toBe(1);

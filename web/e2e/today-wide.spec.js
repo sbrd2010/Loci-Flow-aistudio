@@ -45,11 +45,12 @@ test("1680: no third column; the switch shows the Day map in the list's place, a
 });
 
 // Turn 76: the page grows with the window, by the smaller of width ÷ 1422
-// and height ÷ 800, a tenth smaller since the try-out (×1.25 ÷ 1.1 at
-// 2130×1000), and runs edge to edge: no cap.
-test("2130×1000: ×1.25 ÷ 1.1, edge to edge with 40px gutters (no 1760 cap)", async ({ page }) => {
+// and height ÷ 800, a tenth smaller since the try-out, never above ×1.1
+// (try-out issue 4; 2130×1000 would be ×1.25 ÷ 1.1), and runs edge to edge:
+// no width cap.
+test("2130×1000: ×1.1 at most, edge to edge with 40px gutters (no 1760 cap)", async ({ page }) => {
   await enterDemo(page, { width: 2130, height: 1000 });
-  const z = 1.25 / 1.1;
+  const z = 1.1;
   expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBeCloseTo(z, 3);
   const wall = await page.locator(".today-layout").boundingBox();
   expect(Math.abs(wall.x - 40 * z)).toBeLessThan(1);
@@ -59,9 +60,9 @@ test("2130×1000: ×1.25 ÷ 1.1, edge to edge with 40px gutters (no 1760 cap)", 
 });
 
 // 75a: the title is 46 (its length steps below that), list shown or hidden.
-test("2400×1200: ×1.5 ÷ 1.1, and the title goes a step up with the list hidden (75d)", async ({ page }) => {
+test("2400×1200: ×1.1 at most, and the title goes a step up with the list hidden (75d)", async ({ page }) => {
   await enterDemo(page, { width: 2400, height: 1200 });
-  expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBeCloseTo(1.5 / 1.1, 3);
+  expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBeCloseTo(1.1, 3);
   const shown = await page.locator(".wall-title").evaluate(el => [el.dataset.len, parseFloat(getComputedStyle(el).fontSize)]);
   await page.locator("body").click({ position: { x: 5, y: 300 } });
   await page.keyboard.press("l");
@@ -320,8 +321,8 @@ test("72: the task side reads goal · NOW · UNTIL · title · step · buttons, 
 // The widest screens: the dragged copy lands on the row it is moved to.
 test("2880: a row moved by keyboard drag lands where its copy shows", async ({ page }) => {
   await enterDemo(page, { width: 2880, height: 1620 }, "2024-06-15T10:00:00");
-  // The largest scale (28.5/16): the copy still lands on the row.
-  expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBeCloseTo(28.5 / 16, 3);
+  // The largest scale (×1.1, try-out issue 4): the copy still lands on the row.
+  expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBeCloseTo(1.1, 3);
   const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']");
   const titles = async () => (await rows.locator(".task-title-text").allInnerTexts()).map(t => t.trim());
   const [first, second] = await titles();
