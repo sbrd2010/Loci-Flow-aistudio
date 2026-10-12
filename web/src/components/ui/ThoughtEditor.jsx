@@ -68,10 +68,12 @@ const ThoughtEditor = forwardRef(function ThoughtEditor({
   onKeyDown,
   label = "Thought",
   placeholder = "What\u2019s on your mind?",
-  hint = "ENTER SAVES · SHIFT+ENTER NEW LINE",
+  hint = <>ENTER SAVES<span className="te-hint-more"> · SHIFT+ENTER NEW LINE</span></>,
   saveLabel = "Save thought",
   maxLength = 500,
   disabled = false,
+  // 78 §6: at 50 the field gives way to this line; what was typed is kept.
+  fullMessage = null,
   autoFocus = false,
   className = "",
   fieldClassName = "",
@@ -85,6 +87,7 @@ const ThoughtEditor = forwardRef(function ThoughtEditor({
   const emojiRefs = useRef([]);
   // Visible text only: bold spaces ("** **") are still empty.
   const empty = !plainThought(value);
+  const off = disabled || !!fullMessage;
 
   // Show a value that came from outside (cleared after Save, a prefill).
   useLayoutEffect(() => {
@@ -128,12 +131,12 @@ const ThoughtEditor = forwardRef(function ThoughtEditor({
   }), []);
 
   useEffect(() => {
-    if (autoFocus && !disabled) { fieldRef.current?.focus(); caretToEnd(); }
+    if (autoFocus && !off) { fieldRef.current?.focus(); caretToEnd(); }
     // Mount only: autofocus is a first-open thing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const submit = () => { if (!disabled && !empty) onSubmit?.(); };
+  const submit = () => { if (!off && !empty) onSubmit?.(); };
   const submitRef = useRef(submit);
   submitRef.current = submit;
 
@@ -161,7 +164,7 @@ const ThoughtEditor = forwardRef(function ThoughtEditor({
   }, [focused, refreshMarks]);
 
   const toggle = (cmd) => {
-    if (disabled) return;
+    if (off) return;
     if (document.activeElement !== fieldRef.current) fieldRef.current?.focus();
     exec(cmd);
     emit();
@@ -200,7 +203,7 @@ const ThoughtEditor = forwardRef(function ThoughtEditor({
 
   // Emoji: remember the caret, move into the grid, put the caret back.
   const openEmoji = () => {
-    if (disabled) return;
+    if (off) return;
     if (emojiAt >= 0) { closeEmoji(); return; }
     const sel = window.getSelection?.();
     if (sel?.rangeCount && fieldRef.current?.contains(sel.anchorNode)) savedRange.current = sel.getRangeAt(0).cloneRange();
@@ -236,21 +239,23 @@ const ThoughtEditor = forwardRef(function ThoughtEditor({
   const keepFocus = (e) => e.preventDefault();
 
   return (
-    <div className={`te${focused ? " is-focused" : ""}${disabled ? " is-disabled" : ""} ${className}`.trim()}>
+    <div className={`te${focused ? " is-focused" : ""}${off ? " is-disabled" : ""}${fullMessage ? " is-full" : ""} ${className}`.trim()}>
       <div className="te-box">
+        {fullMessage && <p className="te-full">{fullMessage}</p>}
         <div
           ref={fieldRef}
           className={`te-field${empty ? " is-empty" : ""} ${fieldClassName}`.trim()}
           role="textbox"
           aria-multiline="true"
           aria-label={label}
-          aria-disabled={disabled || undefined}
+          aria-disabled={off || undefined}
+          hidden={!!fullMessage}
           data-placeholder={placeholder}
-          contentEditable={!disabled}
+          contentEditable={!off}
           suppressContentEditableWarning
           enterKeyHint="done"
           spellCheck
-          tabIndex={disabled ? -1 : 0}
+          tabIndex={off ? -1 : 0}
           onInput={() => { emit(); refreshMarks(); }}
           onKeyDown={handleKeyDown}
           onKeyUp={refreshMarks}
@@ -262,19 +267,19 @@ const ThoughtEditor = forwardRef(function ThoughtEditor({
         />
         <div className="te-foot">
           <button type="button" className={`te-tool${marks.b && focused ? " is-on" : ""}`} aria-label="Bold" title="Bold (Ctrl+B)"
-            aria-pressed={marks.b && focused} disabled={disabled} onMouseDown={keepFocus} onClick={() => toggle("bold")}>
+            aria-pressed={marks.b && focused} disabled={off} onMouseDown={keepFocus} onClick={() => toggle("bold")}>
             <IconBold size={18} />
           </button>
           <button type="button" className={`te-tool${marks.u && focused ? " is-on" : ""}`} aria-label="Underline" title="Underline (Ctrl+U)"
-            aria-pressed={marks.u && focused} disabled={disabled} onMouseDown={keepFocus} onClick={() => toggle("underline")}>
+            aria-pressed={marks.u && focused} disabled={off} onMouseDown={keepFocus} onClick={() => toggle("underline")}>
             <IconUnderline size={18} />
           </button>
           <button type="button" className={`te-tool${emojiAt >= 0 ? " is-on" : ""}`} aria-label="Emoji" title="Emoji"
-            aria-expanded={emojiAt >= 0} aria-haspopup="true" disabled={disabled} onMouseDown={keepFocus} onClick={openEmoji}>
+            aria-expanded={emojiAt >= 0} aria-haspopup="true" disabled={off} onMouseDown={keepFocus} onClick={openEmoji}>
             <IconSmile size={18} />
           </button>
           <span className="te-hint" aria-hidden="true">{hint}</span>
-          <button type="button" className="te-save" disabled={disabled || empty} onMouseDown={keepFocus} onClick={submit}>{saveLabel}</button>
+          <button type="button" className="te-save" disabled={off || empty} onMouseDown={keepFocus} onClick={submit}>{saveLabel}</button>
         </div>
       </div>
       {emojiAt >= 0 && (
