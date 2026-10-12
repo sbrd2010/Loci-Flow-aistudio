@@ -401,3 +401,19 @@ test("Today's Day map view: the From panel opens whole, and a quarter-hour moves
   await expect(panel).toHaveCount(0);
   await expect(column(page).locator(".dm-from-select")).not.toContainText("(now)");
 });
+
+// 12 Oct try-out: on a 24″ the list grows to a third of the row (480–640),
+// so the task doesn't sit beside an empty band; a 16″ keeps 480.
+for (const [width, height, min, max] of [[1536, 864, 480, 480], [2133, 1150, 600, 640]]) {
+  test(`${width}×${height}: the list column is ${min === max ? min : `${min}–${max}`}px wide`, async ({ page }) => {
+    await enterDemo(page, { width, height });
+    await page.locator("body").click({ position: { x: 5, y: 300 } });
+    const list = page.locator("section.today-list");
+    if (!(await list.isVisible())) await page.keyboard.press("l");
+    await expect(list).toBeVisible();
+    const z = await page.evaluate(() => document.documentElement.currentCSSZoom || 1);
+    const w = (await list.boundingBox()).width / z;
+    expect(w).toBeGreaterThanOrEqual(min - 1);
+    expect(w).toBeLessThanOrEqual(max + 1);
+  });
+}
