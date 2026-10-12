@@ -254,7 +254,41 @@
   letter-spacing: 0.1em;
   color: var(--accent);
 }
-.dm-stop.is-dragging { box-shadow: var(--shadow-md); }
+/* 12 Oct: while a stop is held the route holds still. Its row stays as a
+   faint placeholder, a card follows the pointer, and a line marks where it
+   lands: above the stop it goes before, below the one it goes after. */
+.dm-stop { position: relative; }
+.dm-stop.is-dragging { opacity: 0.35; }
+.dm-stop.is-drop-before::before,
+.dm-stop.is-drop-after::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
+  z-index: 2;
+}
+.dm-stop.is-drop-before::before { top: -2px; }
+.dm-stop.is-drop-after::after { bottom: -2px; }
+.dm-drag-card {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  min-height: 46px;
+  padding: 10px 14px 10px 10px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--accent);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  cursor: grabbing;
+}
+.dm-drag-grip { color: var(--ink-2); text-align: center; }
+.dm-drag-title { font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The route engine's rows (58): a fixed stop's lock, a stop pulled forward
    into the gap before one, a fixed time now has passed ("now" in red), the
    rest of a stop a break split, the break itself, and free time. */

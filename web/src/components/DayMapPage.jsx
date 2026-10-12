@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { horizonChoices } from "../utils/planLadder";
 import {
   DndContext,
   DragOverlay,
+  closestCenter,
   KeyboardSensor,
   MouseSensor,
   TouchSensor,
@@ -14,9 +15,7 @@ import {
   arrayMove,
   sortableKeyboardCoordinates,
   useSortable,
-  verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { formatClock24, formatSpan, moveToTomorrow, restoreSchedule } from "../utils/dayMapPlan";
 import { getRemainingFocusMinutes, mergeWindowSpans } from "../utils/focusWindows";
 import { isDeferred } from "../utils/deferral";
@@ -48,7 +47,7 @@ import Momentum from "./Momentum";
 import { buildMomentum } from "../utils/momentum";
 import { isOnToday } from "../utils/deferral";
 import { dayBar, doneToday, factualLine } from "../utils/dayMapFacts";
-import { cssZoom, unzoomTransform } from "../utils/cssZoom";
+import { cssZoom } from "../utils/cssZoom";
 import "../styles/dayMap.css";
 
 // Day map (50e–f, 52d–e). Today's tasks laid end to end from a start time,
@@ -58,14 +57,22 @@ import "../styles/dayMap.css";
 // of tomorrow's route (nothing is deleted), with Undo. Every open Today task
 // is on the route, in the list's order (Q59); above it: From · Fixed time.
 
+// Try-out (12 Oct): a stop dragged from evening to morning crossed breaks
+// and "continued" rows that cannot move, so the stops slid past them in
+// uneven jumps. Now the route holds still while a stop is held: a card
+// follows the pointer (as in Today's list) and a line marks where it lands.
+const holdStill = () => null;
+const GLIDE_MS = 220;
+const reducedMotion = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
 // `row` is the stop as the route engine laid it out (utils/dayMapRoute): its
 // start and end, and whether it is fixed, late, pulled forward, or stops for
 // a break. A fixed stop keeps its time, so it is not dragged.
-function RouteStop({ task, row, fromYesterday = false, isNow, isOver, isGoal, isOpen, onOpen, onStartFocus, until = null, min = null, was = null, flash = false, asks = null }) {
+function RouteStop({ task, row, fromYesterday = false, isNow, isOver, isGoal, isOpen, onOpen, onStartFocus, until = null, min = null, was = null, flash = false, asks = null, dropAt = null }) {
   const taskId = getTaskId(task);
   const {
     attributes, listeners, setActivatorNodeRef,
-    setNodeRef, transform, transition, isDragging,
+    setNodeRef, isDragging,
   } = useSortable({ id: taskId, data: { taskId }, disabled: row.fixed });
 
   const { start, end } = row;
@@ -78,18 +85,10 @@ function RouteStop({ task, row, fromYesterday = false, isNow, isOver, isGoal, is
     + (isGoal ? ", goal task" : "") + (min === "confirmed" ? ", minimum day" : "") + (isOver ? ", after the day ends" : "")
     + (asks ? ", did it happen?" : "");
 
-  const style = {
-    transform: CSS.Transform.toString(unzoomTransform(transform)),
-    transition,
-    opacity: isDragging ? 0.55 : undefined,
-    zIndex: isDragging ? 5 : undefined,
-  };
-
   return (
     <li
       ref={setNodeRef}
-      style={style}
-      className={`dm-stop${isNow ? " is-now" : ""}${late ? " is-late" : ""}${asks ? " is-asking" : ""}${isOver ? " is-over" : ""}${isDragging ? " is-dragging" : ""}${isOpen ? " is-open" : ""}${flash ? " is-flash" : ""}`}
+      className={`dm-stop${isNow ? " is-now" : ""}${late ? " is-late" : ""}${asks ? " is-asking" : ""}${isOver ? " is-over" : ""}${isDragging ? " is-dragging" : ""}${isOpen ? " is-open" : ""}${flash ? " is-flash" : ""}${dropAt ? ` is-drop-${dropAt}` : ""}`}
       data-task-uuid={taskId}
     >
       <div
@@ -196,6 +195,12 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
 
   // A drag ends in a click on the row it dropped; that click must not open it.
   const draggingRef = useRef(false);
+  // The stop held, and where it would land: before or after another stop.
+  const [heldId, setHeldId] = useState(null);
+  const [dropAt, setDropAt] = useState(null);
+  // Where each stop sat on screen before a drop, so it can glide to its new
+  // time once the route is timed again (and the dropped one from the card).
+  const glideFrom = useRef(null);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -394,17 +399,60 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     onStartFocus ? onStartFocus(pinPromise) : onClose();
   };
 
+  // The drop is read on the route as it shows (a stop pulled forward sits
+  // ahead of its place in the order), and that order is what is kept
+  // (Codex review of #421).
+  const shownStops = () => routeTasks.map(t => scheduledTasks.find(s => getTaskId(s) === getTaskId(t))).filter(Boolean);
+  const dropPlace = (activeId, overId) => {
+    if (overId == null || activeId === overId) return null;
+    const ids = shownStops().map(getTaskId);
+    const from = ids.indexOf(activeId), to = ids.indexOf(overId);
+    if (from === -1 || to === -1) return null;
+    return { id: overId, side: to < from ? "before" : "after" };
+  };
+  const endHold = () => {
+    setHeldId(null);
+    setDropAt(null);
+    setTimeout(() => { draggingRef.current = false; }, 0);
+  };
+
   const handleDragEnd = ({ active, over }) => {
+    endHold();
     if (!over || active.id === over.id) return;
-    // The drop is read on the route as it shows (a stop pulled forward sits
-    // ahead of its place in the order), and that order is what is kept
-    // (Codex review of #421).
-    const shown = routeTasks.map(t => scheduledTasks.find(s => getTaskId(s) === getTaskId(t))).filter(Boolean);
+    const shown = shownStops();
     const oldIndex = shown.findIndex(t => getTaskId(t) === active.id);
     const newIndex = shown.findIndex(t => getTaskId(t) === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
+    const before = new Map();
+    document.querySelectorAll(".dm-route [data-task-uuid]").forEach(el => before.set(el.dataset.taskUuid, el.getBoundingClientRect().top));
+    const card = active.rect.current.translated;
+    if (card) before.set(String(active.id), card.top);
+    glideFrom.current = before;
     applyAndSave(arrayMove(shown, oldIndex, newIndex), anchorMinutes, null, { listFollows: true });
   };
+
+  // After a drop: each stop starts where it was (the dropped one where the
+  // card was let go) and glides to its new place; breaks and "continued"
+  // rows fade in where the new timing puts them.
+  useLayoutEffect(() => {
+    const from = glideFrom.current;
+    if (!from) return;
+    glideFrom.current = null;
+    if (reducedMotion()) return;
+    const z = cssZoom();
+    document.querySelectorAll(".dm-route > li").forEach(el => {
+      if (!el.animate) return;
+      const id = el.dataset.taskUuid;
+      const top = id != null ? from.get(id) : undefined;
+      if (top == null) {
+        el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: GLIDE_MS, easing: "ease-out" });
+        return;
+      }
+      const dy = (top - el.getBoundingClientRect().top) / z;
+      if (Math.abs(dy) < 1) return;
+      el.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: GLIDE_MS, easing: "cubic-bezier(0.2, 0, 0, 1)" });
+    });
+  }, [rows]);
 
   const n = plan.wontFit.length;
   const isOver = n > 0;
@@ -574,6 +622,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
         isOver={rowIsOver(r)}
         isGoal={isGoal(task)}
         isOpen={detailId === id}
+        dropAt={dropAt?.id === id ? dropAt.side : null}
         onOpen={() => { if (!draggingRef.current) setDetailId(id); }}
         onStartFocus={() => startFocus(id)}
         asks={eventAsks(r, nowMins) ? {
@@ -760,9 +809,11 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
       ) : (
         <DndContext
           sensors={sensors}
-          onDragStart={() => { draggingRef.current = true; }}
-          onDragEnd={(e) => { setTimeout(() => { draggingRef.current = false; }, 0); handleDragEnd(e); }}
-          onDragCancel={() => { setTimeout(() => { draggingRef.current = false; }, 0); }}
+          collisionDetection={closestCenter}
+          onDragStart={({ active }) => { draggingRef.current = true; setHeldId(active.id); }}
+          onDragOver={({ active, over }) => setDropAt(dropPlace(active.id, over?.id))}
+          onDragEnd={handleDragEnd}
+          onDragCancel={endHold}
         >
           <div className="dm-layout">
             {/* Try-out 39: on a phone the least to do today leads, right
@@ -781,7 +832,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
             <div className="dm-route-wrap">
               {doneFold}
               {scheduledTasks.length > 0 && (
-                <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+                <SortableContext items={sortableIds} strategy={holdStill}>
                   <ol className="dm-route" aria-label="Today's route">
                     {rows.filter(r => !rowIsOver(r)).map(renderRow)}
                     <li className="dm-dayend" aria-label={`Day ends at ${dayEndLabel}`}>
@@ -825,11 +876,23 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
               )}
             </div>
           </div>
-          {/* Empty, yet needed: without an overlay, a keyboard drag's drop
-              often lands back where it started. Its box is the dragged
-              rect, so it unzooms as Today's does (try-out issue 8: at ×1.07
-              it sat a row low, and a stop dragged one up landed on itself). */}
-          <DragOverlay dropAnimation={null} style={{ zoom: 1 / cssZoom() }} />
+          {/* The held stop as a card under the pointer (Today's list does
+              the same). Its box is the dragged rect, so it unzooms as Today's
+              does (try-out issue 8: at ×1.07 it sat a row low, and a stop
+              dragged one up landed on itself); the card inside zooms back. */}
+          <DragOverlay dropAnimation={null} style={{ zoom: 1 / cssZoom() }}>
+            {heldId != null && (() => {
+              const t = routeTasks.find(x => getTaskId(x) === heldId);
+              if (!t) return null;
+              return (
+                <div className="dm-drag-card" style={{ zoom: cssZoom() }}>
+                  <span className="dm-drag-grip" aria-hidden="true">⠿</span>
+                  <span className="dm-drag-title">{t.title}</span>
+                  <span className="dm-dur">{formatSpan(Number(t.dayMapDurationMinutes) || 0)}</span>
+                </div>
+              );
+            })()}
+          </DragOverlay>
         </DndContext>
       )}
 
