@@ -87,9 +87,10 @@ export default function ThoughtsList({
           {countAction}
         </div>
       )}
-      {n >= THOUGHTS_NOTE_AT && n < THOUGHTS_MAX && onFlipOrder && (
+      {/* While flipped, the way back stays even outside 40–49 (Codex review of #519). */}
+      {onFlipOrder && ((n >= THOUGHTS_NOTE_AT && n < THOUGHTS_MAX) || oldestFirst) && (
         <p className="thoughts-note">
-          <span>{n} thoughts. Clear a few?</span>{" "}
+          {n >= THOUGHTS_NOTE_AT && n < THOUGHTS_MAX && <span>{n} thoughts. Clear a few? </span>}
           <button type="button" className="thoughts-note-link" onClick={onFlipOrder}>
             {oldestFirst ? "Show the newest first" : "Show the oldest first"}
           </button>
