@@ -24,7 +24,8 @@ async function openToday(page, viewport, { listOpen = true, dark = false } = {})
 }
 
 // Try-out D1: a tenth smaller than Turn 76, on every page.
-const scaleOf = (w, h) => Math.min(28.5 / 16, Math.max(1, Math.min(w / 1422, h / 800) / 1.1));
+// Try-out issue 4: never above ×1.1.
+const scaleOf = (w, h) => Math.min(1.1, Math.max(1, Math.min(w / 1422, h / 800) / 1.1));
 const S = scaleOf(1903, 940);
 
 for (const [width, height] of [[1903, 940], [1280, 720], [1600, 900], [2560, 1305]]) {
