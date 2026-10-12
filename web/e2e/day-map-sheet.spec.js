@@ -120,10 +120,7 @@ test("Done from the sheet closes the gap; Undo puts the stop back where it was",
   await expect(page.locator(".dm-stop.is-dragging")).toHaveCount(1);
   await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
   await page.keyboard.press("ArrowUp");
-  await page.waitForFunction(() => {
-    const el = document.querySelector(".dm-stop.is-dragging");
-    return !!el && el.style.transform && !/translate3d\(0px, 0px/.test(el.style.transform);
-  });
+  await page.waitForFunction(() => !!document.querySelector(".dm-stop.is-drop-before, .dm-stop.is-drop-after"));
   await page.keyboard.press("Space");
   await expect.poll(() => titles(page)).toEqual([start[0], start[2], start[1]]);
   const before = await titles(page);
