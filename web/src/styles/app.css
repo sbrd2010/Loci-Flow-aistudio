@@ -1662,6 +1662,11 @@ html[data-theme="light"] {
   --accent-edge:  #133524;
   --on-accent:    #FFFFFF;
   --accent-tint:  #E0ECE3;
+  --btn-line:     #BFC6BB;  /* 78: outlined buttons, unfocused editor edge */
+  --rule:         #E9E4D7;  /* 78: the editor's writing lines (on --bg) */
+  --rule-surface: #EFEBE0;  /* the same on --surface (phone) */
+  --row-hover:    #F1EEE4;  /* 78: hovered or focused thought */
+  --hair-soft:    #E6E7DF;  /* 78: phone list hairlines */
   --accent-soft:  #D3E8DA;  /* timer digits on the accent fill */
   --accent-muted: #9FC4AB;  /* past Momentum bars (Addendum Y1 --act-soft) */
   --gold-band:    #F1DFB2;
@@ -1737,6 +1742,11 @@ html[data-theme="dark"] {
   --accent-edge:  #76946C;
   --on-accent:    #0D1F15;
   --accent-tint:  #2B3A29;
+  --btn-line:     #3F4B43;
+  --rule:         #232C26;
+  --rule-surface: #232C26;
+  --row-hover:    var(--panel);
+  --hair-soft:    var(--line);
   --accent-soft:  #1F4D36;
   --accent-muted: #607A55;
   --gold-band:    #352C1A;

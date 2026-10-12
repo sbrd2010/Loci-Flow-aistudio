@@ -362,7 +362,6 @@
   border-color: var(--accent);
   box-shadow: inset 0 0 0 0.5px var(--accent);
 }
-.add-card .add-thought-input:focus-visible { box-shadow: none; border-bottom-width: 2px; }
 
 /* Laptop and wide tablet: a 520px dialog, ⌘↵ shown beside the button. */
 @media (min-width: 840px) {
@@ -408,29 +407,18 @@
   cursor: pointer;
 }
 .add-seg-btn + .add-seg-btn { border-left: 1px solid var(--edge); }
-.add-seg-btn.is-on { background: var(--accent); color: var(--on-accent); }
+.add-seg-btn.is-on { background: var(--accent-tint); color: var(--accent); }
 .add-seg-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
-.add-thought { display: flex; flex-direction: column; gap: 16px; }
-.add-thought-input {
-  min-height: 52px;
-  padding: 0;
-  border: 0;
-  border-bottom: 1.5px solid var(--accent);
-  background: none;
-  font: inherit;
-  font-size: 17px;
-  color: var(--ink);
-  outline: none;
+/* 78 §8: the thought uses the Brain dump editor (thoughtEditor.css). */
+.add-thought { display: flex; flex-direction: column; gap: 12px; }
+.add-thought-editor { --te-min: 128px; --te-fs: 19px; }
+.add-thought-note { margin: 4px 0 0; font-size: 13.5px; line-height: 1.45; color: var(--ink-2); }
+.add-thought-hint { margin: 0; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em; color: var(--placeholder); }
+@media (min-width: 840px) {
+  .add-card.is-thought { width: 560px; padding: 22px 24px; }
 }
-.add-thought-input::placeholder { color: var(--placeholder); }
-.add-thought-note { margin: 0; font-size: 13px; line-height: 1.45; color: var(--ink-2); }
-.add-thought-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.add-thought-hint { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; color: var(--placeholder); }
-.add-thought-foot .add-btn-filled { min-height: 40px; padding: 0 18px; border-radius: 4px; font-size: 15px; font-weight: 700; cursor: pointer; }
-.add-thought-foot .add-btn-filled:disabled { opacity: 0.5; cursor: default; }
 @media (pointer: coarse) {
   .add-thought-hint { display: none; }
-  .add-thought-foot .add-btn-filled { flex: 1; min-height: 48px; }
 }
 @media (max-width: 839px) {
   .add-seg-btn { min-height: 48px; }
@@ -438,6 +426,5 @@
 
 /* Try-out 4/5: the thought and a step being edited wrap and grow (one
    line looks as before; GrowTextarea sets the height). */
-.add-thought-input { box-sizing: border-box; display: block; width: 100%; min-height: 0; padding: 14px 0; line-height: 1.4; }
 .add-step-edit { min-height: 0; padding: 9px 12px; line-height: 1.4; }
 .add-step:has(.add-step-edit) { align-items: flex-start; }

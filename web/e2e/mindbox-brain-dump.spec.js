@@ -53,7 +53,7 @@ test("mobile reliability: a thought added in Mind Box is listed there, survives 
   const input = page.locator(".mbx-field").getByRole("textbox", { name: "Thought" });
   await input.fill(thought);
   await input.press("Enter");
-  await expect(input).toHaveValue("");
+  await expect(input).toHaveText("");
 
   // Thoughts live in Mind Box, newest first (demo seeds 4).
   const rows = page.getByTestId("thought-row");

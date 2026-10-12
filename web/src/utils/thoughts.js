@@ -1,20 +1,34 @@
-// Thoughts (Q56): one-line notes that live in Mind Box (payload.brainDump),
-// captured from Add (Task | Thought), Mind Box's field, or Focus's "Park a
-// thought". At most 50; at 40 Mind Box says so.
+// Thoughts (Q56): notes that live in Mind Box › Brain dump (payload.brainDump),
+// captured from Add (Task | Thought), Mind Box's field, Focus's "Park a
+// thought" or Rescue. At most 50; at 40 Mind Box says so. A thought keeps its
+// line breaks (78 §5) and its **bold** / __underline__ markers.
 
 import { safeUUID } from "./uuid";
+import { plainThought, trimThought } from "./thoughtFormat";
 
 export const THOUGHTS_MAX = 50;
 export const THOUGHTS_NOTE_AT = 40;
+export const THOUGHT_MAX_CHARS = 500;
 
 export const thoughtsOf = (payload) => (Array.isArray(payload?.brainDump) ? payload.brainDump : []);
 
 // The payload with the thought added, or null when there is nothing to add or
 // Mind Box is full.
+// Spaces inside a line collapse; at most one blank line between lines.
+export function cleanThought(text) {
+  return String(text || "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map(line => line.replace(/[^\S\n]+/g, " ").trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export function addThought(payload, text, now = Date.now()) {
-  const clean = String(text || "").replace(/\s+/g, " ").trim();
+  const clean = trimThought(cleanThought(text), THOUGHT_MAX_CHARS);
   const dump = thoughtsOf(payload);
-  if (!clean || dump.length >= THOUGHTS_MAX) return null;
+  if (!plainThought(clean) || dump.length >= THOUGHTS_MAX) return null;
   const item = { id: safeUUID(), text: clean, createdAt: now };
   return { payload: { ...payload, brainDump: [...dump, item] }, item };
 }

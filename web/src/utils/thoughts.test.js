@@ -2,13 +2,15 @@ import { describe, it, expect } from "vitest";
 import { THOUGHTS_MAX, addThought, letGoThought, newestThoughtsFirst, restoreThought } from "./thoughts";
 
 describe("thoughts", () => {
-  it("adds a trimmed one-line thought at the end", () => {
-    const r = addThought({ brainDump: [{ id: "a", text: "x" }] }, "  Ask the gym\n about Friday ", 5);
+  it("adds a trimmed thought at the end, keeping its lines", () => {
+    const r = addThought({ brainDump: [{ id: "a", text: "x" }] }, "  Ask the  gym\r\n about Friday \n\n\n\nand Monday ", 5);
     expect(r.payload.brainDump).toHaveLength(2);
-    expect(r.item).toMatchObject({ text: "Ask the gym about Friday", createdAt: 5 });
+    expect(r.item).toMatchObject({ text: "Ask the gym\nabout Friday\n\nand Monday", createdAt: 5 });
   });
   it("adds nothing when empty or full", () => {
     expect(addThought({}, "   ")).toBe(null);
+    expect(addThought({}, "** **")).toBe(null);
+    expect(addThought({}, "x".repeat(600)).item.text).toHaveLength(500);
     const full = { brainDump: Array.from({ length: THOUGHTS_MAX }, (_, i) => ({ id: String(i), text: "t" })) };
     expect(addThought(full, "one more")).toBe(null);
   });

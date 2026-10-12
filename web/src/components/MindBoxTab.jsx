@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import GrowTextarea from "./ui/GrowTextarea";
+import ThoughtEditor from "./ui/ThoughtEditor";
 import { safeUUID } from "../utils/uuid";
 import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
 import { normalizeAiOrganizeSuggestions, buildClearedBrainDump, buildOrganizedTaskSubSteps, CATEGORY_ICONS } from "../utils/taskOps";
@@ -12,6 +12,11 @@ import { RESCUE_STATES } from "./RescueMode";
 import "../styles/mindBox.css";
 import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
 import "../styles/thoughts.css";
+import { plainThought } from "../utils/thoughtFormat";
+
+// 78 §5: the editor takes focus on a laptop; on a phone the keyboard would
+// cover the page.
+const wideScreen = () => typeof window !== "undefined" && !!window.matchMedia?.("(min-width: 840px) and (pointer: fine)").matches;
 
 export default function MindBoxTab({ payload, savePayload, savePayloadAsync, saveConfigPatch, userProfile, initialPanel, onMakeThoughtTask, onOpenRescue, isSyncingFromCache = false, syncWarning = null, uid, writeActivityEvents, focusTimer = {} }) {
   const { config = {} } = payload;
@@ -125,7 +130,7 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
       : "";
     // Include each item's stable ID so AI can return sourceId for safe brain-dump clearing
     const prompt = `Here are raw thoughts from a brain dump:
-${brainDumpItems.map((item, i) => `${i + 1}. [id:${item.id}] ${item.text}`).join("\n")}
+${brainDumpItems.map((item, i) => `${i + 1}. [id:${item.id}] ${plainThought(item.text)}`).join("\n")}
 
 Turn these into clear, atomic, actionable tasks. For each numbered thought, decide:
 - ONE task — a single small action with nothing else worth keeping
@@ -252,8 +257,7 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
     setOrganizeSelected(new Set());
   };
 
-  const handleBrainDumpSubmit = (e) => {
-    e.preventDefault();
+  const handleBrainDumpSubmit = () => {
     if (!brainDumpText.trim()) return;
     const added = addThought(payload, brainDumpText);
     if (!added) return;
@@ -686,20 +690,15 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
                 <h3 className="mbx-h" id="mbx-dump-title">Empty your head</h3>
                 <p className="mbx-dump-line">Get it out now. Sort it later.</p>
               </div>
-              <form className="mbx-field" onSubmit={handleBrainDumpSubmit}>
-                <GrowTextarea
-                  className="mbx-input"
-                  aria-label="Thought"
-                  placeholder="What’s on your mind?"
+              <div className="mbx-field">
+                <ThoughtEditor
                   value={brainDumpText}
-                  maxRows={5}
-                  onEnter={e => e.currentTarget.form?.requestSubmit()}
-                  onChange={e => setBrainDumpText(e.target.value)}
+                  onChange={setBrainDumpText}
+                  onSubmit={handleBrainDumpSubmit}
                   disabled={dumpCount >= THOUGHTS_MAX}
+                  autoFocus={wideScreen()}
                 />
-                <span className="mbx-hint" aria-hidden="true">T · ENTER</span>
-                <button type="submit" className="mbx-sr" disabled={dumpCount >= THOUGHTS_MAX}>Save thought</button>
-              </form>
+              </div>
               <ThoughtsList thoughts={payload.brainDump || []} onMakeTask={t => onMakeThoughtTask?.(t)} onLetGo={handleLetGo} />
               {dumpCount > 0 && hasAnyKey && (
                 <button type="button" className="mbx-link" onClick={handleOrganizeDump} disabled={organizeLoading}>
