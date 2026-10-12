@@ -9,6 +9,8 @@ describe("thoughts", () => {
   });
   it("adds nothing when empty or full", () => {
     expect(addThought({}, "   ")).toBe(null);
+    expect(addThought({}, "** **")).toBe(null);
+    expect(addThought({}, "x".repeat(600)).item.text).toHaveLength(500);
     const full = { brainDump: Array.from({ length: THOUGHTS_MAX }, (_, i) => ({ id: String(i), text: "t" })) };
     expect(addThought(full, "one more")).toBe(null);
   });

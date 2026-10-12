@@ -1,6 +1,6 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import { IconBold, IconSmile, IconUnderline } from "./icons";
-import { parseThought, serializeRuns } from "../../utils/thoughtFormat";
+import { parseThought, plainThought, serializeRuns } from "../../utils/thoughtFormat";
 import "../../styles/thoughtEditor.css";
 
 // 78 §5: the Brain dump editor, shared by Mind Box and Today's Add › Thought.
@@ -83,7 +83,8 @@ const ThoughtEditor = forwardRef(function ThoughtEditor({
   const [marks, setMarks] = useState({ b: false, u: false });
   const [emojiAt, setEmojiAt] = useState(-1); // -1: closed
   const emojiRefs = useRef([]);
-  const empty = !String(value || "").trim();
+  // Visible text only: bold spaces ("** **") are still empty.
+  const empty = !plainThought(value);
 
   // Show a value that came from outside (cleared after Save, a prefill).
   useLayoutEffect(() => {
@@ -145,8 +146,10 @@ const ThoughtEditor = forwardRef(function ThoughtEditor({
       if (e.inputType === "insertParagraph") { e.preventDefault(); submitRef.current(); return; }
       if (!e.inputType?.startsWith("insert")) return;
       const sel = window.getSelection?.();
-      const replacing = sel && !sel.isCollapsed;
-      if (!replacing && plainLength(emitted.current || "") >= maxLength) e.preventDefault();
+      const replaced = sel && !sel.isCollapsed ? sel.toString().length : 0;
+      const added = (e.data ?? e.dataTransfer?.getData("text/plain") ?? "x").length;
+      // A composition can't be cancelled; Save trims it (trimThought).
+      if (plainLength(emitted.current || "") - replaced + added > maxLength && e.cancelable) e.preventDefault();
     };
     el.addEventListener("beforeinput", onBefore);
     return () => el.removeEventListener("beforeinput", onBefore);

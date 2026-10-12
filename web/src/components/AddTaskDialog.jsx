@@ -12,7 +12,7 @@ import { frontsFromConfig, sortFronts } from "../utils/fronts";
 import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
 import { IconCheck, IconChevronRight, IconPencil, IconX } from "./ui/icons";
 import { THOUGHTS_MAX, addThought } from "../utils/thoughts";
-import { plainThought } from "../utils/thoughtFormat";
+import { escapeThought, plainThought } from "../utils/thoughtFormat";
 import ThoughtEditor from "./ui/ThoughtEditor";
 import EstimatePicker from "./EstimatePicker";
 import "../styles/addTask.css";
@@ -336,6 +336,8 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
   const switchMode = (next) => {
     // A task title is one plain line.
     if (next === "task" && mode === "thought") setTitle(t => plainThought(t));
+    // A task title is plain text: a typed foo__bar__ stays as typed.
+    if (next === "thought" && mode === "task") setTitle(t => escapeThought(t));
     setMode(next);
     setThoughtError("");
   };

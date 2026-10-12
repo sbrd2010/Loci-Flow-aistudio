@@ -74,3 +74,21 @@ export function serializeRuns(runs) {
 export function plainThought(text) {
   return parseThought(text).map(r => r.text).join("").replace(/\s+/g, " ").trim();
 }
+
+// At most max visible characters, cut at whole characters, styles kept.
+export function trimThought(text, max) {
+  const kept = [];
+  let room = max;
+  let cut = false;
+  for (const r of parseThought(text)) {
+    let t = "";
+    for (const ch of r.text) {
+      if (t.length + ch.length > room) { cut = true; break; }
+      t += ch;
+    }
+    room -= t.length;
+    kept.push({ ...r, text: t });
+    if (cut) break;
+  }
+  return cut ? serializeRuns(kept) : text;
+}

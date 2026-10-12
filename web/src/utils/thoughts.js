@@ -4,9 +4,11 @@
 // line breaks (78 §5) and its **bold** / __underline__ markers.
 
 import { safeUUID } from "./uuid";
+import { plainThought, trimThought } from "./thoughtFormat";
 
 export const THOUGHTS_MAX = 50;
 export const THOUGHTS_NOTE_AT = 40;
+export const THOUGHT_MAX_CHARS = 500;
 
 export const thoughtsOf = (payload) => (Array.isArray(payload?.brainDump) ? payload.brainDump : []);
 
@@ -24,9 +26,9 @@ export function cleanThought(text) {
 }
 
 export function addThought(payload, text, now = Date.now()) {
-  const clean = cleanThought(text);
+  const clean = trimThought(cleanThought(text), THOUGHT_MAX_CHARS);
   const dump = thoughtsOf(payload);
-  if (!clean || dump.length >= THOUGHTS_MAX) return null;
+  if (!plainThought(clean) || dump.length >= THOUGHTS_MAX) return null;
   const item = { id: safeUUID(), text: clean, createdAt: now };
   return { payload: { ...payload, brainDump: [...dump, item] }, item };
 }

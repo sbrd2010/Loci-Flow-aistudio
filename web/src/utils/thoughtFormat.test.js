@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { escapeThought, parseThought, plainThought, serializeRuns } from "./thoughtFormat";
+import { escapeThought, parseThought, plainThought, serializeRuns, trimThought } from "./thoughtFormat";
 
 describe("thought format", () => {
   it("reads bold and underline, nested too", () => {
@@ -32,6 +32,11 @@ describe("thought format", () => {
     ]);
     expect(plainThought(escapeThought("a_b **c** C:\\temp"))).toBe("a_b **c** C:\\temp");
     expect(plainThought("C:\\temp")).toBe("C:\\temp");
+  });
+  it("trims to max visible characters, keeping styles and whole emoji", () => {
+    expect(trimThought("ab **cd** ef", 4)).toBe("ab **c**");
+    expect(trimThought("ab😀", 3)).toBe("ab");
+    expect(trimThought("short", 10)).toBe("short");
   });
   it("gives a plain one-line version", () => {
     expect(plainThought("Call **Ana**\n__before__  Friday")).toBe("Call Ana before Friday");
