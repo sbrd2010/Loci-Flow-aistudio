@@ -306,6 +306,7 @@ export default function TodayWall({
   onFromWeek,
   onScattered,
   onRescue,
+  onThought,
   // Q58: open Today tasks, the one thing included (the phone's NOW · 1 OF N),
   // and the phone's More sheet.
   nowCount = 0,
@@ -558,6 +559,13 @@ export default function TodayWall({
         {quiet && (
           <div className="wall-quiet" data-flip="quiet">
             {onRescue && <button type="button" className="wall-quiet-link is-muted" onClick={onRescue}>I’m stuck</button>}
+            {/* 12 Oct try-out: a thought that turns up mid-task goes to Mind
+                Box from here (T anywhere), without leaving Today. */}
+            {onThought && (
+              <button type="button" className="wall-quiet-link is-muted" onClick={onThought} aria-keyshortcuts="t" title="Jot a thought (T)">
+                Jot a thought
+              </button>
+            )}
             <span className="wall-quiet-end">
               <button type="button" className="wall-quiet-link" onClick={onMarkDone}>Done</button>
               <button type="button" className="wall-quiet-link" onClick={onMore} aria-haspopup="dialog">More</button>
