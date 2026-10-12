@@ -231,7 +231,9 @@ test("T opens a thought anywhere; Enter saves it to Mind Box; Tab switches to Ta
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Mind Box", exact: true }).click();
   await expect(page.getByTestId("thought-row").first()).toContainText("Ask the gym about the Friday class");
 
-  // Tab carries the text over to a task.
+  // Tab carries the text over to a task. (On Mind Box T puts you in its own
+  // editor instead, 78 §6, so this is from Plan.)
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
   await page.locator("body").click({ position: { x: 5, y: 400 } });
   await page.keyboard.press("t");
   await page.getByRole("dialog", { name: "New thought" }).getByLabel("Thought").fill("Book the dentist");

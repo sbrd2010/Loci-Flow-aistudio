@@ -131,3 +131,18 @@
   .te-emoji-cell { width: 100%; }
 }
 @media (pointer: coarse) { .te-hint { display: none; } }
+
+/* 78 §6: Mind Box is full at 50. */
+.te-full {
+  box-sizing: border-box;
+  min-height: var(--te-min);
+  margin: 0;
+  padding: 16px var(--te-pad);
+  display: flex;
+  align-items: center;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
