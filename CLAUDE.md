@@ -84,8 +84,30 @@ Codex (`chatgpt-codex-connector[bot]`) re-reviews every push, so fixing its find
   - whether it is necessary to fix (a real bug, data loss or a broken core flow) or can be accepted as is, and why;
   - whether it can be grouped with other round-2+ findings into one follow-up PR, rather than fixed on this PR.
 - Count rounds per PR by Codex review submissions (each "Codex Review" on a new commit is one round).
+- Never post `@codex review` yourself — not after opening a PR, not after a push. The owner triggers Codex by hand. When a PR goes up, say in one line how big it is and whether a review is worth it:
+  - **Small** (copy, CSS, a one-function fix, tests only): no Codex needed.
+  - **Medium** (one feature or flow, a few files): Codex recommended.
+  - **Large / risky** (sync, data model, many files, anything that could lose data): Codex recommended, plus a `loopcheck` before merge.
 
-## 7. AI Provider Rate Limits (for live Coach verification)
+## 7. Budget: the owner is on a Claude Pro plan
+
+This repo is past 500 PRs and building it uses most of the plan's message quota. Work so each message and token counts, without lowering the bar on correctness.
+
+**Tests.** GitHub CI runs lint, unit tests and the full Playwright e2e suite (about 9–10 minutes) on every push to a PR. That is the full check — don't duplicate it.
+- Before pushing, run locally only what is fast: `npm run lint` and `npx vitest run` (in `web/`).
+- Don't run the full e2e suite locally. Run single e2e specs only when needed: to see a UI change actually work, or to reproduce a CI failure before fixing it (read the failing test's name and error in the CI log first, then run just that spec).
+- When a change breaks an existing e2e expectation on purpose, update that test in the same push.
+- After pushing, don't poll CI. Wait for the PR's events; fix any CI failure on a PR you opened without being asked.
+
+**Reviews.** Codex rounds as in section 6 (never trigger Codex yourself). `loopcheck` (section 5) when the owner asks, or recommend it for large/risky PRs before merge. Don't spawn other subagents unless the owner asks.
+
+**Messages.** Keep replies short: what changed, what was verified, what the owner must decide. Don't narrate routine events (bot summaries, your own replies echoed back). Prefer grep and reading the needed lines over reading whole large files. Take screenshots only to check a visual change.
+
+**Continuity across chats.** Parked or follow-up work lives in GitHub issues (e.g. #505 breaks and mini window, #511 finishing `redesign-75`), not in chat. When asked "what's pending", read the open issues first.
+
+**Personal data.** Never put the owner's real data (task titles, names, companies, goals) in commits, PRs, issues, test fixtures or screenshots that get committed. Use made-up titles. Delete any copy of real data once the work that needed it is done.
+
+## 8. AI Provider Rate Limits (for live Coach verification)
 
 When live-verifying Coach changes against the real API (not mocked `fetch`), the configured keys are low-tier/free and rate-limit fast under rapid successive test calls:
 
