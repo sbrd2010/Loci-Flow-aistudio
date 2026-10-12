@@ -39,7 +39,7 @@ import { useFocusTimer } from "./hooks/useFocusTimer";
 import { useLociDayStr } from "./hooks/useTodayStr";
 import HorizonReview from "./components/HorizonReview";
 import UndoToast, { UndoAnnouncer } from "./components/ui/UndoToast";
-import { letGoThought } from "./utils/thoughts";
+import { letGoThought, thoughtText } from "./utils/thoughts";
 import { applyReview, detectReviews, pendingReviews, undoReviewOrSort } from "./utils/horizonReview";
 import { endLeftReviewMarks } from "./utils/normalizePayload";
 import CloseTheDay from "./components/CloseTheDay";
@@ -1087,7 +1087,7 @@ export default function App() {
   };
   const openThoughtAsTask = (thought) => {
     openAddTask("today", "Mind Box");
-    setAddMode({ mode: "task", title: plainThought(thought.text), fromThoughtId: thought.id });
+    setAddMode({ mode: "task", title: plainThought(thoughtText(thought)), fromThoughtId: thought.id });
   };
   // T, from anywhere (Q56): a thought, captured in two seconds. Not while
   // typing, in a dialog, or in focus.

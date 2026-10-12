@@ -45,8 +45,7 @@ import { isDeferred, isOnToday } from "../utils/deferral";
 import TaskDetail from "./TaskDetail";
 import DayMapColumn from "./DayMapColumn";
 import { makeOneThing, undoOneThing } from "../utils/oneThing";
-import { escapeThought } from "../utils/thoughtFormat";
-import { addThought } from "../utils/thoughts";
+import { addPlainThought } from "../utils/thoughts";
 import { clearMyDay, undoClearMyDay } from "../utils/clearMyDay";
 import { buildGoalRecord, goalStartDay, goalTaskDoneToday, nextGoalTask } from "../utils/goalRecord";
 import { horizonsFromConfig } from "../utils/horizons";
@@ -507,7 +506,7 @@ export default function TodayTab({
   const handleFocusBrainDump = (text) => {
     // Q56.2: a parked thought lands in Mind Box, under the same 50 cap.
     // False when Mind Box is full, so Focus keeps the text and says so.
-    const added = addThought(payload, escapeThought(text));
+    const added = addPlainThought(payload, text);
     if (!added) return false;
     savePayload(added.payload);
     setParked(p => ({ sessionId: focusSessionId, n: p.sessionId === focusSessionId ? p.n + 1 : 1 }));
@@ -1755,7 +1754,7 @@ export default function TodayTab({
     };
   };
   const handleRescueThought = (text) => {
-    const added = addThought(payload, escapeThought(text));
+    const added = addPlainThought(payload, text);
     if (!added) return false;
     savePayload(added.payload);
     return true;

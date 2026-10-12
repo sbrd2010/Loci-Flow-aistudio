@@ -6,7 +6,7 @@ import { normalizeAiOrganizeSuggestions, buildClearedBrainDump, buildOrganizedTa
 import { computeRitualSecondsLeft, nextRitualStep } from "../utils/ritualTimer";
 import { getFocusWindows } from "../utils/focusWindows";
 import { buildTaskMutationEvent, eventsPatch } from "../utils/activityLog";
-import { THOUGHTS_MAX, addThought, letGoThought, restoreThought } from "../utils/thoughts";
+import { THOUGHTS_MAX, addThought, letGoThought, restoreThought, thoughtText } from "../utils/thoughts";
 import ThoughtsList, { oldestDays, oldestLabel } from "./ThoughtsList";
 import { IconChevronDown, IconSparkles } from "./ui/icons";
 import { RESCUE_STATES } from "./RescueMode";
@@ -19,7 +19,7 @@ import { plainThought } from "../utils/thoughtFormat";
 // cover the page.
 // 78 §6: the toast names the thought, cut at 40 characters.
 const letGoText = (item) => {
-  const t = plainThought(item?.text);
+  const t = plainThought(thoughtText(item));
   return `Let go of “${t.length > 40 ? `${t.slice(0, 40).trimEnd()}…` : t}”`;
 };
 
@@ -144,7 +144,7 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
       : "";
     // Include each item's stable ID so AI can return sourceId for safe brain-dump clearing
     const prompt = `Here are raw thoughts from a brain dump:
-${brainDumpItems.map((item, i) => `${i + 1}. [id:${item.id}] ${plainThought(item.text)}`).join("\n")}
+${brainDumpItems.map((item, i) => `${i + 1}. [id:${item.id}] ${plainThought(thoughtText(item))}`).join("\n")}
 
 Turn these into clear, atomic, actionable tasks. For each numbered thought, decide:
 - ONE task — a single small action with nothing else worth keeping

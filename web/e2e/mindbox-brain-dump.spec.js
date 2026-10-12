@@ -92,6 +92,26 @@ test("mobile reliability: Make it a task opens Add prefilled, and the thought le
   await expect(page.getByTestId("thought-row").filter({ hasText: text })).toHaveCount(0);
 });
 
+// Review of #511 (1.1): a thought saved before the format, or by an older app
+// on the same database, is plain text. It shows, and becomes a task, as typed.
+test("an older plain thought shows and becomes a task as typed", async ({ page }) => {
+  const text = "fix __init__ then 2**3 + 3**2";
+  await page.addInitScript((t) => {
+    window.__LOCI_DEMO_FIXTURE__ = () => ({
+      userId: "demo", tasks: [], config: {}, contributions: [],
+      brainDump: [{ id: "old-1", text: t, createdAt: Date.now() - 60_000 }],
+    });
+  }, text);
+  await enterDemo(page);
+  await openTab(page, "Mind Box");
+  const row = page.getByTestId("thought-row").first();
+  await expect(row.locator(".thought-text")).toHaveText(text);
+  await expect(row.locator(".thought-text u, .thought-text strong")).toHaveCount(0);
+  await row.click();
+  await row.getByRole("button", { name: "Make it a task" }).click();
+  await expect(page.getByRole("dialog", { name: "New task" }).getByTestId("add-task-title")).toHaveValue(text);
+});
+
 test("Mind Box has no Progress, streak or Key Deadline Mirror (Q57)", async ({ page }) => {
   await enterDemo(page);
   await openTab(page, "Mind Box");
