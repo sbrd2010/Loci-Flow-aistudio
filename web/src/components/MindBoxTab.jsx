@@ -738,10 +738,8 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
           Rescue, Morning ritual and Anchors, Rescue and Anchors taking turns. */}
       {!toolPanel && (
         <div className="mbx">
-          <div className="mbx-title">
-            <h2 className="mbx-name">Mind Box</h2>
-            <span className="mbx-sub">For your head, not your tasks.</span>
-          </div>
+          {/* Try-out 12 Oct: the tab names the page; Brain dump is its one heading. */}
+          <h2 className="mbx-sr">Mind Box</h2>
           <div className="mbx-grid">
             <section className="mbx-dump" aria-labelledby="mbx-dump-title">
               <div className="mbx-dump-head">
@@ -773,9 +771,10 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
               <section className={`mbx-rescue${rescueOpen ? " is-open" : ""}`}>
                 <h3 className="mbx-fold-h">
                   <button type="button" className="mbx-fold-head mbx-rescue-head" aria-expanded={rescueOpen} aria-controls="mbx-rescue-body" onClick={swapRail}>
-                    <span className="mbx-kicker">RESCUE · 3 MIN</span>
-                    <span className="mbx-rescue-title">Can’t get started?</span>
+                    <span className="mbx-h-small">Rescue</span>
+                    <span className="mbx-rescue-len">3 min</span>
                     <span className="mbx-chev"><IconChevronDown size={20} /></span>
+                    <span className="mbx-rescue-title">Can’t get started?</span>
                   </button>
                 </h3>
                 <div className="mbx-fold" id="mbx-rescue-body" {...(rescueOpen ? {} : { inert: "" })}>

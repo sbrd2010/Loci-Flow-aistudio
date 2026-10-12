@@ -6,11 +6,7 @@
 
 /* ── Phone (< 840) ─────────────────────────────────────────────────────── */
 .mbx { display: flex; flex-direction: column; gap: 22px; width: 100%; }
-.mbx-title { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-family: var(--font-serif); font-style: italic; font-size: 13.5px; color: var(--ink-2); }
-.mbx .mbx-name { margin: 0; font: inherit; color: inherit; }
-.mbx-name::after { content: " ·"; }
-.mbx-sub { font: inherit; color: inherit; }
-.mbx-sub::first-letter { text-transform: lowercase; }
+.mbx-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 .mbx-grid { display: flex; flex-direction: column; gap: 30px; }
 
@@ -56,11 +52,6 @@
 }
 
 /* Rescue: a --panel row; open, the same panel holds the options. */
-.mbx-rescue { border-radius: 10px; background: var(--panel); }
-.mbx-rescue-head { min-height: 56px; padding: 0 16px; }
-.mbx-kicker { order: 2; margin-left: auto; font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; color: var(--ink-2); white-space: nowrap; }
-.mbx-rescue-title { order: 1; font-size: 15px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); }
-.mbx-rescue .mbx-chev { order: 3; }
 .mbx-rescue .mbx-fold-inner { display: flex; flex-direction: column; gap: 10px; padding: 0 16px; }
 .mbx-rescue.is-open .mbx-fold-inner { padding-bottom: 6px; }
 .mbx-rescue-line { margin: 0; font-size: 14px; color: var(--ink-2); }
@@ -88,7 +79,6 @@
 .mbx-link:disabled { opacity: 0.6; cursor: default; }
 
 /* Morning ritual: one line; Begin is a text link on a phone. */
-.mbx-ritual { min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--hair-soft); }
 .mbx-ritual-text { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 6px; }
 .mbx .mbx-h-small { margin: 0; font-size: 15px; font-weight: 700; color: var(--ink); }
 .mbx-quiet-line { margin: 0; font-size: 13.5px; color: var(--ink-2); }
@@ -106,9 +96,7 @@
 .mbx-row-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .mbx-row-head .mbx-fold-h { flex: 1; min-width: 0; }
 .mbx-anchors-head { min-height: 44px; flex-wrap: wrap; column-gap: 8px; }
-.mbx-anchors-head .mbx-h-small { font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--placeholder); }
 .mbx-anchor-count { font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; color: var(--placeholder); }
-.mbx-anchor-count::before { content: "· "; }
 .mbx-anchors.is-open .mbx-anchor-count { display: none; }
 .mbx-anchors.is-open .mbx-anchors-head .mbx-chev { display: none; }
 .mbx-anchors-head .mbx-chev { margin-left: auto; }
@@ -152,11 +140,6 @@
   }
   .mbx:has(.mbx-grid) { flex: 1; min-height: 0; gap: 18px; }
 
-  .mbx-title { font-family: inherit; font-style: normal; gap: 14px; }
-  .mbx .mbx-name { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink-2); }
-  .mbx-name::after { content: none; }
-  .mbx-sub { font-family: var(--font-serif); font-style: italic; font-size: 14px; color: var(--ink-2); }
-  .mbx-sub::first-letter { text-transform: none; }
 
   .mbx-grid {
     flex: 1;
@@ -189,20 +172,9 @@
 
   /* The rail. */
   .mbx-rail { min-height: 0; gap: 12px; }
-  .mbx-rescue { flex: none; border-radius: 12px; }
-  .mbx-rescue-head { min-height: 60px; padding: 0 18px; flex-wrap: wrap; align-content: center; column-gap: 0; }
-  .mbx-kicker { order: 0; flex-basis: 100%; margin: 0 0 2px; font-size: 11px; }
-  .mbx-rescue-title { order: 1; font-size: 16px; font-weight: 800; }
-  .mbx-rescue .mbx-chev { order: 2; margin-left: auto; }
-  .mbx-rescue .mbx-fold-inner { padding: 0 16px; gap: 10px; }
-  .mbx-rescue.is-open .mbx-rescue-head { padding: 16px 16px 6px; }
-  .mbx-rescue.is-open .mbx-kicker { font-size: 12.5px; color: var(--accent); }
-  .mbx-rescue.is-open .mbx-rescue-title { font-size: 20px; letter-spacing: -0.02em; }
-  .mbx-rescue.is-open .mbx-fold-inner { padding-bottom: 12px; }
   .mbx-states { gap: 6px; }
   .mbx-state { min-height: 44px; padding: 8px 12px; }
 
-  .mbx-ritual { flex: none; min-height: 0; padding: 14px 0; border-bottom-color: var(--line); }
   .mbx-ritual-text { flex-direction: column; align-items: flex-start; gap: 3px; }
   .mbx .mbx-h-small { font-size: 17px; font-weight: 800; }
   .mbx-ritual .mbx-quiet-line::before { content: none; }
@@ -211,9 +183,7 @@
 
   .mbx-anchors { min-height: 0; }
   .mbx-anchors.is-open { flex: 1; }
-  .mbx-anchors-head .mbx-h-small { font-family: inherit; font-size: 17px; font-weight: 800; letter-spacing: 0; text-transform: none; color: var(--ink); }
   .mbx-anchor-count { font-size: 11px; color: var(--ink-2); }
-  .mbx-anchor-count::before { content: none; }
   .mbx-anchors.is-open > .mbx-fold { flex: 1; min-height: 0; }
   .mbx-anchors.is-open .mbx-fold-inner { overflow-y: auto; }
   .mbx-anchor-list { gap: 8px; padding: 4px 0 8px; }
@@ -229,10 +199,6 @@
   .mbx-field .te { --te-fs: 18px; }
   .mbx-field .te-hint-more { display: inline; }
   .mbx-rail { gap: 20px; }
-  .mbx-rescue.is-open .mbx-rescue-head { padding: 22px 22px 8px; }
-  .mbx-rescue.is-open .mbx-rescue-title { font-size: 24px; }
-  .mbx-rescue .mbx-fold-inner { padding: 0 22px; }
-  .mbx-rescue.is-open .mbx-fold-inner { padding-bottom: 18px; }
   .mbx-states { grid-template-columns: 1fr 1fr; gap: 8px; }
   .mbx-state { padding: 11px 14px; }
 }
@@ -242,8 +208,30 @@
   .mbx-dump { padding: 32px; }
   .mbx .mbx-h { font-size: 32px; }
   .mbx-field .te { --te-min: 128px; --te-max: 272px; --te-fs: 19px; }
-  .mbx-rescue.is-open .mbx-rescue-head { padding: 24px 24px 8px; }
-  .mbx-rescue.is-open .mbx-rescue-title { font-size: 26px; }
-  .mbx-rescue .mbx-fold-inner { padding: 0 24px; }
-  .mbx-rescue.is-open .mbx-fold-inner { padding-bottom: 20px; }
+}
+
+/* Try-out 12 Oct: Rescue, Morning ritual and Anchors are three soft-green
+   cards, each headed the same way; "Rescue" is the heading and "Can't get
+   started?" its line. */
+.mbx-rescue, .mbx-ritual, .mbx-anchors { border-radius: 12px; background: var(--panel); }
+.mbx-rescue-head { min-height: 64px; padding: 12px 18px; flex-wrap: wrap; align-content: center; row-gap: 2px; column-gap: 8px; }
+.mbx-rescue-head .mbx-h-small { order: 0; }
+.mbx-rescue-len { order: 1; font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--ink-2); }
+.mbx-rescue .mbx-chev { order: 2; margin-left: auto; }
+.mbx .mbx-rescue-title { order: 3; flex-basis: 100%; font-size: 14px; font-weight: 400; letter-spacing: 0; color: var(--ink-2); }
+.mbx-rescue .mbx-fold-inner { padding: 0 18px; }
+.mbx-rescue.is-open .mbx-fold-inner { padding-bottom: 14px; }
+.mbx-ritual { min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; box-sizing: border-box; }
+.mbx-anchors { padding: 4px 18px; }
+.mbx-anchors.is-open { padding-bottom: 10px; }
+.mbx-anchors-head .mbx-h-small { font-family: inherit; font-size: 15px; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--ink); }
+.mbx-anchor-count::before { content: none; }
+@media (min-width: 840px) {
+  .mbx-rescue-head, .mbx-rescue.is-open .mbx-rescue-head { padding: 14px 18px; }
+  .mbx-rescue.is-open .mbx-rescue-title { font-size: 14.5px; letter-spacing: 0; }
+  .mbx-rescue .mbx-fold-inner { padding: 0 18px; }
+  .mbx-rescue.is-open .mbx-fold-inner { padding-bottom: 16px; }
+  .mbx-rescue, .mbx-ritual { flex: none; }
+  .mbx-ritual { min-height: 0; padding: 14px 18px; }
+  .mbx-anchors-head .mbx-h-small { font-size: 17px; font-weight: 800; }
 }

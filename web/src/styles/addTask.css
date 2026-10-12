@@ -412,13 +412,11 @@
 /* 78 §8: the thought uses the Brain dump editor (thoughtEditor.css). */
 .add-thought { display: flex; flex-direction: column; gap: 12px; }
 .add-thought-editor { --te-min: 128px; --te-fs: 19px; }
+/* Try-out 12 Oct: the box stands out from the cream sheet. */
+.add-thought-editor .te-box { background: var(--field); }
 .add-thought-note { margin: 4px 0 0; font-size: 13.5px; line-height: 1.45; color: var(--ink-2); }
-.add-thought-hint { margin: 0; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em; color: var(--placeholder); }
 @media (min-width: 840px) {
   .add-card.is-thought { width: 560px; padding: 22px 24px; }
-}
-@media (pointer: coarse) {
-  .add-thought-hint { display: none; }
 }
 @media (max-width: 839px) {
   .add-seg-btn { min-height: 48px; }

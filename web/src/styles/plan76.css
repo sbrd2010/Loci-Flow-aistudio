@@ -184,3 +184,17 @@ html[data-theme="dark"] .plan-runway-label.is-open .plan-runway-date { color: va
   .plan-horizons-view .plan-rung { padding: 14px 40px 14px 16px; }
   .plan-horizons-view .plan-runway { margin-bottom: 18px; }
 }
+
+/* Try-out 12 Oct: the open horizon's list is the page's one white card; the
+   runway and the ladder stay on the cream. The drag grips keep their gutter
+   inside the card's left padding. */
+@media (min-width: 1024px) {
+  .plan-horizons-view .plan-ladder-grid > .plan-open {
+    margin-left: -24px;
+    margin-bottom: 16px;
+    padding: 20px 16px 16px 32px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface);
+  }
+}
