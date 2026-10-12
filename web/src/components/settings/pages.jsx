@@ -5,7 +5,7 @@ import { COACH_PROFILE_NOTE_MAX_LENGTH } from "../../utils/coachProfile";
 import { MEMORY_ENTRY_MAX_LENGTH, clearAllMemory, editMemoryEntry, isMemoryEnabled, removePinnedFact, removeRecentObservation } from "../../utils/coachMemory";
 import { analyzeFocusWindowRows, formatTime12 } from "../../utils/focusWindowHints";
 import { formatSpan } from "../../utils/dayMapPlan";
-import { focusWindowRows, focusWindowsSummary, nextFocusWindowRow, reconcileFocusWindowRows, sortFocusWindowRows } from "../../utils/settingsSummary";
+import { focusWindowRows, focusWindowsSummary, reconcileFocusWindowRows, sortFocusWindowRows } from "../../utils/settingsSummary";
 import { exportPayloadAsJson, exportTasksAsCsv } from "../../utils/exportTasks";
 import { isNativeApp } from "../../utils/nativeNotifs";
 import { IconPencil, IconPlus, IconX } from "../ui/icons";
@@ -145,7 +145,7 @@ export function FocusWindowsPage({ config, saveConfigPatch, onBack, backLabel })
             </div>
           );
         })}
-        <button type="button" className="set-row set-add" onClick={() => save([...rows, nextFocusWindowRow(rows)])}>
+        <button type="button" className="set-row set-add" onClick={() => save([...rows, { start: "", end: "" }])}>
           <IconPlus size={18} /> Add a window
         </button>
       </div>
