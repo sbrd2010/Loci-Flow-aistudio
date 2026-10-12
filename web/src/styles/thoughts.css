@@ -3,7 +3,9 @@
 .thoughts-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 44px; }
 .thoughts-count { display: none; margin: 0; font-size: 13.5px; color: var(--ink-2); }
 .thoughts-latest { margin: 0; font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; color: var(--placeholder); }
-.thoughts-head .mbx-ai { display: none; }
+/* A phone keeps Organize with AI for the All N page, so a list short
+   enough to have none shows it here (Codex review of #519). */
+@media (max-width: 839px) { .thoughts.has-more .thoughts-head .mbx-ai { display: none; } }
 
 /* 40–49: a nudge, not a warning. */
 .thoughts-note {
@@ -77,7 +79,6 @@
 @media (min-width: 840px) {
   .thoughts-count { display: block; }
   .thoughts-latest, .thoughts-all { display: none; }
-  .thoughts-head .mbx-ai { display: inline-flex; }
   .thought-row { border-top-color: var(--line); padding: 13px 0; align-items: center; }
   .thought-text { font-size: 15.5px; }
   .thought-age { padding-top: 0; font-size: 11px; color: var(--ink-2); }

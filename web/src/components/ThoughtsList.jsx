@@ -77,13 +77,13 @@ export default function ThoughtsList({
   };
 
   return (
-    <section className={`thoughts${all ? " is-all" : ""}`} aria-label="Thoughts">
+    <section className={`thoughts${all ? " is-all" : ""}${n > PHONE_SHOWS ? " has-more" : ""}`} aria-label="Thoughts">
       {!all && (
         <div className="thoughts-head">
           <p className="thoughts-count">
             {n} {n === 1 ? "thought" : "thoughts"}{days > 0 ? ` · ${oldestLabel(days)}` : ""}
           </p>
-          <p className="thoughts-latest">LATEST · {Math.min(PHONE_SHOWS, n)} OF {n}</p>
+          <p className="thoughts-latest">{oldestFirst ? "OLDEST" : "LATEST"} · {Math.min(PHONE_SHOWS, n)} OF {n}</p>
           {countAction}
         </div>
       )}
