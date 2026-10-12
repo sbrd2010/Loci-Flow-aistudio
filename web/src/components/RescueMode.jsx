@@ -78,9 +78,12 @@ function useCountdown(seconds, running, onEnd) {
   return left;
 }
 
-function Breathing({ onDone }) {
+// Try-out issue 3: someone who is already rattled reads the instruction
+// first; the ring starts only when they press Start (Enter or Space on it).
+function Breathing({ onDone, startRef, onStart }) {
+  const [started, setStarted] = useState(false);
   const total = PHASES.length * PHASE_S * ROUNDS;
-  const left = useCountdown(total, true, onDone);
+  const left = useCountdown(total, started, onDone);
   const elapsed = total - left;
   const phaseIndex = Math.floor(elapsed / PHASE_S) % PHASES.length;
   const inPhase = elapsed % PHASE_S;
@@ -88,6 +91,21 @@ function Breathing({ onDone }) {
   const r = 88;
   const c = 2 * Math.PI * r;
   const fill = (inPhase + 1) / PHASE_S;
+  if (!started) {
+    return (
+      <div className="rescue-breath-ready">
+        <div className="rescue-breath">
+          <svg className="rescue-ring" viewBox="0 0 200 200" aria-hidden="true">
+            <circle cx="100" cy="100" r={r} className="rescue-ring-track" />
+          </svg>
+          <div className="rescue-breath-text">
+            <span className="rescue-kicker">{ROUNDS} ROUNDS · 1 MIN</span>
+          </div>
+        </div>
+        <button type="button" ref={startRef} className="rescue-btn-filled rescue-breath-start" onClick={() => { setStarted(true); onStart(); }}>Start breathing</button>
+      </div>
+    );
+  }
   return (
     <div className="rescue-breath" role="timer" aria-label={`${PHASES[phaseIndex]}, ${PHASE_S - inPhase} seconds. Round ${round} of ${ROUNDS}`}>
       <svg className="rescue-ring" viewBox="0 0 200 200" aria-hidden="true">
@@ -136,6 +154,7 @@ export default function RescueMode({
   const endRef      = useRef(null);
   const inputRef    = useRef(null);
   const headingRef  = useRef(null);
+  const breathStartRef = useRef(null);
   const chatStarted = useRef(false);
   const sendingRef  = useRef(false);
   const userChattedRef = useRef(false);
@@ -158,6 +177,8 @@ export default function RescueMode({
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
   useEffect(() => {
     if (step === "chat") setTimeout(() => inputRef.current?.focus(), 100);
+    // Issue 3: Start takes the focus, so Enter begins the breathing.
+    else if (step === "breathe" && breathStartRef.current) breathStartRef.current.focus();
     else headingRef.current?.focus();
   }, [step]);
 
@@ -427,7 +448,8 @@ export default function RescueMode({
     {kicker(2)}
     {heading("First, one minute of breathing.")}
     <p className="rescue-line">In for 4, hold for 4, out for 4, hold for 4. Follow the ring.</p>
-    <Breathing onDone={() => setStep(reason ? "options" : "state")} />
+    <Breathing onDone={() => setStep(reason ? "options" : "state")} startRef={breathStartRef}
+      onStart={() => headingRef.current?.focus()} />
     <button type="button" className="rescue-text-btn rescue-skip" onClick={() => setStep(reason ? "options" : "state")}>Skip</button>
   </>);
 

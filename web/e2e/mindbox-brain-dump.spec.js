@@ -116,5 +116,5 @@ test("Mind Box: the three levels, and Not sure opens Rescue at the breathing", a
   const quietBox = await page.locator(".mbx-quiet").boundingBox();
   expect(quietBox.x).toBeGreaterThan(rescueBox.x + rescueBox.width);
   await page.getByRole("button", { name: "Not sure. Just help me settle →" }).click();
-  await expect(page.getByRole("dialog", { name: "Rescue" }).getByText("ROUND 1 OF 4")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Rescue" }).getByRole("button", { name: "Start breathing" })).toBeVisible();
 });

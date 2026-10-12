@@ -48,7 +48,7 @@ import Momentum from "./Momentum";
 import { buildMomentum } from "../utils/momentum";
 import { isOnToday } from "../utils/deferral";
 import { dayBar, doneToday, factualLine } from "../utils/dayMapFacts";
-import { unzoomTransform } from "../utils/cssZoom";
+import { cssZoom, unzoomTransform } from "../utils/cssZoom";
 import "../styles/dayMap.css";
 
 // Day map (50e–f, 52d–e). Today's tasks laid end to end from a start time,
@@ -826,8 +826,10 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
             </div>
           </div>
           {/* Empty, yet needed: without an overlay, a keyboard drag's drop
-              often lands back where it started. */}
-          <DragOverlay dropAnimation={null} />
+              often lands back where it started. Its box is the dragged
+              rect, so it unzooms as Today's does (try-out issue 8: at ×1.07
+              it sat a row low, and a stop dragged one up landed on itself). */}
+          <DragOverlay dropAnimation={null} style={{ zoom: 1 / cssZoom() }} />
         </DndContext>
       )}
 

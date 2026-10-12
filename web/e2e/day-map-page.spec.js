@@ -230,3 +230,33 @@ test("From: a half-typed time survives the clock moving on", async ({ page }) =>
   await typed.press("Enter");
   await expect(page.locator(".dm-from-select")).toHaveText(/^11:15/);
 });
+
+// Try-out issue 8: on the 24″ (app zoom ×1.07) a stop dragged one row up and
+// let go over the middle of that row stayed put; down went one row too far.
+// The empty drag overlay is the dragged box, and it sat zoomed, a row low.
+test("24″: a stop dragged onto the middle of the row above or below moves one place (issue 8)", async ({ page }) => {
+  await enterDemo(page, { width: 1903, height: 940 });
+  await openDayMapByKey(page);
+  const titles = () => page.locator(".dm-stop[data-task-uuid] .dm-title").evaluateAll(els => els.map(e => e.innerText.split("\n")[0]));
+  const stops = page.locator(".dm-stop[data-task-uuid]:not(.is-now)");
+  await expect(stops).toHaveCount(2);
+  const drag = async (from, to) => {
+    const src = stops.nth(from), tgt = stops.nth(to);
+    await src.scrollIntoViewIfNeeded();
+    await tgt.scrollIntoViewIfNeeded();
+    const s = await src.boundingBox(), t = await tgt.boundingBox();
+    const x = s.x + s.width / 2;
+    await page.mouse.move(x, s.y + s.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(x, s.y + s.height / 2 + (to < from ? -10 : 10), { steps: 3 });
+    await page.mouse.move(x, t.y + t.height / 2, { steps: 12 });
+    await page.mouse.up();
+  };
+  const moved = (await stops.nth(1).locator(".dm-title").innerText()).split("\n")[0];
+  const before = await titles();
+  const at = before.indexOf(moved);
+  await drag(1, 0);
+  await expect.poll(async () => (await titles()).indexOf(moved)).toBe(at - 1);
+  await drag(0, 1);
+  await expect.poll(async () => (await titles()).indexOf(moved)).toBe(at);
+});

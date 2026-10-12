@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { focusWindowRows, focusWindowsLine, focusWindowsSummary, reconcileFocusWindowRows } from "./settingsSummary";
+import { focusWindowRows, focusWindowsLine, focusWindowsSummary, reconcileFocusWindowRows, sortFocusWindowRows } from "./settingsSummary";
 
 describe("focusWindowsSummary", () => {
   it("counts windows, covered time and the end of the last one (44d)", () => {
@@ -54,5 +54,21 @@ describe("overnight coverage", () => {
       { start: "22:00", end: "02:00" }, { start: "01:00", end: "03:00" },
     ] });
     expect(summary.totalMinutes).toBe(5 * 60);
+  });
+});
+
+describe("sortFocusWindowRows (try-out issue 1)", () => {
+  const w = (start, end) => ({ start, end });
+  it("puts a window added later back in the order of the day", () => {
+    const rows = [w("11:30", "12:30"), w("13:05", "15:00"), w("10:00", "11:00")];
+    expect(sortFocusWindowRows(rows).map(r => r.start)).toEqual(["10:00", "11:30", "13:05"]);
+  });
+  it("keeps a window after midnight at the end of a day that has later ones", () => {
+    const rows = [w("00:30", "01:30"), w("23:00", "23:55"), w("09:00", "12:00")];
+    expect(sortFocusWindowRows(rows).map(r => r.start)).toEqual(["09:00", "23:00", "00:30"]);
+  });
+  it("leaves unfinished rows last, in their own order", () => {
+    const rows = [w("", "10:00"), w("14:00", "15:00"), w("08:00", "")];
+    expect(sortFocusWindowRows(rows).map(r => r.start)).toEqual(["08:00", "14:00", ""]);
   });
 });
