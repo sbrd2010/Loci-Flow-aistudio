@@ -21,7 +21,7 @@ async function openMore(page) {
 
 test("phone: the quiet row stands in for the buttons and links; Start is the only filled control", async ({ page }) => {
   await enterDemo(page);
-  await expect(quiet(page).getByRole("button")).toHaveText(["I’m stuck", "Jot a thought", "Done", "More"]);
+  await expect(quiet(page).getByRole("button")).toHaveText(["I’m stuck", "Brain dump", "Done", "More"]);
   await expect(page.locator(".wall-actions")).toBeHidden();
   await expect(page.locator(".wall-foot .wall-links")).toBeHidden();
   await expect(page.locator(".wall-anchor")).toBeHidden();
@@ -36,7 +36,7 @@ test("phone: the quiet row stands in for the buttons and links; Start is the onl
 
 test("laptop (72): the wall's buttons stay, with I'm stuck · More under them and no quiet Done", async ({ page }) => {
   await enterDemo(page, { width: 1280, height: 800 });
-  await expect(quiet(page).getByRole("button")).toHaveText(["I’m stuck", "Jot a thought", "More"], { useInnerText: true });
+  await expect(quiet(page).getByRole("button")).toHaveText(["I’m stuck", "Brain dump", "More"], { useInnerText: true });
   await expect(quiet(page).getByRole("button", { name: "Done", exact: true })).toBeHidden();
   await expect(page.locator(".wall-action", { hasText: "Mark done" })).toBeVisible();
   await expect(page.locator(".shell-clock-date")).toBeVisible();
@@ -184,9 +184,9 @@ test("phone: the Next strip with nothing after the one thing still reads, and op
 
 // 12 Oct try-out: a stray thought goes to Mind Box from Today, and Today
 // stays where it was.
-test("laptop: Jot a thought opens the Thought sheet; Enter saves it and closes it", async ({ page }) => {
+test("laptop: Brain dump opens the Thought sheet; Enter saves it and closes it", async ({ page }) => {
   await enterDemo(page, { width: 1280, height: 800 });
-  await quiet(page).getByRole("button", { name: "Jot a thought" }).click();
+  await quiet(page).getByRole("button", { name: "Brain dump" }).click();
   const input = page.getByRole("textbox", { name: "Thought" });
   await expect(input).toBeFocused();
   await input.fill("Book the dentist");

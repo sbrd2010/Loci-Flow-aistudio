@@ -562,8 +562,8 @@ export default function TodayWall({
             {/* 12 Oct try-out: a thought that turns up mid-task goes to Mind
                 Box from here (T anywhere), without leaving Today. */}
             {onThought && (
-              <button type="button" className="wall-quiet-link is-muted" onClick={onThought} aria-keyshortcuts="t" title="Jot a thought (T)">
-                Jot a thought
+              <button type="button" className="wall-quiet-link is-muted" onClick={onThought} aria-keyshortcuts="t" title="Brain dump (T)">
+                Brain dump
               </button>
             )}
             <span className="wall-quiet-end">
