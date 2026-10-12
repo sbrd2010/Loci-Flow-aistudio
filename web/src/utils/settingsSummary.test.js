@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { focusWindowRows, focusWindowsLine, focusWindowsSummary, nextFocusWindowRow, reconcileFocusWindowRows, sortFocusWindowRows } from "./settingsSummary";
+import { focusWindowRows, focusWindowsLine, focusWindowsSummary, reconcileFocusWindowRows, sortFocusWindowRows } from "./settingsSummary";
 
 describe("focusWindowsSummary", () => {
   it("counts windows, covered time and the end of the last one (44d)", () => {
@@ -70,21 +70,5 @@ describe("sortFocusWindowRows (try-out issue 1)", () => {
   it("leaves unfinished rows last, in their own order", () => {
     const rows = [w("", "10:00"), w("14:00", "15:00"), w("08:00", "")];
     expect(sortFocusWindowRows(rows).map(r => r.start)).toEqual(["08:00", "14:00", ""]);
-  });
-});
-
-describe("nextFocusWindowRow", () => {
-  it("starts where the day's last window ends, an hour long", () => {
-    expect(nextFocusWindowRow([{ start: "13:00", end: "13:30" }, { start: "15:05", end: "16:45" }, { start: "09:00", end: "09:25" }]))
-      .toEqual({ start: "16:45", end: "17:45" });
-    expect(nextFocusWindowRow([{ start: "18:00", end: "21:00" }])).toEqual({ start: "21:00", end: "22:00" });
-  });
-  it("goes past midnight after a late window, and the day's order counts 00:30 as last", () => {
-    expect(nextFocusWindowRow([{ start: "22:00", end: "23:30" }])).toEqual({ start: "23:30", end: "00:30" });
-    expect(nextFocusWindowRow([{ start: "21:00", end: "23:00" }, { start: "00:30", end: "01:30" }])).toEqual({ start: "01:30", end: "02:30" });
-  });
-  it("is empty with no finished window: no guess at someone's day", () => {
-    expect(nextFocusWindowRow([])).toEqual({ start: "", end: "" });
-    expect(nextFocusWindowRow([{ start: "", end: "" }])).toEqual({ start: "", end: "" });
   });
 });

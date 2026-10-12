@@ -178,7 +178,7 @@ async function dayOverAt18(page, { unpin }) {
   await page.getByRole("button", { name: /^Focus windows/ }).click();
   await page.getByRole("button", { name: "Remove focus window 1" }).click();
   await page.getByRole("button", { name: "Add a window" }).click();
-  // With no windows, Add leaves the first one empty to fill in.
+  // Add leaves a new window empty to fill in.
   await expect(page.getByLabel("Focus window 1 start time")).toHaveValue("");
   await page.getByLabel("Focus window 1 start time").fill("09:00");
   await page.getByLabel("Focus window 1 end time").fill("17:00");

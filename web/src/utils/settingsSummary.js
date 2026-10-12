@@ -24,21 +24,6 @@ export function focusWindowRows(config = {}) {
 // after midnight when the day has a later one, so 23:00 then 00:30 stays in
 // that order. Unfinished rows go last, in their own order.
 const AFTER_MIDNIGHT_BEFORE = 5 * 60;
-// "Add a window": an hour from where the day's last window ends, so it never
-// lands on the windows you have (a fixed 09:00–17:00 overlapped them, and
-// suits nobody who works evenings). With none set yet there is nothing to go
-// by, so the first is left empty: it counts once both times are filled.
-export function nextFocusWindowRow(rows) {
-  const valid = /^\d{1,2}:\d{2}$/;
-  const done = sortFocusWindowRows((rows || []).filter(w => valid.test(w?.start || "") && valid.test(w?.end || "")));
-  const last = done[done.length - 1];
-  if (!last) return { start: "", end: "" };
-  const [h, m] = last.end.split(":").map(Number);
-  const end = (h * 60 + m + 60) % 1440;
-  const pad = (n) => String(n).padStart(2, "0");
-  return { start: `${pad(h)}:${pad(m)}`, end: `${pad(Math.floor(end / 60))}:${pad(end % 60)}` };
-}
-
 export function sortFocusWindowRows(rows) {
   const minutesOf = (t) => {
     const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || ""));

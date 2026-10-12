@@ -111,9 +111,10 @@ test("Mind Box: Brain dump card, Rescue and Anchors take turns, Not sure opens R
   await expect(page.getByRole("heading", { name: "Brain dump" })).toBeVisible();
   const rescueHead = page.getByRole("button", { name: /Can.t get started/ });
   const anchorsHead = page.getByRole("button", { name: /^Anchors/ });
-  await expect(rescueHead).toHaveAttribute("aria-expanded", "false");
-  await expect(anchorsHead).toHaveAttribute("aria-expanded", "true");
-  await expect(page.locator(".mbx-anchor").first()).toBeVisible();
+  // Rescue is open on every visit; Anchors is folded to a preview.
+  await expect(rescueHead).toHaveAttribute("aria-expanded", "true");
+  await expect(anchorsHead).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator(".mbx-anchor-peek")).toBeVisible();
   const card = await page.locator(".mbx-dump").boundingBox();
   const rail = await page.locator(".mbx-rail").boundingBox();
   expect(rail.x).toBeGreaterThan(card.x + card.width);
@@ -121,10 +122,13 @@ test("Mind Box: Brain dump card, Rescue and Anchors take turns, Not sure opens R
   expect(card.y + card.height).toBeLessThanOrEqual(800);
   expect(await page.evaluate(() => document.querySelector(".screen-content").scrollHeight <= document.querySelector(".screen-content").clientHeight + 1)).toBe(true);
 
+  // Opening Anchors folds Rescue, and back.
+  await anchorsHead.click();
+  await expect(anchorsHead).toHaveAttribute("aria-expanded", "true");
+  await expect(rescueHead).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator(".mbx-anchor").first()).toBeVisible();
   await rescueHead.click();
   await expect(rescueHead).toHaveAttribute("aria-expanded", "true");
-  await expect(anchorsHead).toHaveAttribute("aria-expanded", "false");
-  await expect(page.locator(".mbx-anchor-peek")).toBeVisible();
   await page.getByRole("button", { name: "Not sure. Just help me settle →" }).click();
   await expect(page.getByRole("dialog", { name: "Rescue" }).getByRole("button", { name: "Start breathing" })).toBeVisible();
 });

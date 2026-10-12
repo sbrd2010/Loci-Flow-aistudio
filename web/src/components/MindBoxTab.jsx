@@ -44,8 +44,9 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
   const stepEndAtRef = useRef(null);
   const [brainDumpText, setBrainDumpText] = useState("");
   const editorRef = useRef(null);
-  // 78 §4: Rescue and Anchors take turns; Anchors is open on every visit.
-  const [railOpen, setRailOpen] = useState("anchors");
+  // 78 §4: Rescue and Anchors take turns. Rescue is open on every visit
+  // (owner's call, 12 Oct; the design had Anchors).
+  const [railOpen, setRailOpen] = useState("rescue");
   const swapRail = () => setRailOpen(o => (o === "anchors" ? "rescue" : "anchors"));
   // 78 §6: "Show the oldest first" holds until you leave the page.
   const [oldestFirst, setOldestFirst] = useState(false);

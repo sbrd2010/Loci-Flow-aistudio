@@ -123,14 +123,13 @@ test("Focus windows: the row sums them and names the day end; removing them all 
 
   await page.getByRole("button", { name: "Remove focus window 1" }).click();
   await page.getByRole("button", { name: "Add a window" }).click();
-  // The first window is empty: nothing to go by yet.
+  // A new window is always empty: no time is assumed.
   await expect(page.getByLabel("Focus window 1 start time")).toHaveValue("");
   await page.getByLabel("Focus window 1 start time").fill("09:00");
   await page.getByLabel("Focus window 1 end time").fill("12:00");
   await page.getByRole("button", { name: "Add a window" }).click();
-  // A new window starts where the last one ends, an hour long: no overlap.
-  await expect(page.getByLabel("Focus window 2 start time")).toHaveValue("12:00");
-  await expect(page.getByLabel("Focus window 2 end time")).toHaveValue("13:00");
+  await expect(page.getByLabel("Focus window 2 start time")).toHaveValue("");
+  await expect(page.getByLabel("Focus window 2 end time")).toHaveValue("");
   await page.getByLabel("Focus window 2 start time").fill("13:00");
   await page.getByLabel("Focus window 2 end time").fill("17:15");
   await expect(page.locator(".set-facts")).toContainText("7h15m");
@@ -311,14 +310,14 @@ test("a partial first focus window stays in place while the following row is sav
   await page.getByRole("button", { name: "Add a window" }).click();
   const firstEnd = page.getByLabel("Focus window 1 end time");
   const secondEnd = page.getByLabel("Focus window 2 end time");
-  await expect(secondEnd).toHaveValue("03:00");
+  await expect(secondEnd).toHaveValue("");
   await firstEnd.fill("");
   await expect(firstEnd).toBeFocused();
   await expect(firstEnd).toHaveValue("");
-  await expect(secondEnd).toHaveValue("03:00");
+  await expect(secondEnd).toHaveValue("");
   await firstEnd.fill("12:00");
   await expect(firstEnd).toHaveValue("12:00");
-  await expect(secondEnd).toHaveValue("03:00");
+  await expect(secondEnd).toHaveValue("");
 });
 
 test("the API-key dialog keeps keyboard focus inside and returns it to its row", async ({ page }) => {
