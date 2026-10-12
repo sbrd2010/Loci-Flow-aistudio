@@ -159,7 +159,7 @@ test("Mind Box: thoughts by keyboard, Ctrl+Z undoes Let go, T focuses the editor
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(rows).toHaveCount(n);
 
-  await page.locator(".mbx-title").click();
+  await page.locator(".mbx-dump-head").click();
   await page.keyboard.press("t");
   await expect(page.locator(".mbx-field").getByRole("textbox", { name: "Thought" })).toBeFocused();
   await expect(page.getByRole("dialog")).toHaveCount(0);
