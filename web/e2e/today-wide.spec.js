@@ -402,18 +402,21 @@ test("Today's Day map view: the From panel opens whole, and a quarter-hour moves
   await expect(column(page).locator(".dm-from-select")).not.toContainText("(now)");
 });
 
-// 12 Oct try-out: on a 24″ the list grows to a third of the row (480–640),
-// so the task doesn't sit beside an empty band; a 16″ keeps 480.
-for (const [width, height, min, max] of [[1536, 864, 480, 480], [2133, 1150, 600, 640]]) {
-  test(`${width}×${height}: the list column is ${min === max ? min : `${min}–${max}`}px wide`, async ({ page }) => {
+// 12 Oct try-out: on a 24″ (2133×1150 at 90% zoom) the list may grow to 760
+// and the hero to 840, so the task doesn't sit beside an empty band; a 16″
+// (1536) keeps 42% of its row, under the old 680.
+for (const [width, height, min, max, hero] of [[1536, 864, 600, 625, 720], [2133, 1150, 755, 760, 840]]) {
+  test(`${width}×${height}: the list column is ${min}–${max}px and the hero up to ${hero}px`, async ({ page }) => {
     await enterDemo(page, { width, height });
     await page.locator("body").click({ position: { x: 5, y: 300 } });
     const list = page.locator("section.today-list");
     if (!(await list.isVisible())) await page.keyboard.press("l");
     await expect(list).toBeVisible();
-    const z = await page.evaluate(() => document.documentElement.currentCSSZoom || 1);
-    const w = (await list.boundingBox()).width / z;
+    // The column itself (the list's panel adds its own padding around it).
+    const w = await page.locator(".today-layout").evaluate(el => parseFloat(getComputedStyle(el).gridTemplateColumns.split(" ").pop()));
     expect(w).toBeGreaterThanOrEqual(min - 1);
     expect(w).toBeLessThanOrEqual(max + 1);
+    const heroMax = await page.locator(".wall-hero").evaluate(el => parseFloat(getComputedStyle(el).maxWidth));
+    expect(heroMax).toBe(hero);
   });
 }

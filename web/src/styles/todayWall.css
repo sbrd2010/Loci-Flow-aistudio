@@ -1313,13 +1313,6 @@
 @media (min-width: 1280px) {
   .today-layout.is-list-open { grid-template-columns: minmax(0, 1fr) 480px; }
 }
-/* 12 Oct try-out (24″ at 90% zoom): with the scale held to ×1.1 the task
-   column took all the extra width and the hero sat beside an empty band.
-   From 1700px the list takes a third of the row, 480–640px; a 16″ laptop
-   (about 1536px) keeps 480. */
-@media (min-width: 1700px) {
-  .today-layout.is-list-open { grid-template-columns: minmax(0, 1fr) clamp(480px, 34%, 640px); }
-}
 
 /* Q55.2: the Rescue hint — one Lora line, then "Open Rescue →" · "Not
    today", under the buttons and their quiet links (it stays until tapped,
