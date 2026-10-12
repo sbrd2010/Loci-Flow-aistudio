@@ -185,7 +185,12 @@ const ThoughtEditor = forwardRef(function ThoughtEditor({
     const room = Math.max(0, maxLength - plainLength(emitted.current || ""));
     const sel = window.getSelection?.();
     const replacing = sel && !sel.isCollapsed ? sel.toString().length : 0;
-    const clip = text.slice(0, room + replacing);
+    // Cut at whole characters: half an emoji would save as a broken glyph.
+    let clip = "";
+    for (const ch of text) {
+      if (clip.length + ch.length > room + replacing) break;
+      clip += ch;
+    }
     if (clip) exec("insertText", clip);
     emit();
   };

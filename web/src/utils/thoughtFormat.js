@@ -3,41 +3,55 @@
 
 const MARK = { "**": "b", "__": "u" };
 
-// Only markers with a partner toggle; a stray one stays as text.
-function pairedMarkers(text) {
-  const at = { "**": [], "__": [] };
-  const re = /\*\*|__/g;
-  let m;
-  while ((m = re.exec(text))) at[m[0]].push(m.index);
-  const keep = new Set();
-  for (const k of Object.keys(at)) {
-    const list = at[k].length % 2 ? at[k].slice(0, -1) : at[k];
-    list.forEach(i => keep.add(i));
+// Text → literal pieces and markers. A backslash keeps the next \, * or _
+// as text, so a typed "foo__bar__" is never read as underline.
+function tokens(text) {
+  const out = [];
+  let buf = "";
+  for (let i = 0; i < text.length; i += 1) {
+    const c = text[i];
+    if (c === "\\" && /[\\*_]/.test(text[i + 1] || "")) { buf += text[i + 1]; i += 1; continue; }
+    const two = text.slice(i, i + 2);
+    if (MARK[two]) {
+      if (buf) out.push(buf);
+      buf = "";
+      out.push({ mark: MARK[two] });
+      i += 1;
+      continue;
+    }
+    buf += c;
   }
-  return keep;
+  if (buf) out.push(buf);
+  return out;
 }
 
 // "a **b** c" → [{text:"a ",b:false,u:false},{text:"b",b:true,u:false},…]
+// Only markers with a partner toggle; a stray last one stays as text.
 export function parseThought(text) {
-  const s = String(text || "");
-  const keep = pairedMarkers(s);
+  const toks = tokens(String(text || ""));
+  const count = { b: 0, u: 0 };
+  toks.forEach(t => { if (t.mark) count[t.mark] += 1; });
+  const left = { ...count };
   const runs = [];
   const style = { b: false, u: false };
-  let buf = "";
-  const flush = () => { if (buf) { runs.push({ text: buf, b: style.b, u: style.u }); buf = ""; } };
-  for (let i = 0; i < s.length; i += 1) {
-    const two = s.slice(i, i + 2);
-    if (MARK[two] && keep.has(i)) {
-      flush();
-      style[MARK[two]] = !style[MARK[two]];
-      i += 1;
-    } else {
-      buf += s[i];
-    }
-  }
-  flush();
-  return runs;
+  const add = (str) => {
+    const last = runs[runs.length - 1];
+    if (last && last.b === style.b && last.u === style.u) last.text += str;
+    else runs.push({ text: str, b: style.b, u: style.u });
+  };
+  toks.forEach(t => {
+    if (typeof t === "string") { add(t); return; }
+    const k = t.mark;
+    left[k] -= 1;
+    if (count[k] % 2 && left[k] === 0) { add(k === "b" ? "**" : "__"); return; }
+    style[k] = !style[k];
+  });
+  return runs.filter(r => r.text);
 }
+
+// Plain typed text (Focus's "Park a thought", Rescue) → stored text.
+export const escapeThought = (t) => String(t || "").replace(/[\\*_]/g, c => `\\${c}`);
+const escapeText = escapeThought;
 
 // Runs back to stored text; neighbouring runs with the same style join.
 export function serializeRuns(runs) {
@@ -49,7 +63,7 @@ export function serializeRuns(runs) {
     else merged.push({ text: r.text, b: !!r.b, u: !!r.u });
   }
   return merged.map(r => {
-    let t = r.text;
+    let t = escapeText(r.text);
     if (r.u) t = `__${t}__`;
     if (r.b) t = `**${t}**`;
     return t;

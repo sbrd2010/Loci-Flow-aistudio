@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseThought, plainThought, serializeRuns } from "./thoughtFormat";
+import { escapeThought, parseThought, plainThought, serializeRuns } from "./thoughtFormat";
 
 describe("thought format", () => {
   it("reads bold and underline, nested too", () => {
@@ -23,6 +23,15 @@ describe("thought format", () => {
   it("round-trips", () => {
     const s = "Call **Ana**\n__before__ Friday";
     expect(serializeRuns(parseThought(s))).toBe(s);
+  });
+  it("keeps typed ** and __ as text (Codex review of #518)", () => {
+    const stored = serializeRuns([{ text: "rename foo__bar__baz", b: false, u: false }, { text: "2**3", b: true, u: false }]);
+    expect(parseThought(stored)).toEqual([
+      { text: "rename foo__bar__baz", b: false, u: false },
+      { text: "2**3", b: true, u: false },
+    ]);
+    expect(plainThought(escapeThought("a_b **c** C:\\temp"))).toBe("a_b **c** C:\\temp");
+    expect(plainThought("C:\\temp")).toBe("C:\\temp");
   });
   it("gives a plain one-line version", () => {
     expect(plainThought("Call **Ana**\n__before__  Friday")).toBe("Call Ana before Friday");
