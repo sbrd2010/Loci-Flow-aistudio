@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { THOUGHTS_NOTE_AT, newestThoughtsFirst } from "../utils/thoughts";
+import { parseThought } from "../utils/thoughtFormat";
 
 // Thoughts in Mind Box (Q56.2; 65a): newest first, each with its age; on
 // hover, focus or touch, "Make it a task" (Add, prefilled) and "Let go"
@@ -15,6 +16,16 @@ export function thoughtAge(createdAt, now = Date.now()) {
   if (ms < HOUR_MS) return "NOW";
   if (ms < DAY_MS) return `${Math.floor(ms / HOUR_MS)}H`;
   return `${Math.floor(ms / DAY_MS)}D`;
+}
+
+// 78 §5–6: a thought keeps its lines, bold and underline; no markers shown.
+export function ThoughtText({ text }) {
+  return parseThought(text).map((r, i) => {
+    let node = r.text;
+    if (r.u) node = <u>{node}</u>;
+    if (r.b) node = <strong>{node}</strong>;
+    return <React.Fragment key={i}>{node}</React.Fragment>;
+  });
 }
 
 export default function ThoughtsList({ thoughts = [], onMakeTask, onLetGo, now = Date.now() }) {
@@ -33,7 +44,7 @@ export default function ThoughtsList({ thoughts = [], onMakeTask, onLetGo, now =
       <ul className="thoughts-list">
         {newestFirst.map((t, i) => (
           <li key={t.id} className={`thought-row${i >= PHONE_SHOWS ? " is-more" : ""}`} data-testid="thought-row">
-            <span className="thought-text">{t.text}</span>
+            <span className="thought-text"><ThoughtText text={t.text} /></span>
             <span className="thought-age">{thoughtAge(t.createdAt, now)}</span>
             <span className="thought-actions">
               <button type="button" className="thought-btn" onClick={() => onMakeTask(t)}>Make it a task</button>

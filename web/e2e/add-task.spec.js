@@ -312,29 +312,56 @@ test("Other left empty closes; an AI suggestion after a typed time is what shows
   await expect(dialog.getByLabel("Other time")).toHaveCount(0);
 });
 
-// Try-out 4/3: a long thought wraps and grows instead of scrolling sideways;
-// Shift+Enter adds a line, Enter saves. Typing is marked by the field's own
-// border, not a second box round it.
-test("a long thought wraps and grows, stays one line, and Enter saves", async ({ page }) => {
+// 78 §5/§8: a thought grows on ruled lines; Shift+Enter makes a new line,
+// Ctrl+B bolds what comes next, Enter saves. Mind Box shows the lines and
+// the bold, without the ** markers.
+test("a thought keeps its lines and bold, and Enter saves", async ({ page }) => {
   await enterDemo(page, { width: 1280, height: 800 });
   await page.keyboard.press("t");
   const dialog = page.getByRole("dialog", { name: "New thought" });
-  const field = dialog.locator(".add-thought-input");
+  const field = dialog.getByRole("textbox", { name: "Thought" });
   await expect(field).toBeFocused();
-  expect(await field.evaluate(el => getComputedStyle(el).outlineStyle)).toBe("none");
-  const oneLine = (await field.boundingBox()).height;
+  await expect(dialog.getByRole("button", { name: "Save thought" })).toBeDisabled();
+  const empty = (await field.boundingBox()).height;
   await field.pressSequentially("Ask whether the fixed rate can be extended for another five years before the end of the month");
-  // A thought is kept as one line (Codex review of #499): Shift+Enter adds
-  // no line break; the text wraps instead.
   await field.press("Shift+Enter");
-  await field.pressSequentially(" and the fee");
-  const grown = await field.evaluate(el => ({ h: el.getBoundingClientRect().height, sideways: el.scrollWidth > el.clientWidth, value: el.value }));
+  await field.press("Control+b");
+  await expect(dialog.getByRole("button", { name: "Bold" })).toHaveAttribute("aria-pressed", "true");
+  await field.pressSequentially("and the fee");
+  const grown = await field.evaluate(el => ({ h: el.getBoundingClientRect().height, sideways: el.scrollWidth > el.clientWidth }));
   expect(grown.sideways).toBe(false);
-  expect(grown.h).toBeGreaterThan(oneLine + 20);
-  expect(grown.value).toContain("month and the fee");
-  expect(grown.value).not.toContain("\n");
+  expect(grown.h).toBeGreaterThanOrEqual(empty);
+  await expect(dialog.getByRole("button", { name: "Save thought" })).toBeEnabled();
   await field.press("Enter");
   await expect(page.locator(".add-card")).toHaveCount(0, { timeout: 5_000 });
+
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Mind Box", exact: true }).click();
+  const text = page.getByTestId("thought-row").first().locator(".thought-text");
+  await expect(text).toContainText("end of the month");
+  await expect(text.locator("strong")).toHaveText("and the fee");
+  expect(await text.innerText()).toContain("month\nand the fee");
+  await expect(text).not.toContainText("**");
+});
+
+// 78 §5: the emoji picker opens below the footer; arrows move, Enter adds
+// at the caret and closes it.
+test("the emoji picker adds an emoji where the caret is", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await page.keyboard.press("t");
+  const dialog = page.getByRole("dialog", { name: "New thought" });
+  const field = dialog.getByRole("textbox", { name: "Thought" });
+  await field.pressSequentially("Idea ");
+  await dialog.getByRole("button", { name: "Emoji" }).click();
+  const grid = dialog.getByRole("group", { name: "Emoji" });
+  await expect(grid).toBeVisible();
+  const box = await grid.boundingBox();
+  const foot = await dialog.locator(".te-foot").boundingBox();
+  expect(box.y).toBeGreaterThanOrEqual(foot.y + foot.height);
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Enter");
+  await expect(grid).toHaveCount(0);
+  await expect(field).toBeFocused();
+  await expect(field).toHaveText("Idea 😂");
 });
 
 // Try-out 10: the add sheet's reminder is the same picker — quick picks,

@@ -52,6 +52,7 @@ import { migrateStoredTheme, resolveTheme, watchColorScheme } from "./utils/them
 import { buildDayClock } from "./utils/dayClock";
 import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch, activityEventPath } from "./utils/activityLog";
 import { isOnToday } from "./utils/deferral";
+import { plainThought } from "./utils/thoughtFormat";
 
 // Plan's column names, as Add task's note says them ("from Plan · Quarter").
 const PLAN_COLUMN_NAMES = { today: "Today", week: "Week", month: "Month", quarter: "Quarter", halfyear: "6 months", office: "Work" };
@@ -1086,7 +1087,7 @@ export default function App() {
   };
   const openThoughtAsTask = (thought) => {
     openAddTask("today", "Mind Box");
-    setAddMode({ mode: "task", title: thought.text, fromThoughtId: thought.id });
+    setAddMode({ mode: "task", title: plainThought(thought.text), fromThoughtId: thought.id });
   };
   // T, from anywhere (Q56): a thought, captured in two seconds. Not while
   // typing, in a dialog, or in focus.

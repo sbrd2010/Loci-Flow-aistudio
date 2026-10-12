@@ -12,6 +12,8 @@ import { frontsFromConfig, sortFronts } from "../utils/fronts";
 import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
 import { IconCheck, IconChevronRight, IconPencil, IconX } from "./ui/icons";
 import { THOUGHTS_MAX, addThought } from "../utils/thoughts";
+import { plainThought } from "../utils/thoughtFormat";
+import ThoughtEditor from "./ui/ThoughtEditor";
 import EstimatePicker from "./EstimatePicker";
 import "../styles/addTask.css";
 
@@ -321,9 +323,8 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
 
   const chip = (selected) => `add-chip${selected ? " is-selected" : ""}`;
 
-  // A thought is one line: Enter saves it to Mind Box, nothing to decide.
-  const saveThought = (e) => {
-    e.preventDefault();
+  // Enter saves the thought to Mind Box › Brain dump, nothing to decide.
+  const saveThought = () => {
     if (!title.trim()) return;
     const added = addThought(payload, title);
     if (!added) { setThoughtError(`Mind Box holds ${THOUGHTS_MAX} thoughts. Let a few go first.`); return; }
@@ -333,6 +334,8 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
   };
   const thoughtRef = useRef(null);
   const switchMode = (next) => {
+    // A task title is one plain line.
+    if (next === "task" && mode === "thought") setTitle(t => plainThought(t));
     setMode(next);
     setThoughtError("");
   };
@@ -346,7 +349,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
     <div className="add-overlay" onClick={onClose}>
       <div
         ref={cardRef}
-        className="add-card"
+        className={`add-card${mode === "thought" ? " is-thought" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-task-heading"
@@ -368,25 +371,21 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
         </div>
 
         {mode === "thought" ? (
-          <form onSubmit={saveThought} className="add-body add-thought">
-            <GrowTextarea
+          <div className="add-body add-thought">
+            <ThoughtEditor
               ref={thoughtRef}
-              className="add-thought-input"
-              aria-label="Thought"
-              placeholder="What's on your mind?"
+              className="add-thought-editor"
+              fieldClassName="add-thought-input"
               value={title}
-              maxLength={500}
-              onEnter={e => e.currentTarget.form?.requestSubmit()}
-              onChange={e => { setTitle(e.target.value); setThoughtError(""); }}
+              hint=""
+              onChange={v => { setTitle(v); setThoughtError(""); }}
+              onSubmit={saveThought}
               onKeyDown={e => { if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); switchMode("task"); } }}
             />
-            <p className="add-thought-note">Saved to Mind Box. No date, no front, nothing to decide now.</p>
+            <p className="add-thought-note">Goes to Mind Box › Brain dump. No date, nothing to decide now.</p>
             {thoughtError && <p className="add-error-line" role="alert">{thoughtError}</p>}
-            <div className="add-thought-foot">
-              <span className="add-thought-hint" aria-hidden="true">ENTER SAVES · TAB SWITCHES · ESC CLOSES</span>
-              <button type="submit" className="add-btn-filled" disabled={!title.trim()}>Save thought</button>
-            </div>
-          </form>
+            <p className="add-thought-hint" aria-hidden="true">ENTER SAVES · SHIFT+ENTER NEW LINE · TAB SWITCHES · ESC CLOSES</p>
+          </div>
         ) : (
         <form ref={formRef} onSubmit={handleSubmit} className="add-body">
           {isEveningGuardBlocked(payload.config) && (

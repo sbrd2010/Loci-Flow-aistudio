@@ -12,7 +12,8 @@
   gap: 4px 14px;
   border-top: 1px solid var(--line);
 }
-.thought-text { flex: 1; min-width: 0; font-size: 15px; line-height: 1.4; color: var(--ink); overflow-wrap: anywhere; }
+.thought-text { flex: 1; min-width: 0; font-size: 15px; line-height: 1.4; color: var(--ink); overflow-wrap: anywhere; white-space: pre-line; }
+.thought-text strong { font-weight: 800; }
 .thought-age { font-family: var(--font-mono); font-size: 11px; color: var(--placeholder); }
 .thought-actions { display: flex; gap: 14px; }
 .thought-btn {
