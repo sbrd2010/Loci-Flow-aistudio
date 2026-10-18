@@ -5,6 +5,8 @@
 // the minutes between its last save and the page coming back are never
 // credited. This device only: nothing here is synced.
 
+import { focusExpiryReason } from "./focusSession";
+
 export const OPEN_SESSION_KEY = "loci_open_focus_session";
 export const OPEN_SESSION_SAVE_MS = 5000;
 
@@ -88,20 +90,28 @@ export function loadOpenSession(uid) {
 
 // A saved session shaped as the focus timer reports an ended one, for the
 // terminal ledger event: the time worked is the time saved, and it ends when
-// the page was last seen (the pause it was in, or the save).
-export function savedSessionAsEnded(snap, focusEndReason) {
+// the page was last seen (the pause it was in, or the save). As the timer's
+// own readOpenSession does, a session whose pause ran out or whose day ended
+// reads as expired, and is cut at the end of its day (Codex review of #530).
+export function savedSessionAsEnded(snap, focusEndReason, now = Date.now()) {
   const blockElapsed = Math.max(0, snap.timerMaxSeconds - snap.timerSecondsLeft);
+  const stopAt = snap.pausedAt ?? snap.savedAt;
+  const expired = focusExpiryReason({ sessionOpen: true, pausedAt: stopAt, dayEndsAt: snap.dayEndsAt, now });
+  const endAt = expired === "day_ended" ? Math.min(stopAt, snap.dayEndsAt) : stopAt;
+  const worked = snap.accumulatedElapsed + blockElapsed;
   return {
     focusSessionId: snap.focusSessionId,
     focusStartedAt: snap.focusStartedAt,
     focusInitialPlannedSeconds: snap.initialPlannedSeconds,
     focusFinalPlannedSeconds: snap.accumulatedPlanned + snap.timerMaxSeconds,
-    focusElapsedSeconds: snap.accumulatedElapsed + blockElapsed,
-    focusEndReason,
+    focusElapsedSeconds: expired
+      ? Math.max(snap.accumulatedElapsed, Math.round(worked - (stopAt - endAt) / 1000))
+      : worked,
+    focusEndReason: expired || focusEndReason,
     focusBlocks: snap.blocks,
     focusExtensions: snap.extensions,
-    focusPausedAt: snap.pausedAt ?? snap.savedAt,
-    focusEndedAt: snap.pausedAt ?? snap.savedAt,
+    focusPausedAt: stopAt,
+    focusEndedAt: endAt,
     task: snap.task,
     // On the day it began, as an expired session is (the hold's entry, if it
     // banked one, is amended in place).

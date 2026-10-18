@@ -65,6 +65,21 @@ describe("openFocusSession", () => {
     expect(ended.lociDateString).toBe("2024-06-14");
   });
 
+  it("reads as expired when its pause ran out or its day ended, with the day's end as the cut", () => {
+    // Saved running at 1_000_000 with its day ending 1_030_000: 30 s past the end is not credited.
+    const day = savedSessionAsEnded(snap({ dayEndsAt: 970_000 }), "user_abandoned", 1_100_000);
+    expect(day.focusEndReason).toBe("day_ended");
+    expect(day.focusEndedAt).toBe(970_000);
+    expect(day.focusElapsedSeconds).toBe(900 - 30);
+    // Back an hour later, day not ended: the pause ran out, credited as saved.
+    const paused = savedSessionAsEnded(snap(), "user_abandoned", 1_000_000 + PAUSE_EXPIRY_MS + 1);
+    expect(paused.focusEndReason).toBe("paused_too_long");
+    expect(paused.focusEndedAt).toBe(1_000_000);
+    expect(paused.focusElapsedSeconds).toBe(900);
+    // Back at once: not expired, the reason asked for stands.
+    expect(savedSessionAsEnded(snap(), "user_abandoned", 1_010_000).focusEndReason).toBe("user_abandoned");
+  });
+
   it("a session saved long ago is over by the 15-minute rule, counted from the save", () => {
     const s = snap();
     const back = (ms) => focusExpiryReason({ sessionOpen: true, pausedAt: s.pausedAt ?? s.savedAt, dayEndsAt: s.dayEndsAt, now: s.savedAt + ms });
