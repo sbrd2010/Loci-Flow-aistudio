@@ -162,6 +162,9 @@ test("mobile reliability: Rescue chat never reaches the AI provider on crisis la
   // reaches the AI — wait for that real call to land before testing the safety short-circuit.
   await expect.poll(() => groqCalled, { timeout: 8_000 }).toBe(true);
   groqCalled = false;
+  // And wait for its reply to show: while the opener is still being answered the
+  // chat ignores a new message, so the crisis line would never be sent.
+  await expect(page.getByText("Let's find one small step together.")).toBeVisible({ timeout: 8_000 });
 
   await page.getByPlaceholder(/Tell me what's going on/).fill("I want to kill myself");
   await page.keyboard.press("Enter");
