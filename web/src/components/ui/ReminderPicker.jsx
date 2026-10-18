@@ -9,13 +9,17 @@ const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate(
 // task panel on Today, the Day map and Plan). Quick picks first, then the
 // day (the browser's date field, in Loci's style) and the time (typed, or a
 // quarter-hour to tap). With no reminder set (`active` false) nothing shows
-// as chosen, so the panel never looks set when it isn't.
-export default function ReminderPicker({ date, time, onChange, active = true, idPrefix = "reminder" }) {
+// as chosen, so the panel never looks set when it isn't. A time already past
+// can't be kept, so it says so (review of #511, 3.9); `savedAt` is the reminder
+// already kept, which is not "past" just because it came and went.
+export default function ReminderPicker({ date, time, onChange, active = true, savedAt = null, idPrefix = "reminder" }) {
   const now = new Date();
   const today = ymd(now);
   const picks = reminderQuickPicks(now);
   const minutes = minutesOfHHMM(time);
   const nowMin = now.getHours() * 60 + now.getMinutes();
+  const at = new Date(`${date}T${time}`).getTime();
+  const passed = Number.isFinite(at) && at <= now.getTime() && !(savedAt && Math.floor(savedAt / 60000) === Math.floor(at / 60000));
   // Today: the next quarter-hours from now. Another day: the quarter-hours
   // around the time set.
   const choices = (date === today
@@ -53,6 +57,7 @@ export default function ReminderPicker({ date, time, onChange, active = true, id
           />
         </div>
       </div>
+      {passed && <p className="tp-error rp-passed" role="alert">That time has passed. Pick a later one.</p>}
     </div>
   );
 }

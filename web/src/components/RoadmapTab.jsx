@@ -249,7 +249,10 @@ function SortableRoadmapList({ colKey, colTasks, fullColTasks = colTasks, tasks,
       collisionDetection={closestCenter}
       onDragStart={({ active, activatorEvent }) => {
         setActiveId(active.id);
-        if (onDropOnRung) {
+        // Only a pointer or touch drag has a pointer to follow: a keyboard drag
+        // must not pick up a stray mouse move as where it is (review of #511, 3.1).
+        const byPointer = typeof activatorEvent?.clientX === "number" || !!activatorEvent?.touches;
+        if (onDropOnRung && byPointer) {
           lastPointer = null;
           trackPointer(activatorEvent || {});
           window.addEventListener("pointermove", trackPointer, true);

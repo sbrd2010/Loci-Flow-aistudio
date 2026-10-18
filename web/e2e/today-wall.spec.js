@@ -1932,3 +1932,16 @@ test("the goal band shows the Target; Edit goal in its record opens Key deadline
   await page.getByLabel("Target").fill("");
   await expect(preview).not.toContainText("TARGET");
 });
+
+// Review of #511, 2.3: the title's click has no key of its own, so Tab
+// reaches a plain "Open the task" button, seen only while it is focused.
+test("Tab reaches Open the task, which shows when focused and opens the task", async ({ page }) => {
+  await enterDemo(page);
+  const open = page.getByRole("button", { name: "Open the task", exact: true });
+  await expect(open).toHaveCount(1);
+  expect((await open.boundingBox()).width).toBeLessThanOrEqual(1);
+  await open.focus();
+  expect((await open.boundingBox()).width).toBeGreaterThan(40);
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("task-detail")).toBeVisible();
+});

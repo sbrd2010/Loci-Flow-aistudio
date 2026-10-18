@@ -1040,6 +1040,31 @@
 .wall-goal-line,
 .wall-quiet,
 .wall-full-title { display: none; }
+/* Hidden until Tab reaches it. */
+.wall-open-task:not(:focus) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.wall-open-task {
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--line, currentColor);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.wall-open-task:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 839px) {
   .wall-goal {
     flex-direction: row;

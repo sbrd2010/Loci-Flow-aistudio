@@ -114,6 +114,12 @@ describe("getEstimate", () => {
     expect(getEstimate({ dayMapDurationMinutes: 30 })).toBe(30);
     expect(getEstimate({})).toBe(25);
   });
+  it("keeps any length the pickers allow, 5 minutes to 12 hours", () => {
+    expect(getEstimate({ timeEstimateMinutes: 5 })).toBe(5);
+    expect(getEstimate({ timeEstimateMinutes: 720 })).toBe(720);
+    expect(getEstimate({ timeEstimateMinutes: 1 })).toBe(5);
+    expect(getEstimate({ timeEstimateMinutes: 900 })).toBe(720);
+  });
   it("a changed estimate makes the stored route out of date, so it is timed again", () => {
     const a = { uuid: "a", dayMapOrder: 0, dayMapStartMinutes: 540, dayMapDurationMinutes: 25, timeEstimateMinutes: 25 };
     const b = { uuid: "b", dayMapOrder: 1, dayMapStartMinutes: 570, dayMapDurationMinutes: 25, timeEstimateMinutes: 25 };

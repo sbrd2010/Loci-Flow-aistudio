@@ -10,12 +10,12 @@ describe("estimates", () => {
     for (const [text, min] of [
       ["40", 40], ["40m", 40], ["40 min", 40], ["40 minutes", 40],
       ["1h", 60], ["1h20", 80], ["1h 20m", 80], ["1 h 20 min", 80], ["1:20", 80],
-      ["1.5h", 90], ["1,5h", 90], ["2 hours", 120], [" 3H ", 180], ["12h", 720],
+      ["1.5h", 90], ["1,5h", 90], ["2 hours", 120], [" 3H ", 180], ["12h", 720], ["5", 5], ["0:05", 5], ["1:59", 119], ["1h 59m", 119],
     ]) expect(parseEstimate(text), text).toBe(min);
   });
 
-  it("refuses what isn't a length from 1 minute to 12 hours", () => {
-    for (const text of ["", "  ", "0", "0m", "abc", "-5", "13h", "721", "1.5h20", "1h20h", "m"]) {
+  it("refuses what isn't a length from 5 minutes to 12 hours", () => {
+    for (const text of ["", "  ", "0", "0m", "4", "1m", "0:04", "abc", "-5", "13h", "721", "1.5h20", "1h20h", "m", "1:75", "1h 61m", "1h60"]) {
       expect(parseEstimate(text), text).toBeNull();
     }
   });

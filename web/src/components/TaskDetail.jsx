@@ -487,6 +487,7 @@ export default function TaskDetail({
                     date={remind.date}
                     time={remind.time}
                     active={!!task.reminderAt}
+                    savedAt={task.reminderAt || null}
                     onChange={saveReminder}
                   />
                   {task.reminderAt ? (

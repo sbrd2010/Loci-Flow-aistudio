@@ -107,6 +107,32 @@ test("Settings › Focus windows: a window added at an earlier time moves above 
   await expect(page.getByLabel("Focus window 2 start time")).toHaveValue("11:30");
 });
 
+// Review of #511, 3.2: switching to another window blurs the field with
+// nothing taking focus; that is not leaving the row, so the list stays put.
+test("Settings › Focus windows: switching to another window does not re-order the rows", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "The day", exact: true }).click();
+  await page.getByRole("button", { name: /^Focus windows/ }).click();
+  await page.getByRole("button", { name: "Remove focus window 1" }).click();
+  await page.getByRole("button", { name: "Add a window" }).click();
+  await page.getByLabel("Focus window 1 start time").fill("11:30");
+  await page.getByLabel("Focus window 1 end time").fill("12:30");
+  await page.getByRole("button", { name: "Add a window" }).click();
+  await page.getByLabel("Focus window 2 start time").fill("10:00");
+  await page.getByLabel("Focus window 2 end time").fill("11:00");
+  await page.evaluate(() => { document.hasFocus = () => false; });
+  await page.getByLabel("Focus window 2 end time").blur();
+  await expect(page.getByLabel("Focus window 1 start time")).toHaveValue("11:30");
+  await page.evaluate(() => { delete document.hasFocus; });
+  await page.getByLabel("Focus window 2 end time").focus();
+  await page.getByLabel("Focus window 2 end time").blur();
+  await expect(page.getByLabel("Focus window 1 start time")).toHaveValue("10:00");
+});
+
 // Codex round 2 on the issue 1 sort: moving from one row straight into another
 // (its time, or its Remove) must act on the window you chose. The list sorts
 // only once you leave it.

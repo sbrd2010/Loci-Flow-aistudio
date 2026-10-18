@@ -51,7 +51,12 @@ export default function DayMapFrom({ anchorMinutes, onChangeAnchor, windows }) {
     if (!open) return undefined;
     const away = (e) => { if (!rootRef.current?.contains(e.target)) setOpen(false); };
     // Fixed in place, it would float off the button if the page moved.
-    const moved = (e) => { if (!rootRef.current?.contains(e.target)) setOpen(false); };
+    // A resize has the window as its target (not a node), and the on-screen
+    // keyboard resizes the page while the time is typed: stay open then.
+    const moved = (e) => {
+      const inside = e.type === "resize" ? rootRef.current?.contains(document.activeElement) : rootRef.current?.contains(e.target);
+      if (!inside) setOpen(false);
+    };
     document.addEventListener("pointerdown", away);
     window.addEventListener("scroll", moved, true);
     window.addEventListener("resize", moved);

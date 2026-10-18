@@ -262,7 +262,7 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
       {!isCompleted && (fixed || minutes != null) && (
         <span className={`task-row-dur${fixed ? " is-fixed" : ""}`} aria-label={fixed ? `Fixed at ${formatClock24(fixedAt)}, until ${formatClock24(fixedAt + (minutes || 0))}` : undefined}>
           {reminderAsDot && (
-            <span className="task-row-reminder-dot" role="img" aria-label="Reminder overdue" title={`Reminder overdue · ${formatReminderLabel(reminderAt)}`} />
+            <span className="task-row-reminder-dot" role="img" aria-label={`Reminder overdue, ${formatReminderLabel(reminderAt)}`} title={`Reminder overdue · ${formatReminderLabel(reminderAt)}`} />
           )}
           {fixed ? `${formatClock24(fixedAt)}–${formatClock24(fixedAt + (minutes || 0))}` : formatSpanCaps(minutes)}
         </span>

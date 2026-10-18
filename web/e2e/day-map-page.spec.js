@@ -231,6 +231,41 @@ test("From: a half-typed time survives the clock moving on", async ({ page }) =>
   await expect(page.locator(".dm-from-select")).toHaveText(/^11:15/);
 });
 
+// Review of #511, 2.4: the window resizing (the on-screen keyboard, a rotated
+// phone) while a time is typed in From used to throw and leave the panel as
+// it was; it must neither throw nor close the panel under the person's hands.
+test("From: the window resizing while a time is typed keeps the panel open", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await page.clock.setFixedTime(new Date("2024-06-15T10:00:00"));
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".wall-title")).toBeVisible({ timeout: 15_000 });
+  await page.keyboard.press("m");
+  await page.locator(".dm-from-select").click();
+  const panel = page.getByRole("dialog", { name: "Start the route at" });
+  const typed = panel.getByLabel("Route start, typed");
+  await typed.focus();
+  await typed.fill("11:");
+  await page.setViewportSize({ width: 1280, height: 500 });
+  await page.waitForTimeout(200);
+  await expect(panel).toBeVisible();
+  await expect(typed).toHaveValue("11:");
+  expect(errors).toEqual([]);
+});
+
+// Review of #511, 2.1: the footer's total is the done tasks plus the open
+// ones, as Today's footer counts it.
+test("the footer counts done today out of done plus open", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await openDayMapByKey(page);
+  const text = await page.locator(".dm-foot-done").innerText();
+  const [, done, total] = text.match(/^(\d+) OF (\d+) DONE TODAY$/);
+  const open = await page.locator(".dm-stop[data-task-uuid]").count();
+  expect(Number(total)).toBe(Number(done) + open);
+});
+
 // Try-out issue 8: on the 24″ (app zoom ×1.07) a stop dragged one row up and
 // let go over the middle of that row stayed put; down went one row too far.
 // The empty drag overlay is the dragged box, and it sat zoomed, a row low.

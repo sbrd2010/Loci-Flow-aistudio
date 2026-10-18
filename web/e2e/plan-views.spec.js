@@ -202,6 +202,25 @@ test("Horizons: a row dragged onto a rung moves there, with Undo", async ({ page
   await expect(list.getByText(title, { exact: true })).toBeVisible();
 });
 
+// Review of #511, 3.1: a drag made with the keyboard has no pointer; a mouse
+// that merely moves over a rung meanwhile must not pick the rung for it.
+test("Horizons: a keyboard drag is not sent to a rung by a stray mouse move", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await enterDemo(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
+  const list = page.locator(".plan-open");
+  const row = list.locator(".plan-row").first();
+  const title = (await row.locator(".plan-row-title").innerText()).trim();
+  const target = await page.locator(".plan-rung[data-horizon='month']").boundingBox();
+  await row.locator(".plan-row-grip").focus();
+  await page.keyboard.press("Space");
+  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 5 });
+  await page.keyboard.press("Space");
+  await expect(page.locator(".undo-toast")).toHaveCount(0);
+  await expect(list.getByText(title, { exact: true })).toBeVisible();
+});
+
 // 57g: Edit horizons — rename, hide, add one (Q45) and delete it, with Undo.
 test("Edit horizons: rename, hide, add a 2-week horizon, delete it with Undo", async ({ page }) => {
   await enterDemo(page);

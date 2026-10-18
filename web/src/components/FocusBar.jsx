@@ -31,6 +31,15 @@ export default function FocusBar({
   const [ending, setEnding] = useState(false);
   const [more, setMore] = useState(false);
   const pressRef = useRef(null);
+  // The menu takes focus when it opens, so Esc closes it (and only it) and
+  // Tab stays in it; closing it by Esc, Close or a tap outside gives focus
+  // back to End… (review of #511, 2.2).
+  const menuRef = useRef(null);
+  const moreBtnRef = useRef(null);
+  useEffect(() => {
+    if (more) menuRef.current?.querySelector("[role='menuitem']")?.focus();
+  }, [more]);
+  const closeMenu = () => { setMore(false); moreBtnRef.current?.focus(); };
   // A long press opens the menu; the tap its release makes (on Pause, say)
   // is swallowed, or opening the menu would also pause (Codex review of #437).
   const longPressedRef = useRef(false);
@@ -136,7 +145,7 @@ export default function FocusBar({
             {/* 75h: docked in the Day map's footer, End… opens a menu that
                 also holds Mini window. */}
             {docked ? (
-              <button type="button" className="fb-btn fb-more" aria-haspopup="menu" aria-expanded={more} onClick={() => setMore(true)}>End…</button>
+              <button type="button" ref={moreBtnRef} className="fb-btn fb-more" aria-haspopup="menu" aria-expanded={more} onClick={() => setMore(true)}>End…</button>
             ) : (
               <>
                 {PIP_SUPPORTED && !pipOpen && onOpenPiP && (
@@ -154,13 +163,13 @@ export default function FocusBar({
 
       {/* Phone: what a long press offers; docked (75h), what End… opens. */}
       {more && (
-        <div className="fb-menu-scrim" onClick={() => setMore(false)}>
-          <div className={`fb-menu${docked ? " is-docked" : ""}`} role="menu" aria-label="Focus session" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setMore(false); } }}>
+        <div className="fb-menu-scrim" onClick={closeMenu}>
+          <div ref={menuRef} className={`fb-menu${docked ? " is-docked" : ""}`} role="menu" aria-label="Focus session" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); closeMenu(); } }}>
             {PIP_SUPPORTED && !pipOpen && onOpenPiP && (
               <button type="button" role="menuitem" className="fb-menu-item" onClick={() => { setMore(false); onOpenPiP(); }}>Mini window</button>
             )}
             <button type="button" role="menuitem" className="fb-menu-item" onClick={() => { setMore(false); setEnding(true); }}>End session…</button>
-            <button type="button" role="menuitem" className="fb-menu-item" onClick={() => setMore(false)}>Close</button>
+            <button type="button" role="menuitem" className="fb-menu-item" onClick={closeMenu}>Close</button>
           </div>
         </div>
       )}

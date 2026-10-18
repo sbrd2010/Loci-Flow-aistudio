@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ESTIMATE_CHIPS, formatEstimate, parseEstimate } from "../utils/estimates";
 
 // Try-out 8/9: one set of time chips wherever a task's length is chosen (Add
@@ -20,6 +20,14 @@ export default function EstimatePicker({
   const [otherOpen, setOtherOpen] = useState(offChips);
   const [draft, setDraft] = useState(offChips ? formatEstimate(current) : "");
   const [error, setError] = useState("");
+  // Only a tap on Other moves the cursor into its field; Other opening because
+  // the length arrived from outside must not take focus from where the person is.
+  const inputRef = useRef(null);
+  const focusNext = useRef(false);
+  useEffect(() => {
+    if (otherOpen && focusNext.current) inputRef.current?.focus();
+    focusNext.current = false;
+  }, [otherOpen]);
   // Codex review of #498: the length can change from outside (an AI
   // suggestion applied in Add task, a synced edit). Follow it: a chip shows
   // as chosen and Other closes; another length off the chips shows in Other.
@@ -44,6 +52,7 @@ export default function EstimatePicker({
     setError("");
     setDraft(formatEstimate(min));
     if (min !== current) onPick(min);
+    else if (!offChips) setOtherOpen(false); // typed a chip's length: that chip shows chosen
     return true;
   };
 
@@ -54,19 +63,25 @@ export default function EstimatePicker({
         const on = !otherOpen && current === m;
         return (
           <button key={m || "none"} type="button" className={chipClass(on)} {...stateProps(on)}
-            onClick={() => { setOtherOpen(false); setError(""); onPick(m); }}>
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => { setOtherOpen(false); setDraft(""); setError(""); onPick(m); }}>
             {formatEstimate(m)}
           </button>
         );
       })}
       <button type="button" className={chipClass(otherOpen || offChips)} {...stateProps(otherOpen || offChips)}
         aria-label="Other" aria-expanded={otherOpen}
-        onClick={() => { setOtherOpen(true); setDraft(offChips ? formatEstimate(current) : ""); }}>
+        onClick={() => {
+          setOtherOpen(true);
+          setDraft(offChips ? formatEstimate(current) : "");
+          if (inputRef.current) inputRef.current.focus(); else focusNext.current = true;
+        }}>
         {offChips && !otherOpen ? `Other · ${formatEstimate(current)}` : "Other"}
       </button>
       {otherOpen && (
         <span className="estimate-other">
           <input
+            ref={inputRef}
             id={`${idPrefix}-other`}
             type="text"
             inputMode="text"
@@ -76,7 +91,6 @@ export default function EstimatePicker({
             aria-describedby={error ? `${idPrefix}-other-error` : undefined}
             placeholder="e.g. 40m or 1h20"
             value={draft}
-            autoFocus
             onChange={(e) => { setDraft(e.target.value); setError(""); }}
             onBlur={commit}
             onKeyDown={(e) => {
