@@ -102,6 +102,9 @@ export function FocusWindowsPage({ config, saveConfigPatch, onBack, backLabel })
   // input or Remove you chose to another window (Codex review, round 2).
   const sortOnLeave = (e) => {
     if (e.currentTarget.contains(e.relatedTarget)) return;
+    // Switching to another window also blurs, with no relatedTarget: the rows
+    // stay as they are until the person is back (review of #511, 3.2).
+    if (!document.hasFocus()) return;
     const sorted = sortFocusWindowRows(rows);
     if (sorted.some((w, j) => w !== rows[j])) save(sorted);
   };

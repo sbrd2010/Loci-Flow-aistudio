@@ -493,6 +493,11 @@ export default function TodayWall({
         >
           <LinkifyText text={task.title} />
         </h2>
+        {/* The title's click has no key of its own: this is the way in for
+            Tab, seen only when focused (review of #511, 2.3). */}
+        {onOpenTask && (
+          <button type="button" className="wall-open-task" onClick={onOpenTask}>Open the task</button>
+        )}
         {/* 58.4: a title cut at three lines on the phone says so. */}
         {clamped && onOpenTask && (
           <button type="button" className="wall-full-title" onClick={onOpenTask}>Full title and details</button>

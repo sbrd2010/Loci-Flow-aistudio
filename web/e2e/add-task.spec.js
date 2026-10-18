@@ -211,6 +211,40 @@ test("Other takes a typed time, and that time is what is saved", async ({ page }
   expect(bodies.find(b => b.includes("Label the seed trays"))).toContain("Label the seed trays (40min)");
 });
 
+// Review of #511, 3.3 / 3.8: a length half-typed in Other must not beat the chip
+// tapped next; typing a chip's own length hands the choice back to that chip.
+test("a chip tapped over a half-typed Other wins, and a typed chip length shows that chip", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await openFromToday(page);
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await dialog.getByRole("button", { name: "Other", exact: true }).click();
+  const other = dialog.getByLabel("Other time");
+  await expect(other).toBeFocused();
+  await other.fill("4 0");
+  // Pressing a chip must not take the field's focus, or leaving the field would
+  // commit (or reject) the half-typed time before the chip's own tap lands.
+  const chip30 = dialog.getByRole("button", { name: "30m", exact: true });
+  const box = await chip30.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await expect(other).toBeFocused();
+  await expect(dialog.getByRole("alert")).toHaveCount(0);
+  await page.mouse.up();
+  await expect(chip30).toHaveAttribute("aria-pressed", "true");
+  await expect(other).toHaveCount(0);
+
+  await dialog.getByRole("button", { name: "Other", exact: true }).click();
+  await other.fill("45");
+  await other.press("Enter");
+  await expect(other).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "45m", exact: true })).toHaveAttribute("aria-pressed", "true");
+
+  await dialog.getByRole("button", { name: "Other", exact: true }).click();
+  await other.fill("1:75");
+  await other.press("Enter");
+  await expect(dialog.getByRole("alert")).toHaveText("Try 40m, 1h20 or 1.5h");
+});
+
 // Q56.1 (64s–t): Add opens with Task | Thought. T opens on Thought from any
 // tab; Enter saves it to Mind Box with a toast; Tab switches to Task.
 test("T opens a thought anywhere; Enter saves it to Mind Box; Tab switches to Task", async ({ page }) => {
@@ -382,6 +416,24 @@ test("Add task: a reminder from a quick pick, then a typed time", async ({ page 
   await typed.press("Enter");
   await expect(dialog.getByRole("button", { name: /^Remind me:/ })).toHaveText("Remind me: Tomorrow 17:30");
   await expect(page.locator(".add-card")).toHaveCount(1);
+});
+
+// Review of #511, 3.9: a reminder time already past is not kept, and the
+// picker says so instead of leaving "Remind me: …" looking set.
+test("Add task: a reminder time that has passed says so", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await page.keyboard.press("n");
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await dialog.getByRole("button", { name: "More details" }).click();
+  await dialog.getByRole("button", { name: "Set a reminder" }).click();
+  await dialog.getByLabel("Reminder date").fill("2024-06-15");
+  const typed = dialog.getByLabel("Reminder time, typed");
+  await typed.fill("0900");
+  await typed.press("Enter");
+  await expect(dialog.getByRole("alert")).toHaveText("That time has passed. Pick a later one.");
+  await typed.fill("1130");
+  await typed.press("Enter");
+  await expect(dialog.getByRole("alert")).toHaveCount(0);
 });
 
 // Codex review of #498: ⌘↵ while typing in Other adds the task with the

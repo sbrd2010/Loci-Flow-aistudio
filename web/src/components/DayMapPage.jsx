@@ -902,7 +902,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
         {routeConfig.momentumEnabled !== false && momentum && (
           <Momentum bars={momentum.bars} sentence={momentum.sentence} />
         )}
-        {todayAll.length > 0 && <span className="dm-foot-done">{todayDone} OF {todayAll.length} DONE TODAY</span>}
+        {todayAll.length > 0 && <span className="dm-foot-done">{todayDone} OF {todayDone + todayAll.filter(t => !t.isCompleted).length} DONE TODAY</span>}
       </footer>
 
       {fixing && (

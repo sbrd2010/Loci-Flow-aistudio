@@ -23,12 +23,17 @@ export default function TimePicker({
   // Follows the value, but never while it's being typed in: "Now" moves
   // every minute and must not wipe a half-typed time (Codex review of #499).
   const inputRef = useRef(null);
+  // Leaving the field takes the time only if it was typed in (review of #511,
+  // 3.7): tabbing through an untouched field must not set or complain.
+  const edited = useRef(false);
   useEffect(() => {
     if (inputRef.current && inputRef.current === document.activeElement) return;
+    edited.current = false;
     setDraft(value == null ? "" : formatHHMM(value)); setError("");
   }, [value]);
 
   const commit = () => {
+    edited.current = false;
     if (!draft.trim()) return false;
     const typed = parseClock(draft);
     const next = typed == null ? null : normalize(typed);
@@ -49,7 +54,8 @@ export default function TimePicker({
               type="button"
               className={`tp-chip${c.minutes === value ? " is-on" : ""}`}
               aria-pressed={c.minutes === value}
-              onClick={() => { setError(""); onChange(c.minutes); }}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { edited.current = false; setError(""); setDraft(formatHHMM(c.minutes)); onChange(c.minutes); }}
             >
               {c.label ?? formatHHMM(c.minutes)}
             </button>
@@ -70,8 +76,8 @@ export default function TimePicker({
           placeholder="hh:mm"
           value={draft}
           autoFocus={autoFocus}
-          onChange={(e) => { setDraft(e.target.value); setError(""); }}
-          onBlur={commit}
+          onChange={(e) => { edited.current = true; setDraft(e.target.value); setError(""); }}
+          onBlur={() => { if (edited.current) commit(); }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.metaKey && !e.ctrlKey) { e.preventDefault(); commit(); }
             // ⌘↵ (Add task's shortcut) takes the typed time first, then

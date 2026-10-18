@@ -338,9 +338,10 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
       ring.addEventListener("click", togglePlay);
       doc.body.appendChild(ring);
       // Space pauses and resumes from anywhere in the window; on a focused
-      // button it presses that button instead.
+      // button it presses that button instead. Enter on the ring (a focusable
+      // button of its own) does the same (review of #511, 1.3).
       doc.addEventListener("keydown", (e) => {
-        if (e.key !== " " || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+        if ((e.key !== " " && !(e.key === "Enter" && e.target === ring)) || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
         const t = e.target;
         if (t && t !== ring && t.closest?.("button")) return;
         e.preventDefault();

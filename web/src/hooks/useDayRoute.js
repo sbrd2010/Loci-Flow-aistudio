@@ -6,6 +6,7 @@ import { getFocusWindows, getLociNowMinutes } from "../utils/focusWindows";
 import { isDeferred, isOnToday } from "../utils/deferral";
 import { commitmentKickerFront, frontForCommitment, frontsFromConfig } from "../utils/fronts";
 import { useLociDayStr } from "./useTodayStr";
+import { ESTIMATE_MAX, ESTIMATE_MIN } from "../utils/estimates";
 
 // Today's route, as the Day map page (50e–f) and Today's Day map column
 // (50k–l) both read it: which tasks are on it, from when, and where the day
@@ -41,7 +42,7 @@ export function getPeriodForMinutes(m) {
 // (written as this value), read only when a task has no estimate.
 export function getEstimate(task) {
   const raw = Number(task.timeEstimateMinutes || task.dayMapDurationMinutes || task.estimateMinutes || 25);
-  return clamp(Number.isFinite(raw) ? raw : 25, 10, 360);
+  return clamp(Number.isFinite(raw) ? raw : 25, ESTIMATE_MIN, ESTIMATE_MAX);
 }
 
 export function sortByPriorityAndOrder(a, b) {

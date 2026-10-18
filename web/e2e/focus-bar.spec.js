@@ -130,4 +130,12 @@ test("on the Day map the bar takes the footer's place, End… opens a menu", asy
   await expect(page.locator(".dm-foot-done")).toBeHidden();
   await bar.getByRole("button", { name: "End…" }).click();
   await expect(page.getByRole("menu", { name: "Focus session" }).getByRole("menuitem", { name: "End session…" })).toBeVisible();
+
+  // Review of #511, 2.2: the menu takes focus, so Esc closes it and stays on
+  // the Day map; focus goes back to End….
+  await expect(page.getByRole("menuitem").first()).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu", { name: "Focus session" })).toHaveCount(0);
+  await expect(page.locator(".day-map-page")).toBeVisible();
+  await expect(bar.getByRole("button", { name: "End…" })).toBeFocused();
 });

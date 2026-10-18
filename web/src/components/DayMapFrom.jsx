@@ -25,14 +25,16 @@ export default function DayMapFrom({ anchorMinutes, onChangeAnchor, windows }) {
   const buttonRef = useRef(null);
   // Fixed under the button, so a scrolling column (Today's Day map view)
   // never cuts it off; rects are screen px, the style is CSS px.
+  const placeUnderButton = () => {
+    const r = buttonRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const z = cssZoom();
+    const width = Math.min(340, window.innerWidth / z - 24);
+    setPlace({ top: r.bottom / z + 6, left: Math.max(12, Math.min(r.left / z, window.innerWidth / z - width - 12)), width });
+  };
   const toggle = () => {
     if (open) { setOpen(false); return; }
-    const r = buttonRef.current?.getBoundingClientRect();
-    if (r) {
-      const z = cssZoom();
-      const width = Math.min(340, window.innerWidth / z - 24);
-      setPlace({ top: r.bottom / z + 6, left: Math.max(12, Math.min(r.left / z, window.innerWidth / z - width - 12)), width });
-    }
+    placeUnderButton();
     setOpen(true);
   };
 
@@ -51,7 +53,13 @@ export default function DayMapFrom({ anchorMinutes, onChangeAnchor, windows }) {
     if (!open) return undefined;
     const away = (e) => { if (!rootRef.current?.contains(e.target)) setOpen(false); };
     // Fixed in place, it would float off the button if the page moved.
-    const moved = (e) => { if (!rootRef.current?.contains(e.target)) setOpen(false); };
+    // A resize has the window as its target (not a node), and the on-screen
+    // keyboard resizes the page while the time is typed: stay open then.
+    const moved = (e) => {
+      const inside = e.type === "resize" ? rootRef.current?.contains(document.activeElement) : rootRef.current?.contains(e.target);
+      if (!inside) setOpen(false);
+      else if (e.type === "resize") placeUnderButton(); // kept open: follow the button
+    };
     document.addEventListener("pointerdown", away);
     window.addEventListener("scroll", moved, true);
     window.addEventListener("resize", moved);
