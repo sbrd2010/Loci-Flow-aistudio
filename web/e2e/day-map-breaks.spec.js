@@ -168,3 +168,42 @@ test("Settings › Focus windows: going from an edited row into another row edit
   await page.locator(".set-facts").click();
   await expect.poll(starts).toEqual(["15:00", "15:30"]);
 });
+
+// #528: a window after midnight is the tail of the day, as Settings reads it
+// (23:55 then 00:15 is one day). The day ends at its end, so From takes a
+// time up to it, and no later.
+test("a window after midnight is the tail of the day: the day ends at its end", async ({ page }) => {
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ }
+  });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await page.clock.setFixedTime(new Date("2024-06-15T11:35:00"));
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "The day", exact: true }).click();
+  await page.getByRole("button", { name: /^Focus windows/ }).click();
+  await page.getByRole("button", { name: "Remove focus window 1" }).click();
+  const windows = [["08:00", "13:35"], ["22:00", "23:55"], ["00:15", "02:15"]];
+  for (const [i, [start, end]] of windows.entries()) {
+    await page.getByRole("button", { name: "Add a window" }).click();
+    await page.getByLabel(`Focus window ${i + 1} start time`).fill(start);
+    await page.getByLabel(`Focus window ${i + 1} end time`).fill(end);
+  }
+  await expect(page.locator(".set-facts")).toContainText("02:15");
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
+  await openDayMapPage(page);
+
+  const from = page.locator(".dm-from-select");
+  const panel = page.getByRole("dialog", { name: "Start the route at" });
+  await from.click();
+  const typed = panel.getByLabel("Route start, typed");
+  await typed.fill("02:00");
+  await typed.press("Enter");
+  await expect(from).toHaveText(/^02:00/);
+  await from.click();
+  await typed.fill("02:30");
+  await typed.press("Enter");
+  await expect(panel.getByRole("alert")).toHaveText("Pick a time from now until 02:15");
+});

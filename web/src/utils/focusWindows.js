@@ -33,7 +33,27 @@ export function hasConfiguredFocusWindow(config = {}) {
   return Number.isFinite(cfg.dayStartHour) || Number.isFinite(cfg.dayEndHour);
 }
 
+// A window that starts early in the morning (before this) is either the start
+// of its day or the tail of the day before it. It is the tail when it sits
+// closer to the evening before than to the morning after: 00:15–02:15 after a
+// window ending 23:55 is one day, not two; 04:30–06:00 before a 09:00 start is
+// an early riser's morning. Settings orders its rows the same way
+// (sortFocusWindowRows).
+export const AFTER_MIDNIGHT_BEFORE_MIN = 5 * 60;
+
+// `w` and `others` are {startMin, endMin, overnight}, as read from the config.
+export function isAfterMidnightWindow(w, others) {
+  if (w.overnight || w.startMin >= AFTER_MIDNIGHT_BEFORE_MIN) return false;
+  const day = others.filter(o => o !== w && o.startMin >= AFTER_MIDNIGHT_BEFORE_MIN);
+  if (day.length === 0) return false;
+  const lastEnd = Math.max(...day.map(o => (o.overnight ? o.endMin + 1440 : o.endMin)));
+  const firstStart = Math.min(...day.map(o => o.startMin));
+  return (w.startMin + 1440) - lastEnd < firstStart - w.endMin;
+}
+
 // Returns normalized, start-sorted [{startMin, endMin, overnight}], always non-empty.
+// A window after midnight (see above) has its times past 1440, like an overnight
+// window's end, and `afterMidnight: true`.
 // Uses config.focusWindows if it has at least one valid {start, end} entry,
 // otherwise falls back to dayStartHour/dayEndHour (defaults 7/24: someone who
 // never set a window gets a day that ends at midnight).
@@ -48,7 +68,12 @@ export function getFocusWindows(config = {}) {
       if (startMin === null || endMin === null || startMin === endMin) continue;
       valid.push({ startMin, endMin, overnight: endMin <= startMin });
     }
-    if (valid.length > 0) return valid.sort((a, b) => a.startMin - b.startMin);
+    if (valid.length > 0) {
+      const read = valid.map(w => (isAfterMidnightWindow(w, valid)
+        ? { startMin: w.startMin + 1440, endMin: w.endMin + 1440, overnight: false, afterMidnight: true }
+        : w));
+      return read.sort((a, b) => a.startMin - b.startMin);
+    }
   }
 
   const dayStartHour = Number.isFinite(cfg.dayStartHour) ? cfg.dayStartHour : 7;
@@ -66,17 +91,22 @@ export function getFocusWindows(config = {}) {
 // 00:00), so callers that test containment by hand get it wrong all day.
 export function isHourInWindow(hour, w) {
   const min = hour * 60;
+  if (w.afterMidnight) return min >= w.startMin - 1440 && min < w.endMin - 1440;
   return w.overnight
     ? (min >= w.startMin || min < w.endMin)
     : (min >= w.startMin && min < w.endMin);
 }
+
+// Where a window's after-midnight part ends, in minutes past midnight: an
+// overnight window's end, a window after midnight's end less the day, else 0.
+const tailEndMin = (w) => (w.overnight ? w.endMin : w.afterMidnight ? w.endMin - 1440 : 0);
 
 // "Loci now": minutes since today's midnight, pushed past 1440 when `now` falls
 // in the early-morning tail of an overnight window (so it compares correctly
 // against that window's start, which is still "yesterday" in wall-clock terms).
 export function getLociNowMinutes(now, windows) {
   const nowMin = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
-  return windows.some(w => w.overnight && nowMin < w.endMin) ? nowMin + 1440 : nowMin;
+  return windows.some(w => nowMin < tailEndMin(w)) ? nowMin + 1440 : nowMin;
 }
 
 // Windows collapsed to non-overlapping [start, end) spans in "loci minutes" (an
@@ -211,6 +241,6 @@ export function getLociDayStr(now, windows) {
 // after it.
 export function lociDayEndsAt(dayStr, windows) {
   const [y, m, d] = String(dayStr).split("-").map(Number);
-  const tail = Math.max(0, ...windows.filter(w => w.overnight).map(w => w.endMin));
+  const tail = Math.max(0, ...windows.map(tailEndMin));
   return new Date(y, m - 1, d + 1, 0, tail).getTime();
 }
