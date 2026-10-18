@@ -40,7 +40,7 @@ import { useLociDayStr } from "./hooks/useTodayStr";
 import HorizonReview from "./components/HorizonReview";
 import UndoToast, { UndoAnnouncer } from "./components/ui/UndoToast";
 import FocusWelcomeBack from "./components/FocusWelcomeBack";
-import { OPEN_SESSION_SAVE_MS, saveOpenSession, clearOpenSession, loadOpenSession, savedSessionAsEnded, thisTabId, ownedByOtherLiveTab, holdSessionLock, dropSessionLock, claimSessionLock } from "./utils/openFocusSession";
+import { OPEN_SESSION_SAVE_MS, saveOpenSession, clearOpenSession, loadOpenSession, savedSessionAsEnded, saveHeldEvent, loadHeldEvent, clearHeldEvent, dropHeldEvent, thisTabId, ownedByOtherLiveTab, holdSessionLock, dropSessionLock, claimSessionLock } from "./utils/openFocusSession";
 import { letGoThought, thoughtText } from "./utils/thoughts";
 import { applyReview, detectReviews, pendingReviews, undoReviewOrSort } from "./utils/horizonReview";
 import { endLeftReviewMarks } from "./utils/normalizePayload";
@@ -824,9 +824,13 @@ export default function App() {
       ...session, windows: getFocusWindows(payload?.config || {}),
     });
     focusTimer.markFocusLedgerEntry(event);
-    writeActivityEventIfNewer(event);
+    // Kept until the write is confirmed: a reload before it lands (offline, say)
+    // sends it again at the next load, and the write never replaces an entry
+    // with one recording less work (loopcheck of #530).
+    if (activityUid) saveHeldEvent(activityUid, event);
+    Promise.resolve(writeActivityEventIfNewer(event)).then(r => { if (r?.ok) clearHeldEvent(event); }).catch(() => {});
     // The saved copy from before the bell has no entry to amend: a restore from
-    // it would write a second one (loopcheck of #530).
+    // it would write a second one.
     clearOpenSession();
   }, [focusTimer.sessionCompletePending]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1015,6 +1019,17 @@ export default function App() {
     };
   }, [activityUid]);
 
+  // A bell's entry that had not landed when the page went away is sent again.
+  const heldSentForRef = useRef(null);
+  useEffect(() => {
+    if (!activityUid || !payload?.config || isSyncingFromCache || syncWarning === "offline") return;
+    if (heldSentForRef.current === activityUid) return;
+    heldSentForRef.current = activityUid;
+    const held = loadHeldEvent(activityUid);
+    if (!held) return;
+    Promise.resolve(writeActivityEventIfNewer(held)).then(r => { if (r?.ok) clearHeldEvent(held); }).catch(() => {});
+  }, [activityUid, payload?.config, isSyncingFromCache, syncWarning]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [welcomeBack, setWelcomeBack] = useState(false);
   // The restored session closed on its own (its pause had run out): nothing to welcome.
   // Nor once it runs again, however it was resumed.
@@ -1139,6 +1154,7 @@ export default function App() {
     flushNow();
     clearCache();
     clearOpenSession();
+    dropHeldEvent();
     cancelAllNativeScheduling();
     signOut(auth).then(() => { setUser(null); setActiveTab("today"); });
   };
@@ -1382,7 +1398,7 @@ export default function App() {
             </button>
             <button
               className="btn"
-              onClick={() => { flushNow(); clearCache(); clearOpenSession(); cancelAllNativeScheduling(); signOut(auth); }}
+              onClick={() => { flushNow(); clearCache(); clearOpenSession(); dropHeldEvent(); cancelAllNativeScheduling(); signOut(auth); }}
               style={{ background: "var(--bg-secondary)", color: "var(--text-secondary)", border: "1.5px solid var(--border)", boxShadow: "none", fontSize: "13px" }}
             >
               Sign Out
@@ -1761,7 +1777,8 @@ export default function App() {
           onClose={() => setThoughtSaved(null)}
         />
       )}
-      {welcomeBack && focusTimer.focusSessionId && !focusTimer.isTimerRunning && (
+      {welcomeBack && focusTimer.focusSessionId && !focusTimer.isTimerRunning
+        && !EXPIRY_REASONS.has(focusTimer.peekFocusSession(null)?.focusEndReason) && (
         <FocusWelcomeBack
           title={focusTimer.activeTask?.title || "your task"}
           minutes={Math.floor(focusTimer.focusElapsedSeconds / 60)}

@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { OPEN_SESSION_KEY, OPEN_SESSION_SAVE_MS, clearOpenSession, dropSessionLock, holdSessionLock, claimSessionLock, loadOpenSession, ownedByOtherLiveTab, saveOpenSession, savedSessionAsEnded, thisTabId } from "./openFocusSession";
+import { HELD_EVENT_KEY, OPEN_SESSION_KEY, OPEN_SESSION_SAVE_MS, clearOpenSession, dropSessionLock, holdSessionLock, claimSessionLock, clearHeldEvent, dropHeldEvent, loadHeldEvent, loadOpenSession, saveHeldEvent, ownedByOtherLiveTab, saveOpenSession, savedSessionAsEnded, thisTabId } from "./openFocusSession";
 import { focusExpiryReason, PAUSE_EXPIRY_MS } from "./focusSession";
 
 const store = {};
@@ -155,5 +155,33 @@ describe("the lock a tab holds while it has the session", () => {
     expect(await claimSessionLock()).toBeNull();
     holdSessionLock(); // nothing to hold, and no error
     dropSessionLock();
+  });
+});
+
+describe("the bell's entry, kept until it lands", () => {
+  const ev = (elapsed) => ({ eventId: "e1", lociDateString: "2024-06-15", focusSessionId: "s1", focusElapsedSeconds: elapsed });
+  beforeEach(() => { for (const k of Object.keys(store)) delete store[k]; });
+
+  it("comes back for the same account, and not for another or from a broken value", () => {
+    saveHeldEvent("u1", ev(1500));
+    expect(loadHeldEvent("u1")).toEqual(ev(1500));
+    expect(loadHeldEvent("u2")).toBeNull();
+    store[HELD_EVENT_KEY] = JSON.stringify({ v: 1, uid: "u1", event: { eventId: "e1" } });
+    expect(loadHeldEvent("u1")).toBeNull();
+    store[HELD_EVENT_KEY] = "{nope";
+    expect(loadHeldEvent("u1")).toBeNull();
+  });
+
+  it("is forgotten once it lands, unless a later bell replaced it with more work", () => {
+    saveHeldEvent("u1", ev(1500));
+    clearHeldEvent(ev(1500));
+    expect(loadHeldEvent("u1")).toBeNull();
+    saveHeldEvent("u1", ev(1800)); // a second bell, after "+Nm"
+    clearHeldEvent(ev(1500)); // the first bell's write lands late
+    expect(loadHeldEvent("u1")).toEqual(ev(1800));
+    clearHeldEvent({ ...ev(1800), eventId: "other" });
+    expect(loadHeldEvent("u1")).toEqual(ev(1800));
+    dropHeldEvent();
+    expect(loadHeldEvent("u1")).toBeNull();
   });
 });

@@ -368,6 +368,17 @@ describe("useFocusTimer", () => {
     expect(ended.lociDateString).toBe("2024-06-15");
   });
 
+  it("saves nothing when the block has run out and the bell is about to ring", () => {
+    const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
+    const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+    result.current.startFocusSession(task, { enterFocusMode: false });
+    rerender([[task], {}, "u1"]);
+    result.current.setIsTimerRunning(false);
+    result.current.setTimerSecondsLeft(0);
+    rerender([[task], {}, "u1"]);
+    expect(result.current.snapshotOpenSession()).toBeNull();
+  });
+
   it("saves nothing at block end, where the 00:00 hold has banked the session", () => {
     const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
     const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);

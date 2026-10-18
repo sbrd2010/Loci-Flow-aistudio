@@ -952,6 +952,8 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
     const left = isTimerRunning && deadlineRef.current != null
       ? Math.max(0, Math.ceil((deadlineRef.current - now) / 1000))
       : timerSecondsLeft;
+    // The block has run out and the bell is about to ring: nothing to resume.
+    if (left <= 0) return null;
     return {
       v: 1,
       savedAt: now,

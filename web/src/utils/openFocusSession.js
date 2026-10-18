@@ -63,6 +63,44 @@ export function claimSessionLock() {
   });
 }
 
+// The ledger entry the 00:00 bell banks, kept until its write is confirmed, so a
+// reload before it landed (offline, say) can send it again. The write never
+// replaces an entry with one that records less work (writeActivityEventIfNewer),
+// so sending it again is safe whenever it is sent (loopcheck of #530).
+export const HELD_EVENT_KEY = "loci_held_focus_event";
+
+export function saveHeldEvent(uid, event) {
+  try { localStorage.setItem(HELD_EVENT_KEY, JSON.stringify({ v: 1, uid, event })); } catch { /* storage blocked or full */ }
+}
+
+export function loadHeldEvent(uid) {
+  let held;
+  try { held = JSON.parse(localStorage.getItem(HELD_EVENT_KEY)); } catch { return null; }
+  const e = held?.event;
+  if (!held || held.v !== 1 || !uid || held.uid !== uid) return null;
+  if (!e || typeof e.eventId !== "string" || typeof e.lociDateString !== "string" || typeof e.focusSessionId !== "string") return null;
+  return e;
+}
+
+// Forgets the held entry once `confirmed` has landed, unless a later bell has
+// replaced it with one that records more.
+export function clearHeldEvent(confirmed) {
+  const stored = loadHeldEventAny();
+  if (!stored) return;
+  if (stored.eventId === confirmed?.eventId && !(Number(stored.focusElapsedSeconds) > Number(confirmed.focusElapsedSeconds))) {
+    try { localStorage.removeItem(HELD_EVENT_KEY); } catch { /* storage blocked */ }
+  }
+}
+
+// Removes it whatever it is (signing out).
+export function dropHeldEvent() {
+  try { localStorage.removeItem(HELD_EVENT_KEY); } catch { /* storage blocked */ }
+}
+
+function loadHeldEventAny() {
+  try { return JSON.parse(localStorage.getItem(HELD_EVENT_KEY))?.event || null; } catch { return null; }
+}
+
 const num = (v) => typeof v === "number" && Number.isFinite(v);
 
 export function saveOpenSession(snapshot) {
