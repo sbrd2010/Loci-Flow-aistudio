@@ -370,7 +370,7 @@ export function useSync(uid, email) {
     const ctx = beginWrite(toApply);
     writeWithRetry(ref(db, dbRefPath), toApply, baseRef.current)
       .then((committed) => absorbCommitted(committed, ctx))
-      .catch(() => {});
+      .catch((err) => onFullSaveFailed(err));
   };
   // Resolvers for savePayloadAsync calls queued behind the current debounce
   // timer — settled together when that (possibly-coalesced) write lands.
@@ -529,7 +529,7 @@ export function useSync(uid, email) {
               const ctx = beginWrite(payloadRef.current);
               writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseRef.current)
                 .then((committed) => absorbCommitted(committed, ctx))
-                .catch(() => {});
+                .catch((err) => onFullSaveFailed(err));
             } else {
               // savePayload fired before RTDB responded (e.g. a mount-effect on stale
               // cache), giving local a fake-fresh timestamp. Trust RTDB instead of
@@ -724,7 +724,7 @@ export function useSync(uid, email) {
       const ctx = beginWrite(payloadRef.current);
       writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseRef.current)
         .then((committed) => { absorbCommitted(committed, ctx); waiters.forEach(w => w.resolve()); })
-        .catch((err) => waiters.forEach(w => w.reject(err)));
+        .catch((err) => { onFullSaveFailed(err); waiters.forEach(w => w.reject(err)); });
     };
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
@@ -865,8 +865,7 @@ export function useSync(uid, email) {
           })
           .catch((err) => {
             console.error("Remote RTDB payload sync failed after retries:", err);
-            markWriteFailed();
-            if (isConnectionDrop(err)) armResave();
+            onFullSaveFailed(err);
             waiters.forEach(w => w.reject(err));
           })
           .finally(() => {
@@ -1109,6 +1108,13 @@ export function useSync(uid, email) {
   // If it is already back (the drop ended before the failure reached us), a
   // reconnect event will not come, so send it again shortly instead, a few times
   // at most.
+  // Every full-payload write that fails ends here (the debounced save, the flush
+  // when the tab is hidden, flushNow, the pushes after a delivery or load): the
+  // warning, and the re-send if the connection dropped (Codex review of #534).
+  const onFullSaveFailed = (err) => {
+    markWriteFailed();
+    if (isConnectionDrop(err)) armResave();
+  };
   const armResave = () => {
     if (!liveConnRef.current) { resaveOnReconnectRef.current = true; return; }
     if (resaveTriesRef.current >= 3) return;
@@ -1129,7 +1135,7 @@ export function useSync(uid, email) {
       const ctx = beginWrite(payloadRef.current);
       writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseRef.current)
         .then((committed) => { absorbCommitted(committed, ctx); waiters.forEach(w => w.resolve()); })
-        .catch((err) => waiters.forEach(w => w.reject(err)));
+        .catch((err) => { onFullSaveFailed(err); waiters.forEach(w => w.reject(err)); });
     }
   };
 
