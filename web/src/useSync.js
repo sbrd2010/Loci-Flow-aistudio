@@ -237,6 +237,7 @@ export function useSync(uid, email) {
   // Non-null when RTDB is unreachable with cached data ("offline") or a write failed ("write-failed").
   // Cleared on every successful RTDB delivery.
   const [syncWarning, setSyncWarning] = useState(null);
+  const markWriteFailed = () => { writeFailSeqRef.current += 1; setSyncWarning("write-failed"); };
 
   const dbRefPath = uid ? `sync/${uid}` : null;
 
@@ -254,6 +255,16 @@ export function useSync(uid, email) {
   // when the connection comes back (#524). resaveRef holds the function that does.
   const resaveOnReconnectRef = useRef(false);
   const resaveRef = useRef(null);
+  // Whether the SDK reports a live connection right now. (rtdbConnectedRef above
+  // only records that it has connected once.)
+  const liveConnRef = useRef(false);
+  // Counts every write-failed warning, so a re-send that succeeds clears the
+  // warning only if no newer save failed meanwhile (Codex review of #534).
+  const writeFailSeqRef = useRef(0);
+  const resaveBusyRef = useRef(false);
+  // Re-sends while the connection is already back (the drop ended before the
+  // failure arrived) are bounded, so a save that keeps failing cannot loop.
+  const resaveTriesRef = useRef(0);
   // Mutable ref so the timeout callback can see the latest phase without stale closure
   const dataTimeoutRef = useRef(null);
   // Sync safety: detect premature savePayload calls during the isSyncingFromCache window.
@@ -463,6 +474,7 @@ export function useSync(uid, email) {
     // Monitor real connection state from Firebase SDK itself
     const connRef = ref(db, ".info/connected");
     const unsubConn = onValue(connRef, (snap) => {
+      liveConnRef.current = snap.val() === true;
       if (snap.val() === true) {
         rtdbConnectedRef.current = true;
         setConnPhase(CONN.CONNECTED);
@@ -843,6 +855,7 @@ export function useSync(uid, email) {
         writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseRef.current)
           .then((committed) => {
             console.log("Remote RTDB payload sync successful");
+            resaveTriesRef.current = 0;
             // Absorb what the server now holds (and make it the base) before the
             // echo of this write, buffered below while the timer was pending, is
             // processed — or discarded, if a newer local edit raised the local
@@ -852,8 +865,8 @@ export function useSync(uid, email) {
           })
           .catch((err) => {
             console.error("Remote RTDB payload sync failed after retries:", err);
-            setSyncWarning("write-failed");
-            if (isConnectionDrop(err)) resaveOnReconnectRef.current = true;
+            markWriteFailed();
+            if (isConnectionDrop(err)) armResave();
             waiters.forEach(w => w.reject(err));
           })
           .finally(() => {
@@ -945,7 +958,7 @@ export function useSync(uid, email) {
         // warning at all. Matches savePayload/savePayloadAsync's already-
         // shared scheduleFlush failure handling.
         console.error(`Sub-path write failed (${subPath}):`, err);
-        setSyncWarning("write-failed");
+        markWriteFailed();
         throw err;
       });
     return attempt(3);
@@ -989,7 +1002,7 @@ export function useSync(uid, email) {
         // own rejection to sequence an analytics write; without this, a real
         // multi-path write failure there set no user-facing warning at all.
         console.error(`Sub-paths write failed (${Object.keys(patch).join(", ")}):`, err);
-        setSyncWarning("write-failed");
+        markWriteFailed();
         throw err;
       });
     return attempt(3);
@@ -1063,7 +1076,7 @@ export function useSync(uid, email) {
       update(ref(db), updates).catch(err => {
         if (n > 0) return new Promise(r => setTimeout(r, 500 * Math.pow(2, 3 - n))).then(() => attempt(n - 1));
         console.error(`Config-patch write failed (${Object.keys(resolvedPatch).join(", ")}):`, err);
-        setSyncWarning("write-failed");
+        markWriteFailed();
       });
     attempt(3);
   };
@@ -1073,20 +1086,35 @@ export function useSync(uid, email) {
   // when a save is already queued or in flight: it carries the latest payload.
   // A success clears the warning; another failure waits for the next reconnect.
   const resave = () => {
-    if (!dbRefPath || !payloadRef.current || timeoutRef.current) return;
+    if (!dbRefPath || !payloadRef.current || timeoutRef.current || resaveBusyRef.current) return;
+    resaveBusyRef.current = true;
+    const failuresAtStart = writeFailSeqRef.current;
     const ctx = beginWrite(payloadRef.current);
     writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseRef.current)
       .then((committed) => {
         console.log("Remote RTDB payload sync successful (after reconnect)");
+        resaveTriesRef.current = 0;
         absorbCommitted(committed, ctx);
-        setSyncWarning((w) => (w === "write-failed" ? null : w));
+        // Only if no newer save failed meanwhile: that failure's edit is not saved.
+        if (writeFailSeqRef.current === failuresAtStart) setSyncWarning((w) => (w === "write-failed" ? null : w));
       })
       .catch((err) => {
         console.error("Remote RTDB payload re-sync failed:", err);
-        if (isConnectionDrop(err)) resaveOnReconnectRef.current = true;
-      });
+        if (isConnectionDrop(err)) armResave();
+      })
+      .finally(() => { resaveBusyRef.current = false; });
   };
   resaveRef.current = resave;
+  // A save failed because the connection dropped: send it again when it is back.
+  // If it is already back (the drop ended before the failure reached us), a
+  // reconnect event will not come, so send it again shortly instead, a few times
+  // at most.
+  const armResave = () => {
+    if (!liveConnRef.current) { resaveOnReconnectRef.current = true; return; }
+    if (resaveTriesRef.current >= 3) return;
+    resaveTriesRef.current += 1;
+    setTimeout(() => resaveRef.current?.(), 3000);
+  };
 
   // Write any pending debounced payload immediately (call before navigating away).
   // Also settles any savePayloadAsync() callers queued behind the timer this
