@@ -39,6 +39,8 @@ import { useFocusTimer } from "./hooks/useFocusTimer";
 import { useLociDayStr } from "./hooks/useTodayStr";
 import HorizonReview from "./components/HorizonReview";
 import UndoToast, { UndoAnnouncer } from "./components/ui/UndoToast";
+import FocusWelcomeBack from "./components/FocusWelcomeBack";
+import { OPEN_SESSION_SAVE_MS, saveOpenSession, clearOpenSession, loadOpenSession, savedSessionAsEnded, saveHeldEvent, loadHeldEvent, clearHeldEvent, dropHeldEvent, thisTabId, ownedByOtherLiveTab, holdSessionLock, dropSessionLock, claimSessionLock } from "./utils/openFocusSession";
 import { letGoThought, thoughtText } from "./utils/thoughts";
 import { applyReview, detectReviews, pendingReviews, undoReviewOrSort } from "./utils/horizonReview";
 import { endLeftReviewMarks } from "./utils/normalizePayload";
@@ -822,7 +824,14 @@ export default function App() {
       ...session, windows: getFocusWindows(payload?.config || {}),
     });
     focusTimer.markFocusLedgerEntry(event);
-    writeActivityEventIfNewer(event);
+    // Kept until the write is confirmed: a reload before it lands (offline, say)
+    // sends it again at the next load, and the write never replaces an entry
+    // with one recording less work (loopcheck of #530).
+    if (activityUid) saveHeldEvent(activityUid, event);
+    Promise.resolve(writeActivityEventIfNewer(event)).then(r => { if (r?.ok) clearHeldEvent(event); }).catch(() => {});
+    // The saved copy from before the bell has no entry to amend: a restore from
+    // it would write a second one.
+    clearOpenSession();
   }, [focusTimer.sessionCompletePending]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEndFocusSession = () => {
@@ -982,6 +991,80 @@ export default function App() {
     writeActivityEvents(eventPatch(activityUid, event));
   }, [lociDayTick, commitmentDayStr, focusTimer.isTimerRunning, focusTimer.expiryCheck]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // A refresh must not lose the session (#527): while one is open, a copy of
+  // it is saved in this browser every few seconds and as the page goes away.
+  // On the next load it comes back paused and asks (Welcome back); if its
+  // task is gone, or the 15-minute / end-of-day rules say it is over, it is
+  // closed with the time saved, never the time the page was away.
+  useEffect(() => {
+    if (!activityUid) return undefined;
+    const save = () => {
+      const t = focusTimerRef.current;
+      const snap = t.snapshotOpenSession();
+      if (snap) saveOpenSession({ ...snap, uid: activityUid, tabId: thisTabId() });
+      else if (t.focusSessionId) clearOpenSession(); // block end: its entry is banked
+      // While a session is open, this tab holds the lock that tells another tab
+      // the session is live here.
+      if (t.focusSessionId) holdSessionLock(); else dropSessionLock();
+    };
+    const hidden = () => { if (document.visibilityState === "hidden") save(); };
+    const id = setInterval(save, OPEN_SESSION_SAVE_MS);
+    window.addEventListener("pagehide", save);
+    document.addEventListener("visibilitychange", hidden);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("pagehide", save);
+      document.removeEventListener("visibilitychange", hidden);
+      dropSessionLock();
+    };
+  }, [activityUid]);
+
+  // A bell's entry that had not landed when the page went away is sent again.
+  const heldSentForRef = useRef(null);
+  useEffect(() => {
+    if (!activityUid || !payload?.config || isSyncingFromCache || syncWarning === "offline") return;
+    if (heldSentForRef.current === activityUid) return;
+    heldSentForRef.current = activityUid;
+    const held = loadHeldEvent(activityUid);
+    if (!held) return;
+    Promise.resolve(writeActivityEventIfNewer(held)).then(r => { if (r?.ok) clearHeldEvent(held); }).catch(() => {});
+  }, [activityUid, payload?.config, isSyncingFromCache, syncWarning]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [welcomeBack, setWelcomeBack] = useState(false);
+  // The restored session closed on its own (its pause had run out): nothing to welcome.
+  // Nor once it runs again, however it was resumed.
+  useEffect(() => { if (!focusTimer.focusSessionId || focusTimer.isTimerRunning) setWelcomeBack(false); }, [focusTimer.focusSessionId, focusTimer.isTimerRunning]);
+  const restoredForRef = useRef(null);
+  useEffect(() => {
+    if (!activityUid || !payload?.config || isSyncingFromCache || syncWarning === "offline") return;
+    if (restoredForRef.current === activityUid) return;
+    restoredForRef.current = activityUid;
+    const snap = loadOpenSession(activityUid);
+    if (!snap) return;
+    (async () => {
+      // Another tab running it (its lock, or, where the browser has no locks,
+      // a copy it saved a moment ago) keeps it: restoring here would run it twice.
+      // Taking the lock is the same step as asking for it, so two tabs
+      // reopening together cannot both restore.
+      const claimed = await claimSessionLock();
+      if (claimed === false || (claimed === null && ownedByOtherLiveTab(snap))) return;
+      // A session already started in this tab took over: its own copy is what
+      // is saved now, and it must not be closed from here.
+      if (focusTimerRef.current.focusSessionId) return;
+      const stillPinned = (payload.tasks || []).some(t => t.uuid === snap.task.uuid && t.isNowFocus && !t.isDeleted && !t.isCompleted);
+      if (stillPinned && focusTimerRef.current.restoreOpenSession(snap)) { setWelcomeBack(true); return; }
+      // Its task was finished, deleted or moved off the pin meanwhile (on another
+      // device, say): the session is over, with what was worked.
+      dropSessionLock();
+      clearOpenSession();
+      const ended = savedSessionAsEnded(snap, "user_abandoned");
+      const event = buildFocusTerminalEvent("focus_abandoned", ended.task, ended.focusSessionId, {
+        ...ended, windows: getFocusWindows(payload.config || {}),
+      });
+      writeActivityEvents(eventPatch(activityUid, event));
+    })();
+  }, [activityUid, payload?.config, isSyncingFromCache, syncWarning]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const deadlineMoveState = deriveCommitmentDeadlineMove(payload?.config || {}, payload?.tasks || [], commitmentDayStr);
   useEffect(() => {
     if (!payload?.config || syncUnconfirmed || deadlineMoveState === undefined) return;
@@ -1070,6 +1153,8 @@ export default function App() {
     // keep surfacing the previous account's task titles as notifications.
     flushNow();
     clearCache();
+    clearOpenSession();
+    dropHeldEvent();
     cancelAllNativeScheduling();
     signOut(auth).then(() => { setUser(null); setActiveTab("today"); });
   };
@@ -1313,7 +1398,7 @@ export default function App() {
             </button>
             <button
               className="btn"
-              onClick={() => { flushNow(); clearCache(); cancelAllNativeScheduling(); signOut(auth); }}
+              onClick={() => { flushNow(); clearCache(); clearOpenSession(); dropHeldEvent(); cancelAllNativeScheduling(); signOut(auth); }}
               style={{ background: "var(--bg-secondary)", color: "var(--text-secondary)", border: "1.5px solid var(--border)", boxShadow: "none", fontSize: "13px" }}
             >
               Sign Out
@@ -1690,6 +1775,16 @@ export default function App() {
             setThoughtSaved(null);
           }}
           onClose={() => setThoughtSaved(null)}
+        />
+      )}
+      {welcomeBack && focusTimer.focusSessionId && !focusTimer.isTimerRunning
+        && !EXPIRY_REASONS.has(focusTimer.peekFocusSession(null)?.focusEndReason) && (
+        <FocusWelcomeBack
+          title={focusTimer.activeTask?.title || "your task"}
+          minutes={Math.floor(focusTimer.focusElapsedSeconds / 60)}
+          onContinue={() => { setWelcomeBack(false); focusTimer.setIsFocusMode(true); focusTimer.setIsTimerRunning(true); }}
+          onEnd={() => { setWelcomeBack(false); handleEndFocusSession(); }}
+          onClose={() => setWelcomeBack(false)}
         />
       )}
       {showAddTask && (

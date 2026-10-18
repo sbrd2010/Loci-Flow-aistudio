@@ -5,6 +5,14 @@ import { buildExtendedTimerState, buildResetFocusState, shouldTriggerSessionComp
 import { getFocusWindows, getLociDayStr, lociDayEndsAt } from "../utils/focusWindows";
 import { safeUUID } from "../utils/uuid";
 import { clockParts, ringGeometry } from "../utils/focusClock";
+import { clearOpenSession } from "../utils/openFocusSession";
+
+// The part of a task a saved session keeps (#527): its id and title, and the
+// fields the terminal ledger event reads (taskSnapshotFrom in activityLog.js).
+const slimTask = (t) => ({
+  uuid: t.uuid, id: t.id, title: t.title, category: t.category, priority: t.priority,
+  horizonLevel: t.horizonLevel, frontId: t.frontId,
+});
 
 // Block end (59i): the break it offers, how long it waits for an answer
 // before it pauses, and the next block's bounds (Q38.1c).
@@ -934,6 +942,72 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
     return focusLedgerEntryRef.current;
   };
 
+  // The open session as App saves it for a refresh (#527): every number a
+  // restore needs, or null when there is nothing worth restoring. Not at block
+  // end: the 00:00 hold has already banked that session's entry.
+  const snapshotOpenSession = () => {
+    const sessionId = focusSessionIdRef.current;
+    if (!sessionId || sessionCompletePendingRef.current || !focusSessionTaskRef.current) return null;
+    const now = Date.now();
+    const left = isTimerRunning && deadlineRef.current != null
+      ? Math.max(0, Math.ceil((deadlineRef.current - now) / 1000))
+      : timerSecondsLeft;
+    // The block has run out and the bell is about to ring: nothing to resume.
+    if (left <= 0) return null;
+    return {
+      v: 1,
+      savedAt: now,
+      focusSessionId: sessionId,
+      focusStartedAt: focusStartedAtRef.current,
+      initialPlannedSeconds: focusInitialPlannedSecondsRef.current,
+      accumulatedElapsed: focusSessionAccumulatedElapsedRef.current,
+      accumulatedPlanned: focusSessionAccumulatedPlannedRef.current,
+      blocks: focusBlocksRef.current,
+      extensions: focusExtensionsRef.current,
+      startDay: focusStartDayRef.current,
+      dayEndsAt: focusDayEndsAtRef.current,
+      ledgerEntry: focusLedgerEntryRef.current,
+      pausedAt: focusPausedAtRef.current,
+      timerMaxSeconds,
+      timerSecondsLeft: left,
+      // A block set up paused at block end counts once it runs.
+      staged: stagedBlockRef.current,
+      // Only what the ledger event and the screens need, not the whole task.
+      task: slimTask(focusSessionTaskRef.current),
+    };
+  };
+
+  // Puts a saved session back, paused, with the time worked as it was saved.
+  // Its pause counts from the last save (or the pause it was already in), so
+  // the 15-minute and end-of-day rules close it, crediting only what was
+  // saved, if the page was away long enough (59j).
+  const restoreOpenSession = (snap) => {
+    if (focusSessionIdRef.current || !snap?.focusSessionId) return false;
+    focusSessionIdRef.current = snap.focusSessionId;
+    focusStartedAtRef.current = snap.focusStartedAt;
+    focusInitialPlannedSecondsRef.current = snap.initialPlannedSeconds;
+    focusSessionTaskRef.current = snap.task;
+    focusSessionAccumulatedElapsedRef.current = snap.accumulatedElapsed;
+    focusSessionAccumulatedPlannedRef.current = snap.accumulatedPlanned;
+    focusLedgerEntryRef.current = snap.ledgerEntry || null;
+    focusBlocksRef.current = snap.blocks;
+    stagedBlockRef.current = !!snap.staged;
+    focusExtensionsRef.current = snap.extensions;
+    focusPausedAtRef.current = snap.pausedAt ?? snap.savedAt;
+    focusStartDayRef.current = snap.startDay ?? null;
+    focusDayEndsAtRef.current = snap.dayEndsAt ?? null;
+    // The same task is already the pin: the sync effect must leave this
+    // session's block alone.
+    prevActiveTaskRef.current = { uuid: snap.task?.uuid ?? null };
+    setFocusSessionId(snap.focusSessionId);
+    setTimerMaxSeconds(snap.timerMaxSeconds);
+    setTimerSecondsLeft(snap.timerSecondsLeft);
+    setIsTimerRunning(false);
+    setFocusSessionActive(true);
+    setExpiryCheck((n) => n + 1);
+    return true;
+  };
+
   // Consumes the active session (if any) and returns everything needed to
   // build its terminal (focus_completed/focus_abandoned) event, or null if
   // there's nothing to end — either no session was ever started, or an
@@ -942,6 +1016,7 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
   const endFocusSession = (focusEndReason) => {
     const result = readOpenSession(focusEndReason);
     if (!result) return null;
+    clearOpenSession();
     focusSessionIdRef.current = null;
     focusStartedAtRef.current = null;
     focusInitialPlannedSecondsRef.current = null;
@@ -983,6 +1058,7 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
     // elapsed time would be reset to a full block (Codex review of #436).
     keepTimerOnTaskChange: (on = true) => { skipNextDurationSyncRef.current = on; },
     focusSessionId, startFocusSession, endFocusSession,
+    snapshotOpenSession, restoreOpenSession,
     // When the open session began — screen 3 prints it as "STARTED 09:41".
     // Read from the ref each render rather than held in state: it is set once
     // per session and never changes within one, so it needs no re-render of
