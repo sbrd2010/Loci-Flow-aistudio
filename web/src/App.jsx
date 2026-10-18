@@ -40,7 +40,7 @@ import { useLociDayStr } from "./hooks/useTodayStr";
 import HorizonReview from "./components/HorizonReview";
 import UndoToast, { UndoAnnouncer } from "./components/ui/UndoToast";
 import FocusWelcomeBack from "./components/FocusWelcomeBack";
-import { OPEN_SESSION_SAVE_MS, saveOpenSession, clearOpenSession, loadOpenSession, savedSessionAsEnded, thisTabId, ownedByOtherLiveTab, holdSessionLock, dropSessionLock, otherTabHoldsSession } from "./utils/openFocusSession";
+import { OPEN_SESSION_SAVE_MS, saveOpenSession, clearOpenSession, loadOpenSession, savedSessionAsEnded, thisTabId, ownedByOtherLiveTab, holdSessionLock, dropSessionLock, claimSessionLock } from "./utils/openFocusSession";
 import { letGoThought, thoughtText } from "./utils/thoughts";
 import { applyReview, detectReviews, pendingReviews, undoReviewOrSort } from "./utils/horizonReview";
 import { endLeftReviewMarks } from "./utils/normalizePayload";
@@ -1029,8 +1029,10 @@ export default function App() {
     (async () => {
       // Another tab running it (its lock, or, where the browser has no locks,
       // a copy it saved a moment ago) keeps it: restoring here would run it twice.
-      const elsewhere = await otherTabHoldsSession();
-      if (elsewhere === true || (elsewhere === null && ownedByOtherLiveTab(snap))) return;
+      // Taking the lock is the same step as asking for it, so two tabs
+      // reopening together cannot both restore.
+      const claimed = await claimSessionLock();
+      if (claimed === false || (claimed === null && ownedByOtherLiveTab(snap))) return;
       // A session already started in this tab took over: its own copy is what
       // is saved now, and it must not be closed from here.
       if (focusTimerRef.current.focusSessionId) return;
@@ -1038,6 +1040,7 @@ export default function App() {
       if (stillPinned && focusTimerRef.current.restoreOpenSession(snap)) { setWelcomeBack(true); return; }
       // Its task was finished, deleted or moved off the pin meanwhile (on another
       // device, say): the session is over, with what was worked.
+      dropSessionLock();
       clearOpenSession();
       const ended = savedSessionAsEnded(snap, "user_abandoned");
       const event = buildFocusTerminalEvent("focus_abandoned", ended.task, ended.focusSessionId, {

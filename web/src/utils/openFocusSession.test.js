@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { OPEN_SESSION_KEY, OPEN_SESSION_SAVE_MS, clearOpenSession, dropSessionLock, holdSessionLock, loadOpenSession, otherTabHoldsSession, ownedByOtherLiveTab, saveOpenSession, savedSessionAsEnded, thisTabId } from "./openFocusSession";
+import { OPEN_SESSION_KEY, OPEN_SESSION_SAVE_MS, clearOpenSession, dropSessionLock, holdSessionLock, claimSessionLock, loadOpenSession, ownedByOtherLiveTab, saveOpenSession, savedSessionAsEnded, thisTabId } from "./openFocusSession";
 import { focusExpiryReason, PAUSE_EXPIRY_MS } from "./focusSession";
 
 const store = {};
@@ -111,21 +111,33 @@ describe("the lock a tab holds while it has the session", () => {
     else delete globalThis.navigator;
   });
 
-  it("says another tab has it while a lock is held, and nobody once it is dropped", async () => {
+  it("takes the lock in the same step as asking, keeps one for the tab, and gives it up when dropped", async () => {
     const locks = fakeLocks();
     Object.defineProperty(globalThis, "navigator", { value: { locks }, configurable: true });
-    expect(await otherTabHoldsSession()).toBe(false);
-    holdSessionLock();
-    await Promise.resolve();
-    expect(await otherTabHoldsSession()).toBe(true);
+    const asks = await Promise.all([claimSessionLock(), claimSessionLock()]); // this tab twice
+    expect(asks).toEqual([true, true]);
+    expect(locks.held.size).toBe(1);
     dropSessionLock();
     await new Promise((r) => setTimeout(r, 0));
-    expect(await otherTabHoldsSession()).toBe(false);
+    expect(locks.held.size).toBe(0);
+    expect(await claimSessionLock()).toBe(true);
+  });
+
+  it("another tab's lock keeps a new claim out, and a session's hold is the same lock", async () => {
+    const locks = fakeLocks();
+    Object.defineProperty(globalThis, "navigator", { value: { locks }, configurable: true });
+    locks.held.add("loci-open-focus-session"); // another tab
+    expect(await claimSessionLock()).toBe(false);
+    locks.held.clear();
+    holdSessionLock();
+    await Promise.resolve();
+    expect(locks.held.size).toBe(1);
+    expect(await claimSessionLock()).toBe(true); // already this tab's
   });
 
   it("can't say in a browser without locks, so the saved-a-moment-ago guess applies", async () => {
     Object.defineProperty(globalThis, "navigator", { value: {}, configurable: true });
-    expect(await otherTabHoldsSession()).toBeNull();
+    expect(await claimSessionLock()).toBeNull();
     holdSessionLock(); // nothing to hold, and no error
     dropSessionLock();
   });
