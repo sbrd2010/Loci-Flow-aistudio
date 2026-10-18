@@ -403,7 +403,7 @@ export default function App() {
     saveConfigPatch: rtdbSaveConfigPatch,
     writeActivityEvents: rtdbWriteActivityEvents, writeActivityEventIfNewer: rtdbWriteActivityEventIfNewer,
     captureTodaySnapshotIfNeeded: rtdbCaptureTodaySnapshot,
-    flushNow: rtdbFlushNow, clearCache: rtdbClearCache,
+    flushNow: rtdbFlushNow, clearCache: rtdbClearCache, retrySync: rtdbRetrySync,
   } = useSync(demoMode ? null : (user?.uid || null), demoMode ? null : (user?.email || null));
 
   const payload = demoMode ? demoPayload : rtdbPayload;
@@ -1469,7 +1469,7 @@ export default function App() {
         <div
           role="alert"
           className="bottom-toast"
-          onClick={() => window.location.reload()}
+          onClick={() => (syncWarning === "write-failed" && rtdbRetrySync ? rtdbRetrySync() : window.location.reload())}
           style={{
             position: "fixed", bottom: "calc(72px + env(safe-area-inset-bottom, 0px))",
             background: "var(--bg-card)", border: "1px solid #f59e0b",
@@ -1481,7 +1481,7 @@ export default function App() {
           }}
         >
           {syncWarning === "write-failed"
-            ? "⚠️ Changes saved locally — cloud sync failed. Tap to retry."
+            ? "⚠️ Changes saved on this device. Syncing again when you're back online. Tap to retry now."
             : "⚠️ A suspicious task-count drop was blocked. Your data was not overwritten."}
         </div>
       )}

@@ -51,6 +51,14 @@ export async function writeWithRetry(dbRef, data, base, { retries = 3 } = {}) {
   }
 }
 
+// A save that failed because the connection dropped, not because the server
+// refused it: the SDK cancels a transaction in flight with Error("disconnect")
+// (#524). Such a failure is worth sending again once the connection is back.
+export function isConnectionDrop(err) {
+  const text = `${err?.code || ""} ${err?.message || ""}`;
+  return /disconnect|network|unavailable|offline/i.test(text);
+}
+
 // Best-effort, write-once "instrumentation started" marker — the first
 // timestamp at which any ledger event/snapshot was ever successfully
 // written for this user. Future UI/analytics reading the ledger must check
@@ -242,6 +250,10 @@ export function useSync(uid, email) {
   const payloadUidRef = useRef(null);
   // Track if RTDB is physically connected (via .info/connected)
   const rtdbConnectedRef = useRef(false);
+  // A save failed because the connection dropped: send the latest payload again
+  // when the connection comes back (#524). resaveRef holds the function that does.
+  const resaveOnReconnectRef = useRef(false);
+  const resaveRef = useRef(null);
   // Mutable ref so the timeout callback can see the latest phase without stale closure
   const dataTimeoutRef = useRef(null);
   // Sync safety: detect premature savePayload calls during the isSyncingFromCache window.
@@ -454,6 +466,11 @@ export function useSync(uid, email) {
       if (snap.val() === true) {
         rtdbConnectedRef.current = true;
         setConnPhase(CONN.CONNECTED);
+        if (resaveOnReconnectRef.current) {
+          resaveOnReconnectRef.current = false;
+          // A moment for the connection to settle, so the save is not cancelled again.
+          setTimeout(() => resaveRef.current?.(), 1500);
+        }
         if (connTimeoutId) clearTimeout(connTimeoutId);
         // If we're now connected but still waiting for data (no cache), allow 10 more seconds
         if (!hasCachedData && !payloadRef.current) {
@@ -836,6 +853,7 @@ export function useSync(uid, email) {
           .catch((err) => {
             console.error("Remote RTDB payload sync failed after retries:", err);
             setSyncWarning("write-failed");
+            if (isConnectionDrop(err)) resaveOnReconnectRef.current = true;
             waiters.forEach(w => w.reject(err));
           })
           .finally(() => {
@@ -1050,6 +1068,26 @@ export function useSync(uid, email) {
     attempt(3);
   };
 
+  // Sends the latest payload again after a save failed because the connection
+  // dropped (on reconnect, or when the person taps the warning). Nothing to do
+  // when a save is already queued or in flight: it carries the latest payload.
+  // A success clears the warning; another failure waits for the next reconnect.
+  const resave = () => {
+    if (!dbRefPath || !payloadRef.current || timeoutRef.current) return;
+    const ctx = beginWrite(payloadRef.current);
+    writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseRef.current)
+      .then((committed) => {
+        console.log("Remote RTDB payload sync successful (after reconnect)");
+        absorbCommitted(committed, ctx);
+        setSyncWarning((w) => (w === "write-failed" ? null : w));
+      })
+      .catch((err) => {
+        console.error("Remote RTDB payload re-sync failed:", err);
+        if (isConnectionDrop(err)) resaveOnReconnectRef.current = true;
+      });
+  };
+  resaveRef.current = resave;
+
   // Write any pending debounced payload immediately (call before navigating away).
   // Also settles any savePayloadAsync() callers queued behind the timer this
   // preempts — otherwise their promise (and whatever .then() was waiting to
@@ -1087,6 +1125,7 @@ export function useSync(uid, email) {
     saveSubPath, saveSubPathAsync,
     saveSubPaths, saveSubPathsAsync,
     saveConfigPatch,
+    retrySync: resave,
     writeActivityEvents: (pathsToValues, retries) => writeActivityEvents(uid, pathsToValues, retries),
     writeActivityEventIfNewer: (event) => writeActivityEventIfNewer(uid, event),
     captureTodaySnapshotIfNeeded: (tasks, windows) => captureTodaySnapshotIfNeeded(uid, tasks, windows),

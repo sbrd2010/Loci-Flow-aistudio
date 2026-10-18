@@ -21,7 +21,7 @@ vi.mock("./firebase", () => ({
   auth: { currentUser: null },
 }));
 
-import { gatePayloadToUid, writeActivityEvents, writeActivityEventIfNewer, captureTodaySnapshotIfNeeded, writeWithRetry, readCache, writeCache } from "./useSync";
+import { gatePayloadToUid, writeActivityEvents, writeActivityEventIfNewer, captureTodaySnapshotIfNeeded, writeWithRetry, isConnectionDrop, readCache, writeCache } from "./useSync";
 
 // Tests for the uid-isolation gate that prevents a previous user's payload from
 // being visible to App-level effects during the render cycle that follows a uid change.
@@ -487,5 +487,24 @@ describe("writeActivityEventIfNewer", () => {
     const result = await writeActivityEventIfNewer("uid1", ev(1500));
     expect(result.ok).toBe(false);
     expect(result.reason).toBe("write-failed");
+  });
+});
+
+// #524: a save that fails because the connection dropped is sent again when it
+// comes back; one the server refused is not.
+describe("isConnectionDrop", () => {
+  it("is true for the SDK's cancelled-transaction and network errors", () => {
+    expect(isConnectionDrop(new Error("disconnect"))).toBe(true);
+    expect(isConnectionDrop(new Error("Firebase: network error (database/unavailable)"))).toBe(true);
+    expect(isConnectionDrop({ code: "unavailable" })).toBe(true);
+    expect(isConnectionDrop(new Error("client is offline"))).toBe(true);
+  });
+
+  it("is false for a refusal, an abort or nothing", () => {
+    expect(isConnectionDrop(new Error("PERMISSION_DENIED: Permission denied"))).toBe(false);
+    expect(isConnectionDrop(new Error("set"))).toBe(false);
+    expect(isConnectionDrop(new Error("transaction not committed"))).toBe(false);
+    expect(isConnectionDrop(null)).toBe(false);
+    expect(isConnectionDrop(undefined)).toBe(false);
   });
 });
