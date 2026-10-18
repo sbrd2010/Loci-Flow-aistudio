@@ -300,6 +300,67 @@ describe("useFocusTimer", () => {
     expect(result.current.focusElapsedSeconds).toBe(10 * 60);
   });
 
+  // #527: a refresh. The saved copy of the session comes back paused, with the
+  // time worked as saved.
+  it("saves the open session and restores it paused, with the time worked", () => {
+    const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
+    const first = renderHook(useFocusTimer, [[task], {}, "u1"]);
+    first.result.current.startFocusSession(task, { enterFocusMode: false });
+    first.rerender([[task], {}, "u1"]);
+    first.result.current.setIsTimerRunning(false);
+    first.result.current.setTimerSecondsLeft(20 * 60); // 5 of 25 minutes worked
+    first.rerender([[task], {}, "u1"]);
+    const snap = first.result.current.snapshotOpenSession();
+    expect(snap).toMatchObject({ v: 1, timerMaxSeconds: 25 * 60, timerSecondsLeft: 20 * 60, blocks: 1, task: { uuid: "a" } });
+
+    // A new page: nothing in memory.
+    states = []; stateSetters = []; refs = []; effects = []; cleanupFuncs = []; lastDeps = [];
+    const again = renderHook(useFocusTimer, [[task], {}, "u1"]);
+    expect(again.result.current.focusSessionId).toBeNull();
+    expect(again.result.current.restoreOpenSession(snap)).toBe(true);
+    again.rerender([[task], {}, "u1"]);
+    expect(again.result.current.focusSessionId).toBe(snap.focusSessionId);
+    expect(again.result.current.isTimerRunning).toBe(false);
+    expect(again.result.current.timerSecondsLeft).toBe(20 * 60);
+    expect(again.result.current.timerMaxSeconds).toBe(25 * 60);
+    expect(again.result.current.focusElapsedSeconds).toBe(5 * 60);
+    const ended = again.result.current.endFocusSession("user_abandoned");
+    expect(ended.focusSessionId).toBe(snap.focusSessionId);
+    expect(ended.focusElapsedSeconds).toBe(5 * 60);
+    expect(ended.task.uuid).toBe("a");
+  });
+
+  it("a restored session whose pause ran out reads as expired, with only the saved time", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000_000);
+    const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
+    const snap = {
+      v: 1, savedAt: 10_000_000 - 40 * 60_000, focusSessionId: "s1", focusStartedAt: 10_000_000 - 60 * 60_000,
+      initialPlannedSeconds: 1500, accumulatedElapsed: 0, accumulatedPlanned: 0, blocks: 1, extensions: 0,
+      startDay: "2024-06-15", dayEndsAt: 10_000_000 + 3_600_000, ledgerEntry: null, pausedAt: null,
+      timerMaxSeconds: 1500, timerSecondsLeft: 1200, task,
+    };
+    const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+    result.current.restoreOpenSession(snap);
+    rerender([[task], {}, "u1"]);
+    const open = result.current.peekFocusSession(null);
+    expect(open.focusEndReason).toBe("paused_too_long");
+    expect(open.focusElapsedSeconds).toBe(5 * 60); // not the 40 minutes the page was away
+    vi.useRealTimers();
+  });
+
+  it("saves nothing at block end, where the 00:00 hold has banked the session", () => {
+    const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
+    const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
+    result.current.startFocusSession(task, { enterFocusMode: false });
+    rerender([[task], {}, "u1"]);
+    expect(result.current.snapshotOpenSession()).not.toBeNull();
+    result.current.setTimerSecondsLeft(0);
+    rerender([[task], {}, "u1"]);
+    expect(result.current.sessionCompletePending).toBe(true);
+    expect(result.current.snapshotOpenSession()).toBeNull();
+  });
+
   it("adds time to both the countdown and its max without resetting elapsed progress", () => {
     const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false, timeEstimateMinutes: 25 };
     const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);

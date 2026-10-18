@@ -39,6 +39,8 @@ import { useFocusTimer } from "./hooks/useFocusTimer";
 import { useLociDayStr } from "./hooks/useTodayStr";
 import HorizonReview from "./components/HorizonReview";
 import UndoToast, { UndoAnnouncer } from "./components/ui/UndoToast";
+import FocusWelcomeBack from "./components/FocusWelcomeBack";
+import { OPEN_SESSION_SAVE_MS, saveOpenSession, clearOpenSession, loadOpenSession, savedSessionAsEnded, thisTabId, ownedByOtherLiveTab } from "./utils/openFocusSession";
 import { letGoThought, thoughtText } from "./utils/thoughts";
 import { applyReview, detectReviews, pendingReviews, undoReviewOrSort } from "./utils/horizonReview";
 import { endLeftReviewMarks } from "./utils/normalizePayload";
@@ -982,6 +984,52 @@ export default function App() {
     writeActivityEvents(eventPatch(activityUid, event));
   }, [lociDayTick, commitmentDayStr, focusTimer.isTimerRunning, focusTimer.expiryCheck]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // A refresh must not lose the session (#527): while one is open, a copy of
+  // it is saved in this browser every few seconds and as the page goes away.
+  // On the next load it comes back paused and asks (Welcome back); if its
+  // task is gone, or the 15-minute / end-of-day rules say it is over, it is
+  // closed with the time saved, never the time the page was away.
+  useEffect(() => {
+    if (!activityUid) return undefined;
+    const save = () => {
+      const t = focusTimerRef.current;
+      const snap = t.snapshotOpenSession();
+      if (snap) saveOpenSession({ ...snap, uid: activityUid, tabId: thisTabId() });
+      else if (t.focusSessionId) clearOpenSession(); // block end: its entry is banked
+    };
+    const hidden = () => { if (document.visibilityState === "hidden") save(); };
+    const id = setInterval(save, OPEN_SESSION_SAVE_MS);
+    window.addEventListener("pagehide", save);
+    document.addEventListener("visibilitychange", hidden);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("pagehide", save);
+      document.removeEventListener("visibilitychange", hidden);
+    };
+  }, [activityUid]);
+
+  const [welcomeBack, setWelcomeBack] = useState(false);
+  // The restored session closed on its own (its pause had run out): nothing to welcome.
+  useEffect(() => { if (!focusTimer.focusSessionId) setWelcomeBack(false); }, [focusTimer.focusSessionId]);
+  const restoredForRef = useRef(null);
+  useEffect(() => {
+    if (!activityUid || !payload?.config || isSyncingFromCache || syncWarning === "offline") return;
+    if (restoredForRef.current === activityUid) return;
+    restoredForRef.current = activityUid;
+    const snap = loadOpenSession(activityUid);
+    if (!snap || ownedByOtherLiveTab(snap)) return;
+    const stillPinned = (payload.tasks || []).some(t => t.uuid === snap.task.uuid && t.isNowFocus && !t.isDeleted && !t.isCompleted);
+    if (stillPinned && focusTimerRef.current.restoreOpenSession(snap)) { setWelcomeBack(true); return; }
+    // Its task was finished, deleted or moved off the pin meanwhile (on another
+    // device, say): the session is over, with what was worked.
+    clearOpenSession();
+    const ended = savedSessionAsEnded(snap, "user_abandoned");
+    const event = buildFocusTerminalEvent("focus_abandoned", ended.task, ended.focusSessionId, {
+      ...ended, windows: getFocusWindows(payload.config || {}),
+    });
+    writeActivityEvents(eventPatch(activityUid, event));
+  }, [activityUid, payload?.config, isSyncingFromCache, syncWarning]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const deadlineMoveState = deriveCommitmentDeadlineMove(payload?.config || {}, payload?.tasks || [], commitmentDayStr);
   useEffect(() => {
     if (!payload?.config || syncUnconfirmed || deadlineMoveState === undefined) return;
@@ -1690,6 +1738,15 @@ export default function App() {
             setThoughtSaved(null);
           }}
           onClose={() => setThoughtSaved(null)}
+        />
+      )}
+      {welcomeBack && focusTimer.focusSessionId && !focusTimer.isTimerRunning && (
+        <FocusWelcomeBack
+          title={focusTimer.activeTask?.title || "your task"}
+          minutes={Math.floor(focusTimer.focusElapsedSeconds / 60)}
+          onContinue={() => { setWelcomeBack(false); focusTimer.setIsFocusMode(true); focusTimer.setIsTimerRunning(true); }}
+          onEnd={() => { setWelcomeBack(false); handleEndFocusSession(); }}
+          onClose={() => setWelcomeBack(false)}
         />
       )}
       {showAddTask && (
