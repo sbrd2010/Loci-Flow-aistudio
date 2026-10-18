@@ -2,6 +2,23 @@ import { describe, expect, it } from "vitest";
 import { focusWindowRows, focusWindowsLine, focusWindowsSummary, reconcileFocusWindowRows, sortFocusWindowRows } from "./settingsSummary";
 
 describe("focusWindowsSummary", () => {
+  it("orders the rows as the Day map reads them: an early riser's 04:30 first, a window after midnight last", () => {
+    const early = sortFocusWindowRows([{ start: "09:00", end: "17:00" }, { start: "04:30", end: "06:00" }]);
+    expect(early.map(w => w.start)).toEqual(["04:30", "09:00"]);
+    const late = sortFocusWindowRows([{ start: "00:15", end: "02:15" }, { start: "22:00", end: "23:55" }, { start: "08:40", end: "09:15" }]);
+    expect(late.map(w => w.start)).toEqual(["08:40", "22:00", "00:15"]);
+  });
+
+  // #528: a window after midnight is the tail of the day.
+  it("counts a window after midnight once, and the day ends at its end", () => {
+    const config = { focusWindows: [
+      { start: "08:40", end: "09:15" }, { start: "22:00", end: "23:55" }, { start: "00:15", end: "02:15" },
+    ] };
+    // 35 + 115 + 120 minutes, with the 20-minute break between 23:55 and 00:15 left out.
+    expect(focusWindowsSummary(config)).toEqual({ count: 3, totalMinutes: 270, dayEnds: "02:15", isFallback: false });
+    expect(focusWindowsLine(config)).toBe("3 windows · 4h30m · day ends 02:15");
+  });
+
   it("counts windows, covered time and the end of the last one (44d)", () => {
     const config = { focusWindows: [
       { start: "10:00", end: "11:15" }, { start: "11:30", end: "12:30" },
