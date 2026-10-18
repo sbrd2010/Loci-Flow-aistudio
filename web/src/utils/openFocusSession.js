@@ -25,6 +25,32 @@ export function ownedByOtherLiveTab(snap, now = Date.now()) {
   return !!snap.tabId && snap.tabId !== thisTabId() && now - snap.savedAt < OPEN_SESSION_SAVE_MS * 3;
 }
 
+// Whether another tab holds the open session, by a Web Lock its owner keeps
+// for as long as it has one (loopcheck of #530): a lock goes when its tab does,
+// frozen, throttled or killed, which a "saved a moment ago" guess cannot tell.
+// true: another tab has it; false: nobody; null: this browser can't say.
+const LOCK_NAME = "loci-open-focus-session";
+let releaseLock = null;
+const locks = () => (typeof navigator !== "undefined" && navigator.locks?.request ? navigator.locks : null);
+
+export function holdSessionLock() {
+  const l = locks();
+  if (!l || releaseLock) return;
+  const held = new Promise((resolve) => { releaseLock = resolve; });
+  l.request(LOCK_NAME, () => held).catch(() => { releaseLock = null; });
+}
+
+export function dropSessionLock() {
+  if (releaseLock) releaseLock();
+  releaseLock = null;
+}
+
+export async function otherTabHoldsSession() {
+  const l = locks();
+  if (!l) return null;
+  try { return await l.request(LOCK_NAME, { ifAvailable: true }, (lock) => lock === null); } catch { return null; }
+}
+
 const num = (v) => typeof v === "number" && Number.isFinite(v);
 
 export function saveOpenSession(snapshot) {

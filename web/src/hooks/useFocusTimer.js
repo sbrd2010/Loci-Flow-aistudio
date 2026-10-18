@@ -7,6 +7,13 @@ import { safeUUID } from "../utils/uuid";
 import { clockParts, ringGeometry } from "../utils/focusClock";
 import { clearOpenSession } from "../utils/openFocusSession";
 
+// The part of a task a saved session keeps (#527): its id and title, and the
+// fields the terminal ledger event reads (taskSnapshotFrom in activityLog.js).
+const slimTask = (t) => ({
+  uuid: t.uuid, id: t.id, title: t.title, category: t.category, priority: t.priority,
+  horizonLevel: t.horizonLevel, frontId: t.frontId,
+});
+
 // Block end (59i): the break it offers, how long it waits for an answer
 // before it pauses, and the next block's bounds (Q38.1c).
 const BREAK_SECONDS = 5 * 60;
@@ -961,7 +968,10 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
       pausedAt: focusPausedAtRef.current,
       timerMaxSeconds,
       timerSecondsLeft: left,
-      task: focusSessionTaskRef.current,
+      // A block set up paused at block end counts once it runs.
+      staged: stagedBlockRef.current,
+      // Only what the ledger event and the screens need, not the whole task.
+      task: slimTask(focusSessionTaskRef.current),
     };
   };
 
@@ -979,7 +989,7 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
     focusSessionAccumulatedPlannedRef.current = snap.accumulatedPlanned;
     focusLedgerEntryRef.current = snap.ledgerEntry || null;
     focusBlocksRef.current = snap.blocks;
-    stagedBlockRef.current = false;
+    stagedBlockRef.current = !!snap.staged;
     focusExtensionsRef.current = snap.extensions;
     focusPausedAtRef.current = snap.pausedAt ?? snap.savedAt;
     focusStartDayRef.current = snap.startDay ?? null;

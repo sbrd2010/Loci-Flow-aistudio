@@ -1,5 +1,5 @@
-import { describe, expect, it, beforeEach } from "vitest";
-import { OPEN_SESSION_KEY, OPEN_SESSION_SAVE_MS, clearOpenSession, loadOpenSession, ownedByOtherLiveTab, saveOpenSession, savedSessionAsEnded, thisTabId } from "./openFocusSession";
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { OPEN_SESSION_KEY, OPEN_SESSION_SAVE_MS, clearOpenSession, dropSessionLock, holdSessionLock, loadOpenSession, otherTabHoldsSession, ownedByOtherLiveTab, saveOpenSession, savedSessionAsEnded, thisTabId } from "./openFocusSession";
 import { focusExpiryReason, PAUSE_EXPIRY_MS } from "./focusSession";
 
 const store = {};
@@ -82,5 +82,51 @@ describe("another live tab", () => {
     expect(ownedByOtherLiveTab({ tabId: "other", savedAt: 1_000_000 }, 1_005_000)).toBe(true);
     expect(ownedByOtherLiveTab({ tabId: "other", savedAt: 1_000_000 }, 1_000_000 + OPEN_SESSION_SAVE_MS * 3 + 1)).toBe(false);
     expect(ownedByOtherLiveTab({ savedAt: 1_000_000 }, 1_001_000)).toBe(false);
+  });
+});
+
+// A minimal stand-in for navigator.locks: exclusive, one holder per name, and
+// `ifAvailable` answers null when it is taken.
+function fakeLocks() {
+  const held = new Set();
+  return {
+    held,
+    async request(name, opts, cb) {
+      if (typeof opts === "function") { cb = opts; opts = {}; }
+      if (held.has(name)) {
+        if (opts.ifAvailable) return cb(null);
+        throw new Error("queued: not modelled");
+      }
+      held.add(name);
+      try { return await cb({ name }); } finally { held.delete(name); }
+    },
+  };
+}
+
+describe("the lock a tab holds while it has the session", () => {
+  const realNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  afterEach(() => {
+    dropSessionLock();
+    if (realNavigator) Object.defineProperty(globalThis, "navigator", realNavigator);
+    else delete globalThis.navigator;
+  });
+
+  it("says another tab has it while a lock is held, and nobody once it is dropped", async () => {
+    const locks = fakeLocks();
+    Object.defineProperty(globalThis, "navigator", { value: { locks }, configurable: true });
+    expect(await otherTabHoldsSession()).toBe(false);
+    holdSessionLock();
+    await Promise.resolve();
+    expect(await otherTabHoldsSession()).toBe(true);
+    dropSessionLock();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(await otherTabHoldsSession()).toBe(false);
+  });
+
+  it("can't say in a browser without locks, so the saved-a-moment-ago guess applies", async () => {
+    Object.defineProperty(globalThis, "navigator", { value: {}, configurable: true });
+    expect(await otherTabHoldsSession()).toBeNull();
+    holdSessionLock(); // nothing to hold, and no error
+    dropSessionLock();
   });
 });

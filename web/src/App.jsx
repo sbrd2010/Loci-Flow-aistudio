@@ -40,7 +40,7 @@ import { useLociDayStr } from "./hooks/useTodayStr";
 import HorizonReview from "./components/HorizonReview";
 import UndoToast, { UndoAnnouncer } from "./components/ui/UndoToast";
 import FocusWelcomeBack from "./components/FocusWelcomeBack";
-import { OPEN_SESSION_SAVE_MS, saveOpenSession, clearOpenSession, loadOpenSession, savedSessionAsEnded, thisTabId, ownedByOtherLiveTab } from "./utils/openFocusSession";
+import { OPEN_SESSION_SAVE_MS, saveOpenSession, clearOpenSession, loadOpenSession, savedSessionAsEnded, thisTabId, ownedByOtherLiveTab, holdSessionLock, dropSessionLock, otherTabHoldsSession } from "./utils/openFocusSession";
 import { letGoThought, thoughtText } from "./utils/thoughts";
 import { applyReview, detectReviews, pendingReviews, undoReviewOrSort } from "./utils/horizonReview";
 import { endLeftReviewMarks } from "./utils/normalizePayload";
@@ -825,6 +825,9 @@ export default function App() {
     });
     focusTimer.markFocusLedgerEntry(event);
     writeActivityEventIfNewer(event);
+    // The saved copy from before the bell has no entry to amend: a restore from
+    // it would write a second one (loopcheck of #530).
+    clearOpenSession();
   }, [focusTimer.sessionCompletePending]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEndFocusSession = () => {
@@ -996,6 +999,9 @@ export default function App() {
       const snap = t.snapshotOpenSession();
       if (snap) saveOpenSession({ ...snap, uid: activityUid, tabId: thisTabId() });
       else if (t.focusSessionId) clearOpenSession(); // block end: its entry is banked
+      // While a session is open, this tab holds the lock that tells another tab
+      // the session is live here.
+      if (t.focusSessionId) holdSessionLock(); else dropSessionLock();
     };
     const hidden = () => { if (document.visibilityState === "hidden") save(); };
     const id = setInterval(save, OPEN_SESSION_SAVE_MS);
@@ -1005,29 +1011,40 @@ export default function App() {
       clearInterval(id);
       window.removeEventListener("pagehide", save);
       document.removeEventListener("visibilitychange", hidden);
+      dropSessionLock();
     };
   }, [activityUid]);
 
   const [welcomeBack, setWelcomeBack] = useState(false);
   // The restored session closed on its own (its pause had run out): nothing to welcome.
-  useEffect(() => { if (!focusTimer.focusSessionId) setWelcomeBack(false); }, [focusTimer.focusSessionId]);
+  // Nor once it runs again, however it was resumed.
+  useEffect(() => { if (!focusTimer.focusSessionId || focusTimer.isTimerRunning) setWelcomeBack(false); }, [focusTimer.focusSessionId, focusTimer.isTimerRunning]);
   const restoredForRef = useRef(null);
   useEffect(() => {
     if (!activityUid || !payload?.config || isSyncingFromCache || syncWarning === "offline") return;
     if (restoredForRef.current === activityUid) return;
     restoredForRef.current = activityUid;
     const snap = loadOpenSession(activityUid);
-    if (!snap || ownedByOtherLiveTab(snap)) return;
-    const stillPinned = (payload.tasks || []).some(t => t.uuid === snap.task.uuid && t.isNowFocus && !t.isDeleted && !t.isCompleted);
-    if (stillPinned && focusTimerRef.current.restoreOpenSession(snap)) { setWelcomeBack(true); return; }
-    // Its task was finished, deleted or moved off the pin meanwhile (on another
-    // device, say): the session is over, with what was worked.
-    clearOpenSession();
-    const ended = savedSessionAsEnded(snap, "user_abandoned");
-    const event = buildFocusTerminalEvent("focus_abandoned", ended.task, ended.focusSessionId, {
-      ...ended, windows: getFocusWindows(payload.config || {}),
-    });
-    writeActivityEvents(eventPatch(activityUid, event));
+    if (!snap) return;
+    (async () => {
+      // Another tab running it (its lock, or, where the browser has no locks,
+      // a copy it saved a moment ago) keeps it: restoring here would run it twice.
+      const elsewhere = await otherTabHoldsSession();
+      if (elsewhere === true || (elsewhere === null && ownedByOtherLiveTab(snap))) return;
+      // A session already started in this tab took over: its own copy is what
+      // is saved now, and it must not be closed from here.
+      if (focusTimerRef.current.focusSessionId) return;
+      const stillPinned = (payload.tasks || []).some(t => t.uuid === snap.task.uuid && t.isNowFocus && !t.isDeleted && !t.isCompleted);
+      if (stillPinned && focusTimerRef.current.restoreOpenSession(snap)) { setWelcomeBack(true); return; }
+      // Its task was finished, deleted or moved off the pin meanwhile (on another
+      // device, say): the session is over, with what was worked.
+      clearOpenSession();
+      const ended = savedSessionAsEnded(snap, "user_abandoned");
+      const event = buildFocusTerminalEvent("focus_abandoned", ended.task, ended.focusSessionId, {
+        ...ended, windows: getFocusWindows(payload.config || {}),
+      });
+      writeActivityEvents(eventPatch(activityUid, event));
+    })();
   }, [activityUid, payload?.config, isSyncingFromCache, syncWarning]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const deadlineMoveState = deriveCommitmentDeadlineMove(payload?.config || {}, payload?.tasks || [], commitmentDayStr);
@@ -1118,6 +1135,7 @@ export default function App() {
     // keep surfacing the previous account's task titles as notifications.
     flushNow();
     clearCache();
+    clearOpenSession();
     cancelAllNativeScheduling();
     signOut(auth).then(() => { setUser(null); setActiveTab("today"); });
   };
@@ -1361,7 +1379,7 @@ export default function App() {
             </button>
             <button
               className="btn"
-              onClick={() => { flushNow(); clearCache(); cancelAllNativeScheduling(); signOut(auth); }}
+              onClick={() => { flushNow(); clearCache(); clearOpenSession(); cancelAllNativeScheduling(); signOut(auth); }}
               style={{ background: "var(--bg-secondary)", color: "var(--text-secondary)", border: "1.5px solid var(--border)", boxShadow: "none", fontSize: "13px" }}
             >
               Sign Out

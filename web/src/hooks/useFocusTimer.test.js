@@ -349,6 +349,25 @@ describe("useFocusTimer", () => {
     vi.useRealTimers();
   });
 
+  it("restores the hold's entry, a staged block and only the task fields it needs", () => {
+    const task = { uuid: "a", id: 7, title: "Write", notes: "private", isNowFocus: true, isDeleted: false, isCompleted: false, category: "Work", frontId: "f1" };
+    const first = renderHook(useFocusTimer, [[task], {}, "u1"]);
+    first.result.current.startFocusSession(task, { enterFocusMode: false });
+    first.rerender([[task], {}, "u1"]);
+    const snap = first.result.current.snapshotOpenSession();
+    expect(snap.task).toEqual({ uuid: "a", id: 7, title: "Write", category: "Work", frontId: "f1" });
+    expect(snap.task.notes).toBeUndefined();
+
+    states = []; stateSetters = []; refs = []; effects = []; cleanupFuncs = []; lastDeps = [];
+    const again = renderHook(useFocusTimer, [[task], {}, "u1"]);
+    again.result.current.restoreOpenSession({ ...snap, staged: true, ledgerEntry: { eventId: "e1", lociDateString: "2024-06-15" } });
+    again.rerender([[task], {}, "u1"]);
+    expect(again.result.current.focusBlockNumber).toBe(2); // the staged block is counted once it runs
+    const ended = again.result.current.endFocusSession("user_abandoned");
+    expect(ended.eventId).toBe("e1");
+    expect(ended.lociDateString).toBe("2024-06-15");
+  });
+
   it("saves nothing at block end, where the 00:00 hold has banked the session", () => {
     const task = { uuid: "a", isNowFocus: true, isDeleted: false, isCompleted: false };
     const { result, rerender } = renderHook(useFocusTimer, [[task], {}, "u1"]);
