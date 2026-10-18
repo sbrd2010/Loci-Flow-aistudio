@@ -248,10 +248,14 @@ test("From: the window resizing while a time is typed keeps the panel open", asy
   const typed = panel.getByLabel("Route start, typed");
   await typed.focus();
   await typed.fill("11:");
-  await page.setViewportSize({ width: 1280, height: 500 });
+  // The panel follows its button to where the resize put it (Codex review of
+  // #525): it is not left at the place it was opened.
+  await page.setViewportSize({ width: 1100, height: 500 });
   await page.waitForTimeout(200);
   await expect(panel).toBeVisible();
   await expect(typed).toHaveValue("11:");
+  const [button, box] = await Promise.all([page.locator(".dm-from-select").boundingBox(), panel.boundingBox()]);
+  expect(Math.abs(box.y - (button.y + button.height + 6))).toBeLessThanOrEqual(2);
   expect(errors).toEqual([]);
 });
 
