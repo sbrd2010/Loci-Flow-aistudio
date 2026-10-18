@@ -259,6 +259,8 @@ test("laptop: ↓ opens the start chooser, 1–4 pick, the choice is remembered,
   const menu = page.getByRole("menu", { name: "How long" });
   await expect(menu).toBeVisible();
   await expect(menu.getByRole("menuitemradio", { name: /^The whole task · 2h/ })).toBeVisible();
+  // The digit goes to the menu only once focus is inside it.
+  await expect(menu.locator(":focus")).toHaveCount(1);
   await page.keyboard.press("3");
   await expect(menu).toHaveCount(0);
   await expect(page.locator(".wall-primary-figure")).toHaveText("50:00");
@@ -267,6 +269,7 @@ test("laptop: ↓ opens the start chooser, 1–4 pick, the choice is remembered,
   // Remembered: the chooser opens on the pick; the whole task leaves no helper.
   await page.getByRole("button", { name: "How long" }).click();
   await expect(menu.getByRole("menuitemradio", { name: /^50 minutes/ })).toHaveAttribute("aria-checked", "true");
+  await expect(menu.locator(":focus")).toHaveCount(1);
   await page.keyboard.press("4");
   await expect(page.locator(".wall-primary-figure")).toHaveText("2:00:00");
   await expect(page.locator(".wall-start-helper")).toHaveCount(0);
