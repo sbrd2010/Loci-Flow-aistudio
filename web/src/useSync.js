@@ -3,6 +3,7 @@ import { ref, onValue, set, update, runTransaction, get, goOffline, goOnline } f
 import { db } from "./firebase";
 import { safeUUID } from "./utils/uuid";
 import { normalizePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious, configValuesEqual, mergeLocalIntoServer, clampConfigStringsForRules, sanitizeChatHistoryForRules, applyEditsSince } from "./utils/normalizePayload";
+import { createResendPolicy } from "./utils/resendPolicy";
 import { activitySnapshotPath, activityMetaPath, activityEventPath, buildTodaySnapshot } from "./utils/activityLog";
 
 // Connection phase exposed to UI: "connecting" | "connected" | "offline" | "error"
@@ -49,14 +50,6 @@ export async function writeWithRetry(dbRef, data, base, { retries = 3 } = {}) {
       await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt)));
     }
   }
-}
-
-// A save that failed because the connection dropped, not because the server
-// refused it: the SDK cancels a transaction in flight with Error("disconnect")
-// (#524). Such a failure is worth sending again once the connection is back.
-export function isConnectionDrop(err) {
-  const text = `${err?.code || ""} ${err?.message || ""}`;
-  return /disconnect|network|unavailable|offline/i.test(text);
 }
 
 // Best-effort, write-once "instrumentation started" marker — the first
@@ -237,7 +230,7 @@ export function useSync(uid, email) {
   // Non-null when RTDB is unreachable with cached data ("offline") or a write failed ("write-failed").
   // Cleared on every successful RTDB delivery.
   const [syncWarning, setSyncWarning] = useState(null);
-  const markWriteFailed = () => { writeFailSeqRef.current += 1; setSyncWarning("write-failed"); };
+  const markWriteFailed = () => { resendRef.current.noteFailure(); setSyncWarning("write-failed"); };
 
   const dbRefPath = uid ? `sync/${uid}` : null;
 
@@ -252,19 +245,11 @@ export function useSync(uid, email) {
   // Track if RTDB is physically connected (via .info/connected)
   const rtdbConnectedRef = useRef(false);
   // A save failed because the connection dropped: send the latest payload again
-  // when the connection comes back (#524). resaveRef holds the function that does.
-  const resaveOnReconnectRef = useRef(false);
+  // when the connection comes back (#524). resendRef holds the rules for when
+  // (utils/resendPolicy), resaveRef the function that sends.
+  const resendRef = useRef(null);
+  if (!resendRef.current) resendRef.current = createResendPolicy();
   const resaveRef = useRef(null);
-  // Whether the SDK reports a live connection right now. (rtdbConnectedRef above
-  // only records that it has connected once.)
-  const liveConnRef = useRef(false);
-  // Counts every write-failed warning, so a re-send that succeeds clears the
-  // warning only if no newer save failed meanwhile (Codex review of #534).
-  const writeFailSeqRef = useRef(0);
-  const resaveBusyRef = useRef(false);
-  // Re-sends while the connection is already back (the drop ended before the
-  // failure arrived) are bounded, so a save that keeps failing cannot loop.
-  const resaveTriesRef = useRef(0);
   // Mutable ref so the timeout callback can see the latest phase without stale closure
   const dataTimeoutRef = useRef(null);
   // Sync safety: detect premature savePayload calls during the isSyncingFromCache window.
@@ -392,6 +377,7 @@ export function useSync(uid, email) {
   };
 
   useEffect(() => {
+    resendRef.current.reset();
     if (!dbRefPath) {
       payloadRef.current = null;
       pendingRemoteRef.current = null;
@@ -474,15 +460,11 @@ export function useSync(uid, email) {
     // Monitor real connection state from Firebase SDK itself
     const connRef = ref(db, ".info/connected");
     const unsubConn = onValue(connRef, (snap) => {
-      liveConnRef.current = snap.val() === true;
+      const resendIn = resendRef.current.connection(snap.val() === true);
       if (snap.val() === true) {
         rtdbConnectedRef.current = true;
         setConnPhase(CONN.CONNECTED);
-        if (resaveOnReconnectRef.current) {
-          resaveOnReconnectRef.current = false;
-          // A moment for the connection to settle, so the save is not cancelled again.
-          setTimeout(() => resaveRef.current?.(), 1500);
-        }
+        if (resendIn != null) setTimeout(() => resaveRef.current?.(), resendIn);
         if (connTimeoutId) clearTimeout(connTimeoutId);
         // If we're now connected but still waiting for data (no cache), allow 10 more seconds
         if (!hasCachedData && !payloadRef.current) {
@@ -855,7 +837,7 @@ export function useSync(uid, email) {
         writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseRef.current)
           .then((committed) => {
             console.log("Remote RTDB payload sync successful");
-            resaveTriesRef.current = 0;
+            resendRef.current.saved();
             // Absorb what the server now holds (and make it the base) before the
             // echo of this write, buffered below while the timer was pending, is
             // processed — or discarded, if a newer local edit raised the local
@@ -1085,41 +1067,31 @@ export function useSync(uid, email) {
   // when a save is already queued or in flight: it carries the latest payload.
   // A success clears the warning; another failure waits for the next reconnect.
   const resave = () => {
-    if (!dbRefPath || !payloadRef.current || timeoutRef.current || resaveBusyRef.current) return;
-    resaveBusyRef.current = true;
-    const failuresAtStart = writeFailSeqRef.current;
+    const resend = resendRef.current;
+    if (!dbRefPath || !resend.canResend({ hasPayload: !!payloadRef.current, savePending: !!timeoutRef.current })) return;
+    const mark = resend.startResend();
     const ctx = beginWrite(payloadRef.current);
     writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseRef.current)
       .then((committed) => {
         console.log("Remote RTDB payload sync successful (after reconnect)");
-        resaveTriesRef.current = 0;
+        resend.saved();
         absorbCommitted(committed, ctx);
-        // Only if no newer save failed meanwhile: that failure's edit is not saved.
-        if (writeFailSeqRef.current === failuresAtStart) setSyncWarning((w) => (w === "write-failed" ? null : w));
+        if (resend.clearsWarning(mark)) setSyncWarning((w) => (w === "write-failed" ? null : w));
       })
       .catch((err) => {
         console.error("Remote RTDB payload re-sync failed:", err);
-        if (isConnectionDrop(err)) armResave();
+        scheduleResave(resend.resendFailed(err));
       })
-      .finally(() => { resaveBusyRef.current = false; });
+      .finally(() => resend.endResend());
   };
   resaveRef.current = resave;
-  // A save failed because the connection dropped: send it again when it is back.
-  // If it is already back (the drop ended before the failure reached us), a
-  // reconnect event will not come, so send it again shortly instead, a few times
-  // at most.
+  const scheduleResave = (delayMs) => { if (delayMs != null) setTimeout(() => resaveRef.current?.(), delayMs); };
   // Every full-payload write that fails ends here (the debounced save, the flush
   // when the tab is hidden, flushNow, the pushes after a delivery or load): the
   // warning, and the re-send if the connection dropped (Codex review of #534).
   const onFullSaveFailed = (err) => {
-    markWriteFailed();
-    if (isConnectionDrop(err)) armResave();
-  };
-  const armResave = () => {
-    if (!liveConnRef.current) { resaveOnReconnectRef.current = true; return; }
-    if (resaveTriesRef.current >= 3) return;
-    resaveTriesRef.current += 1;
-    setTimeout(() => resaveRef.current?.(), 3000);
+    setSyncWarning("write-failed");
+    scheduleResave(resendRef.current.failed(err));
   };
 
   // Write any pending debounced payload immediately (call before navigating away).
