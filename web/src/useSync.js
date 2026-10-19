@@ -3,6 +3,7 @@ import { ref, onValue, set, update, runTransaction, get, goOffline, goOnline } f
 import { db } from "./firebase";
 import { safeUUID } from "./utils/uuid";
 import { normalizePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious, configValuesEqual, mergeLocalIntoServer, clampConfigStringsForRules, sanitizeChatHistoryForRules, applyEditsSince } from "./utils/normalizePayload";
+import { createResendPolicy } from "./utils/resendPolicy";
 import { activitySnapshotPath, activityMetaPath, activityEventPath, buildTodaySnapshot } from "./utils/activityLog";
 
 // Connection phase exposed to UI: "connecting" | "connected" | "offline" | "error"
@@ -229,6 +230,7 @@ export function useSync(uid, email) {
   // Non-null when RTDB is unreachable with cached data ("offline") or a write failed ("write-failed").
   // Cleared on every successful RTDB delivery.
   const [syncWarning, setSyncWarning] = useState(null);
+  const markWriteFailed = () => { resendRef.current.noteFailure(); setSyncWarning("write-failed"); };
 
   const dbRefPath = uid ? `sync/${uid}` : null;
 
@@ -242,6 +244,12 @@ export function useSync(uid, email) {
   const payloadUidRef = useRef(null);
   // Track if RTDB is physically connected (via .info/connected)
   const rtdbConnectedRef = useRef(false);
+  // A save failed because the connection dropped: send the latest payload again
+  // when the connection comes back (#524). resendRef holds the rules for when
+  // (utils/resendPolicy), resaveRef the function that sends.
+  const resendRef = useRef(null);
+  if (!resendRef.current) resendRef.current = createResendPolicy();
+  const resaveRef = useRef(null);
   // Mutable ref so the timeout callback can see the latest phase without stale closure
   const dataTimeoutRef = useRef(null);
   // Sync safety: detect premature savePayload calls during the isSyncingFromCache window.
@@ -347,7 +355,7 @@ export function useSync(uid, email) {
     const ctx = beginWrite(toApply);
     writeWithRetry(ref(db, dbRefPath), toApply, baseRef.current)
       .then((committed) => absorbCommitted(committed, ctx))
-      .catch(() => {});
+      .catch((err) => onFullSaveFailed(err));
   };
   // Resolvers for savePayloadAsync calls queued behind the current debounce
   // timer — settled together when that (possibly-coalesced) write lands.
@@ -369,6 +377,7 @@ export function useSync(uid, email) {
   };
 
   useEffect(() => {
+    resendRef.current.reset();
     if (!dbRefPath) {
       payloadRef.current = null;
       pendingRemoteRef.current = null;
@@ -451,9 +460,11 @@ export function useSync(uid, email) {
     // Monitor real connection state from Firebase SDK itself
     const connRef = ref(db, ".info/connected");
     const unsubConn = onValue(connRef, (snap) => {
+      const resendIn = resendRef.current.connection(snap.val() === true);
       if (snap.val() === true) {
         rtdbConnectedRef.current = true;
         setConnPhase(CONN.CONNECTED);
+        if (resendIn != null) setTimeout(() => resaveRef.current?.(), resendIn);
         if (connTimeoutId) clearTimeout(connTimeoutId);
         // If we're now connected but still waiting for data (no cache), allow 10 more seconds
         if (!hasCachedData && !payloadRef.current) {
@@ -500,7 +511,7 @@ export function useSync(uid, email) {
               const ctx = beginWrite(payloadRef.current);
               writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseRef.current)
                 .then((committed) => absorbCommitted(committed, ctx))
-                .catch(() => {});
+                .catch((err) => onFullSaveFailed(err));
             } else {
               // savePayload fired before RTDB responded (e.g. a mount-effect on stale
               // cache), giving local a fake-fresh timestamp. Trust RTDB instead of
@@ -695,7 +706,7 @@ export function useSync(uid, email) {
       const ctx = beginWrite(payloadRef.current);
       writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseRef.current)
         .then((committed) => { absorbCommitted(committed, ctx); waiters.forEach(w => w.resolve()); })
-        .catch((err) => waiters.forEach(w => w.reject(err)));
+        .catch((err) => { onFullSaveFailed(err); waiters.forEach(w => w.reject(err)); });
     };
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
@@ -826,6 +837,7 @@ export function useSync(uid, email) {
         writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseRef.current)
           .then((committed) => {
             console.log("Remote RTDB payload sync successful");
+            resendRef.current.saved();
             // Absorb what the server now holds (and make it the base) before the
             // echo of this write, buffered below while the timer was pending, is
             // processed — or discarded, if a newer local edit raised the local
@@ -835,7 +847,7 @@ export function useSync(uid, email) {
           })
           .catch((err) => {
             console.error("Remote RTDB payload sync failed after retries:", err);
-            setSyncWarning("write-failed");
+            onFullSaveFailed(err);
             waiters.forEach(w => w.reject(err));
           })
           .finally(() => {
@@ -927,7 +939,7 @@ export function useSync(uid, email) {
         // warning at all. Matches savePayload/savePayloadAsync's already-
         // shared scheduleFlush failure handling.
         console.error(`Sub-path write failed (${subPath}):`, err);
-        setSyncWarning("write-failed");
+        markWriteFailed();
         throw err;
       });
     return attempt(3);
@@ -971,7 +983,7 @@ export function useSync(uid, email) {
         // own rejection to sequence an analytics write; without this, a real
         // multi-path write failure there set no user-facing warning at all.
         console.error(`Sub-paths write failed (${Object.keys(patch).join(", ")}):`, err);
-        setSyncWarning("write-failed");
+        markWriteFailed();
         throw err;
       });
     return attempt(3);
@@ -1045,9 +1057,41 @@ export function useSync(uid, email) {
       update(ref(db), updates).catch(err => {
         if (n > 0) return new Promise(r => setTimeout(r, 500 * Math.pow(2, 3 - n))).then(() => attempt(n - 1));
         console.error(`Config-patch write failed (${Object.keys(resolvedPatch).join(", ")}):`, err);
-        setSyncWarning("write-failed");
+        markWriteFailed();
       });
     attempt(3);
+  };
+
+  // Sends the latest payload again after a save failed because the connection
+  // dropped (on reconnect, or when the person taps the warning). Nothing to do
+  // when a save is already queued or in flight: it carries the latest payload.
+  // A success clears the warning; another failure waits for the next reconnect.
+  const resave = () => {
+    const resend = resendRef.current;
+    if (!dbRefPath || !resend.canResend({ hasPayload: !!payloadRef.current, savePending: !!timeoutRef.current })) return;
+    const mark = resend.startResend();
+    const ctx = beginWrite(payloadRef.current);
+    writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseRef.current)
+      .then((committed) => {
+        console.log("Remote RTDB payload sync successful (after reconnect)");
+        resend.saved();
+        absorbCommitted(committed, ctx);
+        if (resend.clearsWarning(mark)) setSyncWarning((w) => (w === "write-failed" ? null : w));
+      })
+      .catch((err) => {
+        console.error("Remote RTDB payload re-sync failed:", err);
+        scheduleResave(resend.resendFailed(err));
+      })
+      .finally(() => resend.endResend());
+  };
+  resaveRef.current = resave;
+  const scheduleResave = (delayMs) => { if (delayMs != null) setTimeout(() => resaveRef.current?.(), delayMs); };
+  // Every full-payload write that fails ends here (the debounced save, the flush
+  // when the tab is hidden, flushNow, the pushes after a delivery or load): the
+  // warning, and the re-send if the connection dropped (Codex review of #534).
+  const onFullSaveFailed = (err) => {
+    setSyncWarning("write-failed");
+    scheduleResave(resendRef.current.failed(err));
   };
 
   // Write any pending debounced payload immediately (call before navigating away).
@@ -1063,7 +1107,7 @@ export function useSync(uid, email) {
       const ctx = beginWrite(payloadRef.current);
       writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseRef.current)
         .then((committed) => { absorbCommitted(committed, ctx); waiters.forEach(w => w.resolve()); })
-        .catch((err) => waiters.forEach(w => w.reject(err)));
+        .catch((err) => { onFullSaveFailed(err); waiters.forEach(w => w.reject(err)); });
     }
   };
 
@@ -1087,6 +1131,7 @@ export function useSync(uid, email) {
     saveSubPath, saveSubPathAsync,
     saveSubPaths, saveSubPathsAsync,
     saveConfigPatch,
+    retrySync: resave,
     writeActivityEvents: (pathsToValues, retries) => writeActivityEvents(uid, pathsToValues, retries),
     writeActivityEventIfNewer: (event) => writeActivityEventIfNewer(uid, event),
     captureTodaySnapshotIfNeeded: (tasks, windows) => captureTodaySnapshotIfNeeded(uid, tasks, windows),
