@@ -27,7 +27,8 @@ export function createResendPolicy() {
   // send again shortly, a few times at most.
   const arm = () => {
     if (!live) { waitForReconnect = true; return null; }
-    if (quickResends >= MAX_QUICK_RESENDS) return null;
+    // Out of quick tries: keep the save waiting for the next reconnect.
+    if (quickResends >= MAX_QUICK_RESENDS) { waitForReconnect = true; return null; }
     quickResends += 1;
     return RESEND_RETRY_MS;
   };

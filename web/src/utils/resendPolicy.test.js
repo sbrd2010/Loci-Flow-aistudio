@@ -54,6 +54,15 @@ describe("createResendPolicy: a failed save", () => {
     expect(p.failed(drop())).toBeNull();
   });
 
+  it("after the quick re-sends are used up, the next reconnect sends once more", () => {
+    const p = createResendPolicy();
+    p.connection(true);
+    for (let i = 0; i < MAX_QUICK_RESENDS; i++) p.failed(drop());
+    expect(p.failed(drop())).toBeNull();
+    p.connection(false);
+    expect(p.connection(true)).toBe(RESEND_AFTER_RECONNECT_MS);
+  });
+
   it("a save that goes through resets the count", () => {
     const p = createResendPolicy();
     p.connection(true);
