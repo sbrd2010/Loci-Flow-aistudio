@@ -1,16 +1,29 @@
 import React, { useState, useEffect, useRef } from "react";
+import ThoughtEditor from "./ui/ThoughtEditor";
 import { safeUUID } from "../utils/uuid";
 import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
 import { normalizeAiOrganizeSuggestions, buildClearedBrainDump, buildOrganizedTaskSubSteps, CATEGORY_ICONS } from "../utils/taskOps";
 import { computeRitualSecondsLeft, nextRitualStep } from "../utils/ritualTimer";
 import { getFocusWindows } from "../utils/focusWindows";
 import { buildTaskMutationEvent, eventsPatch } from "../utils/activityLog";
-import { THOUGHTS_MAX, addThought, letGoThought, restoreThought } from "../utils/thoughts";
-import ThoughtsList from "./ThoughtsList";
+import { THOUGHTS_MAX, addThought, letGoThought, restoreThought, thoughtText } from "../utils/thoughts";
+import ThoughtsList, { oldestDays, oldestLabel } from "./ThoughtsList";
+import { IconChevronDown, IconSparkles } from "./ui/icons";
 import { RESCUE_STATES } from "./RescueMode";
 import "../styles/mindBox.css";
 import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
 import "../styles/thoughts.css";
+import { plainThought } from "../utils/thoughtFormat";
+
+// 78 §5: the editor takes focus on a laptop; on a phone the keyboard would
+// cover the page.
+// 78 §6: the toast names the thought, cut at 40 characters.
+const letGoText = (item) => {
+  const t = plainThought(thoughtText(item));
+  return `Let go of “${t.length > 40 ? `${t.slice(0, 40).trimEnd()}…` : t}”`;
+};
+
+const wideScreen = () => typeof window !== "undefined" && !!window.matchMedia?.("(min-width: 840px) and (pointer: fine)").matches;
 
 export default function MindBoxTab({ payload, savePayload, savePayloadAsync, saveConfigPatch, userProfile, initialPanel, onMakeThoughtTask, onOpenRescue, isSyncingFromCache = false, syncWarning = null, uid, writeActivityEvents, focusTimer = {} }) {
   const { config = {} } = payload;
@@ -30,6 +43,13 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
   const ritualIntervalRef = useRef(null);
   const stepEndAtRef = useRef(null);
   const [brainDumpText, setBrainDumpText] = useState("");
+  const editorRef = useRef(null);
+  // 78 §4: Rescue and Anchors take turns. Rescue is open on every visit
+  // (owner's call, 12 Oct; the design had Anchors).
+  const [railOpen, setRailOpen] = useState("rescue");
+  const swapRail = () => setRailOpen(o => (o === "anchors" ? "rescue" : "anchors"));
+  // 78 §6: "Show the oldest first" holds until you leave the page.
+  const [oldestFirst, setOldestFirst] = useState(false);
   const [organizeLoading, setOrganizeLoading] = useState(false);
   const [organizeResults, setOrganizeResults] = useState([]);
   // Tracked separately from organizeResults — updateOrganizeResult/moveOrganizeResult
@@ -124,7 +144,7 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
       : "";
     // Include each item's stable ID so AI can return sourceId for safe brain-dump clearing
     const prompt = `Here are raw thoughts from a brain dump:
-${brainDumpItems.map((item, i) => `${i + 1}. [id:${item.id}] ${item.text}`).join("\n")}
+${brainDumpItems.map((item, i) => `${i + 1}. [id:${item.id}] ${plainThought(thoughtText(item))}`).join("\n")}
 
 Turn these into clear, atomic, actionable tasks. For each numbered thought, decide:
 - ONE task — a single small action with nothing else worth keeping
@@ -251,8 +271,7 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
     setOrganizeSelected(new Set());
   };
 
-  const handleBrainDumpSubmit = (e) => {
-    e.preventDefault();
+  const handleBrainDumpSubmit = () => {
     if (!brainDumpText.trim()) return;
     const added = addThought(payload, brainDumpText);
     if (!added) return;
@@ -260,8 +279,47 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
     setBrainDumpText("");
   };
 
-  // Let go (Q56.2): the thought goes at once, with Undo.
+  // Let go (Q56.2; 78 §6): the thought goes at once, with Undo for 6 s.
   const [letGoUndo, setLetGoUndo] = useState(null);
+  const undoLetGo = () => {
+    if (!letGoUndo) return;
+    const back = restoreThought(payload, letGoUndo.item, letGoUndo.at);
+    if (!back) { setLetGoUndo(u => ({ ...u, full: true, key: Date.now() })); return; }
+    savePayload(back);
+    setLetGoUndo(null);
+  };
+  const undoRef = useRef(undoLetGo);
+  undoRef.current = undoLetGo;
+  const hasUndo = !!letGoUndo && !letGoUndo.full;
+  useEffect(() => {
+    // Ctrl/⌘ Z undoes the last Let go while its toast is up, unless you're
+    // typing (the text field keeps its own undo).
+    if (!hasUndo) return undefined;
+    const onKey = (e) => {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== "z") return;
+      const el = e.target;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      e.preventDefault();
+      undoRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [hasUndo]);
+  // T stays the global "write a thought" key; on Mind Box it puts you in the
+  // editor instead of opening Add (78 §6). Capture runs before App's own.
+  useEffect(() => {
+    if (toolPanel) return undefined;
+    const onKey = (e) => {
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.repeat || e.key.toLowerCase() !== "t") return;
+      const el = e.target;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      if (document.querySelector('[role="dialog"]') || !editorRef.current?.element || (payload.brainDump || []).length >= THOUGHTS_MAX) return;
+      e.preventDefault();
+      editorRef.current.focus();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [toolPanel, payload.brainDump]);
   const handleLetGo = (thought) => {
     const gone = letGoThought(payload, thought.id);
     if (!gone) return;
@@ -309,7 +367,7 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
     ? `Done today ${new Date(config.morningRitualDoneAt).toTimeString().slice(0, 5)}`
     : ritualFirst ? "Not done today · 7 min" : "Tomorrow morning · 7 min";
   const ritualRow = (
-    <div className={`mbx-ritual${ritualFirst ? " is-first" : ""}`}>
+    <div className="mbx-ritual">
       <div className="mbx-ritual-text">
         <h3 className="mbx-h-small">Morning ritual</h3>
         <span className="mbx-quiet-line">{ritualStatus}</span>
@@ -318,6 +376,13 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
     </div>
   );
   const anchorList = (config.dailyAnchors || []).filter(a => a && typeof a.text === "string" && a.text.trim());
+  const rescueOpen = railOpen === "rescue";
+  const dumpOldest = oldestLabel(oldestDays(payload.brainDump || []));
+  const aiLink = (label) => (dumpCount > 0 && hasAnyKey ? (
+    <button type="button" className="mbx-ai" onClick={handleOrganizeDump} disabled={organizeLoading}>
+      <IconSparkles size={17} />{organizeLoading ? "Organizing…" : label}
+    </button>
+  ) : null);
 
   // ── Render ─────────────────────────────────────────────────────────────────
   const handleAddAnchor = () => {
@@ -656,87 +721,118 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
         </>
       )}
 
-      {/* ── The page (Q55.1a, frames 65a–f): Rescue, then Empty your head,
-          then the quiet column (Morning ritual, Anchors). One focal point. */}
+      {/* ── 78 §7: the phone's All N thoughts page. */}
+      {toolPanel === "thoughts" && (
+        <div className="mbx mbx-all">
+          <button type="button" className="mbx-back" onClick={() => setToolPanel(null)}>‹ Mind Box</button>
+          <h2 className="mbx-all-title">All {dumpCount} {dumpCount === 1 ? "thought" : "thoughts"}</h2>
+          <div className="mbx-all-sub">
+            <span>{oldestFirst ? "Oldest first" : "Newest first"}{dumpOldest ? ` · ${dumpOldest}` : ""}</span>
+            {aiLink("Organize with AI")}
+          </div>
+          <ThoughtsList all thoughts={payload.brainDump || []} oldestFirst={oldestFirst} onMakeTask={t => onMakeThoughtTask?.(t)} onLetGo={handleLetGo} />
+        </div>
+      )}
+
+      {/* ── The page (78 §3, §7): Brain dump is the one card; the rail holds
+          Rescue, Morning ritual and Anchors, Rescue and Anchors taking turns. */}
       {!toolPanel && (
         <div className="mbx">
-          <div className="mbx-title">
-            <h2 className="mbx-name">Mind Box</h2>
-            <span className="mbx-sub">For your head, not your tasks.</span>
-          </div>
+          {/* Try-out 12 Oct: the tab names the page; Brain dump is its one heading. */}
+          <h2 className="mbx-sr">Mind Box</h2>
           <div className="mbx-grid">
-            <section className="mbx-rescue" aria-labelledby="mbx-rescue-title">
-              <span className="mbx-kicker">RESCUE · 3 MIN</span>
-              <h3 className="mbx-rescue-title" id="mbx-rescue-title">Head not ready to work?</h3>
-              <p className="mbx-rescue-line">Pick what’s closest.</p>
-              <div className="mbx-states">
-                {RESCUE_STATES.map(st => (
-                  <button key={st.id} type="button" className="mbx-state" onClick={() => onOpenRescue?.(st.id)}>
-                    <span className="mbx-state-title">{st.title}</span>
-                    <span className="mbx-state-sub">{st.sub}</span>
-                  </button>
-                ))}
-              </div>
-              <button type="button" className="mbx-link" onClick={() => onOpenRescue?.("unsure")}>Not sure. Just help me settle →</button>
-            </section>
-
             <section className="mbx-dump" aria-labelledby="mbx-dump-title">
               <div className="mbx-dump-head">
-                <h3 className="mbx-h" id="mbx-dump-title">Empty your head</h3>
-                <p className="mbx-dump-line">Get it out now. Sort it later.</p>
+                <h3 className="mbx-h" id="mbx-dump-title">Brain dump</h3>
+                <p className="mbx-dump-line"><span className="mbx-wide-only">A worry, a to-do, a half-baked idea. </span>Anything goes. Get it out now, sort it later.</p>
               </div>
-              <form className="mbx-field" onSubmit={handleBrainDumpSubmit}>
-                <input
-                  className="mbx-input"
-                  aria-label="Thought"
-                  placeholder="What’s on your mind?"
+              <div className="mbx-field">
+                <ThoughtEditor
+                  ref={editorRef}
                   value={brainDumpText}
-                  onChange={e => setBrainDumpText(e.target.value)}
-                  disabled={dumpCount >= THOUGHTS_MAX}
+                  onChange={setBrainDumpText}
+                  onSubmit={handleBrainDumpSubmit}
+                  fullMessage={dumpCount >= THOUGHTS_MAX ? "Mind Box is full at 50. Let a few go or turn them into tasks, then keep writing." : null}
+                  autoFocus={wideScreen()}
                 />
-                <span className="mbx-hint" aria-hidden="true">T · ENTER</span>
-                <button type="submit" className="mbx-sr" disabled={dumpCount >= THOUGHTS_MAX}>Save thought</button>
-              </form>
-              <ThoughtsList thoughts={payload.brainDump || []} onMakeTask={t => onMakeThoughtTask?.(t)} onLetGo={handleLetGo} />
-              {dumpCount > 0 && hasAnyKey && (
-                <button type="button" className="mbx-link" onClick={handleOrganizeDump} disabled={organizeLoading}>
-                  {organizeLoading ? "Organizing…" : "Organize into tasks with AI"}
-                </button>
-              )}
+              </div>
+              <ThoughtsList
+                thoughts={payload.brainDump || []}
+                onMakeTask={t => onMakeThoughtTask?.(t)}
+                onLetGo={handleLetGo}
+                onShowAll={() => setToolPanel("thoughts")}
+                countAction={aiLink("Organize into tasks with AI")}
+                oldestFirst={oldestFirst}
+                onFlipOrder={() => setOldestFirst(o => !o)}
+              />
             </section>
 
-            <aside className="mbx-quiet" aria-label="Morning ritual and anchors">
-              {ritualFirst && ritualRow}
-              <div className="mbx-anchors">
-                <div className="mbx-row-head">
-                  <h3 className="mbx-h-small">Anchors</h3>
-                  <button type="button" className="mbx-link" onClick={() => setToolPanel("anchors")}>Edit</button>
+            <aside className="mbx-rail" aria-label="Rescue, Morning ritual and Anchors">
+              <section className={`mbx-rescue${rescueOpen ? " is-open" : ""}`}>
+                <h3 className="mbx-fold-h">
+                  <button type="button" className="mbx-fold-head mbx-rescue-head" aria-expanded={rescueOpen} aria-controls="mbx-rescue-body" onClick={swapRail}>
+                    <span className="mbx-h-small">Rescue</span>
+                    <span className="mbx-rescue-len">3 min</span>
+                    <span className="mbx-chev"><IconChevronDown size={20} /></span>
+                    <span className="mbx-rescue-title">Can’t get started?</span>
+                  </button>
+                </h3>
+                <div className="mbx-fold" id="mbx-rescue-body" {...(rescueOpen ? {} : { inert: "" })}>
+                  <div className="mbx-fold-inner">
+                    <p className="mbx-rescue-line">Pick what’s closest.</p>
+                    <div className="mbx-states">
+                      {RESCUE_STATES.map(st => (
+                        <button key={st.id} type="button" className="mbx-state" onClick={() => onOpenRescue?.(st.id)}>
+                          <span className="mbx-state-title">{st.title}</span>
+                          <span className="mbx-state-sub">{st.sub}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <button type="button" className="mbx-link" onClick={() => onOpenRescue?.("unsure")}>Not sure. Just help me settle →</button>
+                  </div>
                 </div>
-                {anchorList.length ? (
-                  <ul className="mbx-anchor-list">
-                    {anchorList.map(a => <li key={a.id || a.text} className="mbx-anchor">{a.text}</li>)}
-                  </ul>
-                ) : (
-                  <p className="mbx-quiet-line">Small daily reminders. Add a few.</p>
-                )}
-              </div>
-              {!ritualFirst && ritualRow}
+              </section>
+
+              {ritualRow}
+
+              <section className={`mbx-anchors${rescueOpen ? "" : " is-open"}`}>
+                <div className="mbx-row-head">
+                  <h3 className="mbx-fold-h">
+                    <button type="button" className="mbx-fold-head mbx-anchors-head" aria-expanded={!rescueOpen} aria-controls="mbx-anchors-body" onClick={swapRail}>
+                      <span className="mbx-h-small">Anchors</span>
+                      <span className="mbx-anchor-count">{anchorList.length}</span>
+                      <span className="mbx-chev"><IconChevronDown size={20} /></span>
+                      {rescueOpen && anchorList.length > 0 && (
+                        <span className="mbx-anchor-peek">{anchorList.slice(0, 2).map(a => a.text).join(" · ")}{anchorList.length > 2 ? " …" : ""}</span>
+                      )}
+                    </button>
+                  </h3>
+                  {!rescueOpen && <button type="button" className="mbx-link" onClick={() => setToolPanel("anchors")}>Edit</button>}
+                </div>
+                <div className="mbx-fold" id="mbx-anchors-body" {...(rescueOpen ? { inert: "" } : {})}>
+                  <div className="mbx-fold-inner">
+                    {anchorList.length ? (
+                      <ul className="mbx-anchor-list">
+                        {anchorList.map(a => <li key={a.id || a.text} className="mbx-anchor">{a.text}</li>)}
+                      </ul>
+                    ) : (
+                      <p className="mbx-quiet-line">Small daily reminders. Add a few.</p>
+                    )}
+                  </div>
+                </div>
+              </section>
             </aside>
           </div>
         </div>
       )}
 
-      <UndoAnnouncer message={letGoUndo ? (letGoUndo.full ? "Mind Box is full. Let one go to bring this back" : `Let go: ${letGoUndo.item.text}`) : ""} />
+      <UndoAnnouncer message={letGoUndo ? (letGoUndo.full ? "Mind Box is full. Let one go to bring this back" : letGoText(letGoUndo.item)) : ""} />
       {letGoUndo && (
         <UndoToast
           key={letGoUndo.key}
-          message={letGoUndo.full ? `Mind Box is full. Let one go to bring this back.` : `Let go: ${letGoUndo.item.text}`}
-          onUndo={() => {
-            const back = restoreThought(payload, letGoUndo.item, letGoUndo.at);
-            if (!back) { setLetGoUndo(u => ({ ...u, full: true, key: Date.now() })); return; }
-            savePayload(back);
-            setLetGoUndo(null);
-          }}
+          ms={6000}
+          message={letGoUndo.full ? `Mind Box is full. Let one go to bring this back.` : letGoText(letGoUndo.item)}
+          onUndo={undoLetGo}
           onClose={() => setLetGoUndo(null)}
         />
       )}

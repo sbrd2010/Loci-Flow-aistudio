@@ -154,14 +154,14 @@ export default function GoalRecord({ goal, record, weekdays = false, next = null
                 {next.title}
                 {Number(next.timeEstimateMinutes) > 0 && <span className="gr-next-est"> · {next.timeEstimateMinutes}m</span>}
               </span>
-              {wide && <button type="button" className="gr-make" onClick={() => onMakeOneThing(next)}>Make it the one thing</button>}
+              {wide && <button type="button" className="gr-make" onClick={() => onMakeOneThing(next)}>Do this now</button>}
             </div>
           )}
         </div>
         {!wide && (
           <div className="gr-foot">
             {!record.todayCounts && next && (
-              <button type="button" className="gr-make" onClick={() => onMakeOneThing(next)}>Make it the one thing</button>
+              <button type="button" className="gr-make" onClick={() => onMakeOneThing(next)}>Do this now</button>
             )}
             {onEditGoal && edit}
           </div>

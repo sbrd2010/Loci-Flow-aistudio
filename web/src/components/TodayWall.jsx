@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import LinkifyText from "./LinkifyText";
 import { taskSteps } from "../utils/taskSteps";
-import { formatClock24 } from "../utils/dayMapPlan";
+import { formatClock24, formatSpanCaps } from "../utils/dayMapPlan";
 import { startLengthOptions, chosenStartOption } from "../utils/focusSession";
 import { formatEstimate } from "./TaskDetail";
 import { IconPin, IconPlus, IconChevronDown, IconChevronLeft, IconCheck } from "./ui/icons";
@@ -285,6 +285,7 @@ export default function TodayWall({
   onStepDone,
   remainingCount = 0,
   nextTitle = null,
+  nextMinutes = null,
   onStartFocus,
   onMarkDone,
   onSplit,
@@ -305,6 +306,7 @@ export default function TodayWall({
   onFromWeek,
   onScattered,
   onRescue,
+  onThought,
   // Q58: open Today tasks, the one thing included (the phone's NOW · 1 OF N),
   // and the phone's More sheet.
   nowCount = 0,
@@ -412,7 +414,7 @@ export default function TodayWall({
           </div>
         ) : picks.length > 0 ? (
           <div className="wall-empty wall-pick">
-            <h2 className="wall-empty-title">Pick the one thing</h2>
+            <h2 className="wall-empty-title">Pick what to do now</h2>
             <ul className="wall-pick-list">
               {picks.map(t => (
                 <li key={t.uuid}>
@@ -469,6 +471,8 @@ export default function TodayWall({
       {top}
 
       <div className="wall-hero">
+        {/* 75a, 75c: the mantra, above the kicker. */}
+        <p className="wall-mantra" data-flip="mantra">ONE task at a time.</p>
         <div className="wall-kicker-row" data-flip="kicker">
           <span className="wall-kicker">
             <span className="wall-kicker-wide">{nowUntil != null ? `NOW · UNTIL ${formatClock24(nowUntil)}` : "NOW"}</span>
@@ -489,13 +493,15 @@ export default function TodayWall({
         >
           <LinkifyText text={task.title} />
         </h2>
+        {/* The title's click has no key of its own: this is the way in for
+            Tab, seen only when focused (review of #511, 2.3). */}
+        {onOpenTask && (
+          <button type="button" className="wall-open-task" onClick={onOpenTask}>Open the task</button>
+        )}
         {/* 58.4: a title cut at three lines on the phone says so. */}
         {clamped && onOpenTask && (
           <button type="button" className="wall-full-title" onClick={onOpenTask}>Full title and details</button>
         )}
-        {/* "Details ›" (52a, 57b answer 15): touch has no hover, so the
-            title's sheet gets a visible way in — at the end of the step
-            line, or under the title when there is no step. */}
         {/* The next step is a checkbox (53, 57b answer 13): ticking it moves
             on to the one after. */}
         {nextStep ? (
@@ -510,16 +516,11 @@ export default function TodayWall({
             />
             <p className="wall-first-step-text">
               <span className="wall-first-step-label">Next step<span className="wall-first-step-dash"> — </span></span><LinkifyText text={nextStep.text} />
-              {onOpenTask && <>{" "}<button type="button" className="wall-details" onClick={onOpenTask}>Details ›</button></>}
             </p>
             {/* 72: where it is in the steps, "1 / 4". */}
             <span className="wall-step-count" aria-hidden="true">{nextIndex + 1} / {steps.length}</span>
           </div>
-        ) : onOpenTask && (
-          <p className="wall-details-line" data-flip="step">
-            <button type="button" className="wall-details" onClick={onOpenTask}>Details ›</button>
-          </p>
-        )}
+        ) : null}
 
         {/* 72: Start, Mark done and Split it share one row from 840px. */}
         <div className="wall-buttons">
@@ -563,6 +564,13 @@ export default function TodayWall({
         {quiet && (
           <div className="wall-quiet" data-flip="quiet">
             {onRescue && <button type="button" className="wall-quiet-link is-muted" onClick={onRescue}>I’m stuck</button>}
+            {/* 12 Oct try-out: a thought that turns up mid-task goes to Mind
+                Box from here (T anywhere), without leaving Today. */}
+            {onThought && (
+              <button type="button" className="wall-quiet-link is-muted" onClick={onThought} aria-keyshortcuts="t" title="Brain dump (T)">
+                Brain dump
+              </button>
+            )}
             <span className="wall-quiet-end">
               <button type="button" className="wall-quiet-link" onClick={onMarkDone}>Done</button>
               <button type="button" className="wall-quiet-link" onClick={onMore} aria-haspopup="dialog">More</button>
@@ -585,7 +593,7 @@ export default function TodayWall({
 
         {/* 72c: with the list away, what comes next and where the day ends. */}
         {then && (
-          <p className="wall-then">
+          <p className="wall-then" data-flip-controls="">
             <span className="wall-then-kicker">THEN</span>
             {then.title ? <> {formatClock24(then.at)} · {then.title} · </> : " "}
             DAY ENDS {formatClock24(then.dayEnd)}
@@ -621,7 +629,11 @@ export default function TodayWall({
             {/* 58.1 (67a): the phone's Next strip, "NEXT" and the next task;
                 with none, it still says what it opens. */}
             {!peekOpen && (nextTitle ? (
-              <span className="wall-peek-next"><span className="wall-peek-next-kicker">NEXT</span> <span className="wall-peek-next-title">{nextTitle}</span></span>
+              <span className="wall-peek-next">
+                <span className="wall-peek-next-kicker">NEXT</span> <span className="wall-peek-next-title">{nextTitle}</span>
+                {/* 75c: how long it takes. */}
+                {nextMinutes > 0 && <span className="wall-peek-next-dur">{formatSpanCaps(nextMinutes)}</span>}
+              </span>
             ) : (
               <span className="wall-peek-next"><span className="wall-peek-next-title">{remainingCount > 0 ? `After that · ${remainingCount}` : "Nothing else on Today"}</span></span>
             ))}

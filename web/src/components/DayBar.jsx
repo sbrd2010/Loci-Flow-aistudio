@@ -5,10 +5,12 @@ import { formatClock24, formatSpan } from "../utils/dayMapPlan";
 // end. Done up to now, planned from now to the finish, fine red hatching past
 // the day end; the start, NOW and DAY ENDS under it, and a legend of three
 // words (two when the day fits). `bar` is dayBar()'s result.
-export default function DayBar({ bar, now, doneMinutes, plannedMinutes, overBy }) {
+// Turn 76 (c): with tasks that won't fit, the legend gives their total, as
+// Today does; the overrun only when none is cut (a late fixed time).
+export default function DayBar({ bar, now, doneMinutes, plannedMinutes, overBy, wontFitMinutes = null }) {
   const pct = (share) => `${Math.round(share * 1000) / 10}%`;
   const label = `The day so far: it runs ${formatClock24(bar.start)} to ${formatClock24(bar.end)}; now ${formatClock24(now)}`
-    + (bar.over ? `; ${formatSpan(overBy)} past the day end` : "");
+    + (bar.over ? (wontFitMinutes != null ? `; ${formatSpan(wontFitMinutes)} won’t fit` : `; ${formatSpan(overBy)} past the day end`) : "");
   return (
     <div className="dm-daybar">
       <div className="dm-daybar-track" role="img" aria-label={label}>
@@ -26,7 +28,7 @@ export default function DayBar({ bar, now, doneMinutes, plannedMinutes, overBy }
       <ul className="dm-daybar-legend" aria-hidden="true">
         {doneMinutes != null && <li><span className="dm-key is-done" />done {formatSpan(doneMinutes)}</li>}
         <li><span className="dm-key is-planned" />planned {formatSpan(plannedMinutes)}</li>
-        {bar.over && <li><span className="dm-key is-past" />past your day end {formatSpan(overBy)}</li>}
+        {bar.over && <li><span className="dm-key is-past" />{wontFitMinutes != null ? `won’t fit ${formatSpan(wontFitMinutes)}` : `past your day end ${formatSpan(overBy)}`}</li>}
       </ul>
     </div>
   );

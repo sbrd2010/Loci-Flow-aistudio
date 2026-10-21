@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { auth, track, setAnalyticsUser } from "./firebase";
 import { getCategoryKeyForTrack } from "./utils/soundLibrary";
 import { computeUserProfile } from "./utils/userProfile";
+import { useAppScale } from "./hooks/useAppScale";
 import { scheduleAllReminders, scheduleCoachCheckin, cancelCoachCheckin, checkDailyCheckinNotifications, scheduleDailyCheckins, cancelDailyCheckins, cancelAllNativeScheduling, VISIBLE_HEARTBEAT_KEY, DAILY_CHECKIN_SLOTS } from "./utils/reminders";
 import { isNativeApp, refreshNativePermission, addNativeNotificationClickListener, NATIVE_PERMISSION_GRANTED_EVENT } from "./utils/nativeNotifs";
 import { signInWithGoogleNative } from "./utils/nativeAuth";
@@ -30,6 +31,7 @@ import OnboardingWizard from "./components/OnboardingWizard";
 import PrivacyPolicy from "./components/PrivacyPolicy";
 import DayMapPage from "./components/DayMapPage";
 import FocusBar from "./components/FocusBar";
+import FocusPill from "./components/FocusPill";
 import { endSessionTasks } from "./utils/focusEnd";
 import { minutesFromSeconds } from "./utils/focusLedger";
 import { formatClock24, nextDateStr } from "./utils/dayMapPlan";
@@ -37,7 +39,9 @@ import { useFocusTimer } from "./hooks/useFocusTimer";
 import { useLociDayStr } from "./hooks/useTodayStr";
 import HorizonReview from "./components/HorizonReview";
 import UndoToast, { UndoAnnouncer } from "./components/ui/UndoToast";
-import { letGoThought } from "./utils/thoughts";
+import FocusWelcomeBack from "./components/FocusWelcomeBack";
+import { OPEN_SESSION_SAVE_MS, saveOpenSession, clearOpenSession, loadOpenSession, savedSessionAsEnded, saveHeldEvent, loadHeldEvent, clearHeldEvent, dropHeldEvent, thisTabId, ownedByOtherLiveTab, holdSessionLock, dropSessionLock, claimSessionLock } from "./utils/openFocusSession";
+import { letGoThought, thoughtText } from "./utils/thoughts";
 import { applyReview, detectReviews, pendingReviews, undoReviewOrSort } from "./utils/horizonReview";
 import { endLeftReviewMarks } from "./utils/normalizePayload";
 import CloseTheDay from "./components/CloseTheDay";
@@ -45,10 +49,12 @@ import { applyClose, closeLineDue, isDayClosed, leftovers, pinFirstThing, reopen
 import { makeOneThing } from "./utils/oneThing";
 import { shouldShowFloatingTimer, buildFocusCompletionPayload, EXPIRY_REASONS } from "./utils/focusSession";
 import { celebrate } from "./utils/celebrations";
+import { uiSoundsOn } from "./utils/uiSounds";
 import { migrateStoredTheme, resolveTheme, watchColorScheme } from "./utils/theme";
 import { buildDayClock } from "./utils/dayClock";
 import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch, activityEventPath } from "./utils/activityLog";
 import { isOnToday } from "./utils/deferral";
+import { plainThought } from "./utils/thoughtFormat";
 
 // Plan's column names, as Add task's note says them ("from Plan · Quarter").
 const PLAN_COLUMN_NAMES = { today: "Today", week: "Week", month: "Month", quarter: "Quarter", halfyear: "6 months", office: "Work" };
@@ -87,15 +93,9 @@ export default function App() {
   const [roadmapView, setRoadmapView] = useState("horizons");
   // The front whose page (52f–g) is open in Plan's Fronts; null is the list.
   const [planFrontId, setPlanFrontId] = useState(null);
-  // ≥1600 (57a): Horizons and Fronts show together, so there is no switch
-  // and Fronts' view is Horizons with the Fronts column.
-  const [planWide, setPlanWide] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1600);
-  useEffect(() => {
-    const update = () => setPlanWide(window.innerWidth >= 1600);
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, []);
-  const planView = planWide && roadmapView === "plan" ? "horizons" : roadmapView;
+  // Plan 76a (Rohan, 6 Oct): the 24″ shows Horizons and Fronts by the switch,
+  // as the laptop does; 57a's Fronts column beside the list is gone.
+  const planView = roadmapView;
   const [editHorizonsOpen, setEditHorizonsOpen] = useState(false);
   // Feeling scattered has three doors (Today, Day map, Plan); its back link
   // returns through the one it came in by.
@@ -403,7 +403,7 @@ export default function App() {
     saveConfigPatch: rtdbSaveConfigPatch,
     writeActivityEvents: rtdbWriteActivityEvents, writeActivityEventIfNewer: rtdbWriteActivityEventIfNewer,
     captureTodaySnapshotIfNeeded: rtdbCaptureTodaySnapshot,
-    flushNow: rtdbFlushNow, clearCache: rtdbClearCache,
+    flushNow: rtdbFlushNow, clearCache: rtdbClearCache, retrySync: rtdbRetrySync,
   } = useSync(demoMode ? null : (user?.uid || null), demoMode ? null : (user?.email || null));
 
   const payload = demoMode ? demoPayload : rtdbPayload;
@@ -578,6 +578,14 @@ export default function App() {
   // handlers they call exist.
   const pipActionsRef = useRef({});
   const focusTimer = useFocusTimer(payload?.tasks || [], payload?.config || {}, user?.uid || null, pipActionsRef);
+  // Turn 76: Today grows with the window; the Focus page over it doesn't
+  // (it isn't redesigned this round), so the scale steps aside while it's open.
+  // Only the main app grows: sign-in, loading, errors and onboarding (the
+  // early returns below) keep their own sizes (Codex review of #494).
+  const mainAppShown = demoMode
+    ? !!payload
+    : !authLoading && !!user && !error && !loading && !!payload && payload.config?.isOnboardingCompleted !== false;
+  useAppScale(!mainAppShown ? null : focusTimer.isFocusMode ? "focus" : activeTab);
   // Live (non-stale) read of focusTimer for effect/promise callbacks that
   // run after an async wait (e.g. the pendingFocusOpen effect's pinPromise
   // handlers below) — those closures capture `focusTimer` from whichever
@@ -816,7 +824,14 @@ export default function App() {
       ...session, windows: getFocusWindows(payload?.config || {}),
     });
     focusTimer.markFocusLedgerEntry(event);
-    writeActivityEventIfNewer(event);
+    // Kept until the write is confirmed: a reload before it lands (offline, say)
+    // sends it again at the next load, and the write never replaces an entry
+    // with one recording less work (loopcheck of #530).
+    if (activityUid) saveHeldEvent(activityUid, event);
+    Promise.resolve(writeActivityEventIfNewer(event)).then(r => { if (r?.ok) clearHeldEvent(event); }).catch(() => {});
+    // The saved copy from before the bell has no entry to amend: a restore from
+    // it would write a second one.
+    clearOpenSession();
   }, [focusTimer.sessionCompletePending]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEndFocusSession = () => {
@@ -976,6 +991,80 @@ export default function App() {
     writeActivityEvents(eventPatch(activityUid, event));
   }, [lociDayTick, commitmentDayStr, focusTimer.isTimerRunning, focusTimer.expiryCheck]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // A refresh must not lose the session (#527): while one is open, a copy of
+  // it is saved in this browser every few seconds and as the page goes away.
+  // On the next load it comes back paused and asks (Welcome back); if its
+  // task is gone, or the 15-minute / end-of-day rules say it is over, it is
+  // closed with the time saved, never the time the page was away.
+  useEffect(() => {
+    if (!activityUid) return undefined;
+    const save = () => {
+      const t = focusTimerRef.current;
+      const snap = t.snapshotOpenSession();
+      if (snap) saveOpenSession({ ...snap, uid: activityUid, tabId: thisTabId() });
+      else if (t.focusSessionId) clearOpenSession(); // block end: its entry is banked
+      // While a session is open, this tab holds the lock that tells another tab
+      // the session is live here.
+      if (t.focusSessionId) holdSessionLock(); else dropSessionLock();
+    };
+    const hidden = () => { if (document.visibilityState === "hidden") save(); };
+    const id = setInterval(save, OPEN_SESSION_SAVE_MS);
+    window.addEventListener("pagehide", save);
+    document.addEventListener("visibilitychange", hidden);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("pagehide", save);
+      document.removeEventListener("visibilitychange", hidden);
+      dropSessionLock();
+    };
+  }, [activityUid]);
+
+  // A bell's entry that had not landed when the page went away is sent again.
+  const heldSentForRef = useRef(null);
+  useEffect(() => {
+    if (!activityUid || !payload?.config || isSyncingFromCache || syncWarning === "offline") return;
+    if (heldSentForRef.current === activityUid) return;
+    heldSentForRef.current = activityUid;
+    const held = loadHeldEvent(activityUid);
+    if (!held) return;
+    Promise.resolve(writeActivityEventIfNewer(held)).then(r => { if (r?.ok) clearHeldEvent(held); }).catch(() => {});
+  }, [activityUid, payload?.config, isSyncingFromCache, syncWarning]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [welcomeBack, setWelcomeBack] = useState(false);
+  // The restored session closed on its own (its pause had run out): nothing to welcome.
+  // Nor once it runs again, however it was resumed.
+  useEffect(() => { if (!focusTimer.focusSessionId || focusTimer.isTimerRunning) setWelcomeBack(false); }, [focusTimer.focusSessionId, focusTimer.isTimerRunning]);
+  const restoredForRef = useRef(null);
+  useEffect(() => {
+    if (!activityUid || !payload?.config || isSyncingFromCache || syncWarning === "offline") return;
+    if (restoredForRef.current === activityUid) return;
+    restoredForRef.current = activityUid;
+    const snap = loadOpenSession(activityUid);
+    if (!snap) return;
+    (async () => {
+      // Another tab running it (its lock, or, where the browser has no locks,
+      // a copy it saved a moment ago) keeps it: restoring here would run it twice.
+      // Taking the lock is the same step as asking for it, so two tabs
+      // reopening together cannot both restore.
+      const claimed = await claimSessionLock();
+      if (claimed === false || (claimed === null && ownedByOtherLiveTab(snap))) return;
+      // A session already started in this tab took over: its own copy is what
+      // is saved now, and it must not be closed from here.
+      if (focusTimerRef.current.focusSessionId) return;
+      const stillPinned = (payload.tasks || []).some(t => t.uuid === snap.task.uuid && t.isNowFocus && !t.isDeleted && !t.isCompleted);
+      if (stillPinned && focusTimerRef.current.restoreOpenSession(snap)) { setWelcomeBack(true); return; }
+      // Its task was finished, deleted or moved off the pin meanwhile (on another
+      // device, say): the session is over, with what was worked.
+      dropSessionLock();
+      clearOpenSession();
+      const ended = savedSessionAsEnded(snap, "user_abandoned");
+      const event = buildFocusTerminalEvent("focus_abandoned", ended.task, ended.focusSessionId, {
+        ...ended, windows: getFocusWindows(payload.config || {}),
+      });
+      writeActivityEvents(eventPatch(activityUid, event));
+    })();
+  }, [activityUid, payload?.config, isSyncingFromCache, syncWarning]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const deadlineMoveState = deriveCommitmentDeadlineMove(payload?.config || {}, payload?.tasks || [], commitmentDayStr);
   useEffect(() => {
     if (!payload?.config || syncUnconfirmed || deadlineMoveState === undefined) return;
@@ -990,7 +1079,7 @@ export default function App() {
     const task = (sessionUuid && (payload?.tasks || []).find(t => t.uuid === sessionUuid && !t.isDeleted)) || focusTimer.activeTask;
     focusTimer.dismissSessionComplete();
     if (!task) return;
-    celebrate();
+    celebrate({ sound: uiSoundsOn(payload?.config) });
     const now = new Date();
     const ended = focusTimer.endFocusSession("completed_task");
     const windows = getFocusWindows(payload?.config || {});
@@ -1064,6 +1153,8 @@ export default function App() {
     // keep surfacing the previous account's task titles as notifications.
     flushNow();
     clearCache();
+    clearOpenSession();
+    dropHeldEvent();
     cancelAllNativeScheduling();
     signOut(auth).then(() => { setUser(null); setActiveTab("today"); });
   };
@@ -1081,7 +1172,7 @@ export default function App() {
   };
   const openThoughtAsTask = (thought) => {
     openAddTask("today", "Mind Box");
-    setAddMode({ mode: "task", title: thought.text, fromThoughtId: thought.id });
+    setAddMode({ mode: "task", title: plainThought(thoughtText(thought)), fromThoughtId: thought.id });
   };
   // T, from anywhere (Q56): a thought, captured in two seconds. Not while
   // typing, in a dialog, or in focus.
@@ -1307,7 +1398,7 @@ export default function App() {
             </button>
             <button
               className="btn"
-              onClick={() => { flushNow(); clearCache(); cancelAllNativeScheduling(); signOut(auth); }}
+              onClick={() => { flushNow(); clearCache(); clearOpenSession(); dropHeldEvent(); cancelAllNativeScheduling(); signOut(auth); }}
               style={{ background: "var(--bg-secondary)", color: "var(--text-secondary)", border: "1.5px solid var(--border)", boxShadow: "none", fontSize: "13px" }}
             >
               Sign Out
@@ -1378,7 +1469,7 @@ export default function App() {
         <div
           role="alert"
           className="bottom-toast"
-          onClick={() => window.location.reload()}
+          onClick={() => (syncWarning === "write-failed" && rtdbRetrySync ? rtdbRetrySync() : window.location.reload())}
           style={{
             position: "fixed", bottom: "calc(72px + env(safe-area-inset-bottom, 0px))",
             background: "var(--bg-card)", border: "1px solid #f59e0b",
@@ -1390,7 +1481,7 @@ export default function App() {
           }}
         >
           {syncWarning === "write-failed"
-            ? "⚠️ Changes saved locally — cloud sync failed. Tap to retry."
+            ? "⚠️ Changes saved on this device. Syncing again when you're back online. Tap to retry now."
             : "⚠️ A suspicious task-count drop was blocked. Your data was not overwritten."}
         </div>
       )}
@@ -1432,10 +1523,20 @@ export default function App() {
         onTabSelect={handleTabSelect}
         onGoHome={goToday}
         dayClock={dayClock}
+        focusPill={activeTab === "coach" && focusTimer.focusSessionActive && focusTimer.activeTask && !focusTimer.isFocusMode ? (
+          <FocusPill
+            className="is-in-header"
+            secondsLeft={focusTimer.timerSecondsLeft}
+            maxSeconds={focusTimer.timerMaxSeconds}
+            isRunning={focusTimer.isTimerRunning}
+            blockEnd={focusTimer.blockEnd}
+            onBack={handleReturnToFocus}
+          />
+        ) : null}
       />
 
       {/* Main Tab Screen Router */}
-      <main className={`screen-content${activeTab === "daymap" ? " screen-content-day-map" : activeTab === "today" ? " screen-content-today" : activeTab === "roadmap" ? " screen-content-plan" : activeTab === "mindbox" ? " screen-content-mindbox" : ""}`}>
+      <main className={`screen-content${activeTab === "daymap" ? " screen-content-day-map" : activeTab === "today" ? " screen-content-today" : activeTab === "roadmap" ? " screen-content-plan" : activeTab === "mindbox" ? " screen-content-mindbox" : activeTab === "coach" ? " screen-content-coach" : ""}`}>
         {syncWarning === "offline" && (
           <div className="offline-banner" role="status">
             <IconWifiOff size={18} />
@@ -1464,6 +1565,7 @@ export default function App() {
             syncWarning={syncWarning}
             saveConfigPatch={saveConfigPatch}
             onOpenAddTask={() => openAddTask("today", "Today")}
+            onOpenAddThought={openAddThought}
             onOpenDayMap={openDayMap}
             onOpenPlan={() => handleTabSelect("roadmap")}
             // 59d / Q39.1: Talk it through arrives with its chip.
@@ -1496,6 +1598,7 @@ export default function App() {
             focusTimer={focusTimer}
             dayClock={dayClock}
             flushNow={flushNow}
+            isSyncingFromCache={!demoMode && isSyncingFromCache}
           />
         )}
         {activeTab === "roadmap" && (planView === "horizons" || (planView === "plan" && !planFrontId)) && (
@@ -1555,15 +1658,13 @@ export default function App() {
             uid={activityUid}
             writeActivityEvents={writeActivityEvents}
             focusTimer={focusTimer}
-            frontsColumn={planWide ? <PlanTab {...planTabProps} wide /> : null}
-            frontOpen={planWide && !!planFrontId}
             onOpenReview={openReview}
             onCloseFront={() => setPlanFrontId(null)}
           />
           </div>
         )}
         {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveConfigPatch={saveConfigPatch} userProfile={userProfile} initialPanel={mindBoxInitialPanel} onMakeThoughtTask={openThoughtAsTask} onOpenRescue={(state) => { handleTabSelect("today"); setRescueRequest({ at: Date.now(), state: typeof state === "string" ? state : null }); }} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} uid={activityUid} writeActivityEvents={writeActivityEvents} focusTimer={focusTimer} />}
-        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveSubPathsAsync={saveSubPathsAsync} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} uid={activityUid} writeActivityEvents={writeActivityEvents} stuck={coachStuck} onClearStuck={() => setCoachStuck(null)} onBackToFocus={focusTimer.focusSessionActive && focusTimer.activeTask ? handleReturnToFocus : null} onOpenPrivacy={() => { handleTabSelect("settings"); setSettingsInitialPage("privacy"); }} />}
+        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveSubPathsAsync={saveSubPathsAsync} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} uid={activityUid} writeActivityEvents={writeActivityEvents} stuck={coachStuck} onClearStuck={() => setCoachStuck(null)} onBackToFocus={focusTimer.focusSessionActive && focusTimer.activeTask ? handleReturnToFocus : null} onOpenPrivacy={() => { handleTabSelect("settings"); setSettingsInitialPage("privacy"); }} onOpenDayMap={openDayMap} />}
         {activeTab === "settings" && (
           <SettingsTab
             initialPage={settingsInitialPage}
@@ -1612,6 +1713,7 @@ export default function App() {
           onStartBreak={focusTimer.startBreak}
           onStartNext={() => focusTimer.startNextBlock()}
           onHoldBlockEnd={focusTimer.setBlockEndHeld}
+          docked={activeTab === "daymap"}
         />
       )}
 
@@ -1673,6 +1775,16 @@ export default function App() {
             setThoughtSaved(null);
           }}
           onClose={() => setThoughtSaved(null)}
+        />
+      )}
+      {welcomeBack && focusTimer.focusSessionId && !focusTimer.isTimerRunning
+        && !EXPIRY_REASONS.has(focusTimer.peekFocusSession(null)?.focusEndReason) && (
+        <FocusWelcomeBack
+          title={focusTimer.activeTask?.title || "your task"}
+          minutes={Math.floor(focusTimer.focusElapsedSeconds / 60)}
+          onContinue={() => { setWelcomeBack(false); focusTimer.setIsFocusMode(true); focusTimer.setIsTimerRunning(true); }}
+          onEnd={() => { setWelcomeBack(false); handleEndFocusSession(); }}
+          onClose={() => setWelcomeBack(false)}
         />
       )}
       {showAddTask && (

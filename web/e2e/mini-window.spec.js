@@ -62,7 +62,7 @@ test("the mini window's ring and time follow its size, down to the time alone", 
 });
 
 // Shuffle is back (Rohan, 5 Oct): shown only while a sound with variations
-// plays, and it plays another variation of it, as the focus page's "Another".
+// plays, and it plays another variation of it, as the focus page's "Shuffle".
 test("the mini window's Shuffle shows with Rain, plays another rain, and hides with the sound off", async ({ page, context }) => {
   const overlay = page.locator(".focus-mode-overlay");
   const soundRow = overlay.getByRole("group", { name: "Sound" });
@@ -86,6 +86,19 @@ test("the mini window's Shuffle shows with Rain, plays another rain, and hides w
   const before = rainTracks.at(-1);
   await shuffle.click();
   await expect.poll(() => rainTracks.at(-1)).not.toBe(before);
+  // PART11 (59b): text buttons 40 tall; "Shuffle sound", "Another track (S)";
+  // S shuffles too; under 340 wide Shuffle goes, the rest stay.
+  await expect(shuffle).toHaveAttribute("aria-label", "Shuffle sound");
+  await expect(shuffle).toHaveAttribute("title", "Another track (S)");
+  expect(await pip.evaluate(() => [...document.querySelectorAll("#pip-btns button")].filter(b => b.offsetParent).every(b => Math.round(b.getBoundingClientRect().height) === 40))).toBe(true);
+  const afterClick = rainTracks.at(-1);
+  await pip.keyboard.press("s");
+  await expect.poll(() => rainTracks.at(-1)).not.toBe(afterClick);
+  await pip.setViewportSize({ width: 339, height: 320 });
+  await expect(shuffle).toBeHidden();
+  expect(await measure(pip)).toMatchObject({ buttons: 4, fits: true });
+  await pip.setViewportSize({ width: 360, height: 320 });
+  await expect(shuffle).toBeVisible();
   // Still Rain: Shuffle stays within the sound that's on.
   await expect(soundRow.getByRole("button", { name: /Rain/ })).toHaveAttribute("aria-pressed", "true");
 
@@ -93,4 +106,40 @@ test("the mini window's Shuffle shows with Rain, plays another rain, and hides w
   await soundRow.getByRole("button", { name: "Off" }).click();
   await expect(shuffle).toBeHidden({ timeout: 3_000 });
   expect(await measure(pip)).toMatchObject({ buttons: 4 });
+});
+
+// Try-out 35: the clock pauses and resumes at every size (the Pause button
+// is gone in the smallest), and so does Space; a paused clock dims and says
+// PAUSED. Try-out 38: the title opens Loci's tab and the window stays.
+test("the mini window's clock pauses and resumes at any size; its title leaves it open", async ({ page, context }) => {
+  const pip = await openMiniWindow(page, context);
+  const paused = () => pip.evaluate(() => document.body.classList.contains("is-paused"));
+
+  await pip.setViewportSize({ width: 360, height: 320 });
+  await expect(pip.locator("#pp")).toBeHidden();
+  await pip.locator("#ring").click();
+  await expect.poll(paused).toBe(true);
+  await expect(pip.locator("#pp")).toHaveText("PAUSED");
+  await expect(pip.locator("#pp")).toBeVisible();
+  await expect(pip.locator("#pip-play")).toHaveText("Resume");
+  await expect(pip.locator("#ring")).toHaveAttribute("aria-label", "Resume the timer");
+  await pip.locator("#ring").click();
+  await expect.poll(paused).toBe(false);
+
+  // The time alone: no buttons, the clock still pauses, and says so.
+  await pip.setViewportSize({ width: 140, height: 60 });
+  await expect(pip.locator("#pip-play")).toBeHidden();
+  await pip.locator("#pt").click();
+  await expect.poll(paused).toBe(true);
+  await expect(pip.locator("#pp")).toBeVisible();
+  expect(await pip.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
+  await pip.keyboard.press("Space");
+  await expect.poll(paused).toBe(false);
+
+  await pip.setViewportSize({ width: 360, height: 320 });
+  await expect(pip.locator("#pl")).toHaveAttribute("title", /Open Loci/);
+  await pip.locator("#pl").click();
+  await page.waitForTimeout(300);
+  expect(pip.isClosed()).toBe(false);
+  await expect(pip.locator("#pt")).toBeVisible();
 });

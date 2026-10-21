@@ -4,7 +4,8 @@ import { buildDeadlineProgressMirror } from "./deadlineProgressMirror";
 import { formatMinutesToTime, getFocusWindows, getLociDayStr } from "./focusWindows";
 import { isDeferred } from "./deferral";
 import { isEventTask } from "./dayMapRoute";
-import { newestThoughtsFirst } from "./thoughts";
+import { newestThoughtsFirst, thoughtText } from "./thoughts";
+import { plainThought } from "./thoughtFormat";
 
 // "tomorrow" is not a horizon: it is Today's tasks moved to tomorrow
 // (deferral.js), listed apart so the Coach neither loses them nor offers
@@ -301,7 +302,7 @@ export function buildLociBrainDumpContext(brainDump = []) {
 
   const lines = [`BRAIN DUMP: ${count} unprocessed thought${count === 1 ? "" : "s"} waiting to be organized into tasks.`];
   newestThoughtsFirst(items).slice(0, BRAIN_DUMP_ITEMS_IN_PROMPT).forEach(item => {
-    const text = String(item.text || "").replace(/\s+/g, " ").trim();
+    const text = plainThought(thoughtText(item));
     if (!text) return;
     const truncated = text.length > BRAIN_DUMP_ITEM_MAX_LENGTH ? `${text.slice(0, BRAIN_DUMP_ITEM_MAX_LENGTH).trim()}...` : text;
     lines.push(`  - ${truncated}`);
@@ -466,7 +467,7 @@ const SNAPSHOT_MAX_NAMED_EXTRA = 3;
 const oneLine = text => String(text || "").replace(/\s+/g, " ").trim();
 
 // A long title keeps its start and its end: two tasks that differ only late
-// in the title ("… Avery Denison" / "… Paques") must not look the same.
+// in the title ("… Northwind Lab" / "… Contoso") must not look the same.
 const SNAPSHOT_TITLE_TAIL = 20;
 function snapshotTitle(title) {
   // The snapshot's own "…" marks the gap; a literal one in the title is

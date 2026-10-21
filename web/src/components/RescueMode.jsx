@@ -26,8 +26,8 @@ const OPTIONS = {
   ],
   tired: [
     { id: "break", title: "10-minute break", min: "10 MIN", sub: "Water, stand up, look away from the screen." },
-    { id: "focus5", title: "Make the step 5 minutes", min: "5 MIN", sub: "Five minutes on the one thing. Stop after if you need to." },
-    { id: "easiest", title: "Pick the easiest task", min: "1 MIN", sub: "The smallest open task becomes the one thing. A quick win first." },
+    { id: "focus5", title: "Make the step 5 minutes", min: "5 MIN", sub: "Five minutes on your now task. Stop after if you need to." },
+    { id: "easiest", title: "Pick the easiest task", min: "1 MIN", sub: "The smallest open task becomes your now task. A quick win first." },
   ],
   anxious: [
     { id: "worry", title: "Write the worry down", min: "2 MIN", sub: "Put it in words. It goes to Mind Box, out of your head." },
@@ -36,7 +36,7 @@ const OPTIONS = {
   ],
   distracted: [
     { id: "park", title: "Park the thought", min: "1 MIN", sub: "Whatever pulled you away goes to Mind Box for later." },
-    { id: "focus10", title: "10-minute restart", min: "10 MIN", sub: "Ten minutes on the one thing, then decide." },
+    { id: "focus10", title: "10-minute restart", min: "10 MIN", sub: "Ten minutes on your now task, then decide." },
     { id: "checklist", title: "Close everything but the task", min: "1 MIN", sub: "Other tabs, your phone, notifications." },
   ],
 };
@@ -78,9 +78,12 @@ function useCountdown(seconds, running, onEnd) {
   return left;
 }
 
-function Breathing({ onDone }) {
+// Try-out issue 3: someone who is already rattled reads the instruction
+// first; the ring starts only when they press Start (Enter or Space on it).
+function Breathing({ onDone, startRef, onStart }) {
+  const [started, setStarted] = useState(false);
   const total = PHASES.length * PHASE_S * ROUNDS;
-  const left = useCountdown(total, true, onDone);
+  const left = useCountdown(total, started, onDone);
   const elapsed = total - left;
   const phaseIndex = Math.floor(elapsed / PHASE_S) % PHASES.length;
   const inPhase = elapsed % PHASE_S;
@@ -88,6 +91,21 @@ function Breathing({ onDone }) {
   const r = 88;
   const c = 2 * Math.PI * r;
   const fill = (inPhase + 1) / PHASE_S;
+  if (!started) {
+    return (
+      <div className="rescue-breath-ready">
+        <div className="rescue-breath">
+          <svg className="rescue-ring" viewBox="0 0 200 200" aria-hidden="true">
+            <circle cx="100" cy="100" r={r} className="rescue-ring-track" />
+          </svg>
+          <div className="rescue-breath-text">
+            <span className="rescue-kicker">{ROUNDS} ROUNDS · 1 MIN</span>
+          </div>
+        </div>
+        <button type="button" ref={startRef} className="rescue-btn-filled rescue-breath-start" onClick={() => { setStarted(true); onStart(); }}>Start breathing</button>
+      </div>
+    );
+  }
   return (
     <div className="rescue-breath" role="timer" aria-label={`${PHASES[phaseIndex]}, ${PHASE_S - inPhase} seconds. Round ${round} of ${ROUNDS}`}>
       <svg className="rescue-ring" viewBox="0 0 200 200" aria-hidden="true">
@@ -136,6 +154,7 @@ export default function RescueMode({
   const endRef      = useRef(null);
   const inputRef    = useRef(null);
   const headingRef  = useRef(null);
+  const breathStartRef = useRef(null);
   const chatStarted = useRef(false);
   const sendingRef  = useRef(false);
   const userChattedRef = useRef(false);
@@ -158,6 +177,8 @@ export default function RescueMode({
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
   useEffect(() => {
     if (step === "chat") setTimeout(() => inputRef.current?.focus(), 100);
+    // Issue 3: Start takes the focus, so Enter begins the breathing.
+    else if (step === "breathe" && breathStartRef.current) breathStartRef.current.focus();
     else headingRef.current?.focus();
   }, [step]);
 
@@ -348,7 +369,7 @@ export default function RescueMode({
     if (id === "tiny") { setDraft(""); setStep("tiny"); return; }
     if (id === "easiest") {
       const picked = onPickEasiest?.();
-      toWhere(picked ? `DONE · ${picked.title.toUpperCase()} IS THE ONE THING` : "NOTHING EASIER WAITING");
+      toWhere(picked ? `DONE · ${picked.title.toUpperCase()} IS YOUR NOW TASK` : "NOTHING EASIER WAITING");
       return;
     }
     if (WRITE[id]) { setWriteKind(id); setWritten([]); setDraft(""); setStep("write"); }
@@ -427,7 +448,8 @@ export default function RescueMode({
     {kicker(2)}
     {heading("First, one minute of breathing.")}
     <p className="rescue-line">In for 4, hold for 4, out for 4, hold for 4. Follow the ring.</p>
-    <Breathing onDone={() => setStep(reason ? "options" : "state")} />
+    <Breathing onDone={() => setStep(reason ? "options" : "state")} startRef={breathStartRef}
+      onStart={() => headingRef.current?.focus()} />
     <button type="button" className="rescue-text-btn rescue-skip" onClick={() => setStep(reason ? "options" : "state")}>Skip</button>
   </>);
 
@@ -446,7 +468,7 @@ export default function RescueMode({
         {task?.isNowFocus && (
           <label className="rescue-keep">
             <input type="checkbox" checked={keepOne} onChange={e => setKeepOne(e.target.checked)} />
-            <span>Keep <strong>{task.title}</strong> as the one thing</span>
+            <span>Keep <strong>{task.title}</strong> as your now task</span>
           </label>
         )}
         <p className="rescue-note">Fixed times{plan.fixedCount ? ` (${plan.fixedCount} today)` : ""} and done tasks stay. Nothing is deleted.</p>
@@ -569,7 +591,7 @@ export default function RescueMode({
   if (step === "breakOver") return shell(<>
     <span className="rescue-kicker">BREAK · 0:00</span>
     {heading("Break’s over. Ready?")}
-    <p className="rescue-line">{task ? `${task.title} is still the one thing. Ten minutes, then decide.` : "Ten minutes, then decide."}</p>
+    <p className="rescue-line">{task ? `${task.title} is still your now task. Ten minutes, then decide.` : "Ten minutes, then decide."}</p>
     <div className="rescue-where">
       {task && <button type="button" className="rescue-btn-filled is-big" onClick={() => startFocus(10)}>Start 10 minutes</button>}
       {!moreAsked && (

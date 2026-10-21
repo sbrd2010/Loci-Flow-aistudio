@@ -32,7 +32,7 @@ test("a stop's sheet: Fix time, Park, Delete; no Remove from route, no Today-onl
   await stops(page).nth(1).click();
   await expect(sheet(page).locator(".detail-kicker").first()).toHaveText("DAY MAP · 2 OF 3");
   await expect(sheet(page).getByRole("button", { name: "Remove from route" })).toHaveCount(0);
-  await expect(sheet(page).getByRole("button", { name: /Make this the one thing/ })).toHaveCount(0);
+  await expect(sheet(page).getByRole("button", { name: /Do this now/ })).toHaveCount(0);
   await expect(sheet(page).getByRole("button", { name: /^Tomorrow/ })).toHaveCount(0);
   await expect(sheet(page).getByRole("button", { name: "Fix time" })).toBeVisible();
   await expect(sheet(page).getByRole("button", { name: "Park" })).toBeVisible();
@@ -100,7 +100,7 @@ test("the sheet's estimate is the stop's duration, and the route is timed again"
   await sheet(page).getByRole("button", { name: /^Estimate/ }).click();
   // Codex review of #418: a stop always has a length — no None to pick.
   await expect(sheet(page).getByRole("radio", { name: "None" })).toHaveCount(0);
-  await sheet(page).getByRole("radio", { name: "1h" }).click();
+  await sheet(page).getByRole("radio", { name: "1h", exact: true }).click();
   await expect(page.locator(".dm-stop").nth(0).locator(".dm-dur")).toHaveText("1h");
   const [first, second] = await times(page);
   expect(first).toBe("NOW");
@@ -120,10 +120,7 @@ test("Done from the sheet closes the gap; Undo puts the stop back where it was",
   await expect(page.locator(".dm-stop.is-dragging")).toHaveCount(1);
   await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
   await page.keyboard.press("ArrowUp");
-  await page.waitForFunction(() => {
-    const el = document.querySelector(".dm-stop.is-dragging");
-    return !!el && el.style.transform && !/translate3d\(0px, 0px/.test(el.style.transform);
-  });
+  await page.waitForFunction(() => !!document.querySelector(".dm-stop.is-drop-before, .dm-stop.is-drop-after"));
   await page.keyboard.press("Space");
   await expect.poll(() => titles(page)).toEqual([start[0], start[2], start[1]]);
   const before = await titles(page);

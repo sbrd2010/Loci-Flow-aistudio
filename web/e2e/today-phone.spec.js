@@ -21,7 +21,7 @@ async function openMore(page) {
 
 test("phone: the quiet row stands in for the buttons and links; Start is the only filled control", async ({ page }) => {
   await enterDemo(page);
-  await expect(quiet(page).getByRole("button")).toHaveText(["I’m stuck", "Done", "More"]);
+  await expect(quiet(page).getByRole("button")).toHaveText(["I’m stuck", "Brain dump", "Done", "More"]);
   await expect(page.locator(".wall-actions")).toBeHidden();
   await expect(page.locator(".wall-foot .wall-links")).toBeHidden();
   await expect(page.locator(".wall-anchor")).toBeHidden();
@@ -36,7 +36,7 @@ test("phone: the quiet row stands in for the buttons and links; Start is the onl
 
 test("laptop (72): the wall's buttons stay, with I'm stuck · More under them and no quiet Done", async ({ page }) => {
   await enterDemo(page, { width: 1280, height: 800 });
-  await expect(quiet(page).getByRole("button")).toHaveText(["I’m stuck", "More"], { useInnerText: true });
+  await expect(quiet(page).getByRole("button")).toHaveText(["I’m stuck", "Brain dump", "More"], { useInnerText: true });
   await expect(quiet(page).getByRole("button", { name: "Done", exact: true })).toBeHidden();
   await expect(page.locator(".wall-action", { hasText: "Mark done" })).toBeVisible();
   await expect(page.locator(".shell-clock-date")).toBeVisible();
@@ -46,7 +46,7 @@ test("More: Move to This week takes it off Today at once, and Undo brings it bac
   await enterDemo(page);
   const title = (await page.locator(".wall-title").innerText()).trim();
   await openMore(page);
-  await expect(more(page).getByRole("button")).toHaveText([/^Split it/, /^Details/, /^Move to…/, /^Park/, /^Not the one thing/, "Delete"]);
+  await expect(more(page).getByRole("button")).toHaveText([/^Split it/, /^Details/, /^Move to…/, /^Park/, /^Not now/, "Delete"]);
   await more(page).getByRole("button", { name: /^Move to…/ }).click();
   await more(page).getByRole("button", { name: "This week", exact: true }).click();
   await expect(more(page)).toHaveCount(0);
@@ -77,7 +77,7 @@ test("More: Esc closes it and hands focus back to More", async ({ page }) => {
 test("phone: a title past three lines is cut, and Full title and details opens it", async ({ page }) => {
   await enterDemo(page, { width: 360, height: 800 });
   await openMore(page);
-  await more(page).getByRole("button", { name: /^Not the one thing/ }).click();
+  await more(page).getByRole("button", { name: /^Not now/ }).click();
   const long = "Write the long methods section on membrane durability testing with every pressure cycling condition spelled out in full";
   // 67i: added through Add, then made the one thing from its sheet.
   const listAdd = page.locator(".today-list-add");
@@ -87,7 +87,7 @@ test("phone: a title past three lines is cut, and Full title and details opens i
   await add.getByTestId("add-task-title").fill(long);
   await add.getByTestId("add-task-submit").click();
   await page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { hasText: "Write the long methods" }).locator(".task-title-text").click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Do this now/ }).click();
   await expect(page.locator(".wall-title")).toContainText("Write the long methods");
   expect(await page.locator(".wall-title").evaluate(el => getComputedStyle(el).webkitLineClamp)).toBe("3");
   await page.getByRole("button", { name: "Full title and details" }).click();
@@ -164,7 +164,7 @@ test("More: Move to leaves out a horizon hidden in Settings", async ({ page }) =
 test("phone: with no one thing, Feeling scattered isn't offered; I'm stuck is", async ({ page }) => {
   await enterDemo(page);
   await openMore(page);
-  await more(page).getByRole("button", { name: /^Not the one thing/ }).click();
+  await more(page).getByRole("button", { name: /^Not now/ }).click();
   await expect(page.locator(".wall-pick")).toBeVisible();
   await expect(page.getByRole("button", { name: "Feeling scattered?" })).toBeHidden();
   await expect(page.getByRole("button", { name: "I’m stuck" }).first()).toBeVisible();
@@ -180,4 +180,17 @@ test("phone: the Next strip with nothing after the one thing still reads, and op
   await page.locator(".today-list.is-sheet").getByRole("button", { name: "Hide list" }).click();
   await expect(page.locator(".wall-peek-next")).toHaveText("Nothing else on Today");
   await expect(page.locator(".wall-peek")).toHaveAccessibleName(/Nothing else on Today/);
+});
+
+// 12 Oct try-out: a stray thought goes to Mind Box from Today, and Today
+// stays where it was.
+test("laptop: Brain dump opens the Thought sheet; Enter saves it and closes it", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await quiet(page).getByRole("button", { name: "Brain dump" }).click();
+  const input = page.getByRole("textbox", { name: "Thought" });
+  await expect(input).toBeFocused();
+  await input.fill("Book the dentist");
+  await input.press("Enter");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator(".today-wall")).toBeVisible();
 });

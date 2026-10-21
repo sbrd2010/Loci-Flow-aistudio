@@ -63,7 +63,8 @@ export function buildBriefInput({ tasks = [], contributions = [], config = {}, f
         focusedMinutes: prev14 && last7 ? prev14.totalMinutes - last7.totalMinutes : null,
         completed: ticks14.slice(0, 7).reduce((n, d) => n + d.count, 0),
       },
-      last30: { ...period("30d"), bestWeekday: facts30.weekday.bestDay || "none yet" },
+      // No best weekday: Review states it as the first line of Patterns (73a).
+      last30: period("30d"),
       byCategory: facts30.byCategory.slice(0, 6).map(c => `${c.name}: ${c.done} done in 30 days, ${c.open} open`),
       openNow: Object.fromEntries(facts30.openNow.byHorizon.map(h => [h.id, h.count])),
       plannedTodayMinutes: facts30.openNow.plannedTodayMin,
@@ -88,7 +89,7 @@ export const BRIEF_SYSTEM_PROMPT = `You write "Coach's brief" for a focus app. Y
 Reply with ONE JSON object and nothing else:
 {
   "howItWent": [string, ...],        // 1–2 facts looking back, compared with the previous period
-  "patterns": [string, ...],         // 0–2 facts: best days, fronts or categories with no progress
+  "patterns": [string, ...],         // 0–2 facts: fronts or categories with no progress (the app states the best weekday itself; don't repeat it)
   "tooMuch": { "line": string, "items": [{ "task": "T#", "to": "week"|"month"|"quarter" }] },  // only if planned today > left today; up to 3 tasks that could wait
   "estimates": [{ "task": "T#", "fact": string, "action": "split"|"week"|"month"|"quarter" }],  // 0–2: a task too big for one sitting, or a long goal sitting on Today
   "next": { "task": "T#", "line": string }   // the one task to start with: why, and its first step if known

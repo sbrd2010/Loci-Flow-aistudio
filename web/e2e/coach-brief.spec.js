@@ -16,7 +16,7 @@ async function openReview(page) {
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
   await page.getByRole("tab", { name: "Review" }).click();
-  return page.getByRole("complementary", { name: "Coach's brief" });
+  return page.getByRole("region", { name: "Coach's brief" });
 }
 
 test("Brief me shows the groups; buttons apply with Undo; Ask about this goes to Chat", async ({ page }) => {
@@ -50,10 +50,10 @@ test("Brief me shows the groups; buttons apply with Undo; Ask about this goes to
   expect(Object.keys(sent)).toEqual(expect.arrayContaining(["today", "last7", "last30", "tasks"]));
   expect(sent.tasks.length).toBeLessThanOrEqual(10);
 
-  await brief.getByRole("button", { name: "Make it the one thing" }).click();
-  await expect(brief.locator(".br-applied").first()).toContainText("✓ The one thing ·");
+  await brief.getByRole("button", { name: "Make it your now task" }).click();
+  await expect(brief.locator(".br-applied").first()).toContainText("✓ Now ·");
   await brief.getByRole("button", { name: "Undo" }).click();
-  await expect(brief.getByRole("button", { name: "Make it the one thing" })).toBeVisible();
+  await expect(brief.getByRole("button", { name: "Make it your now task" })).toBeVisible();
 
   await brief.getByRole("button", { name: "This week" }).click();
   await expect(brief).toContainText("✓ Moved to This week");

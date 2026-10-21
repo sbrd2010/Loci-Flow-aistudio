@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { openRung } from "./helpers/plan.js";
+import { sidewaysScrollers } from "./helpers/overflow";
 
 // Add task (45a phone sheet, 45k laptop dialog). Demo mode: nothing reaches
 // Firebase. The horizon defaults to where + was tapped, and the sheet says so.
@@ -16,11 +17,28 @@ async function enterDemo(page, viewport = { width: 412, height: 892 }) {
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
 }
 
+// On a phone the open list is a sheet over the wall, and it can cover the
+// wall's "+" (the test used to win a race with the sheet sliding up). Once the
+// sheet settles: the "+" if nothing covers it, else N, which opens the same.
+async function openAddFromPhone(page) {
+  await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
+  const plus = page.getByRole("button", { name: "Add a task to Today" }).first();
+  const reachable = await plus.evaluate(el => {
+    const r = el.getBoundingClientRect();
+    return !!document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2)?.closest(".wall-peek-add");
+  });
+  if (reachable) await plus.click();
+  else {
+    await page.evaluate(() => document.activeElement?.blur?.());
+    await page.keyboard.press("n");
+  }
+}
+
 async function openFromToday(page) {
   // The list's "+ Add task" (72); on a phone the wall's + (70a).
   const add = page.locator(".today-list-add");
   if (await add.isVisible()) await add.click();
-  else await page.getByRole("button", { name: "Add a task to Today" }).first().click();
+  else await openAddFromPhone(page);
   await expect(page.getByRole("dialog", { name: "New task" })).toBeVisible({ timeout: 5_000 });
 }
 
@@ -109,8 +127,7 @@ test("an AI suggestion of P4 and 45m shows P4 and opens Other at 45m", async ({ 
   await dialog.getByRole("button", { name: "Apply", exact: true }).click();
 
   await expect(dialog.getByRole("button", { name: "Priority 4" })).toHaveAttribute("aria-pressed", "true");
-  await expect(dialog.getByRole("button", { name: "Other", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await expect(dialog.getByLabel("Minutes")).toHaveValue("45");
+  await expect(dialog.getByRole("button", { name: "45m", exact: true })).toHaveAttribute("aria-pressed", "true");
 });
 
 // With no time chosen, nothing is shown as chosen — so nothing is saved: the
@@ -128,7 +145,7 @@ test("a task added without choosing a time is saved with no estimate", async ({ 
   await openFromToday(page);
   const dialog = page.getByRole("dialog", { name: "New task" });
   await dialog.getByTestId("add-task-title").fill("Sort the museum receipts");
-  for (const name of ["15m", "30m", "1h", "2h", "Other"]) {
+  for (const name of ["5m", "15m", "25m", "30m", "45m", "1h", "1h30m", "2h", "3h", "Other"]) {
     await expect(dialog.getByRole("button", { name, exact: true })).toHaveAttribute("aria-pressed", "false");
   }
   await dialog.getByTestId("add-task-submit").click();
@@ -157,7 +174,9 @@ test("⌘↵ pressed again while the sheet says Saved adds the task once", async
   await expect(page.getByTestId("today-tasks-list").getByText("Order the spare lens cap")).toHaveCount(1);
 });
 
-test("opening Other shows 25m chosen, and 25m is what is saved", async ({ page }) => {
+// Try-out 8/9: Other opens a typed time; Enter takes it without adding the
+// task, and that time is what is saved.
+test("Other takes a typed time, and that time is what is saved", async ({ page }) => {
   await page.addInitScript(() => {
     try { window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key"); } catch { /* private mode */ }
   });
@@ -171,7 +190,17 @@ test("opening Other shows 25m chosen, and 25m is what is saved", async ({ page }
   const dialog = page.getByRole("dialog", { name: "New task" });
   await dialog.getByTestId("add-task-title").fill("Label the seed trays");
   await dialog.getByRole("button", { name: "Other", exact: true }).click();
-  await expect(dialog.getByLabel("Minutes")).toHaveValue("25");
+  const other = dialog.getByLabel("Other time");
+  await expect(other).toBeFocused();
+  await other.fill("1h");
+  await other.fill("4 0");
+  await other.press("Enter");
+  await expect(dialog.getByRole("alert")).toHaveText("Try 40m, 1h20 or 1.5h");
+  await other.fill("40");
+  await other.press("Enter");
+  await expect(other).toHaveValue("40m");
+  await expect(page.locator(".add-card")).toHaveCount(1);
+  await expect(dialog.getByRole("button", { name: "Other", exact: true })).toHaveAttribute("aria-pressed", "true");
   await dialog.getByTestId("add-task-submit").click();
   await expect(page.locator(".add-card")).toHaveCount(0, { timeout: 5_000 });
 
@@ -179,7 +208,41 @@ test("opening Other shows 25m chosen, and 25m is what is saved", async ({ page }
   await page.locator(".coach-composer-input").fill("what are my tasks");
   await page.getByRole("button", { name: "Send" }).click();
   await expect.poll(() => bodies.some(b => b.includes("Label the seed trays")), { timeout: 8_000 }).toBe(true);
-  expect(bodies.find(b => b.includes("Label the seed trays"))).toContain("Label the seed trays (25min)");
+  expect(bodies.find(b => b.includes("Label the seed trays"))).toContain("Label the seed trays (40min)");
+});
+
+// Review of #511, 3.3 / 3.8: a length half-typed in Other must not beat the chip
+// tapped next; typing a chip's own length hands the choice back to that chip.
+test("a chip tapped over a half-typed Other wins, and a typed chip length shows that chip", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await openFromToday(page);
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await dialog.getByRole("button", { name: "Other", exact: true }).click();
+  const other = dialog.getByLabel("Other time");
+  await expect(other).toBeFocused();
+  await other.fill("4 0");
+  // Pressing a chip must not take the field's focus, or leaving the field would
+  // commit (or reject) the half-typed time before the chip's own tap lands.
+  const chip30 = dialog.getByRole("button", { name: "30m", exact: true });
+  const box = await chip30.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await expect(other).toBeFocused();
+  await expect(dialog.getByRole("alert")).toHaveCount(0);
+  await page.mouse.up();
+  await expect(chip30).toHaveAttribute("aria-pressed", "true");
+  await expect(other).toHaveCount(0);
+
+  await dialog.getByRole("button", { name: "Other", exact: true }).click();
+  await other.fill("45");
+  await other.press("Enter");
+  await expect(other).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "45m", exact: true })).toHaveAttribute("aria-pressed", "true");
+
+  await dialog.getByRole("button", { name: "Other", exact: true }).click();
+  await other.fill("1:75");
+  await other.press("Enter");
+  await expect(dialog.getByRole("alert")).toHaveText("Try 40m, 1h20 or 1.5h");
 });
 
 // Q56.1 (64s–t): Add opens with Task | Thought. T opens on Thought from any
@@ -202,7 +265,9 @@ test("T opens a thought anywhere; Enter saves it to Mind Box; Tab switches to Ta
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Mind Box", exact: true }).click();
   await expect(page.getByTestId("thought-row").first()).toContainText("Ask the gym about the Friday class");
 
-  // Tab carries the text over to a task.
+  // Tab carries the text over to a task. (On Mind Box T puts you in its own
+  // editor instead, 78 §6, so this is from Plan.)
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
   await page.locator("body").click({ position: { x: 5, y: 400 } });
   await page.keyboard.press("t");
   await page.getByRole("dialog", { name: "New thought" }).getByLabel("Thought").fill("Book the dentist");
@@ -219,4 +284,198 @@ test("N and + open on Task; the switch is there", async ({ page }) => {
   await expect(dialog.getByRole("radio", { name: "Task" })).toHaveAttribute("aria-checked", "true");
   await dialog.getByRole("radio", { name: "Thought" }).click();
   await expect(page.getByRole("dialog", { name: "New thought" }).getByRole("button", { name: "Save thought" })).toBeDisabled();
+});
+
+// Try-out 2: the sheet never runs past the window. With More details and
+// Other open, its body scrolls and "Add to …" stays in view; nothing scrolls
+// sideways.
+for (const viewport of [{ width: 1280, height: 720 }, { width: 412, height: 760 }]) {
+  test(`${viewport.width}×${viewport.height}: the sheet fits the window, Add to … always in view`, async ({ page }) => {
+    await enterDemo(page, viewport);
+    await openFromToday(page);
+    const dialog = page.getByRole("dialog", { name: "New task" });
+    await dialog.getByRole("button", { name: "Other", exact: true }).click();
+    await dialog.getByRole("button", { name: "More details" }).click();
+    for (const where of ["top", "bottom"]) {
+      await page.locator(".add-card").evaluate((el, w) => { el.scrollTop = w === "top" ? 0 : el.scrollHeight; }, where);
+      const fit = await page.evaluate(() => {
+        const card = document.querySelector(".add-card").getBoundingClientRect();
+        const btn = document.querySelector(".add-submit").getBoundingClientRect();
+        const at = document.elementFromPoint((btn.left + btn.right) / 2, (btn.top + btn.bottom) / 2);
+        return card.bottom <= innerHeight + 1 && btn.bottom <= card.bottom + 1 && !!at?.closest(".add-submit");
+      });
+      expect(fit, where).toBe(true);
+    }
+    expect(await sidewaysScrollers(page)).toEqual([]);
+  });
+}
+
+// Codex review of #498: Other left empty closes and shows what is really
+// chosen; a length set from outside (an AI suggestion) is what shows.
+test("Other left empty closes; an AI suggestion after a typed time is what shows", async ({ page }) => {
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key"); } catch { /* private mode */ }
+  });
+  await page.route("https://api.groq.com/**", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ choices: [{ message: { content: JSON.stringify({
+      title: "File the June field notes", microStep: "Open the notes folder", priority: "P2",
+      estimateMinutes: 45, horizonLevel: "today", subSteps: [],
+    }) } }] }),
+  }));
+  await enterDemo(page);
+  await openFromToday(page);
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  const other = dialog.getByRole("button", { name: "Other", exact: true });
+  await dialog.getByRole("button", { name: "30m", exact: true }).click();
+  await other.click();
+  await expect(other).toHaveAttribute("aria-pressed", "true");
+  await dialog.getByTestId("add-task-title").click();
+  await expect(other).toHaveAttribute("aria-pressed", "false");
+  await expect(dialog.getByLabel("Other time")).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "30m", exact: true })).toHaveAttribute("aria-pressed", "true");
+
+  await other.click();
+  await dialog.getByLabel("Other time").fill("40");
+  await dialog.getByLabel("Other time").press("Enter");
+  await expect(other).toHaveAttribute("aria-pressed", "true");
+  await dialog.getByTestId("add-task-title").fill("field notes");
+  await dialog.getByRole("button", { name: "Ask AI to improve this" }).click();
+  await dialog.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(dialog.getByRole("button", { name: "45m", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(other).toHaveAttribute("aria-pressed", "false");
+  await expect(dialog.getByLabel("Other time")).toHaveCount(0);
+});
+
+// 78 §5/§8: a thought grows on ruled lines; Shift+Enter makes a new line,
+// Ctrl+B bolds what comes next, Enter saves. Mind Box shows the lines and
+// the bold, without the ** markers.
+test("a thought keeps its lines and bold, and Enter saves", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await page.keyboard.press("t");
+  const dialog = page.getByRole("dialog", { name: "New thought" });
+  const field = dialog.getByRole("textbox", { name: "Thought" });
+  await expect(field).toBeFocused();
+  await expect(dialog.getByRole("button", { name: "Save thought" })).toBeDisabled();
+  const empty = (await field.boundingBox()).height;
+  await field.pressSequentially("Ask whether the fixed rate can be extended for another five years before the end of the month");
+  await field.press("Shift+Enter");
+  await field.press("Control+b");
+  await expect(dialog.getByRole("button", { name: "Bold" })).toHaveAttribute("aria-pressed", "true");
+  await field.pressSequentially("and the fee");
+  const grown = await field.evaluate(el => ({ h: el.getBoundingClientRect().height, sideways: el.scrollWidth > el.clientWidth }));
+  expect(grown.sideways).toBe(false);
+  expect(grown.h).toBeGreaterThanOrEqual(empty);
+  await expect(dialog.getByRole("button", { name: "Save thought" })).toBeEnabled();
+  await field.press("Enter");
+  await expect(page.locator(".add-card")).toHaveCount(0, { timeout: 5_000 });
+
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Mind Box", exact: true }).click();
+  const text = page.getByTestId("thought-row").first().locator(".thought-text");
+  await expect(text).toContainText("end of the month");
+  await expect(text.locator("strong")).toHaveText("and the fee");
+  expect(await text.innerText()).toContain("month\nand the fee");
+  await expect(text).not.toContainText("**");
+});
+
+// 78 §5: the emoji picker opens below the footer; arrows move, Enter adds
+// at the caret and closes it.
+test("the emoji picker adds an emoji where the caret is", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await page.keyboard.press("t");
+  const dialog = page.getByRole("dialog", { name: "New thought" });
+  const field = dialog.getByRole("textbox", { name: "Thought" });
+  await field.pressSequentially("Idea ");
+  await dialog.getByRole("button", { name: "Emoji" }).click();
+  const grid = dialog.getByRole("group", { name: "Emoji" });
+  await expect(grid).toBeVisible();
+  const box = await grid.boundingBox();
+  const foot = await dialog.locator(".te-foot").boundingBox();
+  expect(box.y).toBeGreaterThanOrEqual(foot.y + foot.height);
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Enter");
+  await expect(grid).toHaveCount(0);
+  await expect(field).toBeFocused();
+  await expect(field).toHaveText("Idea 😂");
+});
+
+// Try-out 10: the add sheet's reminder is the same picker — quick picks,
+// the day, a typed time — with no browser time field.
+test("Add task: a reminder from a quick pick, then a typed time", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await page.keyboard.press("n");
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await dialog.getByRole("button", { name: "More details" }).click();
+  await dialog.getByRole("button", { name: "Set a reminder" }).click();
+  await expect(dialog.locator('input[type="time"]')).toHaveCount(0);
+  await dialog.getByRole("group", { name: "Quick reminders" }).getByRole("button", { name: /^Tomorrow/ }).click();
+  await expect(dialog.getByRole("button", { name: /^Remind me:/ })).toHaveText("Remind me: Tomorrow 09:00");
+  const typed = dialog.getByLabel("Reminder time, typed");
+  await typed.fill("1730");
+  await typed.press("Enter");
+  await expect(dialog.getByRole("button", { name: /^Remind me:/ })).toHaveText("Remind me: Tomorrow 17:30");
+  await expect(page.locator(".add-card")).toHaveCount(1);
+});
+
+// Review of #511, 3.9: a reminder time already past is not kept, and the
+// picker says so instead of leaving "Remind me: …" looking set.
+test("Add task: a reminder time that has passed says so", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await page.keyboard.press("n");
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await dialog.getByRole("button", { name: "More details" }).click();
+  await dialog.getByRole("button", { name: "Set a reminder" }).click();
+  await dialog.getByLabel("Reminder date").fill("2024-06-15");
+  const typed = dialog.getByLabel("Reminder time, typed");
+  await typed.fill("0900");
+  await typed.press("Enter");
+  await expect(dialog.getByRole("alert")).toHaveText("That time has passed. Pick a later one.");
+  await typed.fill("1130");
+  await typed.press("Enter");
+  await expect(dialog.getByRole("alert")).toHaveCount(0);
+});
+
+// Codex review of #498: ⌘↵ while typing in Other adds the task with the
+// time as typed, not the one chosen before.
+test("⌘↵ in Other adds the task with the typed time", async ({ page }) => {
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key"); } catch { /* private mode */ }
+  });
+  const bodies = [];
+  await page.route("https://api.groq.com/**", (route) => {
+    bodies.push(route.request().postData() || "");
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content: "One small step." } }] }) });
+  });
+  await enterDemo(page, { width: 1280, height: 800 });
+  await page.keyboard.press("n");
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await dialog.getByTestId("add-task-title").fill("Water the balcony plants");
+  await dialog.getByRole("button", { name: "30m", exact: true }).click();
+  await dialog.getByRole("button", { name: "Other", exact: true }).click();
+  await dialog.getByLabel("Other time").fill("40");
+  await dialog.getByLabel("Other time").press("Control+Enter");
+  await expect(page.locator(".add-card")).toHaveCount(0, { timeout: 5_000 });
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
+  await page.locator(".coach-composer-input").fill("what are my tasks");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect.poll(() => bodies.some(b => b.includes("Water the balcony plants")), { timeout: 8_000 }).toBe(true);
+  expect(bodies.find(b => b.includes("Water the balcony plants"))).toContain("Water the balcony plants (40min)");
+});
+
+// Codex review of #498 (the same fix): ⌘↵ in the reminder's typed time adds
+// the task with that time.
+test("⌘↵ in the reminder's typed time keeps that time", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await page.keyboard.press("n");
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await dialog.getByTestId("add-task-title").fill("Ring the plumber");
+  await dialog.getByRole("button", { name: "More details" }).click();
+  await dialog.getByRole("button", { name: "Set a reminder" }).click();
+  await dialog.getByRole("group", { name: "Quick reminders" }).getByRole("button", { name: /^Tomorrow/ }).click();
+  await dialog.getByLabel("Reminder time, typed").fill("1730");
+  await dialog.getByLabel("Reminder time, typed").press("Control+Enter");
+  await expect(page.locator(".add-card")).toHaveCount(0, { timeout: 5_000 });
+  const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { hasText: "Ring the plumber" });
+  await expect(row).toContainText("Tomorrow 17:30");
 });

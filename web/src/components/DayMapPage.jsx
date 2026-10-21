@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { horizonChoices } from "../utils/planLadder";
 import {
   DndContext,
   DragOverlay,
+  closestCenter,
   KeyboardSensor,
   MouseSensor,
   TouchSensor,
@@ -14,15 +15,13 @@ import {
   arrayMove,
   sortableKeyboardCoordinates,
   useSortable,
-  verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { formatClock24, formatSpan, moveToTomorrow, restoreSchedule } from "../utils/dayMapPlan";
-import { mergeWindowSpans } from "../utils/focusWindows";
+import { getRemainingFocusMinutes, mergeWindowSpans } from "../utils/focusWindows";
 import { isDeferred } from "../utils/deferral";
 import {
   applyReflow, currentDayMinutes, getEstimate, getTaskId,
-  hasHeadGap, normalizePriority, reflowRoute, routeIsContiguous, useDayRoute,
+  hasHeadGap, normalizePriority, reflowRoute, routeCut, routeIsContiguous, useDayRoute,
 } from "../hooks/useDayRoute";
 import { isEventTask, isFixedStop } from "../utils/dayMapRoute";
 import { eventAsks } from "../utils/fixedTime";
@@ -44,8 +43,11 @@ import useTaskActions from "../hooks/useTaskActions";
 import { frontsFromConfig, frontsOnOffer } from "../utils/fronts";
 import { IconCheck, IconChevronDown, IconChevronLeft, IconLock, IconPin } from "./ui/icons";
 import { useFocusLedger } from "../hooks/useFocusLedger";
+import Momentum from "./Momentum";
+import { buildMomentum } from "../utils/momentum";
+import { isOnToday } from "../utils/deferral";
 import { dayBar, doneToday, factualLine } from "../utils/dayMapFacts";
-import { unzoomTransform } from "../utils/cssZoom";
+import { cssZoom } from "../utils/cssZoom";
 import "../styles/dayMap.css";
 
 // Day map (50e–f, 52d–e). Today's tasks laid end to end from a start time,
@@ -55,14 +57,22 @@ import "../styles/dayMap.css";
 // of tomorrow's route (nothing is deleted), with Undo. Every open Today task
 // is on the route, in the list's order (Q59); above it: From · Fixed time.
 
+// Try-out (12 Oct): a stop dragged from evening to morning crossed breaks
+// and "continued" rows that cannot move, so the stops slid past them in
+// uneven jumps. Now the route holds still while a stop is held: a card
+// follows the pointer (as in Today's list) and a line marks where it lands.
+const holdStill = () => null;
+const GLIDE_MS = 220;
+const reducedMotion = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
 // `row` is the stop as the route engine laid it out (utils/dayMapRoute): its
 // start and end, and whether it is fixed, late, pulled forward, or stops for
 // a break. A fixed stop keeps its time, so it is not dragged.
-function RouteStop({ task, row, fromYesterday = false, isNow, isOver, isGoal, isOpen, onOpen, onStartFocus, until = null, min = null, was = null, flash = false, asks = null }) {
+function RouteStop({ task, row, fromYesterday = false, isNow, isOver, isGoal, isOpen, onOpen, onStartFocus, until = null, min = null, was = null, flash = false, asks = null, dropAt = null }) {
   const taskId = getTaskId(task);
   const {
     attributes, listeners, setActivatorNodeRef,
-    setNodeRef, transform, transition, isDragging,
+    setNodeRef, isDragging,
   } = useSortable({ id: taskId, data: { taskId }, disabled: row.fixed });
 
   const { start, end } = row;
@@ -75,18 +85,10 @@ function RouteStop({ task, row, fromYesterday = false, isNow, isOver, isGoal, is
     + (isGoal ? ", goal task" : "") + (min === "confirmed" ? ", minimum day" : "") + (isOver ? ", after the day ends" : "")
     + (asks ? ", did it happen?" : "");
 
-  const style = {
-    transform: CSS.Transform.toString(unzoomTransform(transform)),
-    transition,
-    opacity: isDragging ? 0.55 : undefined,
-    zIndex: isDragging ? 5 : undefined,
-  };
-
   return (
     <li
       ref={setNodeRef}
-      style={style}
-      className={`dm-stop${isNow ? " is-now" : ""}${late ? " is-late" : ""}${asks ? " is-asking" : ""}${isOver ? " is-over" : ""}${isDragging ? " is-dragging" : ""}${isOpen ? " is-open" : ""}${flash ? " is-flash" : ""}`}
+      className={`dm-stop${isNow ? " is-now" : ""}${late ? " is-late" : ""}${asks ? " is-asking" : ""}${isOver ? " is-over" : ""}${isDragging ? " is-dragging" : ""}${isOpen ? " is-open" : ""}${flash ? " is-flash" : ""}${dropAt ? ` is-drop-${dropAt}` : ""}`}
       data-task-uuid={taskId}
     >
       <div
@@ -124,7 +126,7 @@ function RouteStop({ task, row, fromYesterday = false, isNow, isOver, isGoal, is
         </span>
         <span className="dm-dur">{formatSpan(end - start)}</span>
         {/* 56a: the one thing, at NOW, until the end of its stop. */}
-        {until != null && <span className="dm-one-thing"><IconPin size={12} />THE ONE THING · UNTIL {formatClock24(until)}</span>}
+        {until != null && <span className="dm-one-thing"><IconPin size={12} />NOW · UNTIL {formatClock24(until)}</span>}
       </div>
       {/* Q36.3: still open 5 minutes after it ended, it asks (Q47.5). */}
       {asks && <DidItHappen title={task.title} {...asks} />}
@@ -139,7 +141,7 @@ function RouteStop({ task, row, fromYesterday = false, isNow, isOver, isGoal, is
   );
 }
 
-export default function DayMapPage({ payload, savePayload, savePayloadAsync, onClose, onStartFocus, onEndFocus, onAddTask, onHelpChoose, onCloseDay, dayClock, flushNow = () => {}, backLabel = "Today", uid, writeActivityEvents, focusTimer }) {
+export default function DayMapPage({ payload, savePayload, savePayloadAsync, onClose, onStartFocus, onEndFocus, onAddTask, onHelpChoose, onCloseDay, dayClock, flushNow = () => {}, backLabel = "Today", uid, writeActivityEvents, focusTimer, isSyncingFromCache = false }) {
   // A stop, opened (52): the task sheet.
   const [detailId, setDetailId] = useState(null);
   // The route's own Undo: { message, before, at } — before is what to put back.
@@ -189,10 +191,16 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     activeTodayTasks, scheduledTasks, tomorrowTasks,
     anchorMinutes, rows, routeTasks, plan, isGoal, sortableIds, latestTasks, applyAndSave,
     setAnchor, setAddedBreaks,
-  } = useDayRoute({ payload, savePayload });
+  } = useDayRoute({ payload, savePayload, syncing: isSyncingFromCache });
 
   // A drag ends in a click on the row it dropped; that click must not open it.
   const draggingRef = useRef(false);
+  // The stop held, and where it would land: before or after another stop.
+  const [heldId, setHeldId] = useState(null);
+  const [dropAt, setDropAt] = useState(null);
+  // Where each stop sat on screen before a drop, so it can glide to its new
+  // time once the route is timed again (and the dropped one from the card).
+  const glideFrom = useRef(null);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -280,7 +288,9 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     }
     const id = getTaskId(task);
     const before = [...scheduledTasks, ...(scheduledTasks.some(t => getTaskId(t) === id) ? [] : [latestTasks().find(t => getTaskId(t) === id) || task])];
-    const fixed = { ...task, dayMapFixedMinutes: at };
+    // The user's edit: stamped here, as reflowRoute stamps only what it moves
+    // (Codex review of #501).
+    const fixed = { ...task, dayMapFixedMinutes: at, lastUpdated: Date.now() };
     const order = scheduledTasks.some(t => getTaskId(t) === id)
       ? scheduledTasks.map(t => (getTaskId(t) === id ? fixed : t))
       : [...scheduledTasks, fixed];
@@ -363,7 +373,8 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   const unfix = (taskId) => {
     const task = scheduledTasks.find(t => getTaskId(t) === taskId);
     if (!task) return;
-    const { dayMapFixedMinutes, ...flowing } = task;
+    const { dayMapFixedMinutes, ...rest } = task;
+    const flowing = { ...rest, lastUpdated: Date.now() };
     applyAndSave(scheduledTasks.map(t => (getTaskId(t) === taskId ? flowing : t)), anchorMinutes);
     // The WAS badges were about the fix; with it gone they'd point nowhere
     // (Codex review of #425).
@@ -388,17 +399,60 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     onStartFocus ? onStartFocus(pinPromise) : onClose();
   };
 
+  // The drop is read on the route as it shows (a stop pulled forward sits
+  // ahead of its place in the order), and that order is what is kept
+  // (Codex review of #421).
+  const shownStops = () => routeTasks.map(t => scheduledTasks.find(s => getTaskId(s) === getTaskId(t))).filter(Boolean);
+  const dropPlace = (activeId, overId) => {
+    if (overId == null || activeId === overId) return null;
+    const ids = shownStops().map(getTaskId);
+    const from = ids.indexOf(activeId), to = ids.indexOf(overId);
+    if (from === -1 || to === -1) return null;
+    return { id: overId, side: to < from ? "before" : "after" };
+  };
+  const endHold = () => {
+    setHeldId(null);
+    setDropAt(null);
+    setTimeout(() => { draggingRef.current = false; }, 0);
+  };
+
   const handleDragEnd = ({ active, over }) => {
+    endHold();
     if (!over || active.id === over.id) return;
-    // The drop is read on the route as it shows (a stop pulled forward sits
-    // ahead of its place in the order), and that order is what is kept
-    // (Codex review of #421).
-    const shown = routeTasks.map(t => scheduledTasks.find(s => getTaskId(s) === getTaskId(t))).filter(Boolean);
+    const shown = shownStops();
     const oldIndex = shown.findIndex(t => getTaskId(t) === active.id);
     const newIndex = shown.findIndex(t => getTaskId(t) === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
+    const before = new Map();
+    document.querySelectorAll(".dm-route [data-task-uuid]").forEach(el => before.set(el.dataset.taskUuid, el.getBoundingClientRect().top));
+    const card = active.rect.current.translated;
+    if (card) before.set(String(active.id), card.top);
+    glideFrom.current = before;
     applyAndSave(arrayMove(shown, oldIndex, newIndex), anchorMinutes, null, { listFollows: true });
   };
+
+  // After a drop: each stop starts where it was (the dropped one where the
+  // card was let go) and glides to its new place; breaks and "continued"
+  // rows fade in where the new timing puts them.
+  useLayoutEffect(() => {
+    const from = glideFrom.current;
+    if (!from) return;
+    glideFrom.current = null;
+    if (reducedMotion()) return;
+    const z = cssZoom();
+    document.querySelectorAll(".dm-route > li").forEach(el => {
+      if (!el.animate) return;
+      const id = el.dataset.taskUuid;
+      const top = id != null ? from.get(id) : undefined;
+      if (top == null) {
+        el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: GLIDE_MS, easing: "ease-out" });
+        return;
+      }
+      const dy = (top - el.getBoundingClientRect().top) / z;
+      if (Math.abs(dy) < 1) return;
+      el.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: GLIDE_MS, easing: "cubic-bezier(0.2, 0, 0, 1)" });
+    });
+  }, [rows]);
 
   const n = plan.wontFit.length;
   const isOver = n > 0;
@@ -407,16 +461,21 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
 
   // The route (50f): the rows as laid out — stops, breaks, free time — the
   // DAY ENDS line where it falls, then what won't fit today.
-  const fitting = isOver ? routeTasks.slice(0, plan.overIndex) : routeTasks;
-  const lastFitting = fitting[fitting.length - 1];
-  // Free from the later of the last stop's end and the route's start: a
-  // fixed stop the day has passed ends before now (Codex review of #421).
-  const free = lastFitting ? plan.dayEnd - Math.max(lastFitting.routeEndMinutes, plan.dayEnd - plan.dayLeft) : 0;
+  // Turn 76 (c): one cut for Today and the Day map. A task fits whole or
+  // not; what doesn't fit is told as its total; the gap left before the day
+  // ends is free time.
+  const fitCut = routeCut(routeTasks, plan);
+  const free = fitCut.spare;
+  const wontFit = { count: plan.wontFit.length, minutes: fitCut.wontFitMinutes };
 
   // 56a–c: what was done today (focus sessions, and tasks ticked done), the
   // factual line, and the day bar. With no ledger to read (demo, a refused
   // read) the done part is left out rather than read as nothing done.
-  const { raw: ledgerRaw, status: ledgerStatus } = useFocusLedger(uid, 1, windows);
+  // 30 days, for the footer's streak (75f) as on Today.
+  const { raw: ledgerRaw, status: ledgerStatus } = useFocusLedger(uid, 30, windows);
+  const momentum = buildMomentum(ledgerRaw, new Date(), windows);
+  const todayAll = tasks.filter(t => isOnToday(t, todayStr) && !t.isDeleted && !t.isParked);
+  const todayDone = todayAll.filter(t => t.isCompleted && t.dateCompletedString === todayStr).length;
   const done = doneToday(ledgerStatus === "ready" ? ledgerRaw : null, tasks, todayStr, windows);
   const doneMinutes = ledgerStatus === "ready" ? done.reduce((sum, r) => sum + r.minutes, 0) : null;
   // Where the route ends. A fixed stop whose time has passed but is still
@@ -441,6 +500,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     dayEnd,
     now: nowMins,
     left: { count: leftStops.length, minutes: leftStops.reduce((sum, t) => sum + getEstimate(t), 0) },
+    wontFit,
   });
   const windowStart = mergeWindowSpans(windows)[0]?.[0];
   const firstSession = done.find(r => r.kind === "session");
@@ -464,7 +524,12 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   // Minimum day (56a–b): today's open tasks in the order they come, the
   // route as it shows.
   const openToday = routeTasks.map(t => scheduledTasks.find(s => getTaskId(s) === getTaskId(t))).filter(Boolean);
-  const minDay = minimumDay({ config: routeConfig, todayStr, ordered: openToday, isGoal });
+  // Turn 76 (d): only what fits before the day ends is suggested: the focus
+  // time left, less what's at a set time, whatever the optional tasks take.
+  const routeMinutes = new Map(routeTasks.map(t => [getTaskId(t), Number(t.dayMapDurationMinutes) || 0]));
+  const fixedMinutes = routeTasks.filter(isEventTask).reduce((n, t) => n + (routeMinutes.get(getTaskId(t)) || 0), 0);
+  const minBudget = Math.max(0, Math.min(plan.dayLeft, getRemainingFocusMinutes(new Date(), windows)) - fixedMinutes);
+  const minDay = minimumDay({ config: routeConfig, todayStr, ordered: openToday, isGoal, budget: minBudget, minutesOf: (t) => routeMinutes.get(getTaskId(t)) || 0 });
   const minIds = new Set(minDay.ids);
   const timeOf = (id) => {
     const r = rows.find(x => x.kind === "stop" && getTaskId(x.task) === id);
@@ -557,6 +622,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
         isOver={rowIsOver(r)}
         isGoal={isGoal(task)}
         isOpen={detailId === id}
+        dropAt={dropAt?.id === id ? dropAt.side : null}
         onOpen={() => { if (!draggingRef.current) setDetailId(id); }}
         onStartFocus={() => startFocus(id)}
         asks={eventAsks(r, nowMins) ? {
@@ -579,8 +645,14 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   //
   // With no From set, the route starts now: a first stop that starts later
   // than now's quarter hour is a gap too (the stop before it went).
+  //
+  // Only a sheet action is an edit. Tidying a gap someone else's write left
+  // stamps nothing (see reflowRoute), and waits for the server's copy: a
+  // cached one, timed again, would otherwise outrank another device's edits
+  // (Codex review of #501).
   useEffect(() => {
     const pending = pendingReflowRef.current;
+    if (!pending && isSyncingFromCache) return;
     const fromSet = routeConfig.dayMapDate === todayStr && routeConfig.dayMapAnchorMinutes != null;
     const start = fromSet ? anchorMinutes : currentDayMinutes(windows);
     // A fixed stop keeps its own time: the head is the first stop that flows.
@@ -591,8 +663,8 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
     const order = (t) => t.dayMapOrder ?? Infinity;
     const route = [...scheduledTasks].sort((a, b) => (order(a) - order(b))
       || ((getTaskId(b) === prefer) - (getTaskId(a) === prefer)));
-    applyAndSave(route, start);
-  }, [scheduledTasks]); // eslint-disable-line react-hooks/exhaustive-deps
+    applyAndSave(route, start, null, { stamp: !!pending });
+  }, [scheduledTasks, isSyncingFromCache]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The sheet on phones and tablets, the drawer from 1024px (as in Plan).
   // Its place is its place on screen (routeTasks: time order), for "N OF M"
@@ -737,13 +809,22 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
       ) : (
         <DndContext
           sensors={sensors}
-          onDragStart={() => { draggingRef.current = true; }}
-          onDragEnd={(e) => { setTimeout(() => { draggingRef.current = false; }, 0); handleDragEnd(e); }}
-          onDragCancel={() => { setTimeout(() => { draggingRef.current = false; }, 0); }}
+          collisionDetection={closestCenter}
+          onDragStart={({ active }) => { draggingRef.current = true; setHeldId(active.id); }}
+          onDragOver={({ active, over }) => setDropAt(dropPlace(active.id, over?.id))}
+          onDragEnd={handleDragEnd}
+          onDragCancel={endHold}
         >
           <div className="dm-layout">
+            {/* Try-out 39: on a phone the least to do today leads, right
+                under the summary; the bar goes below the route. */}
+            {!drawerViewport && openToday.length > 0 && (
+              <div className="dm-min-slot">
+                <MinimumDay state={minDay.state} ids={minDay.ids} unfit={minDay.unfit} tasks={openToday} timeOf={timeOf} onConfirm={confirmMin} />
+              </div>
+            )}
             {bar && (
-              <DayBar bar={bar} now={nowMins} doneMinutes={doneMinutes} plannedMinutes={barPlanned} overBy={barOverBy} />
+              <DayBar bar={bar} now={nowMins} doneMinutes={doneMinutes} plannedMinutes={barPlanned} overBy={barOverBy} wontFitMinutes={wontFit.count > 0 ? wontFit.minutes : null} />
             )}
             {/* 52d: From · Fixed time, as text, above the route. */}
             {!drawerViewport && controls}
@@ -751,7 +832,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
             <div className="dm-route-wrap">
               {doneFold}
               {scheduledTasks.length > 0 && (
-                <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+                <SortableContext items={sortableIds} strategy={holdStill}>
                   <ol className="dm-route" aria-label="Today's route">
                     {rows.filter(r => !rowIsOver(r)).map(renderRow)}
                     <li className="dm-dayend" aria-label={`Day ends at ${dayEndLabel}`}>
@@ -764,11 +845,8 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
               {tomorrowTasks.length > 0 && (
                 <p className="dm-tomorrow-note">{tomorrowTasks.length} {tomorrowTasks.length === 1 ? "task now starts" : "tasks now start"} tomorrow.</p>
               )}
-              {!drawerViewport && openToday.length > 0 && (
-                <MinimumDay state={minDay.state} ids={minDay.ids} tasks={openToday} timeOf={timeOf} onConfirm={confirmMin} />
-              )}
               {(isOver || plan.overBy > 0) && onHelpChoose && (
-                <button type="button" className="dm-text-btn is-alert dm-help" onClick={onHelpChoose}>Help me choose</button>
+                <button type="button" className="dm-text-btn dm-help" onClick={onHelpChoose}>Help me choose</button>
               )}
             </div>
 
@@ -776,27 +854,56 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
                 above the nav (52d). */}
             <div className="dm-side" style={navHeight ? { "--dm-nav-h": `${navHeight}px` } : undefined}>
               {drawerViewport && openToday.length > 0 && (
-                <MinimumDay state={minDay.state} ids={minDay.ids} tasks={openToday} timeOf={timeOf} onConfirm={confirmMin} />
+                <MinimumDay state={minDay.state} ids={minDay.ids} unfit={minDay.unfit} tasks={openToday} timeOf={timeOf} onConfirm={confirmMin} />
               )}
-              {drawerViewport && controls}
-              {movable.length > 0 && (drawerViewport ? (
-                <div className="dm-over">
-                  <p className="dm-over-text">
-                    <strong>Over by {formatSpan(plan.overBy)}.</strong>{" "}
-                    {wontFitCount <= 10 ? NUMBER_WORDS[wontFitCount] : wontFitCount} {wontFitCount === 1 ? "task won’t" : "tasks won’t"} fit.
-                  </p>
+              {/* 75f/75g: each panel section opens with a section heading — a
+                  short rule (red for a warning), the heading, one line. */}
+              {movable.length > 0 && drawerViewport && (
+                <section className="dm-sec is-warn dm-over" aria-labelledby="dm-sec-over">
+                  <h2 id="dm-sec-over" className="dm-sec-title">{wontFitCount <= 10 ? NUMBER_WORDS[wontFitCount] : wontFitCount} {wontFitCount === 1 ? "task won’t" : "tasks won’t"} fit</h2>
+                  <p className="dm-sec-line">{formatSpan(wontFit.minutes)} of it falls after your day ends at {dayEndLabel}.</p>
                   <button type="button" className="dm-btn-outline" onClick={moveOverToTomorrow}>Move {movable.length} to tomorrow</button>
-                </div>
-              ) : (
+                </section>
+              )}
+              {drawerViewport && (
+                <section className="dm-sec dm-from-sec" aria-labelledby="dm-sec-from">
+                  <h2 id="dm-sec-from" className="dm-sec-title">Plan from</h2>
+                  {controls}
+                </section>
+              )}
+              {movable.length > 0 && !drawerViewport && (
                 <button type="button" className="dm-move" onClick={moveOverToTomorrow}>Move {movable.length} to tomorrow</button>
-              ))}
+              )}
             </div>
           </div>
-          {/* Empty, yet needed: without an overlay, a keyboard drag's drop
-              often lands back where it started. */}
-          <DragOverlay dropAnimation={null} />
+          {/* The held stop as a card under the pointer (Today's list does
+              the same). Its box is the dragged rect, so it unzooms as Today's
+              does (try-out issue 8: at ×1.07 it sat a row low, and a stop
+              dragged one up landed on itself); the card inside zooms back. */}
+          <DragOverlay dropAnimation={null} style={{ zoom: 1 / cssZoom() }}>
+            {heldId != null && (() => {
+              const t = routeTasks.find(x => getTaskId(x) === heldId);
+              if (!t) return null;
+              return (
+                <div className="dm-drag-card" style={{ zoom: cssZoom() }}>
+                  <span className="dm-drag-grip" aria-hidden="true">⠿</span>
+                  <span className="dm-drag-title">{t.title}</span>
+                  <span className="dm-dur">{formatSpan(Number(t.dayMapDurationMinutes) || 0)}</span>
+                </div>
+              );
+            })()}
+          </DragOverlay>
         </DndContext>
       )}
+
+      {/* 75f: the same footer as Today — the streak, and N OF M DONE TODAY.
+          A focus session takes its place (75h). */}
+      <footer className="dm-foot">
+        {routeConfig.momentumEnabled !== false && momentum && (
+          <Momentum bars={momentum.bars} sentence={momentum.sentence} />
+        )}
+        {todayAll.length > 0 && <span className="dm-foot-done">{todayDone} OF {todayDone + todayAll.filter(t => !t.isCompleted).length} DONE TODAY</span>}
+      </footer>
 
       {fixing && (
         <FixTimeSheet

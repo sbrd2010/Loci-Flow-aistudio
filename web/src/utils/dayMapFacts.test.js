@@ -14,6 +14,15 @@ describe("factualLine (Q33.3, Q34.2)", () => {
     expect(line.alert).toBe("40 minutes past your day end.");
   });
 
+  // Turn 76 (c): a task fits whole or not; what doesn't fit is told as the
+  // tasks and their total, as on Today, not as a separate overrun.
+  it("over capacity with tasks that don't fit: their count and total, not the overrun", () => {
+    const line = factualLine({ ...base, doneMinutes: 135, finish: 1090, wontFit: { count: 2, minutes: 70 } });
+    expect(line.text).toBe("2h15m done so far today. Keep this order and you finish at 18:10, ");
+    expect(line.alert).toBe("2 tasks won’t fit · 1h10m.");
+    expect(factualLine({ ...base, doneMinutes: 0, finish: 1090, wontFit: { count: 1, minutes: 45 } }).alert).toBe("1 task won’t fit · 45m.");
+  });
+
   it("a day that fits, with nothing done yet", () => {
     expect(factualLine({ ...base, doneMinutes: 0, finish: 1000 }).text).toBe("Nothing done yet. On track: done by 16:40.");
   });

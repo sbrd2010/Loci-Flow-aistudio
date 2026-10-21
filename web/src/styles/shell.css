@@ -237,3 +237,23 @@
 @media (max-width: 839px) {
   .shell-header.is-today .shell-clock-date { display: none; }
 }
+
+/* Turn 76 (75a, 73, 76a): from 1280px the header runs edge to edge — 64
+   tall, 40px gutters, tabs centred — and grows with the window on every
+   page (--app-scale, hooks/useAppScale.js), so it never changes between
+   tabs. A page that grows whole (data-scale-route) already zooms the
+   header with it: zooming it again would double it. */
+@media (min-width: 1280px) {
+  .shell-header,
+  .shell-header.is-today {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    min-height: 64px;
+    padding: 0 40px;
+  }
+  html:not([data-scale-route]) .shell-header { zoom: var(--app-scale, 1); }
+  .shell-wordmark { justify-self: start; font-size: 20px; }
+  .shell-end { justify-self: end; gap: 14px; }
+  .shell-tabs { gap: 6px; }
+  .shell-tab { font-size: 15px; }
+}

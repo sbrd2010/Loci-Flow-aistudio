@@ -134,3 +134,120 @@
   .fb-long { display: none; }
   .fb-short { display: inline; }
 }
+
+/* 75h: on the Day map page the bar takes the footer's place — the same
+   bottom slot, centred, 640 wide, 46 tall, radius 23, no shadow — and the
+   footer's content gives way; nothing stacks and the map keeps its height.
+   (Below 1280 the page has no footer and the bar floats as elsewhere.) */
+@media (min-width: 1280px) {
+  html[data-scale-route="daymap"] .focus-bar.is-docked {
+    bottom: 5px;
+    min-height: 46px;
+    padding: 3px 3px 3px 12px;
+    border-radius: 23px;
+    box-shadow: none;
+  }
+  html[data-scale-route="daymap"] .focus-bar.is-docked .fb-btn,
+  html[data-scale-route="daymap"] .focus-bar.is-docked .fb-back { min-height: 38px; }
+  body:has(.focus-bar.is-docked) .dm-foot > * { visibility: hidden; }
+}
+/* Its End… menu sits above it, at the bar's right (Codex review of #502:
+   only where the bar is docked). */
+@media (min-width: 1280px) {
+  .fb-menu.is-docked { left: auto; right: max(16px, calc(50% - 320px)); width: 240px; bottom: 76px; }
+}
+
+/* 75i / 75k: the focus pill on Coach Chat — one button, 40 tall, green
+   outline, no fill, no shadow: ring · time · Back to focus · F. The bar it
+   stands for gives way there (it would cover the composer); F still works. */
+.focus-pill {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  height: 40px;
+  padding: 0 12px 0 8px;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  white-space: nowrap;
+  color: var(--accent);
+  background: none;
+  border: 1.5px solid var(--accent);
+  border-radius: 20px;
+  cursor: pointer;
+}
+.focus-pill:hover { background: var(--accent-tint); }
+.focus-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.focus-pill .fm-mini-ring { flex: 0 0 auto; }
+.focus-pill-time {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.focus-pill-key {
+  padding: 0 5px;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+}
+body:has(#coach-panel-chat) .focus-bar:not(.is-docked) { display: none; }
+/* A computer: in the header, on Chat only; the date and time left give way
+   below 1600 where both don't fit (Settings stays). */
+@media (min-width: 840px) {
+  body:has(#coach-panel-chat) .focus-pill.is-in-header { display: inline-flex; }
+}
+@media (min-width: 840px) and (max-width: 1599px) {
+  body:has(#coach-panel-chat) .shell-end.has-focus-pill .shell-clock { display: none; }
+}
+/* A phone: in the Chat | Review row, in New's place; New moves into ⋯. */
+@media (max-width: 839px) {
+  .focus-pill.is-in-tabs { display: inline-flex; height: 36px; padding: 0 10px 0 6px; }
+  .focus-pill.is-in-tabs .focus-pill-key { display: none; }
+  .coach-tabs-end.has-focus-pill .coach-new-conversation { display: none; }
+}
+.coach-more-wrap { position: relative; display: none; }
+@media (max-width: 839px) { .coach-more-wrap { display: inline-flex; } }
+.coach-more {
+  width: 40px;
+  height: 40px;
+  font: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-radius: 20px;
+  cursor: pointer;
+}
+.coach-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.coach-more-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-md);
+}
+.coach-more-menu button {
+  min-height: 44px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  text-align: left;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}

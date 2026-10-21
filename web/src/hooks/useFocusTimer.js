@@ -5,6 +5,14 @@ import { buildExtendedTimerState, buildResetFocusState, shouldTriggerSessionComp
 import { getFocusWindows, getLociDayStr, lociDayEndsAt } from "../utils/focusWindows";
 import { safeUUID } from "../utils/uuid";
 import { clockParts, ringGeometry } from "../utils/focusClock";
+import { clearOpenSession } from "../utils/openFocusSession";
+
+// The part of a task a saved session keeps (#527): its id and title, and the
+// fields the terminal ledger event reads (taskSnapshotFrom in activityLog.js).
+const slimTask = (t) => ({
+  uuid: t.uuid, id: t.id, title: t.title, category: t.category, priority: t.priority,
+  horizonLevel: t.horizonLevel, frontId: t.frontId,
+});
 
 // Block end (59i): the break it offers, how long it waits for an answer
 // before it pauses, and the next block's bounds (Q38.1c).
@@ -180,7 +188,7 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
     // Fitted to the ring as ringGeometry fits it (0.21, or 0.16 with hours),
     // in units of the ring's own size so it scales with it.
     if (tEl) tEl.className = hours ? "is-hours" : "";
-    const labelEl = doc.getElementById("pl");
+    const labelEl = doc.getElementById("pl-text");
     if (labelEl) labelEl.textContent = title;
     const playBtn = doc.getElementById("pip-play");
     if (playBtn) playBtn.textContent = running ? "Pause" : "Resume";
@@ -192,6 +200,9 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
       arc.style.display = seconds > 0 ? "" : "none";
     }
     doc.body.className = running ? "" : "is-paused";
+    // Try-out 35: the clock itself pauses and resumes, at every size.
+    const ringEl = doc.getElementById("ring");
+    if (ringEl) ringEl.setAttribute("aria-label", running ? "Pause the timer" : "Resume the timer");
     const shuffleBtn = doc.getElementById("pip-shuffle");
     if (shuffleBtn) shuffleBtn.hidden = !pipActionsRef?.current?.canShuffle?.();
   };
@@ -227,7 +238,7 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
           --control-edge: ${token("--control-edge", "#858B86")};
         }
         body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
-          height: 100vh; padding: 16px; font-family: Manrope, system-ui, sans-serif; color: var(--ink);
+          height: 100vh; padding: 16px 12px; font-family: Manrope, system-ui, sans-serif; color: var(--ink);
           background: var(--bg); user-select: none; overflow: hidden; }
         #ring { position: relative; display: grid; place-items: center; flex: 0 0 auto; container-type: size;
           width: clamp(72px, min(calc(100vh - 188px), calc(100vw - 32px)), 320px); aspect-ratio: 1; height: auto; }
@@ -240,14 +251,34 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
         #pt.is-hours { font-size: 16cqmin; }
         #pt-secs { font-size: 0.58em; font-weight: 400; opacity: 0.72; }
         #pt-secs.is-last { font-size: 1em; font-weight: 700; opacity: 1; }
-        #pl { max-width: 100%; overflow: hidden; font-size: 14px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
+        /* Try-out 35: a click on the clock (or Space) pauses and resumes; a
+           paused clock dims and says so. */
+        #ring { cursor: pointer; border-radius: 50%; }
+        #ring:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+        body.is-paused #pt { opacity: 0.45; }
+        #pp { display: none; position: absolute; left: 0; right: 0; bottom: 22%; text-align: center;
+          font-family: 'Space Mono', ui-monospace, monospace; font-size: max(10px, 8cqmin); font-weight: 700;
+          letter-spacing: 0.14em; color: var(--ink-2); }
+        body.is-paused #pp { display: block; }
+        /* Try-out 38: the title opens Loci's tab; the mini window stays. */
+        #pl { display: flex; align-items: baseline; gap: 6px; max-width: 100%; padding: 2px 4px; font: inherit;
+          font-size: 14px; font-weight: 700; color: var(--ink); background: none; border: 0; border-radius: 4px; cursor: pointer; }
+        #pl-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+        #pl::after { content: "↗"; flex: none; font-weight: 800; color: var(--accent); }
+        #pl:hover { text-decoration: underline; text-underline-offset: 3px; }
+        #pl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
         #pip-btns { display: flex; gap: 6px; width: 100%; }
-        #pip-btns button { flex: 1 1 auto; min-height: 36px; padding: 0 6px; font: inherit; font-size: 12px; font-weight: 700;
+        /* 59b (PART11): text buttons, 13/800, 40 tall, 6 apart. */
+        #pip-btns button { flex: 1 1 auto; min-height: 40px; padding: 0 8px; font: inherit; font-size: 13px; font-weight: 800;
           color: var(--ink); background: var(--surface); border: 1px solid var(--control-edge); border-radius: 6px;
           cursor: pointer; white-space: nowrap; }
         #pip-btns #pip-done { color: var(--on-accent); background: var(--accent); border-color: var(--accent-edge); }
         #pip-btns button[hidden] { display: none; }
         #pip-btns button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        /* Under 340 wide, five don't fit: Shuffle goes first (59b). */
+        @media (max-width: 339px) {
+          #pip-shuffle { display: none; }
+        }
         /* Narrow: Pause and Done only. */
         @media (max-width: 299px) {
           #pip-add5, #pip-shuffle, #pip-stuck { display: none; }
@@ -257,6 +288,8 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
           body { gap: 8px; padding: 8px 12px; }
           #ring { container-type: normal; width: 100%; height: auto; aspect-ratio: auto; }
           #ring svg, #pl { display: none; }
+          #ring { border-radius: 6px; text-align: center; }
+          #pp { position: static; font-size: 10px; margin-top: 2px; }
           #pt, #pt.is-hours { font-size: clamp(24px, min(34vh, 21vw), 120px); }
           #pip-btns { max-width: 280px; }
           #pip-add5, #pip-shuffle, #pip-stuck { display: none; }
@@ -264,6 +297,9 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
         /* Smaller still: the time alone fills the window. */
         @media (max-height: 139px), (max-width: 139px) {
           body { padding: 4px 8px; }
+          #pp { position: static; margin: 0 0 2px; font-size: 10px; line-height: 1; }
+          #ring { display: flex; flex-direction: column-reverse; align-items: center; }
+          body.is-paused #pt, body.is-paused #pt.is-hours { font-size: clamp(14px, min(52vh, 20vw), 120px); }
           #pip-btns { display: none; }
           #pt, #pt.is-hours { font-size: clamp(16px, min(70vh, 22vw), 140px); }
         }
@@ -296,29 +332,65 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
       secsEl.id = "pt-secs";
       timeEl.append(leadEl, secsEl);
       ring.appendChild(timeEl);
+      const pausedEl = doc.createElement("div");
+      pausedEl.id = "pp";
+      pausedEl.setAttribute("aria-hidden", "true");
+      pausedEl.textContent = "PAUSED";
+      ring.appendChild(pausedEl);
+      // At block end there is nothing to resume: the block-end choices are
+      // the main window's (Codex review of #439).
+      const togglePlay = () => { if (!sessionCompletePendingRef.current) setIsTimerRunning(r => !r); };
+      ring.setAttribute("role", "button");
+      ring.tabIndex = 0;
+      ring.title = "Pause or resume · Space";
+      ring.addEventListener("click", togglePlay);
       doc.body.appendChild(ring);
+      // Space pauses and resumes from anywhere in the window; on a focused
+      // button it presses that button instead. Enter on the ring (a focusable
+      // button of its own) does the same (review of #511, 1.3).
+      doc.addEventListener("keydown", (e) => {
+        if ((e.key !== " " && !(e.key === "Enter" && e.target === ring)) || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+        const t = e.target;
+        if (t && t !== ring && t.closest?.("button")) return;
+        e.preventDefault();
+        togglePlay();
+      });
 
-      const labelEl = doc.createElement("div");
+      // The title opens Loci's tab and leaves the mini window open (the
+      // browser's own "Back to tab" closes it).
+      const labelEl = doc.createElement("button");
       labelEl.id = "pl";
+      labelEl.type = "button";
+      labelEl.title = "Open Loci — this window stays open";
+      labelEl.addEventListener("click", () => { try { window.focus(); } catch (_) {} });
+      const labelText = doc.createElement("span");
+      labelText.id = "pl-text";
+      labelEl.appendChild(labelText);
       doc.body.appendChild(labelEl);
 
       const btnsEl = doc.createElement("div");
       btnsEl.id = "pip-btns";
-      const button = (id, text, onClick) => {
+      const button = (id, text, onClick, { label, tip } = {}) => {
         const b = doc.createElement("button");
         b.id = id;
         b.type = "button";
         b.textContent = text;
+        if (label) b.setAttribute("aria-label", label);
+        if (tip) b.title = tip;
         b.addEventListener("click", onClick);
         btnsEl.appendChild(b);
       };
-      // At block end there is nothing to resume: the block-end choices are
-      // the main window's (Codex review of #439).
-      button("pip-play", "Pause", () => { if (!sessionCompletePendingRef.current) setIsTimerRunning(r => !r); });
+      button("pip-play", "Pause", togglePlay);
       button("pip-add5", "+5", () => addTimeToSession(5));
       // Shuffle plays another variation of the sound that's on (as the
       // focus page's "Another" does); hidden when nothing can shuffle.
-      button("pip-shuffle", "Shuffle", () => pipActionsRef?.current?.onShuffle?.());
+      // 59b: restored at Rohan's request; do not remove again.
+      const shuffle = () => { if (pipActionsRef?.current?.canShuffle?.()) pipActionsRef.current.onShuffle?.(); };
+      button("pip-shuffle", "Shuffle", shuffle, { label: "Shuffle sound", tip: "Another track (S)" });
+      // S shuffles from the mini window too (59b), not while typing.
+      doc.addEventListener("keydown", (e) => {
+        if ((e.key === "s" || e.key === "S") && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat) shuffle();
+      });
       // I'm stuck opens the main window on the focus page (its I'm stuck
       // panel, 59d, arrives with 6c).
       button("pip-stuck", "I’m stuck", () => { try { window.focus(); } catch (_) {} pipActionsRef?.current?.onStuck?.(); });
@@ -870,6 +942,72 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
     return focusLedgerEntryRef.current;
   };
 
+  // The open session as App saves it for a refresh (#527): every number a
+  // restore needs, or null when there is nothing worth restoring. Not at block
+  // end: the 00:00 hold has already banked that session's entry.
+  const snapshotOpenSession = () => {
+    const sessionId = focusSessionIdRef.current;
+    if (!sessionId || sessionCompletePendingRef.current || !focusSessionTaskRef.current) return null;
+    const now = Date.now();
+    const left = isTimerRunning && deadlineRef.current != null
+      ? Math.max(0, Math.ceil((deadlineRef.current - now) / 1000))
+      : timerSecondsLeft;
+    // The block has run out and the bell is about to ring: nothing to resume.
+    if (left <= 0) return null;
+    return {
+      v: 1,
+      savedAt: now,
+      focusSessionId: sessionId,
+      focusStartedAt: focusStartedAtRef.current,
+      initialPlannedSeconds: focusInitialPlannedSecondsRef.current,
+      accumulatedElapsed: focusSessionAccumulatedElapsedRef.current,
+      accumulatedPlanned: focusSessionAccumulatedPlannedRef.current,
+      blocks: focusBlocksRef.current,
+      extensions: focusExtensionsRef.current,
+      startDay: focusStartDayRef.current,
+      dayEndsAt: focusDayEndsAtRef.current,
+      ledgerEntry: focusLedgerEntryRef.current,
+      pausedAt: focusPausedAtRef.current,
+      timerMaxSeconds,
+      timerSecondsLeft: left,
+      // A block set up paused at block end counts once it runs.
+      staged: stagedBlockRef.current,
+      // Only what the ledger event and the screens need, not the whole task.
+      task: slimTask(focusSessionTaskRef.current),
+    };
+  };
+
+  // Puts a saved session back, paused, with the time worked as it was saved.
+  // Its pause counts from the last save (or the pause it was already in), so
+  // the 15-minute and end-of-day rules close it, crediting only what was
+  // saved, if the page was away long enough (59j).
+  const restoreOpenSession = (snap) => {
+    if (focusSessionIdRef.current || !snap?.focusSessionId) return false;
+    focusSessionIdRef.current = snap.focusSessionId;
+    focusStartedAtRef.current = snap.focusStartedAt;
+    focusInitialPlannedSecondsRef.current = snap.initialPlannedSeconds;
+    focusSessionTaskRef.current = snap.task;
+    focusSessionAccumulatedElapsedRef.current = snap.accumulatedElapsed;
+    focusSessionAccumulatedPlannedRef.current = snap.accumulatedPlanned;
+    focusLedgerEntryRef.current = snap.ledgerEntry || null;
+    focusBlocksRef.current = snap.blocks;
+    stagedBlockRef.current = !!snap.staged;
+    focusExtensionsRef.current = snap.extensions;
+    focusPausedAtRef.current = snap.pausedAt ?? snap.savedAt;
+    focusStartDayRef.current = snap.startDay ?? null;
+    focusDayEndsAtRef.current = snap.dayEndsAt ?? null;
+    // The same task is already the pin: the sync effect must leave this
+    // session's block alone.
+    prevActiveTaskRef.current = { uuid: snap.task?.uuid ?? null };
+    setFocusSessionId(snap.focusSessionId);
+    setTimerMaxSeconds(snap.timerMaxSeconds);
+    setTimerSecondsLeft(snap.timerSecondsLeft);
+    setIsTimerRunning(false);
+    setFocusSessionActive(true);
+    setExpiryCheck((n) => n + 1);
+    return true;
+  };
+
   // Consumes the active session (if any) and returns everything needed to
   // build its terminal (focus_completed/focus_abandoned) event, or null if
   // there's nothing to end — either no session was ever started, or an
@@ -878,6 +1016,7 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
   const endFocusSession = (focusEndReason) => {
     const result = readOpenSession(focusEndReason);
     if (!result) return null;
+    clearOpenSession();
     focusSessionIdRef.current = null;
     focusStartedAtRef.current = null;
     focusInitialPlannedSecondsRef.current = null;
@@ -919,6 +1058,7 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
     // elapsed time would be reset to a full block (Codex review of #436).
     keepTimerOnTaskChange: (on = true) => { skipNextDurationSyncRef.current = on; },
     focusSessionId, startFocusSession, endFocusSession,
+    snapshotOpenSession, restoreOpenSession,
     // When the open session began — screen 3 prints it as "STARTED 09:41".
     // Read from the ref each render rather than held in state: it is set once
     // per session and never changes within one, so it needs no re-render of

@@ -53,10 +53,14 @@ test("stops after the day end are marked, and Move N to tomorrow takes them off 
   const dayEnd = page.locator(".dm-dayend");
   await expect(dayEnd).toContainText("DAY ENDS 02:00");
   await expect(page.locator(".dm-stop.is-over")).toHaveCount(1);
-  // 56a: the line says it in words, the overrun in red; the bar hatches it.
-  await expect(fact(page)).toHaveText("Keep this order and you finish at 02:35, 35 minutes past your day end.");
-  await expect(fact(page).locator(".dm-fact-alert")).toHaveText("35 minutes past your day end.");
-  await expect(page.locator(".dm-daybar-legend")).toContainText("past your day end 35m");
+  // 56a, Turn 76 (c): the line says it in words, in red, as Today does: the
+  // task that won't fit and its length (not a separate 35m overrun), and the
+  // time left before the day ends is free.
+  await expect(fact(page)).toHaveText("Keep this order and you finish at 02:35, 1 task won’t fit · 2h.");
+  await expect(fact(page).locator(".dm-fact-alert")).toHaveText("1 task won’t fit · 2h.");
+  await expect(page.locator(".dm-daybar-legend")).toContainText("won’t fit 2h");
+  await expect(page.locator(".dm-daybar-legend")).not.toContainText("past your day end");
+  await expect(dayEnd).toHaveText("DAY ENDS 02:00 · 1h30m FREE");
   // Screen readers hear where a stop sits against the day's end (brief §6).
   await expect(page.locator(".dm-stop.is-over .dm-main")).toHaveAttribute("aria-label", /after the day ends$/);
 
@@ -73,6 +77,8 @@ test("stops after the day end are marked, and Move N to tomorrow takes them off 
   await page.locator(".dm-back").click();
   // Three tasks: the one thing on the wall, two rows in the list.
   await expect(page.getByTestId("today-tasks-list").locator("[data-testid='task-row']")).toHaveCount(2);
+  // Today gives the same total as the Day map (Turn 76 c).
+  await expect(page.locator(".today-wontfit-line")).toContainText("1 won’t fit · 2h");
 });
 
 test("on a laptop the action sits on the right of the route (52e)", async ({ page }) => {
@@ -172,11 +178,14 @@ async function dayOverAt18(page, { unpin }) {
   await page.getByRole("button", { name: /^Focus windows/ }).click();
   await page.getByRole("button", { name: "Remove focus window 1" }).click();
   await page.getByRole("button", { name: "Add a window" }).click();
-  await expect(page.getByLabel("Focus window 1 start time")).toHaveValue("09:00");
+  // Add leaves a new window empty to fill in.
+  await expect(page.getByLabel("Focus window 1 start time")).toHaveValue("");
+  await page.getByLabel("Focus window 1 start time").fill("09:00");
+  await page.getByLabel("Focus window 1 end time").fill("17:00");
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
   if (unpin) {
     await page.locator(".wall-title").click();
-    await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
+    await page.getByTestId("task-detail").getByRole("button", { name: /^Not now$/ }).click();
   }
   await openDayMapPage(page);
   await expect(page.locator(".dm-stop.is-over")).toHaveCount(3);

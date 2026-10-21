@@ -490,7 +490,9 @@ export function formatReminderLabel(ts) {
   const now = new Date();
   const isToday = d.toDateString() === now.toDateString();
   const isTomorrow = d.toDateString() === new Date(now.getTime() + 86400000).toDateString();
-  const timeStr = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  // 24-hour, as Loci's clock, the Day map and the time picker are, whatever
+  // the browser's locale.
+  const timeStr = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
   if (isToday) return `Today ${timeStr}`;
   if (isTomorrow) return `Tomorrow ${timeStr}`;
   return d.toLocaleDateString([], { month: "short", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined }) + " " + timeStr;

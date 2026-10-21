@@ -152,42 +152,26 @@ test("Horizons in Drag anywhere mode: Space and Enter on the circle mark the tas
   await expect(rows).toHaveCount(before - 2);
 });
 
-// 57a, 57b.25: from 1600 the Fronts column sits beside the ladder and the
-// switch is hidden; a front's page opens in the list's place, its card
-// tinted, and a rung or Back brings the list back.
-test("Horizons ≥1600: the Fronts column; a front's page opens in place of the list", async ({ page }) => {
-  await page.setViewportSize({ width: 1700, height: 1000 });
+// Plan 76a (Rohan, 6 Oct): from 1600 there's no Fronts column beside the
+// list (57a is gone); Horizons | Fronts switch the views, as on a laptop, and
+// the content stops at 1480.
+test("Horizons ≥1600: no Fronts column; the switch shows Fronts", async ({ page }) => {
+  await page.setViewportSize({ width: 1903, height: 940 });
   await enterDemo(page);
-  await page.setViewportSize({ width: 1700, height: 1000 });
+  await page.setViewportSize({ width: 1903, height: 940 });
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
-  const column = page.locator(".plan-fronts-col");
-  await expect(column.getByRole("heading", { name: /^Fronts · \d+ ACTIVE$/ })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Fronts" })).toBeHidden();
-
-  await column.getByRole("button", { name: "New front" }).click();
-  await page.locator("#plan-new-name").fill("Thesis");
-  await page.getByRole("button", { name: "Add the front" }).click();
-  const card = column.locator(".plan-front", { hasText: "Thesis" });
-  await expect(card.locator(".plan-front-tally")).toHaveText("0 / 0");
-
-  await card.click();
-  await expect(page.getByRole("heading", { name: "Thesis", level: 2 })).toBeVisible();
-  await expect(page.locator(".plan-open")).toHaveCount(0);
-  await expect(card).toHaveClass(/is-open/);
   await expect(page.locator(".plan-ladder")).toBeVisible();
-  const list = await page.locator(".plan-fp").boundingBox();
-  const col = await column.boundingBox();
-  expect(list.x + list.width).toBeLessThanOrEqual(col.x);
-
-  // A rung brings its list back.
-  await page.locator(".plan-rung[data-horizon='month']").click();
-  await expect(page.locator(".plan-open").getByRole("heading", { name: "This month" })).toBeVisible();
-  await expect(card).not.toHaveClass(/is-open/);
-
-  // So does Back.
-  await card.click();
-  await page.getByRole("button", { name: "Back to Fronts" }).click();
-  await expect(page.locator(".plan-open")).toBeVisible();
+  await expect(page.locator(".plan-fronts-col")).toHaveCount(0);
+  // 1480 at the page's scale (every page scales since the try-out, D1).
+  const z = await page.evaluate(() => document.documentElement.currentCSSZoom);
+  const content = await page.locator(".plan-horizons-view").boundingBox();
+  expect(Math.round(content.width)).toBeLessThanOrEqual(Math.ceil(1480 * z));
+  expect(Math.abs((content.x + content.width / 2) - 1903 / 2)).toBeLessThanOrEqual(2);
+  await page.getByRole("tab", { name: "Fronts" }).click();
+  await expect(page.locator(".plan-ladder")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "New front" })).toBeVisible();
+  await page.getByRole("tab", { name: "Horizons" }).click();
+  await expect(page.locator(".plan-ladder")).toBeVisible();
 });
 
 // 57c: drag a row onto a rung — a dashed ring and "Drop to move here", then
@@ -215,6 +199,25 @@ test("Horizons: a row dragged onto a rung moves there, with Undo", async ({ page
   await expect(list.getByText(title, { exact: true })).toHaveCount(0);
   await expect(page.locator(".undo-toast")).toContainText(`Moved to This month: ${title}`);
   await page.locator(".undo-toast").getByRole("button", { name: /Undo/ }).click();
+  await expect(list.getByText(title, { exact: true })).toBeVisible();
+});
+
+// Review of #511, 3.1: a drag made with the keyboard has no pointer; a mouse
+// that merely moves over a rung meanwhile must not pick the rung for it.
+test("Horizons: a keyboard drag is not sent to a rung by a stray mouse move", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await enterDemo(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
+  const list = page.locator(".plan-open");
+  const row = list.locator(".plan-row").first();
+  const title = (await row.locator(".plan-row-title").innerText()).trim();
+  const target = await page.locator(".plan-rung[data-horizon='month']").boundingBox();
+  await row.locator(".plan-row-grip").focus();
+  await page.keyboard.press("Space");
+  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 5 });
+  await page.keyboard.press("Space");
+  await expect(page.locator(".undo-toast")).toHaveCount(0);
   await expect(list.getByText(title, { exact: true })).toBeVisible();
 });
 
@@ -253,25 +256,24 @@ test("Edit horizons: rename, hide, add a 2-week horizon, delete it with Undo", a
   await expect(dialog).toHaveCount(0);
 });
 
-// Q46: the drawer never covers the open list — over the ladder on a laptop,
-// in the Fronts column's place from 1600.
-for (const [width, cover] of [[1100, ".plan-ladder"], [1280, ".plan-ladder"], [1700, ".plan-fronts-col"]]) {
-  test(`Horizons at ${width}: the task drawer leaves the open list whole (Q46)`, async ({ page }) => {
+// Q46 + try-out item 6: the drawer opens on the right, like everywhere else,
+// and never covers the open list — the page makes room for it.
+for (const width of [1100, 1280, 1700]) {
+  test(`Horizons at ${width}: the task drawer opens on the right and leaves the open list whole (Q46)`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await enterDemo(page);
     await page.setViewportSize({ width, height: 900 });
     await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
     const list = page.locator(".plan-open");
-    const listBox = await list.boundingBox();
-    const coverBox = await page.locator(cover).boundingBox();
     await list.locator(".plan-row").first().click();
     const drawer = await page.getByTestId("task-detail").boundingBox();
+    // Right edge of the window.
+    expect(Math.abs(drawer.x + drawer.width - width)).toBeLessThanOrEqual(2);
+    await page.waitForTimeout(300);
+    const listBox = await list.boundingBox();
     const overlap = Math.min(drawer.x + drawer.width, listBox.x + listBox.width) - Math.max(drawer.x, listBox.x);
     expect(overlap).toBeLessThanOrEqual(0);
-    // It sits over what it replaces.
-    expect(drawer.x).toBeLessThanOrEqual(coverBox.x + 1);
-    // The list didn't move, and its next row takes a plain click.
-    expect((await list.boundingBox()).x).toBe(listBox.x);
+    expect(listBox.width).toBeGreaterThan(width < 1280 ? 260 : 300);
     await list.locator(".plan-row").nth(1).click();
     await expect(page.getByTestId("task-detail")).toContainText((await list.locator(".plan-row-title").nth(1).innerText()).trim());
   });

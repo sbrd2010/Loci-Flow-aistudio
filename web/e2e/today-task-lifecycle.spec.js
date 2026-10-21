@@ -31,11 +31,28 @@ function todayRow(page, title) {
   return page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { hasText: title }).first();
 }
 
+// On a phone the open list is a sheet over the wall, and it can cover the
+// wall's "+" (the test used to win a race with the sheet sliding up). Once the
+// sheet settles: the "+" if nothing covers it, else N, which opens the same.
+async function openAddFromPhone(page) {
+  await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
+  const plus = page.getByRole("button", { name: "Add a task to Today" }).first();
+  const reachable = await plus.evaluate(el => {
+    const r = el.getBoundingClientRect();
+    return !!document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2)?.closest(".wall-peek-add");
+  });
+  if (reachable) await plus.click();
+  else {
+    await page.evaluate(() => document.activeElement?.blur?.());
+    await page.keyboard.press("n");
+  }
+}
+
 async function openAddTask(page) {
   // The list's "+ Add task" (72); on a phone the wall's + (70a).
   const add = page.locator(".today-list-add");
   if (await add.isVisible()) await add.click();
-  else await page.getByRole("button", { name: "Add a task to Today" }).first().click();
+  else await openAddFromPhone(page);
   await expect(page.getByRole("heading", { name: "New task" })).toBeVisible({ timeout: 5_000 });
 }
 
@@ -107,7 +124,7 @@ test("mobile reliability: Today task can be added, edited, focused, completed, r
 
   // Pinning makes it the wall's one thing; the overlay does not auto-open.
   await openTaskMenu(page, editedTitle);
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Do this now/ }).click();
   const wallTitle = page.locator(".wall-title");
   await expect(wallTitle).toHaveText(editedTitle, { timeout: 5_000 });
   // The list is a sheet over the wall on a phone; put it away before using
@@ -163,8 +180,8 @@ test("mobile reliability: Add Task accepts manual sub-steps from pasted bullets"
 
   // Editing a step in place (the pencil icon) rewrites its text without removing it.
   await page.getByRole("button", { name: "Edit step Compare flight prices" }).click();
-  await subStepsList.locator("input").fill("Compare flight and train prices");
-  await subStepsList.locator("input").press("Enter");
+  await subStepsList.locator(".add-step-edit").fill("Compare flight and train prices");
+  await subStepsList.locator(".add-step-edit").press("Enter");
   await expect(subStepsList).toContainText("Compare flight and train prices");
   await expect(subStepsList).not.toContainText("Compare flight prices");
 
@@ -199,7 +216,7 @@ test("mobile reliability: Add Task flushes an in-progress sub-step edit on submi
   // Start editing a step but submit the whole dialog (Save/Add Task button)
   // instead of the row-level ✓ or Enter — the pending edit must still land.
   await page.getByRole("button", { name: "Edit step Compare flight prices" }).click();
-  await subStepsList.locator("input").fill("Compare flight and train prices");
+  await subStepsList.locator(".add-step-edit").fill("Compare flight and train prices");
   await page.getByTestId("add-task-submit").click();
 
   await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
@@ -260,7 +277,7 @@ test("mobile reliability: editing the wall's task off Today clears its focus/pin
 
   // Pin it — isNowFocus: true, the same state a running session leaves.
   await openTaskMenu(page, title);
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Do this now/ }).click();
   await expect(page.locator(".wall-title")).toHaveText(title, { timeout: 5_000 });
 
   // The sheet's Horizon picker can move the task off Today. The one thing
@@ -388,6 +405,9 @@ test("mobile reliability: the Done today fold and its count agree across a day c
   const list = page.getByTestId("today-tasks-list");
   const title = "10-minute walk between tasks to reset your focus";
   await list.locator("[data-testid='task-row']", { hasText: title }).getByTestId("task-checkbox").click();
+  // The Undo toast holds while the pointer is over it, and Playwright never
+  // moves the mouse off the spot it clicked, so the toast could cover the fold.
+  await page.mouse.move(0, 0);
   // 58.6: the done rows sit in the "Done today · N" fold.
   const fold = page.locator(".today-done-fold .today-parked-line");
   const doneToday = Number((await fold.innerText()).match(/Done today · (\d+)/i)[1]);

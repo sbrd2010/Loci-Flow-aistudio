@@ -47,7 +47,7 @@ describe("defaultFixTime", () => {
 describe("previewFix + describeFixMoves (58d)", () => {
   const lunch = breaksFromWindows([{ startMin: hm("08:00"), endMin: hm("13:35") }, { startMin: hm("14:15"), endMin: hm("17:30") }], "Lunch");
   const route = [task("cv", "Prepare CV", 120), task("ph", "Pharmacy: order the refill", 15), task("hale", "Reply to Prof. Hale", 25),
-    task("dad", "Dad: write the letter", 25), task("pr", "Course: PRINCE2", 60), task("grove", "Grove: tailor the summary", 45), task("dentist", "Book the dentist", 10)];
+    task("dad", "Mum: write the letter", 25), task("pr", "Course: Spanish", 60), task("grove", "Grove: tailor the summary", 45), task("dentist", "Book the dentist", 10)];
   const call = task("call", "Call with the Everly recruiter", 30);
   const opts = { from: hm("11:35"), breaks: lunch, durationOf };
 
@@ -61,8 +61,8 @@ describe("previewFix + describeFixMoves (58d)", () => {
 
   it("fixing a stop already on the route moves only the ones in its way", () => {
     const moves = describeFixMoves(previewFix(route, route[2], hm("16:30"), opts), route[2]);
-    // Hale leaves 14:35 for 16:30; Dad and PRINCE2 flow up behind Pharmacy.
-    expect(moves.moved.title).toBe("Dad: write the letter");
+    // Hale leaves 14:35 for 16:30; Mum and Spanish flow up behind Pharmacy.
+    expect(moves.moved.title).toBe("Mum: write the letter");
     expect(clock(moves.moved.from)).toBe("15:05");
     expect(clock(moves.moved.to)).toBe("14:35");
   });

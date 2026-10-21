@@ -64,10 +64,7 @@ test("a reorder on the Day map shows on Today", async ({ page }) => {
 
   const held = page.locator(".dm-stop.is-dragging");
   const settle = () => page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
-  const moved = () => page.waitForFunction(() => {
-    const el = document.querySelector(".dm-stop.is-dragging");
-    return !!el && el.style.transform && el.style.transform !== "none" && !/translate3d\(0px, 0px/.test(el.style.transform);
-  });
+  const moved = () => page.waitForFunction(() => !!document.querySelector(".dm-stop.is-drop-before, .dm-stop.is-drop-after"));
   await stops.first().focus();
   await page.keyboard.press("Space");
   await expect(held).toHaveCount(1);

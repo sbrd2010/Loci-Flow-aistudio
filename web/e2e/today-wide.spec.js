@@ -44,30 +44,33 @@ test("1680: no third column; the switch shows the Day map in the list's place, a
   await expect(page.getByTestId("today-tasks-list")).toBeVisible();
 });
 
-// Nothing is zoomed: a 2130 screen (a 1920 monitor at 90% browser zoom)
-// stops at the 1760 cap.
-test("2130: not zoomed; the content stops at 1760px and the margins take the rest", async ({ page }) => {
+// Turn 76: the page grows with the window, by the smaller of width ÷ 1422
+// and height ÷ 800, a tenth smaller since the try-out, never above ×1.1
+// (try-out issue 4; 2130×1000 would be ×1.25 ÷ 1.1), and runs edge to edge:
+// no width cap.
+test("2130×1000: ×1.1 at most, edge to edge with 40px gutters (no 1760 cap)", async ({ page }) => {
   await enterDemo(page, { width: 2130, height: 1000 });
-  expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBe(1);
+  const z = 1.1;
+  expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBeCloseTo(z, 3);
   const wall = await page.locator(".today-layout").boundingBox();
-  expect(Math.round(wall.width)).toBeLessThanOrEqual(1760);
-  expect(Math.round(wall.width)).toBeGreaterThanOrEqual(1740);
+  expect(Math.abs(wall.x - 40 * z)).toBeLessThan(1);
+  expect(Math.abs(wall.x + wall.width - (2130 - 40 * z))).toBeLessThan(1);
   const brand = await page.getByRole("banner").getByRole("button", { name: "Loci" }).boundingBox();
   expect(Math.abs(brand.x - wall.x)).toBeLessThan(2);
 });
 
-// 2400 is a 1920 monitor at 80% browser zoom: not zoomed back up (Codex
-// review of #490), and the title keeps the laptop's sizes.
-test("2400: not zoomed, and the title keeps its laptop size, list shown or hidden", async ({ page }) => {
+// 75a: the title is 46 (its length steps below that), list shown or hidden.
+test("2400×1200: ×1.1 at most, and the title goes a step up with the list hidden (75d)", async ({ page }) => {
   await enterDemo(page, { width: 2400, height: 1200 });
-  expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBe(1);
+  expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBeCloseTo(1.1, 3);
   const shown = await page.locator(".wall-title").evaluate(el => [el.dataset.len, parseFloat(getComputedStyle(el).fontSize)]);
   await page.locator("body").click({ position: { x: 5, y: 300 } });
   await page.keyboard.press("l");
   await expect(page.locator("section.today-list")).toBeHidden();
   const hidden = await page.locator(".wall-title").evaluate(el => parseFloat(getComputedStyle(el).fontSize));
-  const size = { s: 52, m: 44, l: 36, xl: 32 }[shown[0]];
-  expect([shown[1], hidden]).toEqual([size, size]);
+  const size = { s: 46, m: 46, l: 36, xl: 32 }[shown[0]];
+  const up = { s: 52, m: 52, l: 40, xl: 36 }[shown[0]];
+  expect([shown[1], hidden]).toEqual([size, up]);
 });
 
 // Codex review of #422: on the widest screens the header keeps the content's
@@ -155,10 +158,10 @@ test("made the one thing, a task moves to NOW on the route; the rest flows after
   const lastTitle = (await stops.last().locator(".tdm-title").textContent()).trim();
 
   await stops.last().click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Do this now/ }).click();
   await expect(page.locator(".wall-title")).toHaveText(lastTitle);
-  await expect(stops.first()).toHaveAccessibleName(new RegExp(`^Now to \\d\\d:\\d\\d, ${lastTitle}, the one thing`));
-  await expect(stops.first().locator(".tdm-one-thing")).toHaveText(/^THE ONE THING · UNTIL \d\d:\d\d$/);
+  await expect(stops.first()).toHaveAccessibleName(new RegExp(`^Now to \\d\\d:\\d\\d, ${lastTitle}, your now task`));
+  await expect(stops.first().locator(".tdm-one-thing")).toHaveText(/^NOW · UNTIL \d\d:\d\d$/);
   await expect(stops).toHaveCount(3);
 
   await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
@@ -277,7 +280,7 @@ test("a fixed time shows its span and stays put; a task dropped above it that wo
 
 // Rohan: Hide list is an arrow, as a chat app's sidebar; with the list away,
 // an arrow at the right edge brings it back. The header reads "+ Add task".
-test("the list hides with an arrow and comes back from the right edge's arrow; + Add task", async ({ page }) => {
+test("the list hides with an arrow and comes back from the Show list pill at the top right (75d); + Add task", async ({ page }) => {
   await enterDemo(page, { width: 1280, height: 900 });
   await expect(page.locator(".today-list-add")).toHaveText("+ Add task");
   await expect(page.locator(".today-list-head")).not.toContainText("Must-do");
@@ -285,7 +288,8 @@ test("the list hides with an arrow and comes back from the right edge's arrow; +
   await expect(page.locator(".tasks-section")).toBeHidden();
   const show = page.getByRole("button", { name: /^Show list · \d+/ });
   const [box, layout] = await Promise.all([show.boundingBox(), page.locator(".today-layout").boundingBox()]);
-  expect(Math.round(box.width)).toBe(40);
+  await expect(show).toContainText(/Show list · \d+/);
+  expect(box.height).toBeLessThan(48);
   expect(Math.abs(box.x + box.width - (layout.x + layout.width))).toBeLessThan(2);
   await show.click();
   await expect(page.locator(".tasks-section")).toBeVisible();
@@ -297,7 +301,11 @@ test("the list hides with an arrow and comes back from the right edge's arrow; +
 test("72: the task side reads goal · NOW · UNTIL · title · step · buttons, and the footer counts the day", async ({ page }) => {
   await enterDemo(page, { width: 1280, height: 900 });
   const goal = page.locator(".wall-goal");
-  expect(Math.round((await goal.boundingBox()).height)).toBe(44);
+  // One line, and the Target as a quiet line under it (try-out 26).
+  await expect(goal.locator(".wall-goal-target")).toBeVisible();
+  const h = Math.round((await goal.boundingBox()).height);
+  expect(h).toBeGreaterThanOrEqual(44);
+  expect(h).toBeLessThanOrEqual(52);
   await expect(page.locator(".wall-kicker-wide")).toHaveText(/^NOW · UNTIL \d\d:\d\d$/);
   await expect(page.locator(".wall-step-count")).toHaveText(/^1 \/ \d+$/);
   await expect(page.locator(".wall-first-step-label")).toBeHidden();
@@ -311,9 +319,10 @@ test("72: the task side reads goal · NOW · UNTIL · title · step · buttons, 
 });
 
 // The widest screens: the dragged copy lands on the row it is moved to.
-test("2560: a row moved by keyboard drag lands where its copy shows", async ({ page }) => {
-  await enterDemo(page, { width: 2560, height: 1440 }, "2024-06-15T10:00:00");
-  expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBe(1);
+test("2880: a row moved by keyboard drag lands where its copy shows", async ({ page }) => {
+  await enterDemo(page, { width: 2880, height: 1620 }, "2024-06-15T10:00:00");
+  // The largest scale (×1.1, try-out issue 4): the copy still lands on the row.
+  expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBeCloseTo(1.1, 3);
   const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']");
   const titles = async () => (await rows.locator(".task-title-text").allInnerTexts()).map(t => t.trim());
   const [first, second] = await titles();
@@ -339,14 +348,14 @@ test("2560: a row moved by keyboard drag lands where its copy shows", async ({ p
 test("no one thing: picking the second task puts it at NOW on the Day map", async ({ page }) => {
   await enterDemo(page, { width: 1280, height: 900 }, "2024-06-15T10:00:00");
   await page.locator(".wall-title").click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Not now$/ }).click();
   await expect(page.locator(".wall-pick")).toBeVisible();
   const second = (await page.locator(".wall-pick-title").nth(1).innerText()).trim();
   await page.locator(".wall-pick-row").nth(1).click();
   await expect(page.locator(".wall-title")).toHaveText(second);
   await routeReady(page);
   await expect(column(page).locator("button.tdm-stop .tdm-title").first()).toContainText(second);
-  await expect(column(page).locator("button.tdm-stop .tdm-title").first()).toContainText("THE ONE THING");
+  await expect(column(page).locator("button.tdm-stop .tdm-title").first()).toContainText("NOW · UNTIL");
 });
 
 // Loopcheck of #486: with only set-time things open (a call can't be the one
@@ -364,7 +373,7 @@ test("no one thing, only set-time things open: the wall says so", async ({ page 
   await step2.getByRole("button", { name: "Fix at 12:00" }).click();
   await page.locator(".dm-back").click();
   await page.locator(".wall-title").click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Not now$/ }).click();
   const rows = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)");
   const others = rows.filter({ hasNotText: "Call with the recruiter" });
   while (await others.count()) {
@@ -376,3 +385,44 @@ test("no one thing, only set-time things open: the wall says so", async ({ page 
   await expect(page.locator(".wall-empty-title")).toHaveText("Only set-time things left");
   await expect(page.locator(".wall-pick-all")).toHaveText("All 1 task");
 });
+
+// Try-out 19: the From panel opens in full over Today's Day map view; the
+// scrolling column doesn't cut it off.
+test("Today's Day map view: the From panel opens whole, and a quarter-hour moves the route", async ({ page }) => {
+  await enterDemo(page, { width: 1680, height: 1000 });
+  await routeReady(page);
+  await column(page).locator(".dm-from-select").click();
+  const panel = page.getByRole("dialog", { name: "Start the route at" });
+  const set = panel.getByRole("button", { name: "Set" });
+  await expect(set).toBeVisible();
+  // Nothing covers it: the topmost element at its centre is the button.
+  expect(await set.evaluate(el => { const r = el.getBoundingClientRect(); return document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2) === el; })).toBe(true);
+  await panel.getByRole("button", { name: /^\d\d:\d\d$/ }).first().click();
+  await expect(panel).toHaveCount(0);
+  await expect(column(page).locator(".dm-from-select")).not.toContainText("(now)");
+});
+
+// 12 Oct try-out: on a 24″ (2133×1150 at 90% zoom) the list may grow to 760
+// and the hero to 840, so the task doesn't sit beside an empty band; a 16″
+// (1536) keeps 42% of its row, under the old 680.
+for (const [width, height, min, max, hero] of [[1536, 864, 600, 625, 720], [2133, 1150, 755, 760, 840]]) {
+  test(`${width}×${height}: the list column is ${min}–${max}px and the hero up to ${hero}px`, async ({ page }) => {
+    await enterDemo(page, { width, height });
+    await page.locator("body").click({ position: { x: 5, y: 300 } });
+    const list = page.locator("section.today-list");
+    if (!(await list.isVisible())) await page.keyboard.press("l");
+    await expect(list).toBeVisible();
+    // The column itself (the list's panel adds its own padding around it).
+    const w = await page.locator(".today-layout").evaluate(el => parseFloat(getComputedStyle(el).gridTemplateColumns.split(" ").pop()));
+    expect(w).toBeGreaterThanOrEqual(min - 1);
+    expect(w).toBeLessThanOrEqual(max + 1);
+    const heroMax = await page.locator(".wall-hero").evaluate(el => parseFloat(getComputedStyle(el).maxWidth));
+    expect(heroMax).toBe(hero);
+    // List closed: the goal band and the task share one column, edges aligned.
+    await page.keyboard.press("l");
+    await expect(list).toBeHidden();
+    await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
+    const [goal, heroBox] = await Promise.all([page.locator(".wall-goal").boundingBox(), page.locator(".wall-hero").boundingBox()]);
+    expect(Math.abs(goal.x - heroBox.x)).toBeLessThan(2);
+  });
+}

@@ -116,7 +116,16 @@ test("mobile reliability: the goal is one gold line on a phone, with its days", 
   await expect(band.locator(".wall-goal-name")).toBeHidden();
   await expect(band.locator(".wall-goal-kicker")).toBeHidden();
   expect(await band.evaluate(el => getComputedStyle(el).backgroundColor)).toBe("rgb(241, 223, 178)");
-  expect(Math.round((await band.boundingBox()).height)).toBe(44);
+  // Try-out 26: the Target is a quiet line under it: one line (cut with …),
+  // and the band above it keeps its one-line height. Measured against the
+  // font's own line, not a pixel count, so the real fonts pass too.
+  const target = band.locator(".wall-goal-target");
+  await expect(target).toHaveText(/^Target · \S/);
+  const m = await target.evaluate(el => ({ h: el.getBoundingClientRect().height, line: parseFloat(getComputedStyle(el).lineHeight) }));
+  expect(m.h).toBeLessThanOrEqual(m.line * 1.5);
+  const h = (await band.boundingBox()).height;
+  expect(h - m.h).toBeGreaterThanOrEqual(40);
+  expect(h - m.h).toBeLessThanOrEqual(52);
 });
 
 // Laptop and wider keep 51's look: the filled gold card, its figures on the
@@ -250,6 +259,8 @@ test("laptop: ↓ opens the start chooser, 1–4 pick, the choice is remembered,
   const menu = page.getByRole("menu", { name: "How long" });
   await expect(menu).toBeVisible();
   await expect(menu.getByRole("menuitemradio", { name: /^The whole task · 2h/ })).toBeVisible();
+  // The digit goes to the menu only once focus is inside it.
+  await expect(menu.locator(":focus")).toHaveCount(1);
   await page.keyboard.press("3");
   await expect(menu).toHaveCount(0);
   await expect(page.locator(".wall-primary-figure")).toHaveText("50:00");
@@ -258,6 +269,7 @@ test("laptop: ↓ opens the start chooser, 1–4 pick, the choice is remembered,
   // Remembered: the chooser opens on the pick; the whole task leaves no helper.
   await page.getByRole("button", { name: "How long" }).click();
   await expect(menu.getByRole("menuitemradio", { name: /^50 minutes/ })).toHaveAttribute("aria-checked", "true");
+  await expect(menu.locator(":focus")).toHaveCount(1);
   await page.keyboard.press("4");
   await expect(page.locator(".wall-primary-figure")).toHaveText("2:00:00");
   await expect(page.locator(".wall-start-helper")).toHaveCount(0);
@@ -292,7 +304,7 @@ test("mobile reliability: ticking the next step on the wall moves to the step af
 // and its sheet lets it go.
 async function unpinFromList(page) {
   await page.locator(".wall-title").click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Not now$/ }).click();
 }
 
 // The task sheet, for the wall's one thing: its title opens it (52: the sheet
@@ -317,7 +329,7 @@ async function makeOneThing(page, title) {
   await dialog.getByTestId("add-task-submit").click();
   await expect(dialog).toHaveCount(0);
   await page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { hasText: title }).locator(".task-title-text").click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Do this now/ }).click();
   await expect(page.locator(".wall-title")).toContainText(title, { timeout: 8_000 });
 }
 
@@ -335,7 +347,7 @@ async function emptyTheWall(page) {
 // one tap from being the one thing, with Undo. No Start.
 test("mobile reliability: no one thing: pick from the top three, with Undo", async ({ page }) => {
   await emptyTheWall(page);
-  await expect(page.locator(".wall-empty-title")).toHaveText("Pick the one thing");
+  await expect(page.locator(".wall-empty-title")).toHaveText("Pick what to do now");
   // The Key Deadline's band stays (L1); no Start while nothing is chosen.
   await expect(page.locator(".today-wall.is-empty .wall-goal-name")).toHaveText("Project launch");
   await expect(page.locator(".today-wall .wall-primary")).toHaveCount(0);
@@ -348,7 +360,7 @@ test("mobile reliability: no one thing: pick from the top three, with Undo", asy
   const second = listTitles[1];
   await picks.nth(1).click();
   await expect(page.locator(".wall-title")).toHaveText(second);
-  await expect(page.getByRole("status").filter({ hasText: `Made the one thing: ${second}` })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: `Your now task: ${second}` })).toBeVisible();
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.locator(".wall-pick")).toBeVisible({ timeout: 8_000 });
 });
@@ -608,8 +620,8 @@ test("mobile reliability: the one thing can be let go from its sheet, and Undo p
 
   await page.locator(".wall-title").click();
   const detail = page.getByTestId("task-detail");
-  await expect(detail.locator(".detail-kicker").first()).toHaveText("TODAY · THE ONE THING");
-  await detail.getByRole("button", { name: /^Not the one thing now/ }).click();
+  await expect(detail.locator(".detail-kicker").first()).toHaveText("TODAY · NOW");
+  await detail.getByRole("button", { name: /^Not now$/ }).click();
   await expect(page.locator(".wall-pick")).toBeVisible({ timeout: 8_000 });
   await expect(page.getByRole("status").filter({ hasText: `Unpinned: ${title}` })).toBeVisible();
 
@@ -999,7 +1011,7 @@ test("mobile reliability: pinning a longer task with the sheet open re-measures 
   await expect(page.locator(".add-card")).not.toBeVisible({ timeout: 5_000 });
   const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { hasText: "A very long task title" });
   await row.locator(".task-title-text").click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Do this now/ }).click();
   await expect(page.getByTestId("task-detail")).toHaveCount(0);
   await expect(page.locator(".wall-title")).toHaveText(long);
   await expect(sheet).toBeVisible();
@@ -1218,28 +1230,30 @@ test("Split a task: rows are locked while the AI works, and an answer outside tw
   await expect(dialog.getByLabel("Step 1", { exact: true })).toHaveValue("");
 });
 
-// Laptop, 1024px and up (Addendum X3; 35e/36c): edge to edge, content capped
-// at 1200px and centred; with the list hidden, the task has its own column
-// with the Day map beside it (54c). From 1600px the cap is 1760px (54a, 54e,
-// today-wide.spec.js).
-test("laptop: no phone-card frame; content capped at 1200px, centred", async ({ page }) => {
+// From 1280px (75a–b, Turn 76) Today runs edge to edge with 40px gutters —
+// no centred cap — and the page grows with the window by the smaller of
+// width ÷ 1422 and height ÷ 800, so the gutters grow with it.
+const scaleOf = (w, h) => Math.min(1.1, Math.max(1, Math.min(w / 1422, h / 800)));
+
+test("laptop: no phone-card frame; the task and the list run edge to edge with 40px gutters", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1080 });
   await page.goto("/");
   await page.clock.setFixedTime(new Date("2024-06-15T10:00:00"));
   await page.getByTestId("demo-btn").click();
   const frame = await page.locator(".app-container").boundingBox();
   expect(Math.round(frame.width)).toBe(1440);
-  // With the list shown the two columns span the 1200px cap, centred.
   await page.keyboard.press("l");
   await expect(page.locator(".tasks-section")).toBeVisible();
-  await page.waitForTimeout(500);
+  await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
   const [band, list] = await Promise.all([page.locator(".wall-goal").boundingBox(), page.locator(".tasks-section").boundingBox()]);
-  expect(Math.round(band.x)).toBe(120);
-  expect(Math.round(list.x + list.width)).toBe(1320);
+  const gutter = 40 * scaleOf(1440, 1080);
+  expect(Math.abs(band.x - gutter)).toBeLessThan(2);
+  expect(Math.abs(list.x + list.width - (1440 - gutter))).toBeLessThan(2);
 });
 
-// 50k: from 1600px the cap is 1760px, centred. (Not zoomed.)
-test("wide: from 1600px the cap is 1760px, centred (50k)", async ({ page }) => {
+// No width cap on a 1920 monitor either: ×1.35 ÷ 1.1 at 1920×1080 (try-out
+// D1), held to ×1.1 (try-out issue 4); gutters 40px at that scale.
+test("wide: 1920×1080 is ×1.1 and edge to edge, no 1760px cap (Turn 76)", async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto("/");
   await page.clock.setFixedTime(new Date("2024-06-15T10:00:00"));
@@ -1247,10 +1261,11 @@ test("wide: from 1600px the cap is 1760px, centred (50k)", async ({ page }) => {
   await page.keyboard.press("l");
   await expect(page.locator(".tasks-section")).toBeVisible();
   await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
+  const z = 1.1;
+  expect(await page.evaluate(() => document.documentElement.currentCSSZoom)).toBeCloseTo(z, 3);
   const [band, list] = await Promise.all([page.locator(".wall-goal").boundingBox(), page.locator(".tasks-section").boundingBox()]);
-  // (1920 − 1760) / 2 = 80 each side.
-  expect(Math.round(band.x)).toBe(80);
-  expect(Math.round(list.x + list.width)).toBe(1840);
+  expect(Math.abs(band.x - 40 * z)).toBeLessThan(1);
+  expect(Math.abs(list.x + list.width - (1920 - 40 * z))).toBeLessThan(1);
 });
 
 test("laptop: with the list hidden, the task sits on one left edge, its links and THEN line under it (72c)", async ({ page }) => {
@@ -1266,9 +1281,12 @@ test("laptop: with the list hidden, the task sits on one left edge, its links an
     page.getByRole("button", { name: /^Split it/ }).boundingBox(),
   ]);
   for (const box of [kicker, title, start]) expect(Math.abs(box.x - band.x)).toBeLessThan(1);
-  // 72: Start, Mark done and Split it on one row, to the goal's right edge.
+  // 75 (PART5 §5): Start, Mark done and Split it on one row; Start is sized
+  // to its words, never stretched to the column (narrower than 22rem).
   expect(done.x).toBeGreaterThan(start.x + start.width);
-  expect(Math.round(split.x + split.width)).toBe(Math.round(band.x + band.width));
+  expect(split.x).toBeGreaterThan(done.x + done.width);
+  expect(start.width).toBeLessThan(22 * 16);
+  expect(split.x + split.width).toBeLessThan(band.x + band.width);
   expect(Math.abs((done.y + done.height / 2) - (start.y + start.height / 2))).toBeLessThan(4);
   expect(Math.round(done.y)).toBe(Math.round(split.y));
   // 72: the task block is centred in its height: on a taller screen it
@@ -1327,6 +1345,7 @@ test("laptop: the header's + Add task adds to Today; M opens the Day map (72)", 
 // second L mid-move reverses it and leaves nothing behind.
 test("laptop: show/hide glides with transform and opacity, reverses mid-move and leaves no residue (51e–f)", async ({ page }) => {
   await enterLaptop(page);
+  const wasOpen = await page.locator(".tasks-section").isVisible();
   await page.keyboard.press("l");
   const props = await page.evaluate(() => document.getAnimations().flatMap(a =>
     a.effect.getKeyframes().flatMap(k => Object.keys(k).filter(p => !["offset", "easing", "composite", "computedOffset"].includes(p)))));
@@ -1336,11 +1355,11 @@ test("laptop: show/hide glides with transform and opacity, reverses mid-move and
     const a = document.getAnimations().find(x => x.effect.target.classList.contains("wall-title"));
     return a && { d: a.effect.getTiming().duration, e: a.effect.getTiming().easing, from: a.effect.getKeyframes()[0].transform };
   });
-  expect(titleAnim.d).toBe(280);
-  expect(titleAnim.e).toBe("cubic-bezier(0.2, 0, 0, 1)");
-  // Both laptop states take the stage scale, so the title glides without a
-  // zoom (from 1600px, where hiding the list takes the wide sizes, it zooms).
-  expect(titleAnim.from).toMatch(/^translate\(.+\) scale\(1\)$/);
+  // 75e: the glide is 480ms; hiding the list takes the title from 46 to 52
+  // (75d), so it zooms from 46/52 — or back from 52/46 when L shows it.
+  expect(titleAnim.d).toBe(480);
+  expect(titleAnim.e).toBe("cubic-bezier(0.22, 1, 0.36, 1)");
+  expect(titleAnim.from).toMatch(wasOpen ? /^translate\(.+\) scale\(0\.88\d*\)$/ : /^translate\(.+\) scale\(1\.13\d*\)$/);
   await page.waitForTimeout(120);
   await page.keyboard.press("l");
   await expect(page.locator(".tasks-section")).toBeHidden({ timeout: 2_000 });
@@ -1351,9 +1370,9 @@ test("laptop: show/hide glides with transform and opacity, reverses mid-move and
 });
 
 // Codex review of #405. What leaves fades out as a copy (the hidden-state
-// controls on Show, 80ms): the copy must outlive the layout switch. And the
-// list's own 120ms fade on Hide must not end the task's glide, which runs to
-// 320ms. Both are read in the same task as the click, so timing can't flake.
+// controls on Show): the copy must outlive the layout switch. And the
+// list's own 320ms fade on Hide (75e) must not end the task's glide, which
+// runs to 560ms. Both are read in the same task as the click, so timing can't flake.
 test("laptop: the leaving controls fade out, and hiding lets the task finish its glide (51f)", async ({ page }) => {
   await enterLaptop(page);
   await page.locator(".wall-peek").click();
@@ -1368,7 +1387,7 @@ test("laptop: the leaving controls fade out, and hiding lets the task finish its
     const glide = document.querySelector("[data-flip='title']").getAnimations()[0];
     return { listFade: fade.effect.getTiming().duration, glideState: glide?.playState };
   });
-  expect(hide.listFade).toBe(120);
+  expect(hide.listFade).toBe(320);
   expect(hide.glideState).toBe("running");
 });
 
@@ -1489,7 +1508,7 @@ test("Make this the one thing: the old one goes back to the top of the list, tin
   await laptopListOpen(page);
   const oldTitle = (await page.locator(".wall-title").innerText()).trim();
   await listRow(page, "10-minute walk").locator(".task-title-text").click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Do this now/ }).click();
   await expect(page.locator(".wall-title")).toHaveText(/10-minute walk/);
   const firstRow = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']").first();
   await expect(firstRow.locator(".task-title-text")).toHaveText(oldTitle);
@@ -1524,7 +1543,7 @@ test("keyboard on a row: P makes it the one thing, T moves it to tomorrow, ⌫ d
 test("laptop: hovering a row shows the pin, which makes it the one thing (50d)", async ({ page }) => {
   await laptopListOpen(page);
   const row = listRow(page, "10-minute walk");
-  const pin = row.getByRole("button", { name: /^Make the one thing/ });
+  const pin = row.getByRole("button", { name: /^Do this now/ });
   await expect(pin).toBeHidden();
   await row.hover();
   await expect(pin).toBeVisible();
@@ -1589,9 +1608,9 @@ test("mobile reliability: making the one thing on an empty wall offers Undo", as
   const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed)").first();
   const title = (await row.locator(".task-title-text").innerText()).trim();
   await row.locator(".task-title-text").click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Make this the one thing/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Do this now/ }).click();
   await expect(page.locator(".wall-title")).toHaveText(title);
-  await expect(page.getByRole("status").filter({ hasText: `Made the one thing: ${title}` })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: `Your now task: ${title}` })).toBeVisible();
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.locator(".wall-pick")).toBeVisible({ timeout: 8_000 });
 });
@@ -1816,7 +1835,7 @@ test("the task sheet keeps a P4 task's priority on offer", async ({ page }) => {
 test("laptop: with no one thing, the list's Day map view still opens the Day map page", async ({ page }) => {
   await enterLaptop(page);
   await page.locator(".wall-title").click();
-  await page.getByTestId("task-detail").getByRole("button", { name: /^Not the one thing now/ }).click();
+  await page.getByTestId("task-detail").getByRole("button", { name: /^Not now$/ }).click();
   await expect(page.locator(".wall-pick")).toBeVisible();
   await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Day map", exact: true }).click();
   await page.getByRole("button", { name: "Day map page ›" }).click();
@@ -1915,4 +1934,17 @@ test("the goal band shows the Target; Edit goal in its record opens Key deadline
   // Cleared, the line goes.
   await page.getByLabel("Target").fill("");
   await expect(preview).not.toContainText("TARGET");
+});
+
+// Review of #511, 2.3: the title's click has no key of its own, so Tab
+// reaches a plain "Open the task" button, seen only while it is focused.
+test("Tab reaches Open the task, which shows when focused and opens the task", async ({ page }) => {
+  await enterDemo(page);
+  const open = page.getByRole("button", { name: "Open the task", exact: true });
+  await expect(open).toHaveCount(1);
+  expect((await open.boundingBox()).width).toBeLessThanOrEqual(1);
+  await open.focus();
+  expect((await open.boundingBox()).width).toBeGreaterThan(40);
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("task-detail")).toBeVisible();
 });

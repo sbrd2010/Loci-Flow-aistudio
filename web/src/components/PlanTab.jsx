@@ -21,6 +21,8 @@ import { isDeferred } from "../utils/deferral";
 import { getFocusWindows } from "../utils/focusWindows";
 import { useLociDayStr } from "../hooks/useTodayStr";
 import "../styles/plan.css";
+// Plan 76: the runway and horizon cards, after plan.css.
+import "../styles/plan76.css";
 
 // Plan's Fronts (45i): one card per front — its name, GOAL on the goal
 // front, how many tasks are open on it and its next move. The card opens the

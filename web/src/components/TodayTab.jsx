@@ -21,6 +21,7 @@ import { buildParkTaskTasks } from "../utils/coachActions";
 import { shouldStopFocusOnComplete, focusBlockSeconds, chosenStartOption } from "../utils/focusSession";
 import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
 import { celebrate } from "../utils/celebrations";
+import { playListTone, uiSoundsOn } from "../utils/uiSounds";
 import { track } from "../firebase";
 import { cancelReminder } from "../utils/reminders";
 import { getLociDayStr } from "../utils/dailyAnchors";
@@ -42,10 +43,9 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { isDeferred, isOnToday } from "../utils/deferral";
 import TaskDetail from "./TaskDetail";
-import { IconChevronRight } from "./ui/icons";
 import DayMapColumn from "./DayMapColumn";
 import { makeOneThing, undoOneThing } from "../utils/oneThing";
-import { addThought } from "../utils/thoughts";
+import { addPlainThought } from "../utils/thoughts";
 import { clearMyDay, undoClearMyDay } from "../utils/clearMyDay";
 import { buildGoalRecord, goalStartDay, goalTaskDoneToday, nextGoalTask } from "../utils/goalRecord";
 import { horizonsFromConfig } from "../utils/horizons";
@@ -60,6 +60,8 @@ import { weekTasks, pullFromWeek, undoPullFromWeek, takesPinFrom } from "../util
 import FromWeekSheet from "./FromWeekSheet";
 import { cssZoom, unzoomTransform } from "../utils/cssZoom";
 import { useListChoreography, listMotionMode } from "../hooks/useListChoreography";
+// 75 (Turn 76): the 1280+ Today, last so it wins the cascade.
+import "../styles/today75.css";
 
 const PencilIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -93,7 +95,7 @@ function SortableTaskItem({ id, isOver = false, disabled = false, children }) {
 }
 
 export default function TodayTab({
-  payload, savePayload, savePayloadAsync, saveConfigPatch, onOpenDayMap, onOpenPlan, onOpenCoach, onScattered, onOpenAddTask,
+  payload, savePayload, savePayloadAsync, saveConfigPatch, onOpenDayMap, onOpenPlan, onOpenCoach, onScattered, onOpenAddTask, onOpenAddThought,
   // 57f: "September ended · 2 left · Review" until the review is done.
   reviewLine = null,
   // 55d–e, Q47: "Day ends 17:30 · Close the day"; and the closed day.
@@ -252,10 +254,22 @@ export default function TodayTab({
   peekOpenRef.current = peekOpen;
   // From 840px the list shows and hides with the 51 choreography; phones
   // keep the sheet.
-  const toggleList = useListChoreography({ rootRef: layoutRef, listRef: sheetRef, setOpen: setPeekOpen });
+  const toggleListMotion = useListChoreography({ rootRef: layoutRef, listRef: sheetRef, setOpen: setPeekOpen });
+  // 75e: a soft tone as the list hides or shows, when Settings › Sounds is on.
+  const listTone = (shown) => { if (uiSoundsOn(config)) playListTone(shown); };
+  const toggleList = (next) => { listTone(next); toggleListMotion(next); };
   const closeSheet = () => {
     const hadFocus = sheetRef.current?.contains(document.activeElement);
     setPeekOpen(false);
+    if (hadFocus) requestAnimationFrame(() => document.querySelector(".wall-peek")?.focus());
+  };
+  // Every way of putting the list away — its button, Escape, a swipe down —
+  // glides and sounds the same (Codex review of #500); focus left inside the
+  // list goes to the control that brings it back.
+  const hideList = () => {
+    if (!listMotionActive()) { listTone(false); closeSheet(); return; }
+    const hadFocus = sheetRef.current?.contains(document.activeElement);
+    toggleList(false);
     if (hadFocus) requestAnimationFrame(() => document.querySelector(".wall-peek")?.focus());
   };
   // Dragging the grabber moves the sheet with the finger (no re-render per
@@ -292,7 +306,7 @@ export default function TodayTab({
       setTimeout(() => { sheetDragRef.current = null; }, 0);
       if (dy < -60) setSheetFull(true);
       else if (wasFull && dy > 60 && dy < 240) setSheetFull(false);
-      else if (dy > (wasFull ? 240 : 80)) closeSheet();
+      else if (dy > (wasFull ? 240 : 80)) hideList();
     };
     const cancel = (ev) => {
       if (ev.pointerId !== pointerId) return;
@@ -418,7 +432,7 @@ export default function TodayTab({
     }
     if (isCompleted) setUndo({ kind: "done", task, wasPinned: !!task.isNowFocus, at: actionAt });
     if (isCompleted) {
-      celebrate();
+      celebrate({ sound: uiSoundsOn(config) });
       track("task_completed", { horizon: task.horizonLevel });
     }
     let nextContributions = [...contributions];
@@ -492,7 +506,7 @@ export default function TodayTab({
   const handleFocusBrainDump = (text) => {
     // Q56.2: a parked thought lands in Mind Box, under the same 50 cap.
     // False when Mind Box is full, so Focus keeps the text and says so.
-    const added = addThought(payload, text);
+    const added = addPlainThought(payload, text);
     if (!added) return false;
     savePayload(added.payload);
     setParked(p => ({ sessionId: focusSessionId, n: p.sessionId === focusSessionId ? p.n + 1 : 1 }));
@@ -946,7 +960,7 @@ export default function TodayTab({
       return front ? `Put on ${front.name}: ${title}` : `Off its front: ${title}`;
     }
     // A previous one thing in Plan isn't on the list, so the toast names the new one (#489).
-    if (u.kind === "swap") return u.previous?.horizonLevel === "today" ? `${u.previous.title} is back at the top of the list.` : `${u.fromPlan ? "Moved to Today and made the one thing" : "Made the one thing"}: ${title}`;
+    if (u.kind === "swap") return u.previous?.horizonLevel === "today" ? `${u.previous.title} is back at the top of the list.` : `${u.fromPlan ? "Moved to Today as your now task" : "Your now task"}: ${title}`;
     return `${{ done: "Marked done", delete: "Deleted", tomorrow: "Moved to tomorrow", bringback: "Brought back", park: "Parked", restore: "Restored", unpin: "Unpinned" }[u.kind]}: ${title}`;
   };
   const undoText = undo ? undoMessage(undo) : "";
@@ -1247,7 +1261,8 @@ export default function TodayTab({
     const orderMap = new Map(reordered.map((t, i) => [getTaskKey(t), i]));
     // The Day map follows: one order for both.
     const next = routeFollowsList(tasks.map(t =>
-      orderMap.has(getTaskKey(t)) ? { ...t, orderIndex: orderMap.get(getTaskKey(t)), lastUpdated: Date.now() } : t
+      // Sync: only a task whose place changed is stamped (see reflowRoute).
+      orderMap.has(getTaskKey(t)) && t.orderIndex !== orderMap.get(getTaskKey(t)) ? { ...t, orderIndex: orderMap.get(getTaskKey(t)), lastUpdated: Date.now() } : t
     ), todayStr, { config, nowMinutes: currentDayMinutes(windows), breaks: routeBreaks(windows, config, todayStr) });
     savePayload({ ...payload, tasks: next });
     // Q1 (69c): dropped above a fixed time it can't finish before, a task
@@ -1403,7 +1418,7 @@ export default function TodayTab({
   const wallDaysLeft = commitmentDaysLeft(wallKickerFront, new Date());
   // The goal band (Addendum M): the same front, with its done/total when it
   // has tasks on it. With no front and no Key Deadline there is no band.
-  // Q49: its Target ("3 job apply + PRINCE2") is the Key Deadline's own, so
+  // Q49: its Target (the least you'll do each day) is the Key Deadline's own, so
   // it shows only when the band is the Key Deadline, not another front.
   const wallGoal = wallKickerFront
     ? {
@@ -1441,7 +1456,7 @@ export default function TodayTab({
   const isFromYesterday = (t) => t.deferredUntil === todayStr;
   // The list reads in the route's order (Q59): one order, with fixed times
   // where they fall; a task not on the route yet goes by its own order.
-  const route = useDayRoute({ payload, savePayload });
+  const route = useDayRoute({ payload, savePayload, syncing: isSyncingFromCache });
   const routeIndex = new Map(route.routeTasks.map((t, i) => [getTaskId(t), i]));
   const remainingTasks = todayTasksAll
     .filter((t) => !t.isCompleted && t.uuid !== pinnedFocusTask?.uuid)
@@ -1739,7 +1754,7 @@ export default function TodayTab({
     };
   };
   const handleRescueThought = (text) => {
-    const added = addThought(payload, text);
+    const added = addPlainThought(payload, text);
     if (!added) return false;
     savePayload(added.payload);
     return true;
@@ -1804,7 +1819,7 @@ export default function TodayTab({
       // before this listener runs, so its state already reads "closed".
       if (e.target?.closest?.('[role="dialog"], .modal-card, [data-testid="task-options-menu"]')) return;
       if (isFocusMode || splitTask || isAddTaskDialogOpen || rescueActive || frontPickerTask) return;
-      closeSheet();
+      hideList();
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
@@ -1846,7 +1861,7 @@ export default function TodayTab({
       }
       if (key === "l") {
         if (listMotionActive()) toggleList(!peekOpenRef.current);
-        else setPeekOpen(v => !v);
+        else { listTone(!peekOpenRef.current); setPeekOpen(v => !v); }
       } else if (key === " ") {
         e.preventDefault();
         startWallFocus(pinnedFocusTask);
@@ -1914,12 +1929,13 @@ export default function TodayTab({
         startChoice={config.focusStartChoice}
         onChooseStart={(choice) => saveConfigPatch({ focusStartChoice: choice })}
         peekOpen={peekOpen}
-        onTogglePeek={() => (listMotionActive() ? toggleList(!peekOpen) : setPeekOpen(v => !v))}
+        onTogglePeek={() => { if (listMotionActive()) toggleList(!peekOpen); else { listTone(!peekOpen); setPeekOpen(v => !v); } }}
         onAdd={onOpenAddTask}
         onOpenDayMap={onOpenDayMap}
         onOpenTask={() => pinnedFocusTask && setDetailUuid(pinnedFocusTask.uuid)}
         remainingCount={wallRemainingCount}
         nextTitle={remainingTasks[0]?.title || null}
+        nextMinutes={remainingTasks[0] ? getEstimate(remainingTasks[0]) : null}
         onStepDone={(stepId) => pinnedFocusTask && handleSubStepToggle(pinnedFocusTask, stepId)}
         timerLabel={wallLiveTimerLabel}
         live={wallSessionLive ? {
@@ -1952,6 +1968,7 @@ export default function TodayTab({
         onFromWeek={() => setWeekPickerOpen(true)}
         onScattered={onScattered}
         onRescue={() => { rescue.noteStuck(); openRescueMode(); }}
+        onThought={onOpenAddThought}
         rescueHint={rescue.hint}
         nowCount={pinnedFocusTask ? todayTasksAll.filter(t => !t.isCompleted).length : 0}
         nowUntil={pinnedFocusTask ? route.routeTasks.find(t => getTaskId(t) === String(pinnedFocusTask.uuid))?.routeEndMinutes ?? null : null}
@@ -2022,8 +2039,9 @@ export default function TodayTab({
               <button type="button" className="today-view-opt" aria-pressed={listView === "daymap"} onClick={() => setListView("daymap")}>Day map</button>
             </span>
             {pinnedFocusTask && (
-              <button type="button" className="today-list-hide" aria-label="Hide list" title="Hide list · L" onClick={() => (listMotionActive() ? toggleList(false) : closeSheet())}>
-                <IconChevronRight size={20} />
+              <button type="button" className="today-list-hide" aria-label="Hide list" title="Hide list · L" onClick={hideList}>
+                {/* PART5 §3: an →| glyph, no circle. */}
+                <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M11 4l5 5-5 5M3 3v12" fill="none" stroke="currentColor" strokeWidth="1.6" /></svg>
               </button>
             )}
           </span>
@@ -2079,7 +2097,9 @@ export default function TodayTab({
                             onOpen={openDetail}
                             onMakeOneThing={handleMakeOneThing}
                             isMin={minimumDayIds.has(String(task.uuid))}
-                            fromTag={task.reviewFrom?.day === todayStr ? task.reviewFrom.label : null}
+                            // Turn 76: the horizon-review tag ("FROM WEEK TO …") isn't
+                            // shown on Today; the task still heads the list.
+                            reminderDot
                             fromYesterday={isFromYesterday(task)}
                             fixedAt={task.dayMapDate === todayStr ? task.dayMapFixedMinutes ?? null : null}
                             minutes={getEstimate(task)}
@@ -2104,10 +2124,12 @@ export default function TodayTab({
                     </React.Fragment>
                   ))}
                 </SortableContext>
-                {firstOver === -1 && remainingTasks.length > 0 && route.scheduledTasks.length > 0 && (
+                {cut.overIds.size === 0 && remainingTasks.length > 0 && route.scheduledTasks.length > 0 && (
                   <p className="today-dayend">DAY ENDS {formatClock24(route.plan.dayEnd)}{cut.spare > 0 ? ` · ${formatSpanCaps(cut.spare)} SPARE` : ""}</p>
                 )}
-                {firstOver !== -1 && (
+                {/* Turn 76 (c): the same count and total as the Day map,
+                    even when the only task cut is the pinned one thing. */}
+                {cut.overIds.size > 0 && (
                   <p className="today-wontfit-line">
                     {cut.overIds.size} won’t fit · {formatSpanCaps(cut.wontFitMinutes).toLowerCase()}
                     {" · "}<button type="button" className="today-list-empty-link" onClick={() => setListView("daymap")}>Sort in Day map ›</button>
@@ -2343,8 +2365,11 @@ export default function TodayTab({
       {moreOpen && pinnedFocusTask && (
         <MoreSheet
           task={pinnedFocusTask}
-          onSplit={() => setSplitTask(pinnedFocusTask)}
-          onDetails={() => setDetailUuid(pinnedFocusTask.uuid)}
+          // Try-out 31: from 840px Split it is a button beside Mark done
+          // and the title opens the task, so More doesn't repeat them; a
+          // phone's quiet row has neither, so its More keeps both.
+          onSplit={sheetViewport ? () => setSplitTask(pinnedFocusTask) : undefined}
+          onDetails={sheetViewport ? () => setDetailUuid(pinnedFocusTask.uuid) : undefined}
           hiddenHorizons={horizonsFromConfig(config, todayStr).filter(h => h.hidden).map(h => h.id)}
           onMove={(dest) => (dest === "tomorrow" ? actOnTask(pinnedFocusTask, "t") : handleMoveWithUndo(pinnedFocusTask, dest))}
           onPark={() => handleParkWithUndo(pinnedFocusTask)}

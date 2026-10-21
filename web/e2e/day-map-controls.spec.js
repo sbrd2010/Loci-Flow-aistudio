@@ -27,7 +27,8 @@ test("laptop: the controls sit in the right column as text: From and Fixed time,
   const route = await page.locator(".dm-route-wrap").boundingBox();
   const box = await controls.boundingBox();
   expect(box.x).toBeGreaterThanOrEqual(route.x + route.width);
-  await expect(controls.getByRole("button")).toHaveText(["Fixed time"]);
+  // From is a button that opens its time panel (try-out 19).
+  await expect(controls.getByRole("button")).toHaveText([/^\d\d:\d\d \(now\)/, "Fixed time"]);
   await expect(page.getByRole("button", { name: /Auto-fill|Clear route/ })).toHaveCount(0);
   await expect(page.getByRole("region", { name: /^Unscheduled/ })).toHaveCount(0);
   // Every open Today task is a stop; the NOW stop keeps its Start focus.
@@ -81,15 +82,13 @@ test("keyboard: Enter on a stop opens its sheet, Esc hands focus back; Space pic
   await expect(stops.nth(1)).toBeFocused();
 
   const before = await stopTitles(page);
-  // Each step waits for the page's own state: the stop held, then moved.
+  // Each step waits for the page's own state: the stop held, then its drop
+  // line (the route holds still while a stop is held).
   // dnd-kit measures the list a frame or two after the pick-up; an arrow key
   // before that is ignored, which no person types fast enough to hit.
   const held = page.locator(".dm-stop.is-dragging");
   const settle = () => page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
-  const moved = () => page.waitForFunction(() => {
-    const el = document.querySelector(".dm-stop.is-dragging");
-    return !!el && el.style.transform && el.style.transform !== "none" && !/translate3d\(0px, 0px/.test(el.style.transform);
-  });
+  const moved = () => page.waitForFunction(() => !!document.querySelector(".dm-stop.is-drop-before, .dm-stop.is-drop-after"));
   await stops.nth(1).focus();
   await page.keyboard.press("Space");
   await expect(held).toHaveCount(1);

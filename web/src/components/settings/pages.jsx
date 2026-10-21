@@ -5,7 +5,7 @@ import { COACH_PROFILE_NOTE_MAX_LENGTH } from "../../utils/coachProfile";
 import { MEMORY_ENTRY_MAX_LENGTH, clearAllMemory, editMemoryEntry, isMemoryEnabled, removePinnedFact, removeRecentObservation } from "../../utils/coachMemory";
 import { analyzeFocusWindowRows, formatTime12 } from "../../utils/focusWindowHints";
 import { formatSpan } from "../../utils/dayMapPlan";
-import { focusWindowRows, focusWindowsSummary, reconcileFocusWindowRows } from "../../utils/settingsSummary";
+import { focusWindowRows, focusWindowsSummary, reconcileFocusWindowRows, sortFocusWindowRows } from "../../utils/settingsSummary";
 import { exportPayloadAsJson, exportTasksAsCsv } from "../../utils/exportTasks";
 import { isNativeApp } from "../../utils/nativeNotifs";
 import { IconPencil, IconPlus, IconX } from "../ui/icons";
@@ -96,6 +96,18 @@ export function FocusWindowsPage({ config, saveConfigPatch, onBack, backLabel })
     });
   };
   const change = (i, field, value) => save(rows.map((w, j) => j === i ? { ...w, [field]: value } : w));
+  // Try-out issue 1: once you are done with the windows (focus leaves the
+  // list), they fall into the order of the day. Not when focus only moves
+  // to another row: rows are keyed by index, so a sort then would hand the
+  // input or Remove you chose to another window (Codex review, round 2).
+  const sortOnLeave = (e) => {
+    if (e.currentTarget.contains(e.relatedTarget)) return;
+    // Switching to another window also blurs, with no relatedTarget: the rows
+    // stay as they are until the person is back (review of #511, 3.2).
+    if (!document.hasFocus()) return;
+    const sorted = sortFocusWindowRows(rows);
+    if (sorted.some((w, j) => w !== rows[j])) save(sorted);
+  };
   // The time between two windows is a break on the Day map (57b answer 2),
   // "Break" unless named here.
   const [breakName, setBreakName, flushBreakName] = useAutosave(config.breakName || "", (v) => {
@@ -109,7 +121,7 @@ export function FocusWindowsPage({ config, saveConfigPatch, onBack, backLabel })
       backLabel={backLabel}
       lede="When you want to focus. The Day map plans inside these, and the last one sets when your day ends."
     >
-      <div className="set-list">
+      <div className="set-list" onBlur={sortOnLeave}>
         {rows.map((w, i) => {
           const hint = hints[i] || {};
           const suspect = !!hint.meridiemFix;
@@ -136,7 +148,7 @@ export function FocusWindowsPage({ config, saveConfigPatch, onBack, backLabel })
             </div>
           );
         })}
-        <button type="button" className="set-row set-add" onClick={() => save([...rows, { start: "09:00", end: "17:00" }])}>
+        <button type="button" className="set-row set-add" onClick={() => save([...rows, { start: "", end: "" }])}>
           <IconPlus size={18} /> Add a window
         </button>
       </div>
@@ -248,7 +260,7 @@ export function KeyDeadlinePage({ config, saveConfigPatch, onBack }) {
       {/* Q49: "Target", as the band says it; "minimum" is the Day map's. */}
       <label className="set-field">
         <span className="set-label">Target</span>
-        <input className="set-input" value={daily} onChange={e => setDaily(e.target.value)} onBlur={flushDaily} placeholder="e.g. 3 job apply + PRINCE2" aria-describedby="set-target-note" />
+        <input className="set-input" value={daily} onChange={e => setDaily(e.target.value)} onBlur={flushDaily} placeholder="e.g. 2 applications + 1 study hour" aria-describedby="set-target-note" />
         <span className="set-note" id="set-target-note">The least you'll do each day toward this goal.</span>
       </label>
       {/* The goal record's dots (Q57.2): 7 rolling days, or Mon–Fri with a

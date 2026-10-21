@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { taskSteps, stepsPatch, applyStepsPatch } from "../utils/taskSteps";
 import { celebrate } from "../utils/celebrations";
+import { uiSoundsOn } from "../utils/uiSounds";
 import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
 import { removeScheduleFields } from "./useDayRoute";
 import { buildTaskMutationEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
@@ -122,7 +123,7 @@ export default function useTaskActions({ payload, savePayload, savePayloadAsync,
   };
 
   const handleMarkDone = (task) => {
-    celebrate();
+    celebrate({ sound: uiSoundsOn(payloadRef.current?.config) });
     const actionAt = Date.now();
     const todayDateStr = getTodayDateString();
     const lociTodayStr = getLociDayStr(new Date(), getFocusWindows(config));

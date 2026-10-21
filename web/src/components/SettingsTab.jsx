@@ -129,7 +129,7 @@ export default function SettingsTab({ initialPage = null, payload, savePayload, 
       <Row title="Reminder before" value={`${Number(config.reminderNagIntervalMinutes) || 15} min`} onClick={() => open("reminder")} />
       <SwitchRow title="Evening guard" sub="No new tasks after 20:00" checked={!!config.eveningGuardWindowActive} onChange={v => saveConfigPatch({ eveningGuardWindowActive: v })} />
       {/* Q55.2: off after 3 ignored days; switching it back on starts the count again. */}
-      <SwitchRow title="Rescue hint" sub="A line on Today when the one thing isn’t moving" checked={!config.rescueHintOff} onChange={v => saveConfigPatch(rescueHintSwitchPatch(v))} />
+      <SwitchRow title="Rescue hint" sub="A line on Today when your now task isn’t moving" checked={!config.rescueHintOff} onChange={v => saveConfigPatch(rescueHintSwitchPatch(v))} />
       {/* 57g: Edit horizons, from Settings as from Plan's header. */}
       <Row title="Edit horizons" sub="Rename, hide or add a horizon" onClick={() => setEditHorizons(true)} />
       <Row title="Anchors on Today" value={ANCHOR_MODES.find(m => m.value === (config.anchorsOnToday === "off" ? "off" : "line")).label} onClick={() => open("anchors")} />
@@ -155,6 +155,8 @@ export default function SettingsTab({ initialPage = null, payload, savePayload, 
         <span className="set-row-sub">Auto follows your device’s dark mode.</span>
       </div>
       <SwitchRow title="Show momentum" sub="Five bars under Today" checked={config.momentumEnabled !== false} onChange={v => saveConfigPatch({ momentumEnabled: v })} />
+      {/* 75e: off by default. */}
+      <SwitchRow title="Sounds" sub="Soft tones when you hide the list or finish a task" checked={config.uiSounds === true} onChange={v => saveConfigPatch({ uiSounds: v })} />
       <SwitchRow title="Drag anywhere" sub="Reorder a task by dragging anywhere on its row" checked={config.taskRowInteractionStyle === "dragAnywhere"} onChange={v => saveConfigPatch({ taskRowInteractionStyle: v ? "dragAnywhere" : "classic" })} />
     </Group>
   );

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BRAIN_DUMP_LIMIT, normalizePayload, mergeRemotePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious, mergeLocalIntoServer, clampConfigStringsForRules, sanitizeChatHistoryForRules, applyEditsSince, endLeftReviewMarks } from "./normalizePayload";
+import { BRAIN_DUMP_LIMIT, normalizePayload, mergeRemotePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious, mergeLocalIntoServer, clampConfigStringsForRules, sanitizeChatHistoryForRules, applyEditsSince, endLeftReviewMarks, keepOneThing } from "./normalizePayload";
 
 describe("normalizePayload", () => {
   it("fills missing brainDump with []", () => {
@@ -1239,5 +1239,37 @@ describe("the review mark ends when the task leaves Today (Q48.1)", () => {
     const moved = endLeftReviewMarks([t({ deferredUntil: "2026-10-02" })])[0];
     const back = endLeftReviewMarks([{ ...moved, deferredUntil: null }])[0];
     expect(back.reviewFrom).toBeUndefined();
+  });
+});
+
+describe("keepOneThing — at most one open task is the one thing", () => {
+  const t = (uuid, o = {}) => ({ uuid, title: uuid, isNowFocus: true, lastUpdated: 100, ...o });
+  const pins = (tasks) => tasks.filter(x => x.isNowFocus).map(x => x.uuid);
+
+  it("keeps the most recently updated pin", () => {
+    expect(pins(keepOneThing([t("a", { lastUpdated: 100 }), t("b", { lastUpdated: 200 })]))).toEqual(["b"]);
+  });
+
+  it("on a tie keeps the first, as Today shows it, and stamps nothing", () => {
+    const out = keepOneThing([t("a"), { uuid: "x" }, t("b")]);
+    expect(pins(out)).toEqual(["a"]);
+    expect(out[2].lastUpdated).toBe(100);
+  });
+
+  it("ignores done and deleted tasks, and leaves a single pin alone", () => {
+    const one = [t("a", { isCompleted: true }), t("b"), t("c", { isDeleted: true })];
+    expect(keepOneThing(one)).toBe(one);
+  });
+
+  it("a merge of two devices, each with its own pin, keeps one (incoming and outgoing)", () => {
+    const remote = { userId: "u", tasks: [t("a", { lastUpdated: 300 }), t("b", { isNowFocus: false, lastUpdated: 100 })] };
+    const local = { userId: "u", tasks: [t("a", { isNowFocus: false, lastUpdated: 100 }), t("b", { lastUpdated: 200 })] };
+    expect(pins(mergeRemotePayload(remote, local).tasks)).toEqual(["a"]);
+    expect(pins(mergeLocalIntoServer(remote, local, remote).tasks)).toEqual(["a"]);
+  });
+
+  it("runs as part of normalizePayload", () => {
+    const out = normalizePayload({ userId: "u", tasks: [t("a", { lastUpdated: 300 }), t("b", { lastUpdated: 200 })] });
+    expect(pins(out.tasks)).toEqual(["a"]);
   });
 });

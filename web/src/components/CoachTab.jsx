@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
+import FocusPill from "./FocusPill";
 import { auth } from "../firebase";
 import { callAI, describeAIError, getAIKeys, hasAIKey } from "../utils/aiCall";
 import { buildLocalSafetyReply } from "../utils/crisisSafety";
@@ -40,6 +41,10 @@ import "../styles/coachUI.css";
 import { isOnToday } from "../utils/deferral";
 import { focusBlockSeconds } from "../utils/focusSession";
 import { cssZoom } from "../utils/cssZoom";
+import ClampedReply from "./ClampedReply";
+import { REVIEW_PERIODS } from "../utils/coachReview";
+// 73–74 (Turn 76): Chat and Review, last so they win the cascade.
+import "../styles/coach74.css";
 
 // Visible/stored chat history cap (was 20) — the raw window actually sent to
 // the LLM stays at historyLimitForMode's 3/10, unaffected by this; the
@@ -98,8 +103,8 @@ function getLastFullTaskTime(userId) {
 
 const NO_MESSAGES = [];
 // Q50: the button under a reply, and what it reads once applied.
-const COACH_ACTION_LABELS = { COMPLETE_TASK: "Mark done", SET_NOW_FOCUS: "Make it the one thing", START_FOCUS: "Start focus", ADD_TASK: "Add to Today", PARK_TASK: "Park" };
-const COACH_ACTION_DONE = { COMPLETE_TASK: "Marked done", SET_NOW_FOCUS: "The one thing", START_FOCUS: "Focus started", ADD_TASK: "Added", PARK_TASK: "Parked" };
+const COACH_ACTION_LABELS = { COMPLETE_TASK: "Mark done", SET_NOW_FOCUS: "Make it your now task", START_FOCUS: "Start focus", ADD_TASK: "Add to Today", PARK_TASK: "Park" };
+const COACH_ACTION_DONE = { COMPLETE_TASK: "Marked done", SET_NOW_FOCUS: "Your now task", START_FOCUS: "Focus started", ADD_TASK: "Added", PARK_TASK: "Parked" };
 const clockHHMM = (ms) => {
   const d = new Date(ms);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -111,7 +116,10 @@ const briefChipLabel = (brief) => {
   return `${d.getDate()} ${d.toLocaleString("en-GB", { month: "short" })} ${clockHHMM(brief.at)}`;
 };
 
-export default function CoachTab({ payload, savePayload, savePayloadAsync, saveSubPath, saveSubPaths, saveSubPathsAsync, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null, chatDraft = "", setChatDraft = () => {}, uid, writeActivityEvents, stuck = null, onClearStuck, onBackToFocus, onOpenPrivacy }) {
+export default function CoachTab({ payload, savePayload, savePayloadAsync, saveSubPath, saveSubPaths, saveSubPathsAsync, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null, chatDraft = "", setChatDraft = () => {}, uid, writeActivityEvents, stuck = null, onClearStuck, onBackToFocus, onOpenPrivacy, onOpenDayMap = null }) {
+  // 75i/75k: a session running while Chat is open shows as the focus pill.
+  const sessionPill = !!onBackToFocus && !!focusTimer.activeTask;
+  const [moreOpen, setMoreOpen] = useState(false);
   const { tasks = [], config = {}, brainDump = [], contributions = [] } = payload;
   const windows = getFocusWindows(config);
   // "Today" is the Loci day: a task moved to tomorrow stays off it until the
@@ -150,6 +158,8 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
   // in the kicker and the placeholder.
   const coachName = config.mentorName || "Coach";
   const [coachTab, setCoachTab] = useState("chat");
+  // Review's period lives here: its switch sits in the tab row (73a).
+  const [reviewPeriod, setReviewPeriod] = useState("7d");
 
   const chatInput = chatDraft;
   const setChatInput = setChatDraft;
@@ -1545,23 +1555,61 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
       // Rects and scrollY are screen px, scrollHeight is CSS px (cssZoom.js).
       const z = cssZoom();
       const rect = col.getBoundingClientRect();
-      const below = Math.max(0, document.documentElement.scrollHeight - (rect.bottom + window.scrollY) / z);
+      // What's below is the page's own bottom padding (it clears the phone's
+      // tab bar). Not the gap under the column: a column started too short
+      // would measure its own shortfall as "below" and stay short.
+      const main = col.closest(".screen-content");
+      const below = main ? Number.parseFloat(getComputedStyle(main).paddingBottom) || 0 : 0;
       col.style.setProperty("--coach-chrome", `${Math.round((rect.top + window.scrollY) / z + below)}px`);
     };
     fit();
     // 62h: the newest message sits at the bottom; opening Chat starts there.
     const win = col.querySelector(".chat-window");
     if (win) win.scrollTop = win.scrollHeight;
+    // 74: and it stays pinned there while the messages settle (a long reply
+    // is cut to four lines after it first lays out) or grow, unless you
+    // have scrolled up to read.
+    let pinned = true;
+    const onScroll = () => { pinned = win.scrollHeight - win.clientHeight - win.scrollTop < 8; };
+    const pin = () => { if (pinned) win.scrollTop = win.scrollHeight; };
+    const contentRo = win && typeof ResizeObserver === "function" ? new ResizeObserver(pin) : null;
+    const watch = () => { if (contentRo) [...win.children].forEach(c => contentRo.observe(c)); };
+    const added = win && typeof MutationObserver === "function" ? new MutationObserver(() => { watch(); pin(); }) : null;
+    if (win) {
+      win.addEventListener("scroll", onScroll, { passive: true });
+      watch();
+      added?.observe(win, { childList: true });
+    }
     window.addEventListener("resize", fit);
     // Something appearing above the column (the offline banner) moves it
     // without a window resize; the page's size changes, so re-fit then.
     const ro = typeof ResizeObserver === "function" ? new ResizeObserver(fit) : null;
     ro?.observe(document.body);
-    return () => { window.removeEventListener("resize", fit); ro?.disconnect(); };
+    return () => {
+      window.removeEventListener("resize", fit);
+      ro?.disconnect();
+      contentRo?.disconnect();
+      added?.disconnect();
+      win?.removeEventListener("scroll", onScroll);
+    };
+  }, [coachTab]);
+
+  // Review scrolls under the app header, which is sticky too: the tab row
+  // sticks just below it (the header's height changes with width and scale).
+  const pageRef = useRef(null);
+  useLayoutEffect(() => {
+    if (coachTab !== "review") return undefined;
+    const header = document.querySelector(".shell-header");
+    const set = () => pageRef.current?.style.setProperty("--coach-sticky-top", `${header ? Math.max(0, header.getBoundingClientRect().height) : 0}px`);
+    set();
+    const ro = header && typeof ResizeObserver === "function" ? new ResizeObserver(set) : null;
+    ro?.observe(header);
+    window.addEventListener("resize", set);
+    return () => { ro?.disconnect(); window.removeEventListener("resize", set); };
   }, [coachTab]);
 
   return (
-    <div className="coach-page">
+    <div className="coach-page" ref={pageRef}>
       {confirmDialog && <ConfirmDialog {...confirmDialog} />}
 
       {/* Q51: Coach is two tabs, Chat (first) and Review. */}
@@ -1576,18 +1624,50 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
           <button type="button" role="tab" id="coach-tab-chat" aria-controls="coach-panel-chat" aria-selected={coachTab === "chat"} tabIndex={coachTab === "chat" ? 0 : -1} className="coach-tab" onClick={() => setCoachTab("chat")}>Chat</button>
           <button type="button" role="tab" id="coach-tab-review" aria-controls="coach-panel-review" aria-selected={coachTab === "review"} tabIndex={coachTab === "review" ? 0 : -1} className="coach-tab" onClick={() => setCoachTab("review")}>Review</button>
         </div>
+        {coachTab === "review" && (
+          <div className="rv-period" role="radiogroup" aria-label="Period">
+            {REVIEW_PERIODS.map(p => (
+              <button key={p.key} type="button" role="radio" aria-checked={reviewPeriod === p.key} onClick={() => setReviewPeriod(p.key)}>{p.label}</button>
+            ))}
+          </div>
+        )}
         {coachTab === "chat" && (
-          <span className="coach-tabs-end">
+          <span className={`coach-tabs-end${sessionPill ? " has-focus-pill" : ""}`}>
             <span className="coach-tabs-note">Reads your lists. Changes only what you tap.</span>
+            {/* 75k: on a phone a running session takes New's place, as the
+                pill (the header that carries it on a computer is hidden on
+                phone Chat); New moves into the ⋯ menu. */}
+            {sessionPill && (
+              <FocusPill
+                className="is-in-tabs"
+                secondsLeft={focusTimer.timerSecondsLeft}
+                maxSeconds={focusTimer.timerMaxSeconds}
+                isRunning={focusTimer.isTimerRunning}
+                blockEnd={focusTimer.blockEnd}
+                onBack={onBackToFocus}
+              />
+            )}
             {hasConversation && (
-              <button type="button" className="coach-new-conversation" onClick={startNewConversation}>New conversation</button>
+              <button type="button" className="coach-new-conversation" aria-label="New conversation" onClick={startNewConversation}>
+                <span className="coach-new-long">New conversation</span><span className="coach-new-short" aria-hidden="true">New</span>
+              </button>
+            )}
+            {sessionPill && hasConversation && (
+              <span className="coach-more-wrap">
+                <button type="button" className="coach-more" aria-label="More" aria-haspopup="menu" aria-expanded={moreOpen} onClick={() => setMoreOpen(v => !v)}>⋯</button>
+                {moreOpen && (
+                  <span className="coach-more-menu" role="menu" onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setMoreOpen(false); } }}>
+                    <button type="button" role="menuitem" autoFocus onClick={() => { setMoreOpen(false); startNewConversation(); }}>New conversation</button>
+                  </span>
+                )}
+              </span>
             )}
           </span>
         )}
       </div>
 
       {coachTab === "chat" && (
-      <section ref={chatColRef} className="coach-chat-col" id="coach-panel-chat" role="tabpanel" aria-labelledby="coach-tab-chat">
+      <section ref={chatColRef} className={`coach-chat-col${hasConversation ? " has-conversation" : ""}`} id="coach-panel-chat" role="tabpanel" aria-labelledby="coach-tab-chat">
         <div className="chat-window coach-chat">
           {!hasConversation && !chatLoading && (
             <div className="coach-empty">
@@ -1604,10 +1684,16 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
             const lastMentorIdx = chatHistory.reduce((last, m, i) => (!m.isUser ? i : last), -1);
             return chatHistory.map((m, idx) => (
             <div key={idx} className={`coach-msg ${m.isUser ? "is-you" : "is-coach"}`}>
-              <span className="coach-msg-kicker">{m.isUser ? "You" : coachName}{m.at ? ` · ${clockHHMM(m.at)}` : ""}</span>
+              {(() => {
+                const kicker = <span className="coach-msg-kicker"><span className="coach-msg-name">{m.isUser ? "You" : coachName}</span>{m.at ? <><span className="coach-msg-sep"> · </span><span className="coach-msg-time">{clockHHMM(m.at)}</span></> : null}</span>;
+                return m.isUser ? kicker : null;
+              })()}
               {m.isUser ? (
                 <span className="coach-msg-text">{m.text}</span>
               ) : (
+                // 74: a reply longer than four lines shows four and "Show all";
+                // its action buttons and chips stay in view under it.
+                <ClampedReply text={m.text} head={<span className="coach-msg-kicker"><span className="coach-msg-name">{coachName}</span>{m.at ? <><span className="coach-msg-sep"> · </span><span className="coach-msg-time">{clockHHMM(m.at)}</span></> : null}</span>}>
                 <ReactMarkdown
                   className="coach-md coach-msg-text"
                   remarkPlugins={[remarkGfm]}
@@ -1620,6 +1706,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
                 >
                   {m.text}
                 </ReactMarkdown>
+                </ClampedReply>
               )}
               <button
                 type="button"
@@ -1700,9 +1787,9 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
                 // Q36.3: something at a set time is never the focus.
                 if (isEventTask(task)) { /* no focus chip */ }
                 else if (isOnToday(task, lociDayNow()) && !task.isNowFocus)
-                  phaseB.push({ action: 'focus',       label: 'Make it the one thing' });
+                  phaseB.push({ action: 'focus',       label: 'Make it your now task' });
                 else if (!isOnToday(task, lociDayNow()) && !task.isNowFocus)
-                  phaseB.push({ action: 'focus+today', label: 'Today, as the one thing' });
+                  phaseB.push({ action: 'focus+today', label: 'Today, as your now task' });
                 if (!isOnToday(task, lociDayNow()))
                   phaseB.push({ action: 'today',       label: 'Move to Today' });
                 if (!task.isParked)
@@ -1732,9 +1819,6 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
         </div>
 
         <div className="coach-composer-wrap">
-          {onBackToFocus && (
-            <button type="button" className="coach-back-focus" onClick={onBackToFocus}>← Back to focus</button>
-          )}
           <form ref={chatFormRef} onSubmit={handleSendChat} className="chat-input-row coach-composer">
             {briefChip && (
               <span className="coach-stuck-chip">
@@ -1778,14 +1862,16 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
       </section>
       )}
 
-      {/* Review (Q51): the facts, and Coach's brief beside them. */}
+      {/* Review (73a/b): Coach's brief first, then the numbers behind it. */}
       {coachTab === "review" && (
       <div id="coach-panel-review" role="tabpanel" aria-labelledby="coach-tab-review">
-        <CoachReview payload={payload} uid={uid} renderBrief={({ focusRaw, frontNameOf }) => (
+        <CoachReview payload={payload} uid={uid} period={reviewPeriod} onOpenDayMap={onOpenDayMap} renderBrief={({ focusRaw, frontNameOf, lead, weekdayLine }) => (
           <CoachBrief
             brief={config.coachBrief || null}
             status={briefStatus}
             error={briefError}
+            lead={lead}
+            weekdayLine={weekdayLine}
             tasks={tasks}
             horizonName={(id) => horizonsFromConfig(config, lociDayNow()).find(h => h.id === id)?.name || id}
             onBriefMe={() => handleBriefMe(focusRaw, frontNameOf)}

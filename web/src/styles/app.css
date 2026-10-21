@@ -57,10 +57,16 @@
   z-index: 2;
 }
 
-/* Q59 (72): the app isn't scaled on big screens. 72's steps (1600, 1920,
-   2400) made a 24" 1920 monitor feel oversized, and browser zoom below 100%
-   widens the viewport, so it set them off or, at 80%, undid the zoom out
-   (Rohan, 5 Oct; Codex review of #490). Browser zoom does it instead. */
+/* Turn 76 (75, PART5 §2): a page built for it grows with the window —
+   continuously, by the smaller of width ÷ 1422 and height ÷ 800, so a
+   1903×940 24" is ×1.175 and still fits (72's fixed steps made it ×1.35 and
+   overflowed; #490). The header grows on every page (shell.css). Browser
+   zoom doesn't change it: accepted (README Turn 76). --app-scale is set by
+   hooks/useAppScale.js; --zoom divides the viewport units below. */
+html[data-scale-route] {
+  zoom: var(--app-scale, 1);
+  --zoom: var(--app-scale, 1);
+}
 
 /* Global Reset & Base */
 * {
@@ -1656,6 +1662,12 @@ html[data-theme="light"] {
   --accent-edge:  #133524;
   --on-accent:    #FFFFFF;
   --accent-tint:  #E0ECE3;
+  --btn-line:     #BFC6BB;  /* 78: outlined buttons, unfocused editor edge */
+  --rule:         #E9E4D7;  /* 78: the editor's writing lines (on --bg) */
+  --rule-surface: #EFEBE0;  /* the same on --surface (phone) */
+  --field:        #FFFFFF;  /* a writing box that stands out on cream */
+  --row-hover:    #F1EEE4;  /* 78: hovered or focused thought */
+  --hair-soft:    #E6E7DF;  /* 78: phone list hairlines */
   --accent-soft:  #D3E8DA;  /* timer digits on the accent fill */
   --accent-muted: #9FC4AB;  /* past Momentum bars (Addendum Y1 --act-soft) */
   --gold-band:    #F1DFB2;
@@ -1731,6 +1743,12 @@ html[data-theme="dark"] {
   --accent-edge:  #76946C;
   --on-accent:    #0D1F15;
   --accent-tint:  #2B3A29;
+  --btn-line:     #3F4B43;
+  --rule:         #232C26;
+  --rule-surface: #232C26;
+  --field:        #222B25;
+  --row-hover:    var(--panel);
+  --hair-soft:    var(--line);
   --accent-soft:  #1F4D36;
   --accent-muted: #607A55;
   --gold-band:    #352C1A;

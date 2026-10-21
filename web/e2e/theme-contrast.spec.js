@@ -97,7 +97,11 @@ for (const theme of THEMES) {
       [".wall-kicker", "NOW kicker"],
       [".wall-quiet-link.is-muted", "I'm stuck"],
       [".wall-quiet-link:not(.is-muted)", "Done"],
-      [".wall-first-step-label", "next step label"],
+      // 75c: the step's "2 / 2" (the "Next step" label is gone), the
+      // mantra, and the Next strip's duration.
+      [".wall-step-count", "step count"],
+      [".wall-mantra", "mantra"],
+      [".wall-peek-next-dur", "Next strip duration"],
       [".wall-primary-figure", "timer on Start focus"],
       [".wall-peek-next-title", "Next strip"],
     ]) {

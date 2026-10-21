@@ -1,3 +1,5 @@
+import { playDoneTone } from "./uiSounds";
+
 let keyframesInjected = false;
 
 function injectKeyframes() {
@@ -12,27 +14,6 @@ function injectKeyframes() {
     }
   `;
   document.head.appendChild(style);
-}
-
-export function playCompletionSound() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const play = (freq, start, dur) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.value = freq;
-      osc.type = "sine";
-      gain.gain.setValueAtTime(0.25, start);
-      gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
-      osc.start(start);
-      osc.stop(start + dur);
-    };
-    play(523.25, ctx.currentTime,        0.35); // C5
-    play(659.25, ctx.currentTime + 0.12, 0.40); // E5
-    play(783.99, ctx.currentTime + 0.24, 0.55); // G5
-  } catch (_) {}
 }
 
 export function launchConfetti() {
@@ -60,7 +41,9 @@ export function launchConfetti() {
   }
 }
 
-export function celebrate() {
-  playCompletionSound();
+// 75e (try-out 43): the finish tone follows Settings › Sounds (off by
+// default) and is the soft one; the confetti stays.
+export function celebrate({ sound = false } = {}) {
+  if (sound) playDoneTone();
   launchConfetti();
 }

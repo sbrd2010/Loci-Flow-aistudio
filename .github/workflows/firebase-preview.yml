@@ -1,0 +1,60 @@
+name: Deploy redesign preview
+
+# The redesign round (redesign-75) on a Firebase Hosting preview channel, for
+# a try-out before the one merge to main. The live site and the database
+# rules are never touched here: only main's workflow deploys those.
+on:
+  push:
+    branches: [ redesign-75 ]
+  workflow_dispatch: {}
+
+concurrency:
+  group: firebase-preview-redesign-75
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    if: github.ref == 'refs/heads/redesign-75'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install, test, and build web
+        working-directory: web
+        env:
+          VITE_GROQ_KEY: ${{ secrets.VITE_GROQ_KEY }}
+          VITE_GEMINI_KEY: ${{ secrets.VITE_GEMINI_KEY }}
+          VITE_CEREBRAS_KEY: ${{ secrets.VITE_CEREBRAS_KEY }}
+          VITE_ZAI_KEY: ${{ secrets.VITE_ZAI_KEY }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_GA_MEASUREMENT_ID: ${{ secrets.VITE_GA_MEASUREMENT_ID }}
+        run: |
+          npm ci --legacy-peer-deps
+          npm test
+          npm run build
+
+      - name: Validate deploy script syntax
+        run: node --check scripts/deploy-hosting-rest.mjs
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_LOCI_FLOW }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      # The same REST deploy as main's, to the "redesign-75" preview channel
+      # (created if missing; each deploy renews its 14-day expiry).
+      - name: Deploy Hosting to the preview channel
+        env:
+          HOSTING_CHANNEL_ID: redesign-75
+        run: |
+          set -euo pipefail
+          export FIREBASE_ACCESS_TOKEN="$(gcloud auth print-access-token)"
+          node scripts/deploy-hosting-rest.mjs

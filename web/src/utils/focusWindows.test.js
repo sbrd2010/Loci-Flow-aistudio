@@ -14,6 +14,8 @@ import {
   hasConfiguredFocusWindow,
   getTotalFocusMinutes,
   isHourInWindow,
+  getLociNowMinutes,
+  mergeWindowSpans,
 } from "./focusWindows";
 
 const dt = (h, mi = 0) => new Date(2024, 5, 15, h, mi);
@@ -429,5 +431,70 @@ describe("lociDayEndsAt", () => {
   it("crosses a month end", () => {
     const end = agrees(getFocusWindows({}), "2024-09-30");
     expect([end.getMonth(), end.getDate()]).toEqual([9, 1]);
+  });
+});
+
+// #528: a window after midnight is the tail of the day, as Settings reads it.
+describe("a window after midnight", () => {
+  const cfg = { focusWindows: [
+    { start: "08:40", end: "09:15" }, { start: "22:00", end: "23:55" }, { start: "00:15", end: "02:15" },
+  ] };
+  const at = (iso) => new Date(iso);
+
+  it("is the day's last window, with its times past 1440", () => {
+    const w = getFocusWindows(cfg);
+    expect(w.map(x => x.startMin)).toEqual([520, 1320, 1455]);
+    expect(w[2]).toEqual({ startMin: 1455, endMin: 1575, overnight: false, afterMidnight: true });
+    // The gap 23:55–00:15 is a break; the day ends at 02:15.
+    expect(mergeWindowSpans(w)).toEqual([[520, 555], [1320, 1435], [1455, 1575]]);
+    expect(getOverallSpan(w)).toEqual({ startMin: 520, endMin: 1575 });
+  });
+
+  it("keeps 01:00 on the day it began, and 02:30 is the next day", () => {
+    const w = getFocusWindows(cfg);
+    expect(getLociNowMinutes(at("2026-10-19T01:00:00"), w)).toBe(1500);
+    expect(getLociNowMinutes(at("2026-10-19T00:05:00"), w)).toBe(1445); // in the break
+    expect(getLociDayStr(at("2026-10-19T01:00:00"), w)).toBe("2026-10-18");
+    expect(getLociDayStr(at("2026-10-19T02:30:00"), w)).toBe("2026-10-19");
+    expect(getLociDayStr(at("2026-10-18T23:30:00"), w)).toBe("2026-10-18");
+    expect(new Date(lociDayEndsAt("2026-10-18", w))).toEqual(new Date(2026, 9, 19, 2, 15));
+  });
+
+  it("counts the tail as focus time still to come", () => {
+    const w = getFocusWindows(cfg);
+    // At 08:00: 35 + 115 + 120 minutes of windows ahead.
+    expect(getRemainingFocusMinutes(at("2026-10-18T08:00:00"), w)).toBe(35 + 115 + 120);
+    expect(getRemainingFocusMinutes(at("2026-10-19T01:00:00"), w)).toBe(75);
+    expect(getWindowState(at("2026-10-19T01:00:00"), w)).toBe("during");
+    expect(getWindowState(at("2026-10-19T00:05:00"), w)).toBe("before");
+  });
+
+  it("covers the early wall-clock hours, not the hours it is read as", () => {
+    const [, , tail] = getFocusWindows(cfg);
+    expect(isHourInWindow(1, tail)).toBe(true);
+    expect(isHourInWindow(2, tail)).toBe(true);
+    expect(isHourInWindow(3, tail)).toBe(false);
+    expect(isHourInWindow(1 + 24, tail)).toBe(false);
+  });
+
+  it("is read by distance: an early riser's 04:30 is the start of the day, not the tail of the one before", () => {
+    const riser = getFocusWindows({ focusWindows: [{ start: "04:30", end: "06:00" }, { start: "09:00", end: "17:00" }] });
+    expect(riser.map(x => x.afterMidnight)).toEqual([undefined, undefined]);
+    expect(riser[0].startMin).toBe(270);
+    // After an evening window, the same early start is the tail.
+    const owl = getFocusWindows({ focusWindows: [{ start: "02:00", end: "04:30" }, { start: "20:00", end: "22:00" }] });
+    expect(owl.map(x => x.afterMidnight)).toEqual([undefined, true]);
+    expect(mergeWindowSpans(owl)).toEqual([[1200, 1320], [1560, 1710]]);
+    // Equally far from both: the start of the day, as before.
+    const tie = getFocusWindows({ focusWindows: [{ start: "02:00", end: "04:00" }, { start: "08:00", end: "22:00" }] });
+    expect(tie[0].startMin).toBe(120);
+  });
+
+  it("changes nothing when the day has no later window, or the window is overnight", () => {
+    expect(getFocusWindows({ focusWindows: [{ start: "00:30", end: "03:00" }] })[0])
+      .toEqual({ startMin: 30, endMin: 180, overnight: false });
+    const w = getFocusWindows({ focusWindows: [{ start: "09:00", end: "12:00" }, { start: "22:00", end: "02:15" }] });
+    expect(w.map(x => x.afterMidnight)).toEqual([undefined, undefined]);
+    expect(mergeWindowSpans(w)).toEqual([[540, 720], [1320, 1575]]);
   });
 });

@@ -1,7 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { focusWindowRows, focusWindowsLine, focusWindowsSummary, reconcileFocusWindowRows } from "./settingsSummary";
+import { focusWindowRows, focusWindowsLine, focusWindowsSummary, reconcileFocusWindowRows, sortFocusWindowRows } from "./settingsSummary";
 
 describe("focusWindowsSummary", () => {
+  it("orders the rows as the Day map reads them: an early riser's 04:30 first, a window after midnight last", () => {
+    const early = sortFocusWindowRows([{ start: "09:00", end: "17:00" }, { start: "04:30", end: "06:00" }]);
+    expect(early.map(w => w.start)).toEqual(["04:30", "09:00"]);
+    const late = sortFocusWindowRows([{ start: "00:15", end: "02:15" }, { start: "22:00", end: "23:55" }, { start: "08:40", end: "09:15" }]);
+    expect(late.map(w => w.start)).toEqual(["08:40", "22:00", "00:15"]);
+  });
+
+  // #528: a window after midnight is the tail of the day.
+  it("counts a window after midnight once, and the day ends at its end", () => {
+    const config = { focusWindows: [
+      { start: "08:40", end: "09:15" }, { start: "22:00", end: "23:55" }, { start: "00:15", end: "02:15" },
+    ] };
+    // 35 + 115 + 120 minutes, with the 20-minute break between 23:55 and 00:15 left out.
+    expect(focusWindowsSummary(config)).toEqual({ count: 3, totalMinutes: 270, dayEnds: "02:15", isFallback: false });
+    expect(focusWindowsLine(config)).toBe("3 windows · 4h30m · day ends 02:15");
+  });
+
   it("counts windows, covered time and the end of the last one (44d)", () => {
     const config = { focusWindows: [
       { start: "10:00", end: "11:15" }, { start: "11:30", end: "12:30" },
@@ -54,5 +71,21 @@ describe("overnight coverage", () => {
       { start: "22:00", end: "02:00" }, { start: "01:00", end: "03:00" },
     ] });
     expect(summary.totalMinutes).toBe(5 * 60);
+  });
+});
+
+describe("sortFocusWindowRows (try-out issue 1)", () => {
+  const w = (start, end) => ({ start, end });
+  it("puts a window added later back in the order of the day", () => {
+    const rows = [w("11:30", "12:30"), w("13:05", "15:00"), w("10:00", "11:00")];
+    expect(sortFocusWindowRows(rows).map(r => r.start)).toEqual(["10:00", "11:30", "13:05"]);
+  });
+  it("keeps a window after midnight at the end of a day that has later ones", () => {
+    const rows = [w("00:30", "01:30"), w("23:00", "23:55"), w("09:00", "12:00")];
+    expect(sortFocusWindowRows(rows).map(r => r.start)).toEqual(["09:00", "23:00", "00:30"]);
+  });
+  it("leaves unfinished rows last, in their own order", () => {
+    const rows = [w("", "10:00"), w("14:00", "15:00"), w("08:00", "")];
+    expect(sortFocusWindowRows(rows).map(r => r.start)).toEqual(["08:00", "14:00", ""]);
   });
 });

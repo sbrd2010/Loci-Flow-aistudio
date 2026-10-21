@@ -7,10 +7,10 @@ import "../styles/shell.css";
 // laptop, the day's date and time left, and the Settings gear. On phones and
 // tablets Settings has no tab, so the gear hides while you are in it and a tab
 // takes you back; on a laptop it stays, marked as the current page.
-export default function Header({ activeTab, onTabSelect, onGoHome, dayClock, onDayMap = false }) {
+export default function Header({ activeTab, onTabSelect, onGoHome, dayClock, onDayMap = false, focusPill = null }) {
   const inSettings = activeTab === "settings";
   return (
-    <header className={`shell-header${inSettings ? " is-settings" : ""}${onDayMap ? " is-day-map" : activeTab === "today" ? " is-today" : ""}`}>
+    <header className={`shell-header${inSettings ? " is-settings" : ""}${onDayMap ? " is-day-map" : activeTab === "today" ? " is-today" : activeTab === "coach" ? " is-coach" : ""}`}>
       <button type="button" className="shell-wordmark" onClick={onGoHome}>Loci</button>
 
       <nav className="shell-tabs" aria-label="Main navigation">
@@ -31,7 +31,9 @@ export default function Header({ activeTab, onTabSelect, onGoHome, dayClock, onD
         })}
       </nav>
 
-      <div className="shell-end">
+      <div className={`shell-end${focusPill ? " has-focus-pill" : ""}`}>
+        {/* 75i: a running session on Coach Chat, as a pill. */}
+        {focusPill}
         <span className="shell-clock">
           {/* 58.2: the full date leaves Today on the phone; the time left stays. */}
           <span className="shell-clock-date">{dayClock.date}{dayClock.left && " · "}</span>

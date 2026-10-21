@@ -29,6 +29,11 @@ test("the four steps, Clear my day to This week, and Undo", async ({ page }) => 
   await expect(rescue(page).getByText("STEP 1 OF 3")).toBeVisible();
   await rescue(page).getByRole("button", { name: /^Too much going on/ }).click();
   await expect(rescue(page).getByText("STEP 2 OF 3 · TOO MUCH GOING ON")).toBeVisible();
+  // Try-out issue 3: the instruction first; the ring starts on Start.
+  await expect(rescue(page).getByRole("timer")).toHaveCount(0);
+  const start = rescue(page).getByRole("button", { name: "Start breathing" });
+  await expect(start).toBeFocused();
+  await page.keyboard.press("Enter");
   await expect(rescue(page).getByRole("timer")).toContainText("ROUND 1 OF 4");
   await rescue(page).getByRole("button", { name: "Skip", exact: true }).click();
 
@@ -37,7 +42,7 @@ test("the four steps, Clear my day to This week, and Undo", async ({ page }) => 
   await clear.click();
   await expect(clear).toHaveAttribute("aria-expanded", "true");
   await expect(rescue(page).getByRole("radio", { name: "This week" })).toHaveAttribute("aria-checked", "true");
-  await expect(rescue(page).getByRole("checkbox", { name: /as the one thing/ })).toBeChecked();
+  await expect(rescue(page).getByRole("checkbox", { name: /as your now task/ })).toBeChecked();
   const move = rescue(page).getByRole("button", { name: /^Move \d+ to This week$/ });
   const n = Number((await move.innerText()).match(/\d+/)[0]);
   expect(n).toBeGreaterThan(0);
@@ -60,7 +65,7 @@ test("after Clear my day moves the one thing away, Back to it doesn't offer it",
   await rescue(page).getByRole("button", { name: /^Too much going on/ }).click();
   await rescue(page).getByRole("button", { name: "Skip", exact: true }).click();
   await rescue(page).getByRole("button", { name: /^Clear my day/ }).click();
-  await rescue(page).getByRole("checkbox", { name: /as the one thing/ }).uncheck();
+  await rescue(page).getByRole("checkbox", { name: /as your now task/ }).uncheck();
   await rescue(page).getByRole("button", { name: /^Move \d+ to This week$/ }).click();
   await expect(rescue(page).getByRole("heading", { name: "Where to now?" })).toBeVisible();
   await expect(rescue(page).getByRole("button", { name: /^Back to it/ })).toHaveCount(0);
@@ -102,7 +107,8 @@ test("Mind Box opens Rescue; Leave comes back to Mind Box; the reset tiles are g
   await nav(page).getByRole("button", { name: "Mind Box", exact: true }).click();
   await expect(page.getByText("Bad Day Reset")).toHaveCount(0);
   await expect(page.getByText("Clean Slate")).toHaveCount(0);
-  // A state picked on Mind Box enters Rescue at the breathing (65a).
+  // A state picked on Mind Box enters Rescue at the breathing (65a); Rescue
+  // is open on arrival.
   await page.getByRole("button", { name: /^Got distracted/ }).click();
   await expect(rescue(page).getByText("STEP 2 OF 3 · GOT DISTRACTED")).toBeVisible();
   // Full screen: the tab bar is under it.

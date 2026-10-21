@@ -54,30 +54,30 @@ describe("layoutRoute", () => {
   // after the call there's a buffer, so 15:05. The day's last stop ends 18:10.
   it("reproduces the 56a rail", () => {
     const stops = [task("CV", 120), task("Pharmacy", 15), task("Call", 30, "14:30"), task("Hale", 25),
-      task("Dad", 25), task("PRINCE2", 60), task("Grove", 45), task("Dentist", 10)];
+      task("Mum", 25), task("Spanish", 60), task("Grove", 45), task("Dentist", 10)];
     const rows = layoutRoute(stops, { from: hm("11:35"), breaks: lunch, durationOf });
     expect(read(rows)).toEqual(["11:35 CV", "13:35 Lunch", "14:15 Pharmacy", "14:30 Call 🔒", "15:05 Hale",
-      "15:35 Dad", "16:05 PRINCE2", "17:10 Grove", "18:00 Dentist"]);
+      "15:35 Mum", "16:05 Spanish", "17:10 Grove", "18:00 Dentist"]);
     expect(rows[rows.length - 1].end).toBe(hm("18:10"));
   });
 
-  // 58e: fixing the call at 14:30 moves Hale 14:35 → 15:05, Dad and PRINCE2
+  // 58e: fixing the call at 14:30 moves Hale 14:35 → 15:05, Mum and Spanish
   // after it; Pharmacy (14:15–14:30) still fits before it.
   it("moves a stop that would overlap a fixed one after it, in order (58e)", () => {
-    const stops = [task("Pharmacy", 15), task("Hale", 25), task("Dad", 25), task("PRINCE2", 60)];
+    const stops = [task("Pharmacy", 15), task("Hale", 25), task("Mum", 25), task("Spanish", 60)];
     const before = layoutRoute(stops, { from: hm("14:15"), durationOf });
-    expect(read(before)).toEqual(["14:15 Pharmacy", "14:35 Hale", "15:05 Dad", "15:35 PRINCE2"]);
+    expect(read(before)).toEqual(["14:15 Pharmacy", "14:35 Hale", "15:05 Mum", "15:35 Spanish"]);
     const after = layoutRoute([...stops, task("Call", 30, "14:30")], { from: hm("14:15"), durationOf });
-    expect(read(after)).toEqual(["14:15 Pharmacy", "14:30 Call 🔒", "15:05 Hale", "15:35 Dad", "16:05 PRINCE2"]);
+    expect(read(after)).toEqual(["14:15 Pharmacy", "14:30 Call 🔒", "15:05 Hale", "15:35 Mum", "16:05 Spanish"]);
   });
 
   // 58f: the 40-minute gap before the call takes the earliest later stop
-  // that fits whole (the dentist, 10m); PRINCE2 (1h) doesn't fit in the 25
+  // that fits whole (the dentist, 10m); Spanish (1h) doesn't fit in the 25
   // minutes left, so that time is free.
   it("fills the gap before a fixed stop with the earliest later stop that fits, the rest free (58f)", () => {
-    const stops = [task("Brightlab", 45), task("PRINCE2", 60), task("Dentist", 10), task("Call", 30, "14:30")];
+    const stops = [task("Brightlab", 45), task("Spanish", 60), task("Dentist", 10), task("Call", 30, "14:30")];
     const rows = layoutRoute(stops, { from: hm("13:00"), durationOf });
-    expect(read(rows)).toEqual(["13:00 Brightlab", "13:50 Dentist (pulled forward)", "14:05 free 25m", "14:30 Call 🔒", "15:05 PRINCE2"]);
+    expect(read(rows)).toEqual(["13:00 Brightlab", "13:50 Dentist (pulled forward)", "14:05 free 25m", "14:30 Call 🔒", "15:05 Spanish"]);
   });
 
   it("splits a task that runs into a break: it stops for it and continues after", () => {

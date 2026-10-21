@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import GrowTextarea from "./ui/GrowTextarea";
+import ReminderPicker from "./ui/ReminderPicker";
 import { isEveningGuardBlocked } from "../utils/eveningGuard";
 import { callAI, getAIKeys, hasAIKey } from "../utils/aiCall";
 import { safeUUID } from "../utils/uuid";
@@ -10,6 +12,9 @@ import { frontsFromConfig, sortFronts } from "../utils/fronts";
 import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
 import { IconCheck, IconChevronRight, IconPencil, IconX } from "./ui/icons";
 import { THOUGHTS_MAX, addThought } from "../utils/thoughts";
+import { escapeThought, plainThought } from "../utils/thoughtFormat";
+import ThoughtEditor from "./ui/ThoughtEditor";
+import EstimatePicker from "./EstimatePicker";
 import "../styles/addTask.css";
 
 function defaultReminderDateTime() {
@@ -173,7 +178,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
       const est = Number(aiSuggestion.estimateMinutes);
       // A value with no chip of its own shows under Other, so it is never
       // chosen without being seen.
-      if ([15,25,45,60,120,240,360].includes(est)) { setEstimateMinutes(est); setEstimatePicked(true); setOtherOpen(![15, 30, 60, 120].includes(est)); }
+      if ([15,25,45,60,120,240,360].includes(est)) { setEstimateMinutes(est); setEstimatePicked(true); }
       // Only a horizon the chips offer: a hidden one would hide the task (Codex review of #443).
       if (horizons.some(h => h.key === aiSuggestion.horizonLevel)) setHorizonLevel(aiSuggestion.horizonLevel);
       if (aiSuggestion.subSteps.length > 0 && subSteps.length === 0) {
@@ -202,16 +207,11 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
     ...shown.filter(h => !SHORT[h.id]).map(h => ({ key: h.id, label: h.name })),
     ...(defaultHorizon === "office" ? [{ key: "office", label: "Work" }] : []),
   ];
-  const hasCustoms = shown.some(h => !SHORT[h.id]);
   const priorities = ["P1", "P2", "P3", ...(priority === "P4" ? ["P4"] : [])];
   const categories = ["Career", "Health", "Work", "Personal"];
   const parsedSubStepDraft = parseManualSubSteps(subStepDraft);
   const hasSubStepDraft = parsedSubStepDraft.length > 0;
   // Time: 15m · 30m · 1h · 2h · Other (45a). Other holds the rest.
-  const timeChips = [{ min: 15, label: "15m" }, { min: 30, label: "30m" }, { min: 60, label: "1h" }, { min: 120, label: "2h" }];
-  const otherTimes = [10, 20, 25, 45, 90, 180, 240, 360];
-  const onChip = timeChips.some(c => c.min === Number(estimateMinutes));
-  const [otherOpen, setOtherOpen] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -323,9 +323,8 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
 
   const chip = (selected) => `add-chip${selected ? " is-selected" : ""}`;
 
-  // A thought is one line: Enter saves it to Mind Box, nothing to decide.
-  const saveThought = (e) => {
-    e.preventDefault();
+  // Enter saves the thought to Mind Box › Brain dump, nothing to decide.
+  const saveThought = () => {
     if (!title.trim()) return;
     const added = addThought(payload, title);
     if (!added) { setThoughtError(`Mind Box holds ${THOUGHTS_MAX} thoughts. Let a few go first.`); return; }
@@ -335,6 +334,10 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
   };
   const thoughtRef = useRef(null);
   const switchMode = (next) => {
+    // A task title is one plain line.
+    if (next === "task" && mode === "thought") setTitle(t => plainThought(t));
+    // A task title is plain text: a typed foo__bar__ stays as typed.
+    if (next === "thought" && mode === "task") setTitle(t => escapeThought(t));
     setMode(next);
     setThoughtError("");
   };
@@ -348,7 +351,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
     <div className="add-overlay" onClick={onClose}>
       <div
         ref={cardRef}
-        className="add-card"
+        className={`add-card${mode === "thought" ? " is-thought" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-task-heading"
@@ -370,24 +373,20 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
         </div>
 
         {mode === "thought" ? (
-          <form onSubmit={saveThought} className="add-body add-thought">
-            <input
+          <div className="add-body add-thought">
+            <ThoughtEditor
               ref={thoughtRef}
-              className="add-thought-input"
-              aria-label="Thought"
-              placeholder="What's on your mind?"
+              className="add-thought-editor"
+              fieldClassName="add-thought-input"
               value={title}
-              maxLength={500}
-              onChange={e => { setTitle(e.target.value); setThoughtError(""); }}
+              hint=""
+              onChange={v => { setTitle(v); setThoughtError(""); }}
+              onSubmit={saveThought}
               onKeyDown={e => { if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); switchMode("task"); } }}
             />
-            <p className="add-thought-note">Saved to Mind Box. No date, no front, nothing to decide now.</p>
+            <p className="add-thought-note">Goes to Mind Box › Brain dump.</p>
             {thoughtError && <p className="add-error-line" role="alert">{thoughtError}</p>}
-            <div className="add-thought-foot">
-              <span className="add-thought-hint" aria-hidden="true">ENTER SAVES · TAB SWITCHES · ESC CLOSES</span>
-              <button type="submit" className="add-btn-filled" disabled={!title.trim()}>Save thought</button>
-            </div>
-          </form>
+          </div>
         ) : (
         <form ref={formRef} onSubmit={handleSubmit} className="add-body">
           {isEveningGuardBlocked(payload.config) && (
@@ -436,7 +435,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
           <div className={`add-block${ringOn ? " is-ringed" : ""}`}>
             <div className="add-field" role="group" aria-labelledby="add-horizon-label">
               <span id="add-horizon-label" className="add-label">Horizon</span>
-              <div className={`add-chips${hasCustoms ? " is-scroll" : ""}`}>
+              <div className="add-chips">
                 {horizons.map((h) => (
                   <button key={h.key} type="button" className={chip(horizonLevel === h.key)} aria-pressed={horizonLevel === h.key} onClick={() => setHorizonLevel(h.key)}>
                     {h.label}
@@ -459,31 +458,15 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
           <div className="add-field" role="group" aria-labelledby="add-time-label">
             <span id="add-time-label" className="add-label">Time</span>
             <div className="add-chips">
-              {timeChips.map((c) => (
-                <button
-                  key={c.min}
-                  type="button"
-                  className={chip(!otherOpen && Number(estimateMinutes) === c.min && estimatePicked)}
-                  aria-pressed={!otherOpen && Number(estimateMinutes) === c.min && estimatePicked}
-                  onClick={() => { setEstimateMinutes(c.min); setEstimatePicked(true); setOtherOpen(false); }}
-                >
-                  {c.label}
-                </button>
-              ))}
-              <button type="button" className={chip(otherOpen)} aria-pressed={otherOpen} onClick={() => { setOtherOpen(true); setEstimatePicked(true); }}>Other</button>
+              <EstimatePicker
+                value={estimatePicked ? Number(estimateMinutes) : null}
+                chipClass={chip}
+                inputClass="add-input add-other-input"
+                buttonClass="add-btn-outline add-other-set"
+                idPrefix="add-time"
+                onPick={(m) => { setEstimateMinutes(m); setEstimatePicked(true); }}
+              />
             </div>
-            {otherOpen && (
-              <label className="add-other">
-                Minutes
-                <select
-                  value={onChip ? "" : Number(estimateMinutes)}
-                  onChange={(e) => { setEstimateMinutes(Number(e.target.value)); setEstimatePicked(true); }}
-                >
-                  {onChip && <option value="" disabled>Choose</option>}
-                  {otherTimes.map((m) => <option key={m} value={m}>{m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${m % 60 ? `${m % 60}m` : ""}`}</option>)}
-                </select>
-              </label>
-            )}
           </div>
 
           {fronts.length > 0 && (
@@ -532,10 +515,12 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
                   {reminderOn ? `Remind me: ${formatReminderLabel(new Date(`${reminderDate}T${reminderTime}`).getTime())}` : "Set a reminder"}
                 </button>
                 {reminderOn && (
-                  <div className="add-inline">
-                    <input type="date" className="add-input" aria-label="Reminder date" value={reminderDate} min={new Date().toISOString().slice(0, 10)} onChange={e => setReminderDate(e.target.value)} />
-                    <input type="time" className="add-input" aria-label="Reminder time" value={reminderTime} onChange={e => setReminderTime(e.target.value)} />
-                  </div>
+                  <ReminderPicker
+                    idPrefix="add-reminder"
+                    date={reminderDate}
+                    time={reminderTime}
+                    onChange={({ date, time }) => { setReminderDate(date); setReminderTime(time); }}
+                  />
                 )}
               </div>
 
@@ -568,19 +553,19 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
                       <li key={s.id} className="add-step">
                         {editingSubStepId === s.id ? (
                           <>
-                            <input
-                              type="text"
-                              className="add-input"
+                            <GrowTextarea
+                              className="add-input add-step-edit"
                               aria-label={`Edit step ${s.text}`}
                               value={editingSubStepText}
+                              maxRows={4}
                               onChange={(e) => setEditingSubStepText(e.target.value)}
+                              onEnter={() => {
+                                const trimmed = editingSubStepText.trim();
+                                if (trimmed) setSubSteps(prev => prev.map(step => step.id === s.id ? { ...step, text: trimmed } : step));
+                                setEditingSubStepId(null);
+                              }}
                               onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                  const trimmed = editingSubStepText.trim();
-                                  if (trimmed) setSubSteps(prev => prev.map(step => step.id === s.id ? { ...step, text: trimmed } : step));
-                                  setEditingSubStepId(null);
-                                } else if (e.key === "Escape") {
+                                if (e.key === "Escape") {
                                   e.stopPropagation();
                                   setEditingSubStepId(null);
                                 }

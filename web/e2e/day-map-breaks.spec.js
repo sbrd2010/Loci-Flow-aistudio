@@ -82,3 +82,128 @@ test("a split stop that ends past the day end is under the line, in time order",
   expect(order.indexOf("dm-break")).toBeGreaterThan(order.indexOf("dm-stop"));
   expect(order.indexOf("dm-stop:continued")).toBeGreaterThan(order.indexOf("dm-break"));
 });
+
+// Try-out issue 1: a window added later falls into the order of the day once
+// its edit is done — not while it is typed in.
+test("Settings › Focus windows: a window added at an earlier time moves above once its row is left", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "The day", exact: true }).click();
+  await page.getByRole("button", { name: /^Focus windows/ }).click();
+  await page.getByRole("button", { name: "Remove focus window 1" }).click();
+  await page.getByRole("button", { name: "Add a window" }).click();
+  await page.getByLabel("Focus window 1 start time").fill("11:30");
+  await page.getByLabel("Focus window 1 end time").fill("12:30");
+  await page.getByRole("button", { name: "Add a window" }).click();
+  await page.getByLabel("Focus window 2 start time").fill("10:00");
+  // Still typing in it: it stays where it is.
+  await expect(page.getByLabel("Focus window 2 start time")).toHaveValue("10:00");
+  await page.getByLabel("Focus window 2 end time").fill("11:00");
+  await page.getByLabel("Focus window 2 end time").blur();
+  await expect(page.getByLabel("Focus window 1 start time")).toHaveValue("10:00");
+  await expect(page.getByLabel("Focus window 2 start time")).toHaveValue("11:30");
+});
+
+// Review of #511, 3.2: switching to another window blurs the field with
+// nothing taking focus; that is not leaving the row, so the list stays put.
+test("Settings › Focus windows: switching to another window does not re-order the rows", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "The day", exact: true }).click();
+  await page.getByRole("button", { name: /^Focus windows/ }).click();
+  await page.getByRole("button", { name: "Remove focus window 1" }).click();
+  await page.getByRole("button", { name: "Add a window" }).click();
+  await page.getByLabel("Focus window 1 start time").fill("11:30");
+  await page.getByLabel("Focus window 1 end time").fill("12:30");
+  await page.getByRole("button", { name: "Add a window" }).click();
+  await page.getByLabel("Focus window 2 start time").fill("10:00");
+  await page.getByLabel("Focus window 2 end time").fill("11:00");
+  await page.evaluate(() => { document.hasFocus = () => false; });
+  await page.getByLabel("Focus window 2 end time").blur();
+  await expect(page.getByLabel("Focus window 1 start time")).toHaveValue("11:30");
+  await page.evaluate(() => { delete document.hasFocus; });
+  await page.getByLabel("Focus window 2 end time").focus();
+  await page.getByLabel("Focus window 2 end time").blur();
+  await expect(page.getByLabel("Focus window 1 start time")).toHaveValue("10:00");
+});
+
+// Codex round 2 on the issue 1 sort: moving from one row straight into another
+// (its time, or its Remove) must act on the window you chose. The list sorts
+// only once you leave it.
+test("Settings › Focus windows: going from an edited row into another row edits and removes the one you chose", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "The day", exact: true }).click();
+  await page.getByRole("button", { name: /^Focus windows/ }).click();
+  await page.getByRole("button", { name: "Remove focus window 1" }).click();
+  for (const [n, s, e] of [[1, "11:30", "12:30"], [2, "13:00", "14:00"], [3, "15:00", "16:00"]]) {
+    await page.getByRole("button", { name: "Add a window" }).click();
+    await page.getByLabel(`Focus window ${n} start time`).fill(s);
+    await page.getByLabel(`Focus window ${n} end time`).fill(e);
+  }
+  const starts = () => page.locator(".set-window input[aria-label$='start time']").evaluateAll(els => els.map(e => e.value));
+  await page.locator(".set-facts").click();
+  await expect.poll(starts).toEqual(["11:30", "13:00", "15:00"]);
+
+  // Window 1 now belongs last; straight into window 2's start, then its Remove.
+  await page.getByLabel("Focus window 1 start time").fill("15:30");
+  await page.getByLabel("Focus window 1 end time").fill("16:30");
+  await page.getByLabel("Focus window 2 start time").click();
+  await expect.poll(starts).toEqual(["15:30", "13:00", "15:00"]);
+  await page.getByLabel("Focus window 2 start time").fill("13:15");
+  await expect.poll(starts).toEqual(["15:30", "13:15", "15:00"]);
+  await page.getByRole("button", { name: "Remove focus window 2" }).click();
+  await expect.poll(starts).toEqual(["15:30", "15:00"]);
+
+  // Leaving the list puts it in the order of the day.
+  await page.locator(".set-facts").click();
+  await expect.poll(starts).toEqual(["15:00", "15:30"]);
+});
+
+// #528: a window after midnight is the tail of the day, as Settings reads it
+// (23:55 then 00:15 is one day). The day ends at its end, so From takes a
+// time up to it, and no later.
+test("a window after midnight is the tail of the day: the day ends at its end", async ({ page }) => {
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ }
+  });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await page.clock.setFixedTime(new Date("2024-06-15T11:35:00"));
+  await page.getByTestId("demo-btn").click();
+  await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "The day", exact: true }).click();
+  await page.getByRole("button", { name: /^Focus windows/ }).click();
+  await page.getByRole("button", { name: "Remove focus window 1" }).click();
+  const windows = [["08:00", "13:35"], ["22:00", "23:55"], ["00:15", "02:15"]];
+  for (const [i, [start, end]] of windows.entries()) {
+    await page.getByRole("button", { name: "Add a window" }).click();
+    await page.getByLabel(`Focus window ${i + 1} start time`).fill(start);
+    await page.getByLabel(`Focus window ${i + 1} end time`).fill(end);
+  }
+  await expect(page.locator(".set-facts")).toContainText("02:15");
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
+  await openDayMapPage(page);
+
+  const from = page.locator(".dm-from-select");
+  const panel = page.getByRole("dialog", { name: "Start the route at" });
+  await from.click();
+  const typed = panel.getByLabel("Route start, typed");
+  await typed.fill("02:00");
+  await typed.press("Enter");
+  await expect(from).toHaveText(/^02:00/);
+  await from.click();
+  await typed.fill("02:30");
+  await typed.press("Enter");
+  await expect(panel.getByRole("alert")).toHaveText("Pick a time from now until 02:15");
+});

@@ -1,0 +1,148 @@
+/* 78 §5: the Brain dump editor (ThoughtEditor), in Mind Box and in Add ›
+   Thought. --te-min sets how many lines show before anything is typed. */
+.te { position: relative; --te-min: 96px; --te-max: 208px; --te-fs: 18px; --te-pad: 20px; }
+.te-box {
+  border: 1px solid var(--btn-line);
+  border-radius: 10px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.te.is-focused .te-box { border-color: var(--accent); box-shadow: inset 0 0 0 0.5px var(--accent); }
+.te-field {
+  position: relative;
+  box-sizing: border-box;
+  min-height: var(--te-min);
+  max-height: var(--te-max);
+  overflow-y: auto;
+  padding: 8px var(--te-pad);
+  font: inherit;
+  font-size: var(--te-fs);
+  line-height: 32px;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background-image: repeating-linear-gradient(to bottom, transparent 0 31px, var(--rule) 31px 32px);
+  background-origin: content-box;
+  background-clip: content-box;
+  background-attachment: local;
+  outline: none;
+  caret-color: var(--accent);
+}
+.te-field b { font-weight: 800; }
+.te-field.is-empty::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  color: var(--placeholder);
+  pointer-events: none;
+}
+.te.is-disabled .te-field { cursor: default; }
+.te-foot {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 6px 6px 8px;
+  border-top: 1px solid var(--line);
+  box-sizing: border-box;
+}
+.te-tool {
+  width: 40px; height: 40px;
+  display: inline-grid; place-items: center;
+  border: 0; border-radius: 8px;
+  background: none;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.te-tool:hover:not(:disabled) { background: var(--row-hover); }
+.te-tool.is-on { background: var(--accent-tint); color: var(--accent); }
+.te-tool:disabled { opacity: 0.45; cursor: default; }
+.te-tool:focus-visible, .te-save:focus-visible, .te-emoji-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.te-hint {
+  flex: 1;
+  min-width: 0;
+  padding: 0 10px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--placeholder);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+}
+.te-save {
+  min-height: 40px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.te-save:disabled { opacity: 0.45; cursor: default; }
+
+/* Emoji: just below the footer, so it never covers the text. In the flow,
+   so a dialog or a scrolling card never cuts it off. */
+.te-emoji {
+  margin-top: 6px;
+  width: 356px;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgba(15, 31, 22, 0.14);
+}
+.te-emoji-grid { display: grid; grid-template-columns: repeat(8, 40px); gap: 2px; justify-content: center; }
+.te-emoji-cell {
+  width: 40px; height: 40px;
+  border: 0; border-radius: 8px;
+  background: none;
+  font-size: 21px;
+  line-height: 1;
+  cursor: pointer;
+}
+.te-emoji-cell:hover { background: var(--row-hover); }
+.te-emoji-cell.is-at { background: var(--accent-tint); box-shadow: inset 0 0 0 2px var(--accent); }
+.te-emoji-cell:focus-visible { outline: none; }
+.te-emoji-hint {
+  margin: 8px 0 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--placeholder);
+  text-align: center;
+}
+
+@media (max-width: 839px) {
+  .te { --te-pad: 16px; }
+  .te-box { border-radius: 12px; background: var(--surface); }
+  .te-field { background-image: repeating-linear-gradient(to bottom, transparent 0 31px, var(--rule-surface, var(--rule)) 31px 32px); }
+  .te-tool { width: 44px; height: 44px; color: var(--placeholder); }
+  .te-hint { display: none; }
+  .te-foot { justify-content: flex-start; }
+  .te-save { margin-left: auto; min-height: 44px; }
+  .te-emoji-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+  .te-emoji-cell { width: 100%; }
+}
+@media (pointer: coarse) { .te-hint { display: none; } }
+
+/* 78 §6: Mind Box is full at 50. */
+.te-full {
+  box-sizing: border-box;
+  min-height: var(--te-min);
+  margin: 0;
+  padding: 16px var(--te-pad);
+  display: flex;
+  align-items: center;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}

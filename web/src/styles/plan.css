@@ -296,9 +296,10 @@
   color: var(--ink, var(--text-primary));
   border-bottom: 1px solid var(--line, var(--border));
 }
+/* Try-out 24: smaller — the header already says Plan. */
 .plan-head-title {
   margin: 0;
-  font-size: 1.625rem;
+  font-size: 1.375rem;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
@@ -465,6 +466,28 @@
 .plan-row-figures.plan-row-front { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .plan-row-pin { display: inline-flex; flex-shrink: 0; color: var(--ink-2, var(--text-secondary)); }
 .plan-row-meta .task-tag { flex-shrink: 0; }
+/* Try-out 11: the steps line under a row, and the steps unfolded. */
+.plan-row-steps { display: flex; align-items: baseline; gap: 6px; min-width: 0; font-size: 0.8125rem; color: var(--ink-2); }
+.plan-row-steps-toggle {
+  flex-shrink: 0;
+  min-height: 28px;
+  margin: -4px 0;
+  padding: 0 6px;
+  margin-left: -6px;
+  font: inherit;
+  font-weight: 700;
+  color: var(--ink-2);
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.plan-row-steps-toggle:hover { color: var(--ink); background: var(--panel); }
+.plan-row-steps-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.plan-row-next { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-row-step-list { margin: 2px 0 0; padding-left: 20px; font-size: 0.8125rem; line-height: 1.45; color: var(--ink); }
+.plan-row-step-list li { overflow-wrap: anywhere; }
+.plan-row-step-list li.is-done { color: var(--ink-2); text-decoration: line-through; }
 /* The open task's row (52h): tinted, with the focus ring. */
 .roadmap-task-card.plan-row.is-open {
   margin: 0 -8px;
@@ -496,7 +519,7 @@
     padding-right: 48px;
   }
   .plan-head { border-bottom: 0; padding-top: 28px; }
-  .plan-head-title { font-size: 2.25rem; }
+  .plan-head-title { font-size: 1.625rem; }
   .plan-horizons { grid-template-columns: repeat(4, minmax(0, 1fr)); column-gap: 28px; }
   .plan-horizon-name { font-size: 1rem; }
   .roadmap-task-card.plan-row { min-height: 48px; }
@@ -741,7 +764,11 @@
   margin-left: auto; min-height: 44px; padding: 0 14px; font: inherit; font-size: 0.875rem; font-weight: 700;
   color: var(--ink-2, var(--text-secondary)); background: none; border: 1px solid var(--line, var(--border)); border-radius: var(--radius-sm, 8px); cursor: pointer;
 }
-@media (max-width: 599px) { .dm-close-day { border: 0; padding: 0 4px; } }
+/* Try-out 12 Oct: a real action, so a soft green fill; solid green stays for
+   Start focus. */
+.dm-close-day { background: var(--accent-tint); border-color: transparent; color: var(--accent); }
+.dm-close-day:hover { border-color: var(--accent); }
+@media (max-width: 599px) { .dm-close-day { border: 0; padding: 0 10px; } }
 .dm-close-day:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .today-closed { display: flex; flex-direction: column; gap: 14px; padding: 24px 0; }
 .today-closed-title { margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }

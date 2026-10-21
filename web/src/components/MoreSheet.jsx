@@ -67,7 +67,7 @@ export default function MoreSheet({ task, hiddenHorizons = [], onSplit, onDetail
           </div>
         )}
         {onPark && row("Park", "Out of Today, into the parked fold", act(onPark))}
-        {onUnpin && row("Not the one thing", "Keep it in Today, pick another", act(onUnpin))}
+        {onUnpin && row("Not now", "Keep it in Today, pick another", act(onUnpin))}
         {onDelete && (
           <button type="button" className="more-delete" onClick={act(onDelete)}>Delete</button>
         )}

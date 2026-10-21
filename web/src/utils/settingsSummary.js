@@ -1,4 +1,4 @@
-import { formatMinutesToTime, getFocusWindows, mergeWindowSpans } from "./focusWindows";
+import { formatMinutesToTime, getFocusWindows, isAfterMidnightWindow, mergeWindowSpans, parseTimeToMinutes } from "./focusWindows";
 import { formatSpan } from "./dayMapPlan";
 
 // Settings' summary of the day (44a, 44d): how many windows, how much focus
@@ -17,6 +17,30 @@ export function focusWindowRows(config = {}) {
     return [{ start: formatMinutesToTime(w.startMin), end: formatMinutesToTime(w.endMin) }];
   }
   return [];
+}
+
+// Try-out issue 1: the windows read in the order of the day, so a window
+// added later at 10:00 sits above 11:30. A window after midnight is the tail
+// of the day (isAfterMidnightWindow, the same reading the Day map takes), so
+// 23:00 then 00:30 stays in that order. Unfinished rows go last, in their own
+// order.
+export function sortFocusWindowRows(rows) {
+  const read = rows.map(w => {
+    const startMin = parseTimeToMinutes(w.start);
+    const endMin = parseTimeToMinutes(w.end);
+    return startMin == null ? null : { startMin, endMin, overnight: endMin != null && endMin <= startMin };
+  });
+  // A row with no end yet is read as ending when it starts.
+  const complete = read.filter(Boolean).map(r => (r.endMin == null ? { ...r, endMin: r.startMin } : r));
+  const key = (r) => {
+    if (!r) return Infinity;
+    const w = r.endMin == null ? { ...r, endMin: r.startMin } : r;
+    return isAfterMidnightWindow(w, complete) ? r.startMin + 1440 : r.startMin;
+  };
+  return rows
+    .map((w, i) => ({ w, i, k: key(read[i]) }))
+    .sort((a, b) => a.k - b.k || a.i - b.i)
+    .map(x => x.w);
 }
 
 // A time input can briefly be incomplete while a person edits it. Keep that
@@ -42,7 +66,7 @@ export function focusWindowsSummary(config = {}) {
   // before merging, or 22:00–02:00 and 01:00–03:00 count 01:00–02:00 twice.
   const clockWindows = windows.flatMap(w => w.overnight
     ? [{ startMin: w.startMin, endMin: 1440, overnight: false }, { startMin: 0, endMin: w.endMin, overnight: false }]
-    : [w]);
+    : w.afterMidnight ? [{ startMin: w.startMin - 1440, endMin: w.endMin - 1440, overnight: false }] : [w]);
   const clockSpans = mergeWindowSpans(clockWindows);
   const totalMinutes = clockSpans.reduce((sum, [s, e]) => sum + (e - s), 0);
   // Day end remains the end of the latest configured span, including its
