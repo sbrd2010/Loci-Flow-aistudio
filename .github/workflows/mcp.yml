@@ -1,0 +1,42 @@
+name: MCP connector tests
+
+# The connector reuses modules from web/src/utils, so a change there can break it.
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'mcp/**'
+      - 'web/src/utils/**'
+      - '.github/workflows/mcp.yml'
+  push:
+    branches: [main, master]
+    paths:
+      - 'mcp/**'
+      - 'web/src/utils/**'
+      - '.github/workflows/mcp.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mcp-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcp
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mcp/package-lock.json
+
+      - run: npm ci
+
+      - run: npm test

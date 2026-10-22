@@ -1,0 +1,11 @@
+{
+  "name": "loci-mcp",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  // Needed so the OAuth library may fetch a connecting app's public client metadata.
+  "compatibility_flags": ["global_fetch_strictly_public"],
+  // Create with: npx wrangler kv namespace create OAUTH_KV   (then paste the id here)
+  "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }]
+  // Settings that name the owner (email, uid, zone) are secrets, not committed
+  // here: see docs/mcp-connector.md.
+}
