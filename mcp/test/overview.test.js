@@ -1,0 +1,103 @@
+import { describe, expect, it } from "vitest";
+import { buildOverview } from "../src/overview.js";
+
+const IST = "Asia/Kolkata";
+// 2026-10-22 01:00 in India, which is still 2026-10-21 in UTC.
+const NOW = Date.UTC(2026, 9, 21, 19, 30, 0);
+
+const task = (over) => ({
+  id: Math.random(), userId: "u1", uuid: `t-${Math.random()}`, title: "Sample task", concreteStep: "",
+  horizonLevel: "today", priority: "P2", category: "Work", timeEstimateMinutes: 30,
+  deadlineTimestamp: null, isCompleted: false, isParked: false, isNowFocus: false, isDeleted: false,
+  orderIndex: 0, dateCompletedString: null, lastUpdated: 1, ...over,
+});
+// Midday in India on the given date, so the deadline's calendar day is unambiguous.
+const noonIst = (y, m, d) => Date.UTC(y, m - 1, d, 6, 30, 0);
+
+const payload = (tasks, config = {}, extra = {}) => ({ userId: "u1", tasks, config: { userId: "u1", ...config }, timestamp: 1, ...extra });
+
+describe("buildOverview", () => {
+  it("reads 'today' in the user's zone, not UTC", () => {
+    const out = buildOverview(payload([]), NOW, IST);
+    expect(out.today).toBe("2026-10-22");
+    expect(out.timeZone).toBe(IST);
+  });
+
+  it("counts open work per horizon and keeps deferred 'today' tasks out of Today", () => {
+    const out = buildOverview(payload([
+      task({ title: "A" }),
+      task({ title: "B", deferredUntil: "2026-10-23" }),
+      task({ title: "C", horizonLevel: "week" }),
+      task({ title: "D", horizonLevel: "week", isParked: true }),
+      task({ title: "E", isDeleted: true }),
+    ]), NOW, IST);
+    expect(out.horizons).toEqual({ today: 1, tomorrow: 1, week: 1 });
+    expect(out.todayList.tasks.map(t => t.title)).toEqual(["A"]);
+  });
+
+  it("totals planned minutes and today's completions", () => {
+    const out = buildOverview(payload([
+      task({ timeEstimateMinutes: 45 }),
+      task({ timeEstimateMinutes: 15 }),
+      task({ isCompleted: true, dateCompletedString: "2026-10-22" }),
+      task({ isCompleted: true, dateCompletedString: "2026-10-21" }),
+    ]), NOW, IST);
+    expect(out.todayList.plannedMinutes).toBe(60);
+    expect(out.todayList.completedCount).toBe(1);
+  });
+
+  it("splits task deadlines into overdue, due today and upcoming by calendar day", () => {
+    const out = buildOverview(payload([
+      task({ title: "late", deadlineTimestamp: noonIst(2026, 10, 20) }),
+      task({ title: "today", deadlineTimestamp: noonIst(2026, 10, 22) }),
+      task({ title: "soon", horizonLevel: "week", deadlineTimestamp: noonIst(2026, 10, 25) }),
+      task({ title: "far", horizonLevel: "month", deadlineTimestamp: noonIst(2026, 12, 25) }),
+      task({ title: "done late", deadlineTimestamp: noonIst(2026, 10, 1), isCompleted: true }),
+    ]), NOW, IST);
+    expect(out.taskDeadlines.overdue).toEqual([{ title: "late", horizon: "today", due: "2026-10-20", daysLeft: -2 }]);
+    expect(out.taskDeadlines.dueToday.map(d => d.title)).toEqual(["today"]);
+    expect(out.taskDeadlines.upcoming.map(d => d.title)).toEqual(["soon"]);
+  });
+
+  it("a deadline later today in India is due today even when UTC is still the day before", () => {
+    const out = buildOverview(payload([task({ title: "x", deadlineTimestamp: Date.UTC(2026, 9, 22, 12, 0, 0) })]), NOW, IST);
+    expect(out.taskDeadlines.dueToday.map(d => d.title)).toEqual(["x"]);
+  });
+
+  it("projects the key deadline and stored fronts with days left and status", () => {
+    const out = buildOverview(payload(
+      [task({ frontId: "f1" }), task({ frontId: "f1", isCompleted: true })],
+      { deadlineLabel: "Thesis draft", deadlineDate: "2026-10-20", fronts: [{ id: "f1", name: "Paper", dueAt: "2026-11-01", nextMove: "Write methods" }] },
+    ), NOW, IST);
+    expect(out.fronts.map(f => [f.name, f.daysLeft, f.status])).toEqual([["Thesis draft", -2, "overdue"], ["Paper", 10, "upcoming"]]);
+    expect(out.fronts[1].tasks).toEqual({ open: 1, done: 1 });
+    expect(out.fronts[1].nextMove).toBe("Write methods");
+  });
+
+  it("lists the last seven days, oldest first, from contributions", () => {
+    const out = buildOverview(payload([], {}, { contributions: [{ dateString: "2026-10-22", count: 3 }, { dateString: "2026-10-20", count: 1 }] }), NOW, IST);
+    expect(out.last7Days.map(d => d.date)).toEqual(["2026-10-16", "2026-10-17", "2026-10-18", "2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22"]);
+    expect(out.last7Days.map(d => d.completed)).toEqual([0, 0, 0, 0, 1, 0, 3]);
+  });
+
+  it("never returns private fields", () => {
+    const out = JSON.stringify(buildOverview(payload([task()], { userName: "Real Name", mentorName: "Mentor", dailyAnchors: [{ id: "a", text: "anchor text" }] }, {
+      chatHistory: [{ text: "secret chat", isUser: true }],
+      brainDump: [{ id: "b", text: "secret thought" }],
+    }), NOW, IST));
+    for (const leak of ["Real Name", "Mentor", "anchor text", "secret chat", "secret thought"]) expect(out).not.toContain(leak);
+  });
+
+  it("handles an empty or missing record", () => {
+    expect(buildOverview(null, NOW, IST).todayList.openCount).toBe(0);
+    expect(buildOverview({}, NOW, IST).fronts).toEqual([]);
+  });
+
+  it("caps the Today list and says so", () => {
+    const many = Array.from({ length: 45 }, (_, i) => task({ title: `T${i}` }));
+    const out = buildOverview(payload(many), NOW, IST);
+    expect(out.todayList.openCount).toBe(45);
+    expect(out.todayList.tasks).toHaveLength(40);
+    expect(out.todayList.truncated).toBe(true);
+  });
+});
