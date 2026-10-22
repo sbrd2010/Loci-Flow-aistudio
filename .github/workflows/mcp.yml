@@ -15,6 +15,9 @@ on:
       - 'web/src/utils/**'
       - '.github/workflows/mcp.yml'
 
+permissions:
+  contents: read
+
 concurrency:
   group: mcp-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

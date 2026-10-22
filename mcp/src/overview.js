@@ -8,6 +8,9 @@ import { addDays, assertUtcRuntime, dateString, daysBetween, wallClock } from ".
 const TODAY_LIST_LIMIT = 40;
 const DEADLINE_LIST_LIMIT = 25;
 const UPCOMING_DAYS = 14;
+// A task's own deadline must be a real moment before 2100; 0, negatives and absurd
+// values are treated as "no date" instead of becoming 1970 or a crash.
+const MAX_DEADLINE_MS = Date.UTC(2100, 0, 1);
 
 function deadlineStatus(daysLeft) {
   if (daysLeft === null) return "no date";
@@ -59,14 +62,27 @@ export function buildOverview(raw, nowMs, timeZone) {
   const doneToday = live.filter(t => t.isCompleted && t.dateCompletedString === lociDay);
   const plannedMinutes = onToday.reduce((sum, t) => sum + (Number(t.timeEstimateMinutes) || 0), 0);
 
+  const liveFronts = frontsFromConfig(config).filter(f => !f.parked);
+  const frontById = new Map(liveFronts.map(f => [f.id, f]));
+  // A task's own date wins; otherwise it takes its front's, as the app's
+  // narrowDown does. The app only ever sets a task's own date to null, so in
+  // practice nearly every task deadline is its front's.
   const dated = active
-    .filter(t => Number.isFinite(t.deadlineTimestamp))
-    .map(t => ({ t, due: dateString(wallClock(t.deadlineTimestamp, timeZone)) }))
-    .map(({ t, due }) => ({ title: t.title, horizon: t.horizonLevel, due, daysLeft: daysBetween(calendarToday, due) }))
+    .map(t => {
+      const own = Number(t.deadlineTimestamp);
+      if (Number.isFinite(own) && own > 0 && own < MAX_DEADLINE_MS) {
+        return { t, due: dateString(wallClock(own, timeZone)), viaFront: null };
+      }
+      const front = frontById.get(t.frontId);
+      return front?.dueAt ? { t, due: front.dueAt, viaFront: front.name } : null;
+    })
+    .filter(Boolean)
+    .map(({ t, due, viaFront }) => ({
+      title: t.title, horizon: t.horizonLevel, due, daysLeft: daysBetween(calendarToday, due), ...(viaFront ? { viaFront } : {}),
+    }))
     .sort((a, b) => a.daysLeft - b.daysLeft);
 
-  const fronts = frontsFromConfig(config)
-    .filter(f => !f.parked)
+  const fronts = liveFronts
     .map(f => {
       const daysLeft = f.dueAt ? daysBetween(calendarToday, f.dueAt) : null;
       const mine = live.filter(t => t.frontId === f.id);
@@ -81,7 +97,8 @@ export function buildOverview(raw, nowMs, timeZone) {
     })
     .sort((a, b) => (a.daysLeft ?? Infinity) - (b.daysLeft ?? Infinity));
 
-  const completedByDay = new Map(contributions.map(c => [c.dateString, Number(c.count) || 0]));
+  // Firebase hands back a hole in a sparse array as null.
+  const completedByDay = new Map(contributions.filter(c => c && typeof c === "object").map(c => [c.dateString, Number(c.count) || 0]));
   const last7Days = [];
   for (let back = 6; back >= 0; back -= 1) {
     const day = addDays(calendarToday, -back);

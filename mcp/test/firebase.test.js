@@ -53,18 +53,34 @@ describe("getAccessToken", () => {
 describe("readUserRecord", () => {
   const env = (json) => ({ FIREBASE_SERVICE_ACCOUNT: json, FIREBASE_DB_URL: "https://demo-project-default-rtdb.firebaseio.com/" });
 
-  it("GETs sync/{uid}.json with the token in a header, not the URL", async () => {
+  it("GETs only tasks, config and contributions, with the token in a header, not the URL", async () => {
     const { json } = await makeAccount();
     const calls = [];
     const fetchImpl = async (url, init) => {
       calls.push([String(url), init]);
-      return String(url).includes("oauth2") ? Response.json({ access_token: "tok", expires_in: 3600 }) : Response.json({ tasks: [] });
+      if (String(url).includes("oauth2")) return Response.json({ access_token: "tok", expires_in: 3600 });
+      return Response.json({ tasks: [{ id: 1 }], config: { a: 1 }, contributions: [] }[String(url).split("/").pop().replace(".json", "")]);
     };
-    expect(await readUserRecord(env(json), "abc123", { fetchImpl })).toEqual({ tasks: [] });
-    const [url, init] = calls[1];
-    expect(url).toBe("https://demo-project-default-rtdb.firebaseio.com/sync/abc123.json");
-    expect(init.headers.Authorization).toBe("Bearer tok");
-    expect(init.method).toBeUndefined(); // a plain GET
+    expect(await readUserRecord(env(json), "abc123", { fetchImpl })).toEqual({ userId: "abc123", tasks: [{ id: 1 }], config: { a: 1 }, contributions: [] });
+    const reads = calls.filter(([url]) => !url.includes("oauth2"));
+    expect(reads.map(([url]) => url).sort()).toEqual([
+      "https://demo-project-default-rtdb.firebaseio.com/sync/abc123/config.json",
+      "https://demo-project-default-rtdb.firebaseio.com/sync/abc123/contributions.json",
+      "https://demo-project-default-rtdb.firebaseio.com/sync/abc123/tasks.json",
+    ]);
+    for (const [, init] of reads) {
+      expect(init.headers.Authorization).toBe("Bearer tok");
+      expect(init.method).toBeUndefined(); // a plain GET
+    }
+  });
+
+  it("drops the cached token when the database refuses it, so the next read gets a fresh one", async () => {
+    const { json } = await makeAccount();
+    let tokens = 0;
+    const refused = async (url) => String(url).includes("oauth2") ? (tokens += 1, Response.json({ access_token: `tok-${tokens}`, expires_in: 3600 })) : new Response("", { status: 401 });
+    await expect(readUserRecord(env(json), "abc", { fetchImpl: refused })).rejects.toThrow("(401)");
+    await expect(readUserRecord(env(json), "abc", { fetchImpl: refused })).rejects.toThrow("(401)");
+    expect(tokens).toBe(2);
   });
 
   it("refuses a uid that could change the path", async () => {

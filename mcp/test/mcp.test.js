@@ -14,7 +14,7 @@ const rpc = (method, params = {}, id = 1) => new Request("https://x.test/mcp", {
 // A stand-in for firebase.js: the token request, then the record.
 const fakeFetch = (record, status = 200) => vi.fn(async (url) =>
   String(url).includes("oauth2") ? Response.json({ access_token: "tok", expires_in: 3600 })
-    : status === 200 ? Response.json(record) : new Response("nope", { status }));
+    : status === 200 ? Response.json(record?.[String(url).split("/").pop().replace(".json", "")] ?? null) : new Response("nope", { status }));
 
 describe("access checks", () => {
   it("refuses a token for another user, no user, or without the read scope", async () => {
@@ -43,7 +43,7 @@ describe("tools", () => {
     expect(overview.todayList.plannedMinutes).toBe(50);
     // Only ever reads: every call is a GET or the token POST.
     const methods = fetchImpl.mock.calls.map(([, init]) => init?.method ?? "GET");
-    expect(methods).toEqual(["POST", "GET"]);
+    expect(methods).toEqual(["POST", "GET", "GET", "GET"]); // the token, then tasks, config, contributions
   });
 
   it("returns a plain error, with no internals, when the read fails", async () => {

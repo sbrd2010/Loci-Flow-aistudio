@@ -128,6 +128,39 @@ describe("buildOverview", () => {
     expect(titles).toHaveLength(40);
   });
 
+  describe("task deadlines", () => {
+    it("a task with no date of its own takes its front's, and says so", () => {
+      const out = buildOverview(payload(
+        [task({ title: "own date", frontId: "f1", deadlineTimestamp: noonIst(2026, 10, 24) }), task({ title: "inherited", frontId: "f1" }), task({ title: "no front" })],
+        { fronts: [{ id: "f1", name: "Paper", dueAt: "2026-10-30" }] },
+      ), NOW, IST);
+      expect(out.taskDeadlines.upcoming).toEqual([
+        { title: "own date", horizon: "today", due: "2026-10-24", daysLeft: 2 },
+        { title: "inherited", horizon: "today", due: "2026-10-30", daysLeft: 8, viaFront: "Paper" },
+      ]);
+    });
+
+    it("a task on an overdue front is overdue, and a parked front's date is ignored", () => {
+      const out = buildOverview(payload(
+        [task({ title: "late", frontId: "f1" }), task({ title: "parked", frontId: "f2" })],
+        { fronts: [{ id: "f1", name: "Old", dueAt: "2026-10-15" }, { id: "f2", name: "Shelved", dueAt: "2026-10-15", parked: true }] },
+      ), NOW, IST);
+      expect(out.taskDeadlines.overdue.map(d => d.title)).toEqual(["late"]);
+    });
+
+    it("treats 0, negative and absurd timestamps as no date, without failing", () => {
+      for (const bad of [0, -5, 1e20, Infinity, "soon"]) {
+        const out = buildOverview(payload([task({ title: "x", deadlineTimestamp: bad })]), NOW, IST);
+        expect(out.taskDeadlines).toEqual({ overdue: [], dueToday: [], upcoming: [] });
+      }
+    });
+  });
+
+  it("copes with holes in the contributions list", () => {
+    const out = buildOverview(payload([], {}, { contributions: [null, { dateString: "2026-10-22", count: 2 }, undefined, "junk"] }), NOW, IST);
+    expect(out.last7Days.at(-1)).toEqual({ date: "2026-10-22", completed: 2 });
+  });
+
   it("never returns private fields", () => {
     const out = JSON.stringify(buildOverview(payload([task()], { userName: "Real Name", mentorName: "Mentor", dailyAnchors: [{ id: "a", text: "anchor text" }] }, {
       chatHistory: [{ text: "secret chat", isUser: true }],

@@ -11,3 +11,26 @@ export function missingConfig(env) {
 }
 
 export const publicUrl = (env) => env.PUBLIC_URL.replace(/\/+$/, "");
+
+// Where an access code may be sent. Registration is open (ChatGPT and Claude
+// register themselves), so without this anyone could register an app under a
+// friendly name, send the owner a link, and be handed a token once the owner
+// signs in with Google. An entry ending in "/" matches any path under it.
+// ChatGPT's address carries a per-connector id; the older shared one still works.
+// EXTRA_REDIRECT_URIS (comma-separated, same format) adds more without a code change.
+const DEFAULT_REDIRECTS = [
+  "https://claude.ai/api/mcp/auth_callback",
+  "https://claude.com/api/mcp/auth_callback",
+  "https://chatgpt.com/connector/oauth/",
+  "https://chatgpt.com/connector_platform_oauth_redirect",
+];
+
+export function redirectAllowed(redirectUri, env = {}) {
+  let url;
+  try { url = new URL(redirectUri); } catch { return false; }
+  if (url.protocol !== "https:") return false;
+  // Parsed, not string-matched: "https://claude.ai@evil.example/" has the origin evil.example.
+  const where = `${url.origin}${url.pathname}`;
+  const extra = String(env.EXTRA_REDIRECT_URIS ?? "").split(",").map(s => s.trim()).filter(Boolean);
+  return [...DEFAULT_REDIRECTS, ...extra].some(entry => (entry.endsWith("/") ? where.startsWith(entry) && where.length > entry.length : where === entry));
+}

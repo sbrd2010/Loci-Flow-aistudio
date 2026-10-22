@@ -34,7 +34,12 @@ export default {
       console.error(`Connector is not configured. Missing: ${missing.join(", ")}`);
       return new Response("The Loci connector is not configured.", { status: 503 });
     }
-    assertTimeZone(env.LOCI_TIMEZONE);
+    try {
+      assertTimeZone(env.LOCI_TIMEZONE);
+    } catch (err) {
+      console.error(err.message);
+      return new Response("The Loci connector is not configured.", { status: 503 });
+    }
     return getProvider(env).fetch(request, env, ctx);
   },
 };

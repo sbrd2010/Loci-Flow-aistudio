@@ -71,3 +71,67 @@ describe("/callback", () => {
     expect(oauth.completeAuthorization).not.toHaveBeenCalled();
   });
 });
+
+describe("/authorize", () => {
+  const CLAUDE = "https://claude.ai/api/mcp/auth_callback";
+  const fakeConsent = (redirectUri, clientName = "Claude") => {
+    const headers = new Headers();
+    return {
+      parseAuthRequest: vi.fn(async () => ({ clientId: "c1", redirectUri, scope: ["mcp:read"] })),
+      describeConsent: vi.fn(async () => ({ clientName, redirectHost: new URL(redirectUri).hostname, redirectIsLoopback: false, scope: ["mcp:read"] })),
+      beginConsent: vi.fn(async () => ({ handle: "h-1", headers })),
+      approveConsent: vi.fn(async () => ({ request: { clientId: "c1", redirectUri, scope: ["mcp:read"] }, headers: new Headers() })),
+      denyConsent: vi.fn(async () => ({ headers: new Headers({ Location: `${redirectUri}?error=access_denied` }) })),
+      beginUpstream: vi.fn(async (_req, { headers }) => ({ state: "st-1", headers })),
+    };
+  };
+  const handler = createAuthorizeHandler();
+  const get = (o) => handler.fetch(new Request("https://loci.example.workers.dev/authorize?x=1"), env(o));
+  const post = (o, fields) => handler.fetch(new Request("https://loci.example.workers.dev/authorize", { method: "POST", body: new URLSearchParams(fields) }), env(o));
+
+  it("shows the consent page for an allowed app, with its name escaped", async () => {
+    const o = fakeConsent(CLAUDE, `<img src=x onerror=alert(1)> & "Co"`);
+    const res = await get(o);
+    const html = await res.text();
+    expect(res.status).toBe(200);
+    expect(html).toContain('name="handle" value="h-1"');
+    expect(html).not.toContain("<img src=x");
+    expect(html).toContain("&#60;img src=x onerror=alert(1)&#62;");
+  });
+
+  it("refuses an app whose redirect address is not on the list, before any consent is started", async () => {
+    const o = fakeConsent("https://evil.example/cb", "Claude");
+    const res = await get(o);
+    expect(res.status).toBe(400);
+    expect(await res.text()).toBe("That app is not on this connector's list of allowed apps.");
+    expect(o.beginConsent).not.toHaveBeenCalled();
+  });
+
+  it("on approve, grants only the read scope whatever the form says, and sends the user to Google with PKCE", async () => {
+    const o = fakeConsent(CLAUDE);
+    const res = await post(o, { handle: "h-1", decision: "approve", scope: "mcp:write" });
+    expect(o.approveConsent).toHaveBeenCalledWith(expect.anything(), "h-1", { scope: ["mcp:read"] });
+    expect(res.status).toBe(302);
+    const to = new URL(res.headers.get("Location"));
+    expect(to.origin + to.pathname).toBe("https://accounts.google.com/o/oauth2/v2/auth");
+    expect(to.searchParams.get("code_challenge_method")).toBe("S256");
+    expect(to.searchParams.get("state")).toBe("st-1");
+    expect(to.searchParams.get("redirect_uri")).toBe("https://loci.example.workers.dev/callback");
+  });
+
+  it("does not go to Google if the approved request turns out to have a disallowed address", async () => {
+    const o = fakeConsent("https://evil.example/cb");
+    const res = await post(o, { handle: "h-1", decision: "approve" });
+    expect(res.status).toBe(400);
+    expect(o.beginUpstream).not.toHaveBeenCalled();
+  });
+
+  it("on deny, answers the app with access_denied and never reaches Google", async () => {
+    const o = fakeConsent(CLAUDE);
+    const res = await post(o, { handle: "h-1", decision: "deny" });
+    expect(o.denyConsent).toHaveBeenCalled();
+    expect(res.headers.get("Location")).toBe(`${CLAUDE}?error=access_denied`);
+    expect(o.approveConsent).not.toHaveBeenCalled();
+    expect(o.beginUpstream).not.toHaveBeenCalled();
+  });
+});

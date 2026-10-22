@@ -3,9 +3,9 @@
 // token is made by hand: a signed JWT exchanged at Google's token endpoint.
 //
 // A service-account token bypasses database.rules.json. Two things stand in for
-// the rules: this file only ever GETs sync/{uid} for the uid it is handed, and
-// the account should hold only the "Firebase Realtime Database Viewer" role, so
-// even a bug here could not write (see docs/mcp-connector.md).
+// the rules: this file only ever GETs under sync/{uid} for the uid it is handed,
+// and the account should hold only the "Firebase Realtime Database Viewer" role,
+// so even a bug here could not write (see docs/mcp-connector.md).
 
 const SCOPES = "https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/userinfo.email";
 const REFRESH_MARGIN_MS = 5 * 60 * 1000;
@@ -60,12 +60,22 @@ export function resetTokenCache() {
 // Firebase uids are short alphanumerics. Anything else could change the path.
 const UID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
+// The plan is these three children. chatHistory and brainDump are never fetched,
+// so they never reach the Worker at all.
+const PLAN_PARTS = ["tasks", "config", "contributions"];
+
 export async function readUserRecord(env, uid, { fetchImpl = fetch, now = Date.now() } = {}) {
   if (!UID_PATTERN.test(uid)) throw new Error("Invalid user id.");
   const token = await getAccessToken(env.FIREBASE_SERVICE_ACCOUNT, { fetchImpl, now });
   const base = env.FIREBASE_DB_URL.replace(/\/+$/, "");
-  const res = await fetchImpl(`${base}/sync/${uid}.json`, { headers: { Authorization: `Bearer ${token}` } });
-  // Status only: the body can echo the path or the data.
-  if (!res.ok) throw new Error(`Database read failed (${res.status}).`);
-  return res.json();
+  const get = async (part) => {
+    const res = await fetchImpl(`${base}/sync/${uid}/${part}.json`, { headers: { Authorization: `Bearer ${token}` } });
+    // A refused token (key revoked or rotated) must not keep being reused until it expires.
+    if (res.status === 401) resetTokenCache();
+    // Status only: the body can echo the path or the data.
+    if (!res.ok) throw new Error(`Database read failed (${res.status}).`);
+    return res.json();
+  };
+  const [tasks, config, contributions] = await Promise.all(PLAN_PARTS.map(get));
+  return { userId: uid, tasks, config, contributions };
 }

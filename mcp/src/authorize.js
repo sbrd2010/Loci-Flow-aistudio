@@ -1,5 +1,5 @@
 import { AuthorizationError, CimdFetchError, authorizationErrorRedirect } from "@cloudflare/workers-oauth-provider";
-import { publicUrl } from "./config.js";
+import { publicUrl, redirectAllowed } from "./config.js";
 import { exchangeGoogleCode, googleAuthorizeUrl, isAllowedUser, newVerifier, s256 } from "./google.js";
 import { READ_SCOPE } from "./mcp.js";
 
@@ -27,8 +27,19 @@ ${details.redirectIsLoopback ? "<p><strong>This sends access to an app on your c
 </body>`;
 }
 
-async function showConsent(request, oauth) {
+const NOT_ALLOWED = "That app is not on this connector's list of allowed apps.";
+
+function refuseRedirect(redirectUri) {
+  // Origin and path only: a redirect address can carry a query.
+  let where = "an unparseable address";
+  try { const u = new URL(redirectUri); where = `${u.origin}${u.pathname}`; } catch { /* keep the placeholder */ }
+  console.warn(`Refused a sign-in that would send access to ${where}`);
+  return text(NOT_ALLOWED, 400);
+}
+
+async function showConsent(request, env, oauth) {
   const authRequest = await oauth.parseAuthRequest(request);
+  if (!redirectAllowed(authRequest.redirectUri, env)) return refuseRedirect(authRequest.redirectUri);
   const details = await oauth.describeConsent(authRequest);
   const consent = await oauth.beginConsent(authRequest);
   consent.headers.set("Content-Type", "text/html; charset=utf-8");
@@ -43,6 +54,7 @@ async function submitConsent(request, env, oauth) {
     return new Response(null, { status: 302, headers: denied.headers });
   }
   const approved = await oauth.approveConsent(request, handle, { scope: [READ_SCOPE] });
+  if (!redirectAllowed(approved.request.redirectUri, env)) return refuseRedirect(approved.request.redirectUri);
   const verifier = newVerifier();
   const { state, headers } = await oauth.beginUpstream(approved.request, { data: { verifier }, headers: approved.headers });
   headers.set("Location", googleAuthorizeUrl({
@@ -83,7 +95,7 @@ export function createAuthorizeHandler({ fetchImpl = fetch } = {}) {
       const { pathname } = new URL(request.url);
       const oauth = env.OAUTH_PROVIDER;
       try {
-        if (pathname === "/authorize" && request.method === "GET") return await showConsent(request, oauth);
+        if (pathname === "/authorize" && request.method === "GET") return await showConsent(request, env, oauth);
         if (pathname === "/authorize" && request.method === "POST") return await submitConsent(request, env, oauth);
         if (pathname === "/callback" && request.method === "GET") return await finishSignIn(request, env, oauth, fetchImpl);
         if (pathname === "/") return text("Loci connector. Add this address as a connector in ChatGPT or Claude.", 200);

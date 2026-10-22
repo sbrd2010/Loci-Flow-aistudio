@@ -20,7 +20,8 @@ function createServer(env, deps) {
       description:
         "A snapshot of the user's Loci plan right now: today's calendar date in their zone (and lociDay, the date their day counts as, which is still yesterday in the small hours if their day runs past midnight), their fronts (named pieces of work) with deadlines and days left, " +
         "open task counts per horizon, today's list (pinned task first, then the user's order) with estimates and total planned minutes, task deadlines that are overdue / due today / coming in 14 days, " +
-        "and tasks completed per day over the last 7 days. Read-only. Does not include chat history, Mind Box thoughts, or personal names.",
+        "and tasks completed per day over the last 7 days. A task with no date of its own takes its front's date (viaFront). " +
+        "Read-only. Task and front titles are included as the user wrote them; chat history and Mind Box thoughts are never read.",
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async () => {
