@@ -80,6 +80,54 @@ describe("buildOverview", () => {
     expect(out.last7Days.map(d => d.completed)).toEqual([0, 0, 0, 0, 1, 0, 3]);
   });
 
+  describe("a day that runs past midnight (window 07:00-02:00), asked at 01:00 on the 23rd", () => {
+    // 01:00 IST on 2026-10-23: the calendar says the 23rd, the user's Loci day is still the 22nd.
+    const LATE = Date.UTC(2026, 9, 22, 19, 30, 0);
+    const late = (tasks, config = {}, extra = {}) => payload(tasks, { focusWindows: [{ start: "07:00", end: "02:00" }], ...config }, extra);
+
+    it("reports both days: the calendar date for 'today', the Loci day for the Today list", () => {
+      const out = buildOverview(late([]), LATE, IST);
+      expect(out.today).toBe("2026-10-23");
+      expect(out.lociDay).toBe("2026-10-22");
+    });
+
+    it("measures deadlines from the calendar date, as the app's front countdown does", () => {
+      const out = buildOverview(late(
+        [task({ title: "due 23rd", deadlineTimestamp: noonIst(2026, 10, 23) }), task({ title: "due 22nd", deadlineTimestamp: noonIst(2026, 10, 22) })],
+        { fronts: [{ id: "f1", name: "Paper", dueAt: "2026-10-23" }] },
+      ), LATE, IST);
+      expect(out.fronts[0]).toMatchObject({ name: "Paper", daysLeft: 0, status: "due today" });
+      expect(out.taskDeadlines.dueToday.map(d => d.title)).toEqual(["due 23rd"]);
+      expect(out.taskDeadlines.overdue.map(d => d.title)).toEqual(["due 22nd"]);
+    });
+
+    it("keys the last seven days by calendar date, as contributions are stored", () => {
+      const out = buildOverview(late([], {}, { contributions: [{ dateString: "2026-10-23", count: 2 }] }), LATE, IST);
+      expect(out.last7Days.at(-1)).toEqual({ date: "2026-10-23", completed: 2 });
+    });
+
+    it("keeps the Loci day for the Today list: yesterday's completions count, 'tomorrow' tasks stay out", () => {
+      const out = buildOverview(late([
+        task({ title: "done in the small hours", isCompleted: true, dateCompletedString: "2026-10-22" }),
+        task({ title: "later", deferredUntil: "2026-10-23" }),
+        task({ title: "now" }),
+      ]), LATE, IST);
+      expect(out.todayList.completedCount).toBe(1);
+      expect(out.todayList.tasks.map(t => t.title)).toEqual(["now"]);
+      expect(out.horizons.tomorrow).toBe(1);
+    });
+  });
+
+  it("keeps the pinned task and the user's order when the Today list is cut", () => {
+    const many = Array.from({ length: 45 }, (_, i) => task({ title: `T${i}`, orderIndex: 45 - i })); // stored in reverse of the user's order
+    many[44].isNowFocus = true; // the last one stored, pinned
+    const out = buildOverview(payload(many), NOW, IST);
+    const titles = out.todayList.tasks.map(t => t.title);
+    expect(titles[0]).toBe("T44"); // pinned first
+    expect(titles.slice(1, 4)).toEqual(["T43", "T42", "T41"]); // then lowest orderIndex first
+    expect(titles).toHaveLength(40);
+  });
+
   it("never returns private fields", () => {
     const out = JSON.stringify(buildOverview(payload([task()], { userName: "Real Name", mentorName: "Mentor", dailyAnchors: [{ id: "a", text: "anchor text" }] }, {
       chatHistory: [{ text: "secret chat", isUser: true }],

@@ -18,8 +18,8 @@ function createServer(env, deps) {
     {
       title: "Loci overview",
       description:
-        "A snapshot of the user's Loci plan right now: today's date in their zone, their fronts (named pieces of work) with deadlines and days left, " +
-        "open task counts per horizon, today's list with estimates and total planned minutes, task deadlines that are overdue / due today / coming in 14 days, " +
+        "A snapshot of the user's Loci plan right now: today's calendar date in their zone (and lociDay, the date their day counts as, which is still yesterday in the small hours if their day runs past midnight), their fronts (named pieces of work) with deadlines and days left, " +
+        "open task counts per horizon, today's list (pinned task first, then the user's order) with estimates and total planned minutes, task deadlines that are overdue / due today / coming in 14 days, " +
         "and tasks completed per day over the last 7 days. Read-only. Does not include chat history, Mind Box thoughts, or personal names.",
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },

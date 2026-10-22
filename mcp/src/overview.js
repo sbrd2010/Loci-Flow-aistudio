@@ -36,30 +36,39 @@ export function buildOverview(raw, nowMs, timeZone) {
   assertUtcRuntime();
   const { tasks, config, contributions } = normalizePayload(raw);
   const wall = wallClock(nowMs, timeZone);
-  const todayStr = getLociDayStr(wall, getFocusWindows(config));
+  // Two different "todays", as in the app. The Loci day runs until the user's
+  // window ends (past midnight for some), and rules the Today list, deferral and
+  // dateCompletedString. The calendar date rules deadlines (frontDaysLeft) and
+  // contributions[].dateString.
+  const calendarToday = dateString(wall);
+  const lociDay = getLociDayStr(wall, getFocusWindows(config));
   const live = tasks.filter(t => !t.isDeleted);
   const active = live.filter(isActiveLociTask);
 
   const horizons = {};
   for (const t of active) {
-    const key = t.horizonLevel === "today" && isDeferred(t, todayStr) ? "tomorrow" : t.horizonLevel;
+    const key = t.horizonLevel === "today" && isDeferred(t, lociDay) ? "tomorrow" : t.horizonLevel;
     horizons[key] = (horizons[key] || 0) + 1;
   }
 
-  const onToday = active.filter(t => t.horizonLevel === "today" && !isDeferred(t, todayStr));
-  const doneToday = live.filter(t => t.isCompleted && t.dateCompletedString === todayStr);
+  // Pinned task first, then the user's own list order, so the cap below keeps what
+  // the app puts at the top. (The Day map's route order is not mirrored.)
+  const onToday = active
+    .filter(t => t.horizonLevel === "today" && !isDeferred(t, lociDay))
+    .sort((a, b) => Number(!!b.isNowFocus) - Number(!!a.isNowFocus) || (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+  const doneToday = live.filter(t => t.isCompleted && t.dateCompletedString === lociDay);
   const plannedMinutes = onToday.reduce((sum, t) => sum + (Number(t.timeEstimateMinutes) || 0), 0);
 
   const dated = active
     .filter(t => Number.isFinite(t.deadlineTimestamp))
     .map(t => ({ t, due: dateString(wallClock(t.deadlineTimestamp, timeZone)) }))
-    .map(({ t, due }) => ({ title: t.title, horizon: t.horizonLevel, due, daysLeft: daysBetween(todayStr, due) }))
+    .map(({ t, due }) => ({ title: t.title, horizon: t.horizonLevel, due, daysLeft: daysBetween(calendarToday, due) }))
     .sort((a, b) => a.daysLeft - b.daysLeft);
 
   const fronts = frontsFromConfig(config)
     .filter(f => !f.parked)
     .map(f => {
-      const daysLeft = f.dueAt ? daysBetween(todayStr, f.dueAt) : null;
+      const daysLeft = f.dueAt ? daysBetween(calendarToday, f.dueAt) : null;
       const mine = live.filter(t => t.frontId === f.id);
       return {
         name: f.name,
@@ -75,12 +84,13 @@ export function buildOverview(raw, nowMs, timeZone) {
   const completedByDay = new Map(contributions.map(c => [c.dateString, Number(c.count) || 0]));
   const last7Days = [];
   for (let back = 6; back >= 0; back -= 1) {
-    const day = addDays(todayStr, -back);
+    const day = addDays(calendarToday, -back);
     last7Days.push({ date: day, completed: completedByDay.get(day) || 0 });
   }
 
   return {
-    today: todayStr,
+    today: calendarToday,
+    lociDay,
     timeZone,
     fronts,
     horizons,
