@@ -103,23 +103,46 @@ describe("get_day_map", () => {
   it("reads the windows, the gap between them as a break, and the saved route", () => {
     expect(out.focusWindows).toEqual([{ start: "09:00", end: "12:00", minutes: 180 }, { start: "14:00", end: "18:00", minutes: 240 }]);
     expect(out.breaks).toEqual([{ start: "12:00", end: "14:00", minutes: 120, name: "Break", addedByUser: false }]);
-    expect(out.route.map(s => [s.title, s.routeStart, s.routeEnd])).toEqual([["Pinned report", "10:00", "10:50"], ["Email draft", "11:00", "11:30"]]);
+    // Laid out as the app does: the pinned task from now, then the next stop after a 5-minute buffer.
+    expect(out.route.map(s => [s.title, s.routeStart, s.routeEnd])).toEqual([["Pinned report", "10:00", "10:50"], ["Email draft", "10:55", "11:25"]]);
     expect(titles(out.unscheduled)).toEqual(["Loose end"]);
   });
 
   it("says whether the plan fits", () => {
     expect(out.fit).toMatchObject({
       openTasksMinutes: 105, capacityMinutes: 420, remainingFocusMinutes: 360, exceedsRemainingFocusByMinutes: 0,
-      routeEndsAt: "11:30", dayEndsAt: "18:00", routeOverrunMinutes: 0, wontFit: [],
+      routeEndsAt: "11:25", dayEndsAt: "18:00", routeOverrunMinutes: 0, wontFit: [],
     });
   });
 
   it("names the stops that run past the end of the day", () => {
     const rec = record();
-    rec.tasks[1] = { ...rec.tasks[1], dayMapStartMinutes: 1050, dayMapDurationMinutes: 60 }; // 17:30-18:30, day ends 18:00
+    rec.tasks[0] = { ...rec.tasks[0], timeEstimateMinutes: 500 }; // 10:00, across the 12:00-14:00 gap, to 20:20; day ends 18:00
     const late = buildDayMap(rec, NOW, IST);
-    expect(late.fit.routeOverrunMinutes).toBe(30);
-    expect(late.fit.wontFit.map(s => s.title)).toEqual(["Email draft"]);
+    expect(late.fit.wontFit.map(s => s.title)).toEqual(["Pinned report", "Email draft"]);
+    expect(late.fit.routeOverrunMinutes).toBe(175); // Email draft then ends 20:55
+  });
+
+  it("counts the break when a flexible task spans it (Codex, #542): 120 min from 11:30 over a 12:00-14:00 gap ends 15:30, not 13:30", () => {
+    const rec = record({ config: { focusWindows: [{ start: "09:00", end: "12:00" }, { start: "14:00", end: "15:00" }] } });
+    rec.tasks = [rec.tasks[1]]; // Email draft alone
+    rec.tasks[0] = { ...rec.tasks[0], isNowFocus: false, timeEstimateMinutes: 120, dayMapStartMinutes: 690, dayMapDurationMinutes: 120, dayMapOrder: 0 };
+    const out = buildDayMap(rec, NOW, IST);
+    expect(out.route).toHaveLength(1);
+    expect(out.route[0]).toMatchObject({ routeStart: "11:30", routeEnd: "15:30", splitByBreak: true });
+    expect(out.route[0].parts).toEqual([{ start: "11:30", end: "12:00" }, { start: "14:00", end: "15:30" }]);
+    expect(out.fit.routeEndsAt).toBe("15:30");
+    expect(out.fit.dayEndsAt).toBe("15:00");
+    expect(out.fit.routeOverrunMinutes).toBe(30);
+    expect(out.fit.wontFit.map(s => s.title)).toEqual(["Email draft"]);
+  });
+
+  it("puts a task on the route the way the app does: a saved day and order are enough, a saved start is not needed", () => {
+    const rec = record();
+    rec.tasks[2] = { ...rec.tasks[2], dayMapDate: "2026-10-22", dayMapOrder: 2 }; // Loose end: no saved start
+    const out = buildDayMap(rec, NOW, IST);
+    expect(out.route.map(s => s.title)).toEqual(["Pinned report", "Email draft", "Loose end"]);
+    expect(out.unscheduled).toEqual([]);
   });
 
   it("flags when open work exceeds the focus time left", () => {

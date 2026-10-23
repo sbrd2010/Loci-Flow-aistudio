@@ -2,6 +2,7 @@ import { normalizePayload } from "../../web/src/utils/normalizePayload.js";
 import { getFocusWindows, getLociDayStr } from "../../web/src/utils/focusWindows.js";
 import { isActiveLociTask } from "../../web/src/utils/lociAIContext.js";
 import { frontsFromConfig } from "../../web/src/utils/fronts.js";
+import { ESTIMATE_MAX, ESTIMATE_MIN } from "../../web/src/utils/estimates.js";
 import { assertUtcRuntime, dateString, daysBetween, wallClock } from "./time.js";
 
 // Longest list any tool returns. A guard for the Worker and the model's context,
@@ -39,7 +40,12 @@ export function taskView(task) {
 // Pinned task first, then the user's own list order.
 export const todayOrder = (a, b) => Number(!!b.isNowFocus) - Number(!!a.isNowFocus) || (a.orderIndex ?? 0) - (b.orderIndex ?? 0);
 
-export const minutesOf = (t) => Number(t.timeEstimateMinutes) || Number(t.dayMapDurationMinutes) || 25;
+// A task's minutes, by the app's own rule (getEstimate in useDayRoute): its estimate,
+// else the route's saved copy, else 25, kept within the allowed range.
+export function minutesOf(task) {
+  const raw = Number(task.timeEstimateMinutes || task.dayMapDurationMinutes || task.estimateMinutes || 25);
+  return Math.min(ESTIMATE_MAX, Math.max(ESTIMATE_MIN, Number.isFinite(raw) ? raw : 25));
+}
 
 // Keeps a list within LIST_LIMIT and records that it was cut, so the AI is told
 // instead of assuming it saw everything.

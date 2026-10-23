@@ -4,10 +4,10 @@
 import { isDeferred } from "../../web/src/utils/deferral.js";
 import { parkedSince, parkedTasks } from "../../web/src/utils/parked.js";
 import { confirmedMinimumDay } from "../../web/src/utils/minimumDay.js";
-import { getRemainingFocusMinutes, mergeWindowSpans } from "../../web/src/utils/focusWindows.js";
+import { getLociNowMinutes, getRemainingFocusMinutes, mergeWindowSpans } from "../../web/src/utils/focusWindows.js";
 import { routeBreaks } from "../../web/src/utils/dayMapBreaks.js";
-import { formatClock24, planDay } from "../../web/src/utils/dayMapPlan.js";
-import { isEventTask, isFixedStop } from "../../web/src/utils/dayMapRoute.js";
+import { dayLeftFrom, formatClock24, planDay } from "../../web/src/utils/dayMapPlan.js";
+import { isEventTask, isFixedStop, layoutRoute } from "../../web/src/utils/dayMapRoute.js";
 import { BUILT_IN_HORIZONS, WORK_OLDER_ID, currentPeriod, daysLeft as horizonDaysLeft, horizonsFromConfig, taskHorizonId } from "../../web/src/utils/horizons.js";
 import { frontNextMove, frontProgress, frontsFromConfig, tasksForFront } from "../../web/src/utils/fronts.js";
 import { byPriorityThenOrder } from "../../web/src/utils/taskOps.js";
@@ -72,7 +72,10 @@ export function buildToday(raw, nowMs, timeZone) {
   }, truncated);
 }
 
-// The Day map page: the day's windows and breaks, the saved route, and whether it fits.
+// The Day map page: the day's windows and breaks, the route, and whether it fits.
+// The route is laid out the way the page lays it out (useDayRoute): from now or the
+// saved start, whichever is later, with a task that reaches a break continuing after
+// it, so a task's end counts the break.
 export function buildDayMap(raw, nowMs, timeZone) {
   const c = prepare(raw, nowMs, timeZone);
   const { active, lociDay, config, windows } = c;
@@ -83,19 +86,31 @@ export function buildDayMap(raw, nowMs, timeZone) {
   const dayEnd = Math.max(...spans.map(([, end]) => end));
   const clock = formatClock24;
 
-  const stops = open
-    .filter(t => t.dayMapDate === lociDay && Number.isFinite(Number(t.dayMapStartMinutes)))
-    .map(t => {
-      const start = Number(t.dayMapStartMinutes);
-      const duration = Number(t.dayMapDurationMinutes) || minutesOf(t);
-      return { t, dayMapStartMinutes: start, dayMapDurationMinutes: duration, end: start + duration };
-    })
-    .sort((a, b) => (a.t.dayMapOrder ?? 0) - (b.t.dayMapOrder ?? 0) || a.dayMapStartMinutes - b.dayMapStartMinutes);
-  const onRoute = new Set(stops.map(s => s.t));
+  // On the route when it has today's day and a place in the order (isOnRoute).
+  const byRouteOrder = (a, b) => (a.dayMapOrder ?? Infinity) - (b.dayMapOrder ?? Infinity) || (a.dayMapStartMinutes ?? 0) - (b.dayMapStartMinutes ?? 0);
+  const scheduled = open.filter(t => t.dayMapDate === lociDay && (t.dayMapOrder != null || !!t.dayMapPeriod)).sort(byRouteOrder);
+  const onRoute = new Set(scheduled);
   const unscheduled = open.filter(t => !onRoute.has(t)).sort(todayOrder);
 
-  const plan = stops.length
-    ? planDay(stops, stops[0].dayMapStartMinutes, Math.max(0, dayEnd - stops[0].dayMapStartMinutes))
+  // Where the route starts (routeAnchor): the saved anchor or the earliest saved start,
+  // but never before now.
+  const nowMin = Math.floor(getLociNowMinutes(c.wall, windows));
+  const savedStarts = scheduled.filter(t => !isFixedStop(t) && t.dayMapStartMinutes != null).map(t => Number(t.dayMapStartMinutes));
+  const anchor = config.dayMapDate === lociDay && config.dayMapAnchorMinutes != null
+    ? Math.max(nowMin, Number(config.dayMapAnchorMinutes))
+    : (savedStarts.length ? Math.max(nowMin, Math.min(...savedStarts)) : nowMin);
+  const breaks = routeBreaks(windows, config, lociDay);
+
+  const stops = new Map();
+  for (const row of scheduled.length ? layoutRoute(scheduled, { from: anchor, breaks, durationOf: minutesOf }) : []) {
+    if (row.kind !== "stop") continue;
+    const seen = stops.get(row.task);
+    if (seen) { seen.routeEnd = row.end; seen.parts.push({ start: row.start, end: row.end }); }
+    else stops.set(row.task, { t: row.task, start: row.start, routeEnd: row.end, parts: [{ start: row.start, end: row.end }] });
+  }
+  const route = [...stops.values()];
+  const plan = route.length
+    ? planDay(route.map(s => ({ ...s, dayMapStartMinutes: s.start, dayMapDurationMinutes: minutesOf(s.t), routeEndMinutes: s.routeEnd })), anchor, dayLeftFrom(anchor, c.wall, windows))
     : null;
   const remainingFocusMinutes = getRemainingFocusMinutes(c.wall, windows);
   const openMinutes = open.reduce((sum, t) => sum + minutesOf(t), 0);
@@ -105,12 +120,14 @@ export function buildDayMap(raw, nowMs, timeZone) {
     lociDay,
     timeZone,
     focusWindows: spans.map(([start, end]) => ({ start: clock(start), end: clock(end), minutes: end - start })),
-    breaks: routeBreaks(windows, config, lociDay).map(b => ({
+    breaks: breaks.map(b => ({
       start: clock(b.start), end: clock(b.end), minutes: b.end - b.start, name: b.name, addedByUser: !!b.added,
     })),
-    route: stops.map(s => ({
+    route: route.map(s => ({
       ...taskView(s.t),
-      routeStart: clock(s.dayMapStartMinutes), routeEnd: clock(s.end), durationMinutes: s.dayMapDurationMinutes,
+      routeStart: clock(s.start), routeEnd: clock(s.routeEnd), durationMinutes: minutesOf(s.t),
+      splitByBreak: s.parts.length > 1,
+      ...(s.parts.length > 1 ? { parts: s.parts.map(p => ({ start: clock(p.start), end: clock(p.end) })) } : {}),
       isFixedTime: isFixedStop(s.t), isEvent: isEventTask(s.t),
     })),
     unscheduled: unscheduled.map(taskView),
@@ -119,12 +136,12 @@ export function buildDayMap(raw, nowMs, timeZone) {
       capacityMinutes,
       remainingFocusMinutes,
       exceedsRemainingFocusByMinutes: Math.max(0, openMinutes - remainingFocusMinutes),
-      routeEndsAt: stops.length ? clock(Math.max(...stops.map(s => s.end))) : null,
+      routeEndsAt: route.length ? clock(Math.max(...route.map(s => s.routeEnd))) : null,
       dayEndsAt: clock(dayEnd),
       routeOverrunMinutes: plan ? plan.overBy : 0,
-      wontFit: plan ? plan.wontFit.map(s => ({ uuid: s.t.uuid, title: s.t.title, routeStart: clock(s.dayMapStartMinutes), routeEnd: clock(s.end) })) : [],
+      wontFit: plan ? plan.wontFit.map(s => ({ uuid: s.t.uuid, title: s.t.title, routeStart: clock(s.start), routeEnd: clock(s.routeEnd) })) : [],
     },
-    note: "The route is the one the app last saved (start times and order per task); it is not recomputed here. Open tasks with no saved start are in `unscheduled`. Minutes are 'loci minutes': a window running past midnight reads as 24:00 onward.",
+    note: "The route is laid out as the Day map would show it right now: it starts from now or the saved start, whichever is later; a task that reaches a break continues after it (see parts). Open tasks with no place in the route are in `unscheduled`. Minutes are 'loci minutes': a window running past midnight reads as 24:00 onward.",
   };
 }
 

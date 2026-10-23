@@ -24,7 +24,7 @@ const TOOLS = [
   {
     name: "get_day_map", title: "Day map page", parts: ["tasks", "config"], build: buildDayMap,
     description:
-      "The user's Day map: focus windows and breaks, the saved route (each open Today task with start, end and duration, fixed-time and event flags), open tasks with no saved start, " +
+      "The user's Day map: focus windows and breaks, the route laid out as the page shows it right now (each open Today task with start, end and duration, a task that reaches a break continues after it, fixed-time and event flags), open tasks with no place in the route, " +
       "and whether the plan fits: open minutes vs remaining and total focus time, where the route ends vs the day's end, and the stops that won't fit.",
   },
   {

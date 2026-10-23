@@ -17,7 +17,7 @@ Eight read-only tools. Each page of the app has one, and it returns what the pag
 |---|---|---|
 | `get_overview` | (summary) | Today's date in your zone, fronts with days left, open tasks per horizon, task deadlines (overdue / today / next 14 days; a task with no date of its own takes its front's), completed per day for 7 days |
 | `get_today` | Today | Open list (pinned task first), moved to tomorrow, completed today, **all parked tasks** with how long, the pinned task, the Minimum Day, whether the day is closed |
-| `get_day_map` | Day map | Focus windows and breaks, the route the app last saved (start, end, duration per task), tasks with no saved start, and whether the plan fits (open minutes vs focus time left, where the route ends, the stops that won't fit) |
+| `get_day_map` | Day map | Focus windows and breaks, the route laid out as the page shows it right now (start, end, duration per task; a task that reaches a break continues after it), tasks with no place in the route, and whether the plan fits (open minutes vs focus time left, where the route ends, the stops that won't fit) |
 | `get_plan` | Plan | Every horizon (including ones you added and Work · older) with period, days left, review and its open tasks; the fronts with their dates, next move, progress and all their tasks; what was completed in the last 14 days. Optional `horizon` |
 | `get_mind_box` | Mind Box | Every thought as you wrote it, newest first, with when and how many days ago |
 | `get_week` | (history) | Day by day: the app's completion count, tasks completed, and your Close-the-day record. Optional `days` (default 14, up to 60) |
