@@ -11,7 +11,7 @@ Only one person can use it: the Google account in `ALLOWED_EMAIL`, mapped to the
 
 ## What it returns, and what it never does
 
-Eight read-only tools. Each page of the app has one, and it returns what the page shows, with whole task records:
+Twelve read-only tools and one prompt. Each page of the app has a tool, and it returns what the page shows, with whole task records:
 
 | Tool | Page | Returns |
 |---|---|---|
@@ -20,13 +20,17 @@ Eight read-only tools. Each page of the app has one, and it returns what the pag
 | `get_day_map` | Day map | Focus windows and breaks, the route laid out as the page shows it right now (start, end, duration per task; a task that reaches a break continues after it), tasks with no place in the route, and whether the plan fits (open minutes vs focus time left, where the route ends, the stops that won't fit) |
 | `get_plan` | Plan | Every horizon (including ones you added and Work · older) with period, days left, review and its open tasks; the fronts with their dates, next move, progress and all their tasks; what was completed in the last 14 days. Optional `horizon` |
 | `get_mind_box` | Mind Box | Every thought as you wrote it, newest first, with when and how many days ago |
-| `get_week` | (history) | Day by day: the app's completion count, tasks completed, and your Close-the-day record. Optional `days` (default 14, up to 60) |
+| `get_week` | (history) | Day by day: the app's completion count, tasks completed, focus minutes and sessions, and your Close-the-day record. Optional `days` (default 14, up to 60) |
 | `get_stuck` | (facts) | Overdue tasks, long-parked tasks, Today / This-week tasks not edited for a while, open Today tasks with no step or no estimate. Optional `staleDays`, `parkedDays` (default 7) |
+| `get_focus_history` | Focus | Every focus session in the last N days (default 14): when it started, minutes, planned minutes, done / ended / expired, why it ended, and the task, category, priority and front; minutes per day and per front |
+| `get_coach_review` | Coach > Review | The Review page's facts, computed with the app's own code: focus minutes and ticks day by day, minutes per front, work by category, pace, best weekday, what is open now and whether today's plan exceeds the focus time left. `period`: today, 7d (default) or 30d |
+| `get_coach_brief` | Coach > Brief | The latest Brief your Coach wrote (as text and as saved). Only the latest is kept and it can be out of date; it may name your tasks |
+| `get_review_guide` | (guide) | How Loci plans and how to review a plan against that, so the AI doesn't give generic advice. The same text is the `review_my_plan` prompt, which Claude lists as a starting point |
 | `get_settings` | Settings | Only the settings that shape a plan: day start/end, focus windows, challenge type, pomodoro length, evening guard, goal-days mode, break name, key-deadline settings |
 
-Each tool fetches only the parts of your record it needs. It **never reads your Coach chat**, and never returns your name, the mentor's name, Coach notes, daily anchors or display options. **Your task titles and Mind Box thoughts do go to the AI** (and so to OpenAI or Anthropic) whenever it asks, exactly as you wrote them. A list is cut at 200 entries and says so. It never writes: the Firebase account it uses should hold only the Viewer role, so even a bug could not write.
+Each tool fetches only the parts of your record it needs; three also read your focus log (`activityLogs/<uid>/events`, only from the oldest day they need). It **never reads your Coach chat**, and never returns your name, the mentor's name, your Coach profile and persona notes, Coach memory, daily anchors or display options. **Your task titles and Mind Box thoughts do go to the AI** (and so to OpenAI or Anthropic) whenever it asks, exactly as you wrote them. A list is cut at 200 entries and says so. It never writes: the Firebase account it uses should hold only the Viewer role, so even a bug could not write.
 
-What it cannot see: a focus timer that is running right now (that lives only in the browser; the pinned task is visible), Coach Brief / Review and focus history (coming), Rescue.
+What it cannot see: a focus timer that is running right now (that lives only in the browser; the pinned task is visible), and Rescue. The review guide says you have not yet written down your own rules for a good plan (tasks per day, estimate drift, how long before something is stuck), so the AI reports numbers instead of inventing limits. When you decide them, put them in `OWNER_RULES` in `mcp/src/guide.js`.
 
 ## One-time setup (about 30 minutes)
 
@@ -65,7 +69,7 @@ It answers `503` until step 4 is done. That is expected.
 
 Only Claude's and ChatGPT's own sign-in return addresses may receive access: `https://claude.ai/api/mcp/auth_callback`, `https://claude.com/api/mcp/auth_callback`, `https://chatgpt.com/connector/oauth/…` and `https://chatgpt.com/connector_platform_oauth_redirect`. Anyone can register an app with this connector, so without the list a stranger could send you a link that looks like "Claude wants access" and be handed your plan when you sign in. If an app is refused (the Worker log shows "Refused a sign-in that would send access to …"), check that address is really the app's, then add it to `EXTRA_REDIRECT_URIS` (comma-separated; an entry ending in `/` matches everything under it).
 
-The free Workers plan allows 10 ms of CPU per request. Signing in and reading your plan may or may not fit; I could not measure it. If requests fail with "exceeded CPU", the paid plan ($5/month) lifts that.
+The free Workers plan allows 10 ms of CPU per request. Signing in and reading your plan may or may not fit; I could not measure it. The tools that read the focus log (`get_week`, `get_focus_history`, `get_coach_review`) are the heaviest, because that log holds every event the app writes, not only focus sessions, and the database cannot filter by type; each reads only as many days as it needs (`get_coach_review` reads 1, 7 or 30 depending on the period). If requests fail with "exceeded CPU", the paid plan ($5/month) lifts that.
 **5. Connect the apps** with the address `https://<your-worker-url>/mcp`
 - Claude: Settings → Connectors → add a custom connector.
 - ChatGPT: Settings → Apps / Connectors → turn on developer mode → create a connector (needs a paid plan).

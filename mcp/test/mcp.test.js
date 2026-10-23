@@ -14,7 +14,7 @@ const rpc = (method, params = {}, id = 1) => new Request("https://x.test/mcp", {
 // A stand-in for firebase.js: the token request, then the record.
 const fakeFetch = (record, status = 200) => vi.fn(async (url) =>
   String(url).includes("oauth2") ? Response.json({ access_token: "tok", expires_in: 3600 })
-    : status === 200 ? Response.json(record?.[String(url).split("/").pop().replace(".json", "")] ?? null) : new Response("nope", { status }));
+    : status === 200 ? Response.json(record?.[String(url).split("?")[0].split("/").pop().replace(".json", "")] ?? null) : new Response("nope", { status }));
 
 describe("access checks", () => {
   it("refuses a token for another user, no user, or without the read scope", async () => {
@@ -28,7 +28,10 @@ describe("tools", () => {
   it("lists the page tools, every one marked read-only", async () => {
     const res = await handleMcp(rpc("tools/list"), env, ctx());
     const { result } = await res.json();
-    expect(result.tools.map(t => t.name)).toEqual(["get_overview", "get_today", "get_day_map", "get_plan", "get_mind_box", "get_week", "get_stuck", "get_settings"]);
+    expect(result.tools.map(t => t.name)).toEqual([
+      "get_overview", "get_today", "get_day_map", "get_plan", "get_mind_box", "get_week", "get_stuck", "get_settings",
+      "get_focus_history", "get_coach_review", "get_coach_brief", "get_review_guide",
+    ]);
     for (const tool of result.tools) expect(tool.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
   });
 
@@ -36,16 +39,79 @@ describe("tools", () => {
     const fetchImpl = fakeFetch(record);
     const res = await handleMcp(rpc("tools/call", { name, arguments: args }), { ...env, FIREBASE_SERVICE_ACCOUNT: await serviceAccount() }, ctx(), { fetchImpl, now: NOW, ...extra });
     const { result } = await res.json();
-    const reads = fetchImpl.mock.calls.map(([url]) => String(url)).filter(u => !u.includes("oauth2")).map(u => u.split("/").pop().replace(".json", "")).sort();
-    return { result, reads, body: result.isError ? null : JSON.parse(result.content[0].text) };
+    const reads = fetchImpl.mock.calls.map(([url]) => String(url)).filter(u => !u.includes("oauth2")).map(u => u.split("?")[0].split("/").pop().replace(".json", "")).sort();
+    return { result, reads, fetchImpl, text: result.isError ? null : result.content[0].text, body: result.isError ? null : tryJson(result.content[0].text) };
   };
+  const tryJson = (text) => { try { return JSON.parse(text); } catch { return null; } };
   const plan = { tasks: [{ id: 1, userId: "u1", uuid: "a", title: "Draft section 2", horizonLevel: "week", priority: "P1", isCompleted: false, isParked: false, isDeleted: false }], config: { userId: "u1" }, contributions: [], brainDump: [{ id: "b", text: "a thought", createdAt: NOW, fmt: 1 }] };
 
   it("each tool fetches only the parts of the record it needs", async () => {
     expect((await call("get_mind_box", {}, plan)).reads).toEqual(["brainDump"]);
     expect((await call("get_settings", {}, plan)).reads).toEqual(["config"]);
     expect((await call("get_today", {}, plan)).reads).toEqual(["config", "tasks"]);
-    expect((await call("get_week", {}, plan)).reads).toEqual(["config", "contributions", "tasks"]);
+    // get_week also reads the focus log (one bounded read of activityLogs/{uid}/events)
+    expect((await call("get_week", {}, plan)).reads).toEqual(["config", "contributions", "events", "tasks"]);
+    expect((await call("get_coach_brief", {}, plan)).reads).toEqual(["config"]);
+    expect((await call("get_focus_history", {}, plan)).reads).toEqual(["config", "events", "tasks"]);
+  });
+
+  it("the focus log is read from the oldest day the tool needs, never the whole history", async () => {
+    const { fetchImpl } = await call("get_focus_history", { days: 3 }, plan);
+    const url = fetchImpl.mock.calls.map(([u]) => String(u)).find(u => u.includes("/events.json"));
+    // NOW is 2026-10-21 19:30 UTC = 2026-10-22 in India: 3 days back, plus one for the Loci-day edge.
+    expect(url).toContain("/activityLogs/u1/events.json?orderBy=%22%24key%22&startAt=%222026-10-18%22");
+    const since = async (name, args) => (await call(name, args, plan)).fetchImpl.mock.calls.map(([u]) => String(u)).find(u => u.includes("/events.json"));
+    // Calendar date in India is 2026-10-22. Each period reads its own span plus the one-day margin.
+    expect(await since("get_coach_review", {})).toContain("startAt=%222026-10-14%22"); // 7d (default) + 1
+    expect(await since("get_coach_review", { period: "today" })).toContain("startAt=%222026-10-20%22"); // 1 + 1
+    expect(await since("get_coach_review", { period: "30d" })).toContain("startAt=%222026-09-21%22"); // 30 + 1
+    expect(await since("get_week", {})).toContain("startAt=%222026-10-07%22"); // default 14 + 1
+    expect(await since("get_week", { days: 3 })).toContain("startAt=%222026-10-18%22"); // 3 + 1
+  });
+
+  // The log read fails (HTTP 500) while the plan data reads fine.
+  const failingLog = async () => {
+    const fetchImpl = vi.fn(async (url) => String(url).includes("oauth2") ? Response.json({ access_token: "tok", expires_in: 3600 })
+      : String(url).includes("/events.json") ? new Response("nope", { status: 500 })
+        : Response.json({ tasks: plan.tasks, config: plan.config, contributions: [] }[String(url).split("?")[0].split("/").pop().replace(".json", "")] ?? null));
+    return fetchImpl;
+  };
+  const callWith = async (name, args, fetchImpl) => {
+    const res = await handleMcp(rpc("tools/call", { name, arguments: args }), { ...env, FIREBASE_SERVICE_ACCOUNT: await serviceAccount() }, ctx(), { fetchImpl, now: NOW });
+    return (await res.json()).result;
+  };
+
+  it("when the focus log cannot be read, get_week still answers without it and says so", async () => {
+    const result = await callWith("get_week", { days: 3 }, await failingLog());
+    expect(result.isError).toBeFalsy();
+    const body = JSON.parse(result.content[0].text);
+    expect(body.focusUnavailable).toBe(true);
+    expect(body.days).toHaveLength(3);
+    expect(body.days[0]).not.toHaveProperty("focusMinutes");
+  });
+
+  it("but the tools that are about the focus log fail loudly instead of reporting no focus", async () => {
+    for (const name of ["get_focus_history", "get_coach_review"]) {
+      const result = await callWith(name, {}, await failingLog());
+      expect(result.isError, name).toBe(true);
+    }
+  });
+
+  it("get_review_guide needs no database read at all", async () => {
+    const { fetchImpl, text } = await call("get_review_guide", {}, plan);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(text).toContain("HOW LOCI PLANS");
+    expect(text).toContain("have not written these down yet");
+  });
+
+  it("offers a review_my_plan prompt that carries the guide and an optional focus", async () => {
+    const listed = await (await handleMcp(rpc("prompts/list"), env, ctx())).json();
+    expect(listed.result.prompts.map(p => p.name)).toEqual(["review_my_plan"]);
+    const got = await (await handleMcp(rpc("prompts/get", { name: "review_my_plan", arguments: { focus: "the Paper front" } }), env, ctx())).json();
+    const text = got.result.messages[0].content.text;
+    expect(text).toContain("focusing on: the Paper front");
+    expect(text).toContain("HOW LOCI PLANS");
+    expect(text).toContain("HOW TO REVIEW");
   });
 
   it("passes tool arguments through: a horizon for get_plan, a number of days for get_week", async () => {

@@ -13,6 +13,9 @@ import { frontNextMove, frontProgress, frontsFromConfig, tasksForFront } from ".
 import { byPriorityThenOrder } from "../../web/src/utils/taskOps.js";
 import { THOUGHTS_MAX, thoughtText } from "../../web/src/utils/thoughts.js";
 import { parseThought } from "../../web/src/utils/thoughtFormat.js";
+import { briefToText } from "../../web/src/utils/coachBrief.js";
+import { REVIEW_PERIODS, reviewFacts } from "../../web/src/utils/coachReview.js";
+import { dailyTotals, eventMinutes, flattenFocusEvents, lociDayWindow, minutesByFront } from "../../web/src/utils/focusLedger.js";
 import { taskSteps } from "../../web/src/utils/taskSteps.js";
 import { addDays, dateString, daysBetween, wallClock } from "./time.js";
 import { cap, datedTasks, deadlineStatus, minutesOf, prepare, taskView, todayOrder } from "./context.js";
@@ -228,7 +231,8 @@ export function buildMindBox(raw, nowMs, timeZone) {
 }
 
 // The last days: ticks, what was completed, and the day-close records.
-export function buildWeek(raw, nowMs, timeZone, { days = 14 } = {}) {
+export function buildWeek(raw, nowMs, timeZone, args = {}, focusRaw = null) {
+  const { days = 14 } = args;
   const c = prepare(raw, nowMs, timeZone);
   const count = Math.min(60, Math.max(1, Math.round(Number(days)) || 14));
   const ticks = new Map(c.contributions.filter(x => x && typeof x === "object").map(x => [x.dateString, Number(x.count) || 0]));
@@ -236,9 +240,11 @@ export function buildWeek(raw, nowMs, timeZone, { days = 14 } = {}) {
   const dates = [];
   for (let back = count - 1; back >= 0; back -= 1) dates.push(addDays(c.calendarToday, -back));
   const truncated = [];
+  const focus = focusRaw ? dailyTotals(flattenFocusEvents(focusRaw)) : null;
   const perDay = dates.map(date => ({
     date,
     ticks: ticks.get(date) || 0,
+    ...(focus ? { focusMinutes: focus[date]?.minutes || 0, focusSessions: focus[date]?.moves || 0 } : {}),
     completedTasks: cap(c.live.filter(t => t.isCompleted && t.dateCompletedString === date).map(brief), `completed:${date}`, truncated),
     dayClose: log.find(e => e.day === date) ?? null,
   }));
@@ -247,8 +253,13 @@ export function buildWeek(raw, nowMs, timeZone, { days = 14 } = {}) {
     lociDay: c.lociDay,
     timeZone,
     days: perDay,
-    totals: { ticks: perDay.reduce((s, d) => s + d.ticks, 0), completedTasks: perDay.reduce((s, d) => s + d.completedTasks.length, 0) },
-    note: "ticks are the app's daily completion counts (calendar dates); completedTasks are grouped by the Loci day they were finished on, so the two can differ for a day that runs past midnight. dayClose is the user's Close-the-day record, when there is one. Focus minutes per day arrive with the focus log.",
+    ...(args.focusUnavailable ? { focusUnavailable: true } : {}),
+    totals: {
+      ticks: perDay.reduce((s, d) => s + d.ticks, 0),
+      completedTasks: perDay.reduce((s, d) => s + d.completedTasks.length, 0),
+      ...(focus ? { focusMinutes: perDay.reduce((s, d) => s + d.focusMinutes, 0) } : {}),
+    },
+    note: "ticks are the app's daily completion counts (calendar dates); completedTasks and focusMinutes are grouped by the Loci day they happened on, so they can differ from ticks for a day that runs past midnight. dayClose is the user's Close-the-day record, when there is one."
   }, truncated);
 }
 
@@ -300,5 +311,97 @@ export function buildSettings(raw, nowMs, timeZone) {
     settings,
     effectiveFocusWindows: mergeWindowSpans(c.windows).map(([start, end]) => ({ start: formatClock24(start), end: formatClock24(end), minutes: end - start })),
     note: "Only settings that shape a plan are shown; names, notes, anchors and display options are never returned.",
+  };
+}
+
+// The focus log: every session in the last days, joined back to its task.
+export function buildFocusHistory(raw, nowMs, timeZone, { days = 14 } = {}, focusRaw = null) {
+  const c = prepare(raw, nowMs, timeZone);
+  const count = Math.min(60, Math.max(1, Math.round(Number(days)) || 14));
+  const window = lociDayWindow(count, c.wall, c.windows);
+  const inWindow = new Set(window);
+  const events = flattenFocusEvents(focusRaw).filter(e => inWindow.has(e.lociDateString));
+  const totals = dailyTotals(events);
+  const taskOf = new Map(c.live.map(t => [t.uuid, t])); // deleted tasks are not named
+  const fronts = new Map(frontsFromConfig(c.config).map(f => [f.id, f.name]));
+  const frontName = (id) => (!id ? "no front" : fronts.get(id) || "a front the user closed");
+  const truncated = [];
+
+  const session = (e) => {
+    const task = taskOf.get(e.taskId);
+    const snapFront = e.taskSnapshot?.frontId;
+    const frontId = typeof snapFront === "string" ? (snapFront || null) : (task?.frontId ?? null);
+    const planned = Number(e.focusFinalPlannedSeconds || e.focusInitialPlannedSeconds);
+    return {
+      // The app's own labels: done, ended (stopped by the user) or expired (timed out). Older events have no stored label.
+      outcome: e.focusOutcome || (e.type === "focus_completed" ? "done" : "ended"),
+      minutes: eventMinutes(e),
+      startedAt: localStamp(Number(e.focusStartedAt), timeZone),
+      plannedMinutes: Number.isFinite(planned) && planned > 0 ? Math.round(planned / 60) : null,
+      endReason: e.focusEndReason ?? null,
+      taskId: e.taskId ?? null,
+      taskTitle: task?.title ?? null,
+      category: e.taskSnapshot?.category ?? task?.category ?? null,
+      priority: e.taskSnapshot?.priority ?? task?.priority ?? null,
+      front: frontName(frontId),
+    };
+  };
+  const perDay = window.map(date => ({
+    date,
+    minutes: totals[date]?.minutes || 0,
+    sessions: cap(events.filter(e => e.lociDateString === date).sort((a, b) => (Number(a.focusStartedAt) || 0) - (Number(b.focusStartedAt) || 0)).map(session), `sessions:${date}`, truncated),
+  }));
+  return withTruncated({
+    today: c.calendarToday,
+    lociDay: c.lociDay,
+    timeZone,
+    days: perDay,
+    totals: {
+      minutes: perDay.reduce((s, d) => s + d.minutes, 0),
+      sessions: events.filter(e => eventMinutes(e) > 0).length,
+      daysWithFocus: perDay.filter(d => d.minutes > 0).length,
+      byFront: [...minutesByFront(events, c.tasks).entries()].map(([id, minutes]) => ({ front: frontName(id), minutes })).sort((a, b) => b.minutes - a.minutes),
+    },
+    note: "Days are Loci days. outcome: done = finished, ended = stopped by the user, expired = timed out (paused too long or the day ended). A session under a minute counts as zero; ended and expired sessions still count their minutes. taskTitle is null if the task has since been deleted.",
+  }, truncated);
+}
+
+// Coach -> Review: the app's own facts for today, 7 days or 30 days.
+export function buildCoachReview(raw, nowMs, timeZone, { period = "7d" } = {}, focusRaw = null) {
+  const c = prepare(raw, nowMs, timeZone);
+  const key = REVIEW_PERIODS.some(p => p.key === period) ? period : "7d";
+  const fronts = frontsFromConfig(c.config);
+  const frontNameOf = (id) => (!id ? "work on no front" : fronts.find(f => f.id === id)?.name || "a front you've closed");
+  const facts = reviewFacts({
+    tasks: c.tasks, contributions: c.contributions, config: c.config, focusRaw: focusRaw || {},
+    period: key, now: c.wall, windows: c.windows, frontNameOf,
+  });
+  return {
+    today: c.calendarToday,
+    lociDay: c.lociDay,
+    timeZone,
+    ...facts,
+    note: "Computed with the same code as the Coach > Review page. `days` pairs focus minutes with ticks; openNow.over says whether today's planned minutes exceed the focus time left.",
+  };
+}
+
+const BRIEF_KEYS = ["at", "howItWent", "patterns", "tooMuch", "estimates", "next"];
+
+// Coach -> the latest saved Brief (the AI-written summary the user asked for).
+export function buildCoachBrief(raw, nowMs, timeZone) {
+  const c = prepare(raw, nowMs, timeZone);
+  const brief = c.config.coachBrief && typeof c.config.coachBrief === "object" ? c.config.coachBrief : null;
+  if (!brief) return { today: c.calendarToday, brief: null, note: "No Brief is saved. The user makes one with 'Brief me' in the Coach tab; only the latest is kept." };
+  // Only the keys the Coach saves are passed on, so a field added later is not sent by accident.
+  const known = Object.fromEntries(BRIEF_KEYS.filter(k => brief[k] !== undefined).map(k => [k, brief[k]]));
+  let text = null;
+  try { text = briefToText(known); } catch { /* a damaged brief still returns what was saved */ }
+  return {
+    today: c.calendarToday,
+    savedAt: localStamp(Number(brief.at), timeZone),
+    ageDays: daysAgo(Number(brief.at), c.calendarToday, timeZone),
+    text,
+    brief: known,
+    note: "Written by the Coach from the user's data when they asked for it, so it can be out of date; tasks named in it may have changed since.",
   };
 }
