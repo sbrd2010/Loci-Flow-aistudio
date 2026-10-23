@@ -60,8 +60,41 @@ describe("tools", () => {
     const url = fetchImpl.mock.calls.map(([u]) => String(u)).find(u => u.includes("/events.json"));
     // NOW is 2026-10-21 19:30 UTC = 2026-10-22 in India: 3 days back, plus one for the Loci-day edge.
     expect(url).toContain("/activityLogs/u1/events.json?orderBy=%22%24key%22&startAt=%222026-10-18%22");
-    const review = (await call("get_coach_review", {}, plan)).fetchImpl.mock.calls.map(([u]) => String(u)).find(u => u.includes("/events.json"));
-    expect(review).toContain("startAt=%222026-09-21%22"); // 30 days + 1
+    const since = async (name, args) => (await call(name, args, plan)).fetchImpl.mock.calls.map(([u]) => String(u)).find(u => u.includes("/events.json"));
+    // Calendar date in India is 2026-10-22. Each period reads its own span plus the one-day margin.
+    expect(await since("get_coach_review", {})).toContain("startAt=%222026-10-14%22"); // 7d (default) + 1
+    expect(await since("get_coach_review", { period: "today" })).toContain("startAt=%222026-10-20%22"); // 1 + 1
+    expect(await since("get_coach_review", { period: "30d" })).toContain("startAt=%222026-09-21%22"); // 30 + 1
+    expect(await since("get_week", {})).toContain("startAt=%222026-10-07%22"); // default 14 + 1
+    expect(await since("get_week", { days: 3 })).toContain("startAt=%222026-10-18%22"); // 3 + 1
+  });
+
+  // The log read fails (HTTP 500) while the plan data reads fine.
+  const failingLog = async () => {
+    const fetchImpl = vi.fn(async (url) => String(url).includes("oauth2") ? Response.json({ access_token: "tok", expires_in: 3600 })
+      : String(url).includes("/events.json") ? new Response("nope", { status: 500 })
+        : Response.json({ tasks: plan.tasks, config: plan.config, contributions: [] }[String(url).split("?")[0].split("/").pop().replace(".json", "")] ?? null));
+    return fetchImpl;
+  };
+  const callWith = async (name, args, fetchImpl) => {
+    const res = await handleMcp(rpc("tools/call", { name, arguments: args }), { ...env, FIREBASE_SERVICE_ACCOUNT: await serviceAccount() }, ctx(), { fetchImpl, now: NOW });
+    return (await res.json()).result;
+  };
+
+  it("when the focus log cannot be read, get_week still answers without it and says so", async () => {
+    const result = await callWith("get_week", { days: 3 }, await failingLog());
+    expect(result.isError).toBeFalsy();
+    const body = JSON.parse(result.content[0].text);
+    expect(body.focusUnavailable).toBe(true);
+    expect(body.days).toHaveLength(3);
+    expect(body.days[0]).not.toHaveProperty("focusMinutes");
+  });
+
+  it("but the tools that are about the focus log fail loudly instead of reporting no focus", async () => {
+    for (const name of ["get_focus_history", "get_coach_review"]) {
+      const result = await callWith(name, {}, await failingLog());
+      expect(result.isError, name).toBe(true);
+    }
   });
 
   it("get_review_guide needs no database read at all", async () => {

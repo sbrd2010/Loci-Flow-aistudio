@@ -42,7 +42,7 @@ const TOOLS = [
     description: "The user's Mind Box: every thought as they wrote it, newest first, with when it was written and how many days ago.",
   },
   {
-    name: "get_week", title: "Recent days", parts: ["tasks", "config", "contributions"], build: buildWeek, ledgerDays: (args) => args.days ?? 14,
+    name: "get_week", title: "Recent days", parts: ["tasks", "config", "contributions"], build: buildWeek, ledgerDays: (args) => args.days ?? 14, ledgerOptional: true,
     inputSchema: { days: z.number().int().min(1).max(60).optional().describe("How many days back, ending today. Default 14.") },
     description:
       "Day by day for the last N days: the app's completion count, the tasks completed that day, the focus minutes and sessions logged, and the user's Close-the-day record (done, moved to tomorrow, planned, dropped, focus minutes, their note, first thing for tomorrow).",
@@ -64,10 +64,10 @@ const TOOLS = [
     name: "get_focus_history", title: "Focus log", parts: ["tasks", "config"], build: buildFocusHistory, ledgerDays: (args) => args.days ?? 14,
     inputSchema: { days: z.number().int().min(1).max(60).optional().describe("How many Loci days back, ending today. Default 14.") },
     description:
-      "The user's focus log for the last N days: every focus session with when it started, its minutes, planned minutes, whether it was completed or abandoned, why it ended, and the task, category, priority and front it was on; minutes per day and per front.",
+      "The user's focus log for the last N days: every focus session with when it started, its minutes, planned minutes, its outcome (done, ended by the user, or expired), why it ended, and the task, category, priority and front it was on; minutes per day and per front.",
   },
   {
-    name: "get_coach_review", title: "Coach review", parts: ["tasks", "config", "contributions"], build: buildCoachReview, ledgerDays: () => 30,
+    name: "get_coach_review", title: "Coach review", parts: ["tasks", "config", "contributions"], build: buildCoachReview, ledgerDays: (args) => ({ today: 1, "7d": 7, "30d": 30 })[args.period ?? "7d"],
     inputSchema: { period: z.enum(["today", "7d", "30d"]).optional().describe("The period. Default 7d.") },
     description:
       "The facts on the user's Coach > Review page, computed with the app's own code: minutes focused and ticks day by day, minutes per front, completed and open work by category, pace, best weekday, what is open now by horizon, and whether today's planned minutes exceed the focus time left.",
@@ -85,24 +85,27 @@ const TOOLS = [
 export const TOOL_NAMES = TOOLS.map(t => t.name);
 
 export function registerTools(server, env, deps) {
-  for (const { name, title, description, parts, build, inputSchema, ledgerDays } of TOOLS) {
+  for (const { name, title, description, parts, build, inputSchema, ledgerDays, ledgerOptional } of TOOLS) {
     const run = async (args) => {
       try {
         const now = deps.now ?? Date.now();
         let record = null;
         let focusRaw = null;
+        let logFailed = false;
         if (parts.length || ledgerDays) {
           // One token for both reads, so they do not each ask Google for one.
           await getAccessToken(env.FIREBASE_SERVICE_ACCOUNT, deps);
           const since = ledgerDays ? addDays(dateString(wallClock(now, env.LOCI_TIMEZONE)), -(ledgerDays(args) + 1)) : null;
+          const readLog = () => readFocusEvents(env, deps.uid, since, deps);
           [record, focusRaw] = await Promise.all([
             parts.length ? readUserRecord(env, deps.uid, deps, parts) : null,
-            ledgerDays ? readFocusEvents(env, deps.uid, since, deps) : null,
+            // A tool that is about the log must fail when it cannot be read; one that only adds to its answer can go without.
+            ledgerDays ? (ledgerOptional ? readLog().catch((err) => { console.error(`${name}: focus log unavailable:`, err instanceof Error ? err.message : "unknown"); logFailed = true; return null; }) : readLog()) : null,
           ]);
-          // An empty log reads back as nothing at all; that is different from one we could not read (which throws).
-          if (ledgerDays && focusRaw == null) focusRaw = {};
+          // An empty log reads back as nothing at all; that is different from one we could not read.
+          if (ledgerDays && focusRaw == null && !logFailed) focusRaw = {};
         }
-        const out = build(record, now, env.LOCI_TIMEZONE, args, focusRaw);
+        const out = build(record, now, env.LOCI_TIMEZONE, logFailed ? { ...args, focusUnavailable: true } : args, focusRaw);
         return { content: [{ type: "text", text: typeof out === "string" ? out : JSON.stringify(out) }] };
       } catch (err) {
         // Log the reason (status only, never data); tell the model something it can relay.

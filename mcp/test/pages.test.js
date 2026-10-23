@@ -69,7 +69,7 @@ const sess = (day, taskId, type, startedAt, seconds, snapshot, extra = {}) => ({
 });
 const FOCUS = {
   "2026-10-22": {
-    e1: sess("2026-10-22", "u-1", "focus_completed", NOW - 3 * HOUR, 3000, { category: "Work", priority: "P2", horizonLevel: "today", frontId: "" }),
+    e1: sess("2026-10-22", "u-1", "focus_completed", NOW - 3 * HOUR, 3000, { category: "Work", priority: "P2", horizonLevel: "today", frontId: "" }, { privateLogNote: "secret log field" }),
     e2: sess("2026-10-22", "u-2", "focus_abandoned", NOW - 2 * HOUR, 600, { category: "Work", priority: "P2", horizonLevel: "today", frontId: "f1" }),
     e3: { type: "focus_started", taskId: "u-1", focusSessionId: "s-x", lociDateString: "2026-10-22" },
   },
@@ -302,9 +302,11 @@ describe("get_settings", () => {
 
 describe("what never leaves", () => {
   it("no tool returns names, anchors, the profile note or chat", () => {
+    const withBrief = record({ config: { coachBrief: { at: NOW - DAY, howItWent: ["Fine."], memoryExcerpt: "secret brief field" } } });
     const all = [buildOverview, buildToday, buildDayMap, buildPlan, buildMindBox, buildWeek, buildStuck, buildSettings, buildFocusHistory, buildCoachReview, buildCoachBrief]
-      .map(build => JSON.stringify(build(record(), NOW, IST, {}, FOCUS))).join("\n");
-    for (const leak of ["Real Name", "Mentor", "anchor text", "private coach note", "secret chat line"]) expect(all).not.toContain(leak);
+      .map(build => JSON.stringify(build(withBrief, NOW, IST, {}, FOCUS))).join("\n");
+    expect(all).toContain("Fine."); // the brief is really in the output being checked
+    for (const leak of ["Real Name", "Mentor", "anchor text", "private coach note", "secret chat line", "secret log field", "secret brief field"]) expect(all).not.toContain(leak);
   });
 });
 
@@ -347,8 +349,8 @@ describe("get_focus_history", () => {
     const today = out.days[2];
     expect(today.minutes).toBe(60);
     expect(today.sessions).toHaveLength(2);
-    expect(today.sessions[0]).toMatchObject({ outcome: "completed", minutes: 50, plannedMinutes: 50, taskTitle: "Pinned report", front: "no front", startedAt: "2026-10-22 07:00", endReason: "timer" });
-    expect(today.sessions[1]).toMatchObject({ outcome: "abandoned", minutes: 10, taskTitle: "Email draft", front: "Paper" });
+    expect(today.sessions[0]).toMatchObject({ outcome: "done", minutes: 50, plannedMinutes: 50, taskTitle: "Pinned report", front: "no front", startedAt: "2026-10-22 07:00", endReason: "timer" });
+    expect(today.sessions[1]).toMatchObject({ outcome: "ended", minutes: 10, taskTitle: "Email draft", front: "Paper" });
   });
 
   it("totals the window, by front, and leaves out starts, other days and events older than the window", () => {
@@ -412,5 +414,40 @@ describe("get_coach_brief", () => {
 
   it("says so when there is none", () => {
     expect(buildCoachBrief(record(), NOW, IST).brief).toBeNull();
+  });
+});
+
+describe("review findings on the focus tools (loopcheck of #543)", () => {
+  it("a deleted task's title is not returned with its focus sessions", () => {
+    const rec = record();
+    rec.tasks[0] = { ...rec.tasks[0], isDeleted: true }; // "Pinned report", which has a session
+    const session = buildFocusHistory(rec, NOW, IST, { days: 1 }, FOCUS).days[0].sessions[0];
+    expect(session).toMatchObject({ minutes: 50, taskTitle: null });
+    expect(JSON.stringify(buildFocusHistory(rec, NOW, IST, { days: 1 }, FOCUS))).not.toContain("Pinned report");
+  });
+
+  it("labels an outcome as the app does: done, ended or expired", () => {
+    const log = { "2026-10-22": {
+      a: sess("2026-10-22", "u-1", "focus_completed", NOW - 4 * HOUR, 1800, { frontId: "" }, { focusOutcome: "done" }),
+      b: sess("2026-10-22", "u-2", "focus_abandoned", NOW - 3 * HOUR, 1800, { frontId: "" }, { focusOutcome: "ended" }),
+      c: sess("2026-10-22", "u-3", "focus_abandoned", NOW - 2 * HOUR, 1800, { frontId: "" }, { focusOutcome: "expired", focusEndReason: "paused_too_long" }),
+      d: sess("2026-10-22", "u-4", "focus_abandoned", NOW - HOUR, 1800, { frontId: "" }), // an older event with no focusOutcome
+    } };
+    expect(buildFocusHistory(record(), NOW, IST, { days: 1 }, log).days[0].sessions.map(s => s.outcome)).toEqual(["done", "ended", "expired", "ended"]);
+  });
+
+  it("returns only the known fields of a saved brief, and survives a damaged one", () => {
+    const brief = { at: NOW - DAY, howItWent: ["Fine."], patterns: ["Mornings."], memoryExcerpt: "kept out", chatSeed: "kept out" };
+    const out = buildCoachBrief(record({ config: { coachBrief: brief } }), NOW, IST);
+    expect(Object.keys(out.brief).sort()).toEqual(["at", "howItWent", "patterns"]);
+    const damaged = buildCoachBrief(record({ config: { coachBrief: { at: NOW - DAY, tooMuch: { line: "x" } } } }), NOW, IST);
+    expect(damaged.text).toBeNull();
+    expect(damaged.brief.tooMuch).toEqual({ line: "x" });
+  });
+
+  it("get_week says when the focus log could not be read, and leaves the fields out", () => {
+    const out = buildWeek(record(), NOW, IST, { days: 3, focusUnavailable: true }, null);
+    expect(out.focusUnavailable).toBe(true);
+    expect(out.days[0]).not.toHaveProperty("focusMinutes");
   });
 });

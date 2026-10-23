@@ -231,7 +231,8 @@ export function buildMindBox(raw, nowMs, timeZone) {
 }
 
 // The last days: ticks, what was completed, and the day-close records.
-export function buildWeek(raw, nowMs, timeZone, { days = 14 } = {}, focusRaw = null) {
+export function buildWeek(raw, nowMs, timeZone, args = {}, focusRaw = null) {
+  const { days = 14 } = args;
   const c = prepare(raw, nowMs, timeZone);
   const count = Math.min(60, Math.max(1, Math.round(Number(days)) || 14));
   const ticks = new Map(c.contributions.filter(x => x && typeof x === "object").map(x => [x.dateString, Number(x.count) || 0]));
@@ -252,6 +253,7 @@ export function buildWeek(raw, nowMs, timeZone, { days = 14 } = {}, focusRaw = n
     lociDay: c.lociDay,
     timeZone,
     days: perDay,
+    ...(args.focusUnavailable ? { focusUnavailable: true } : {}),
     totals: {
       ticks: perDay.reduce((s, d) => s + d.ticks, 0),
       completedTasks: perDay.reduce((s, d) => s + d.completedTasks.length, 0),
@@ -320,7 +322,7 @@ export function buildFocusHistory(raw, nowMs, timeZone, { days = 14 } = {}, focu
   const inWindow = new Set(window);
   const events = flattenFocusEvents(focusRaw).filter(e => inWindow.has(e.lociDateString));
   const totals = dailyTotals(events);
-  const taskOf = new Map(c.tasks.map(t => [t.uuid, t]));
+  const taskOf = new Map(c.live.map(t => [t.uuid, t])); // deleted tasks are not named
   const fronts = new Map(frontsFromConfig(c.config).map(f => [f.id, f.name]));
   const frontName = (id) => (!id ? "no front" : fronts.get(id) || "a front the user closed");
   const truncated = [];
@@ -331,7 +333,8 @@ export function buildFocusHistory(raw, nowMs, timeZone, { days = 14 } = {}, focu
     const frontId = typeof snapFront === "string" ? (snapFront || null) : (task?.frontId ?? null);
     const planned = Number(e.focusFinalPlannedSeconds || e.focusInitialPlannedSeconds);
     return {
-      outcome: e.type === "focus_completed" ? "completed" : "abandoned",
+      // The app's own labels: done, ended (stopped by the user) or expired (timed out). Older events have no stored label.
+      outcome: e.focusOutcome || (e.type === "focus_completed" ? "done" : "ended"),
       minutes: eventMinutes(e),
       startedAt: localStamp(Number(e.focusStartedAt), timeZone),
       plannedMinutes: Number.isFinite(planned) && planned > 0 ? Math.round(planned / 60) : null,
@@ -359,7 +362,7 @@ export function buildFocusHistory(raw, nowMs, timeZone, { days = 14 } = {}, focu
       daysWithFocus: perDay.filter(d => d.minutes > 0).length,
       byFront: [...minutesByFront(events, c.tasks).entries()].map(([id, minutes]) => ({ front: frontName(id), minutes })).sort((a, b) => b.minutes - a.minutes),
     },
-    note: "Days are Loci days. A session under a minute counts as zero. An abandoned session still counts its minutes. taskTitle is null if the task has since been deleted.",
+    note: "Days are Loci days. outcome: done = finished, ended = stopped by the user, expired = timed out (paused too long or the day ended). A session under a minute counts as zero; ended and expired sessions still count their minutes. taskTitle is null if the task has since been deleted.",
   }, truncated);
 }
 
@@ -382,17 +385,23 @@ export function buildCoachReview(raw, nowMs, timeZone, { period = "7d" } = {}, f
   };
 }
 
+const BRIEF_KEYS = ["at", "howItWent", "patterns", "tooMuch", "estimates", "next"];
+
 // Coach -> the latest saved Brief (the AI-written summary the user asked for).
 export function buildCoachBrief(raw, nowMs, timeZone) {
   const c = prepare(raw, nowMs, timeZone);
   const brief = c.config.coachBrief && typeof c.config.coachBrief === "object" ? c.config.coachBrief : null;
   if (!brief) return { today: c.calendarToday, brief: null, note: "No Brief is saved. The user makes one with 'Brief me' in the Coach tab; only the latest is kept." };
+  // Only the keys the Coach saves are passed on, so a field added later is not sent by accident.
+  const known = Object.fromEntries(BRIEF_KEYS.filter(k => brief[k] !== undefined).map(k => [k, brief[k]]));
+  let text = null;
+  try { text = briefToText(known); } catch { /* a damaged brief still returns what was saved */ }
   return {
     today: c.calendarToday,
     savedAt: localStamp(Number(brief.at), timeZone),
     ageDays: daysAgo(Number(brief.at), c.calendarToday, timeZone),
-    text: briefToText(brief),
-    brief,
+    text,
+    brief: known,
     note: "Written by the Coach from the user's data when they asked for it, so it can be out of date; tasks named in it may have changed since.",
   };
 }

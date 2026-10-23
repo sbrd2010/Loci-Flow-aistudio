@@ -5,11 +5,11 @@
 export const LOCI_METHOD = `HOW LOCI PLANS (judge the plan against this)
 - Horizons: Today, then This week, This month, This quarter and 6 months. The names, and any extra horizons, are the user's own; "Work · older" is the old Work horizon not yet sorted. A task's horizon says when it should happen.
 - Fronts: named pieces of work, each with its own deadline and one next move. A task belongs to a front through its frontId, and with no date of its own it takes the front's. A front's date is what makes a task late.
-- Today is the one working list, in the user's own order. One task can be pinned as the one thing to do now (isNowFocus). The Minimum Day ("At least these 3") is the three tasks confirmed to happen even if the day goes wrong. A task moved to tomorrow leaves Today and returns on the next day. Parked tasks are set aside on purpose until restored or dropped.
+- Today is the one working list, in the user's own order. One task can be pinned as the one thing to do now (isNowFocus). The Minimum Day ("At least these 3") is up to three of today's tasks that the user confirms each day as the ones to keep even if the day goes wrong; it resets daily, and get_today lists it only once confirmed. A task moved to tomorrow leaves Today and returns on the next day. Parked tasks are set aside on purpose until restored or dropped.
 - Time: focus windows set the working day. The Day map lays Today out as a route inside them, in order; a stop that does not end by the end of the day "won't fit". A task's estimate is its minutes. A plan is sound when its minutes fit the focus time left (get_day_map, fit).
 - A task's next step should be a concrete first action. The text "Do first tiny step" is only a placeholder, not a step.
 - Mind Box holds thoughts that are not tasks yet. Close the day records what was done, moved to tomorrow, planned and dropped, and the first thing for tomorrow.
-- Two kinds of "today": the calendar date (deadlines, daily completion counts) and the Loci day (the Today list, completions; it runs until the end of a window that passes midnight). Every tool returns both.`;
+- Two kinds of "today": the calendar date (deadlines, daily completion counts) and the Loci day (the Today list, completions, the focus log; it runs until the end of a window that passes midnight). The day-based tools (get_overview, get_today, get_day_map, get_plan, get_week, get_stuck, get_focus_history, get_coach_review) return both.`;
 
 // The user's own rules for a good plan. Edit this when they decide them: the three
 // questions below are the ones a review most needs answered.
