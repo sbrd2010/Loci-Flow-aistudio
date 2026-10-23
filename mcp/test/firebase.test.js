@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getAccessToken, parseServiceAccount, readUserRecord, resetTokenCache } from "../src/firebase.js";
+import { getAccessToken, parseServiceAccount, readFocusEvents, readUserRecord, resetTokenCache } from "../src/firebase.js";
 
 async function makeAccount() {
   const pair = await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"]);
@@ -109,5 +109,43 @@ describe("readUserRecord", () => {
     const { json } = await makeAccount();
     const fetchImpl = async (url) => String(url).includes("oauth2") ? Response.json({ access_token: "tok" }) : new Response("secret body", { status: 403 });
     await expect(readUserRecord(env(json), "abc", { fetchImpl })).rejects.toThrow(/^Database read failed \(403\)\.$/);
+  });
+});
+
+describe("readFocusEvents", () => {
+  const env = (json) => ({ FIREBASE_SERVICE_ACCOUNT: json, FIREBASE_DB_URL: "https://demo-project-default-rtdb.firebaseio.com/" });
+
+  it("reads one bounded slice of the user's focus log, with a plain GET and the token in a header", async () => {
+    const { json } = await makeAccount();
+    const calls = [];
+    const fetchImpl = async (url, init) => {
+      calls.push([String(url), init]);
+      return String(url).includes("oauth2") ? Response.json({ access_token: "tok", expires_in: 3600 }) : Response.json({ "2026-10-22": { e1: { type: "focus_completed" } } });
+    };
+    expect(await readFocusEvents(env(json), "abc123", "2026-09-23", { fetchImpl })).toEqual({ "2026-10-22": { e1: { type: "focus_completed" } } });
+    const reads = calls.filter(([url]) => !url.includes("oauth2"));
+    expect(reads).toHaveLength(1);
+    expect(reads[0][0]).toBe('https://demo-project-default-rtdb.firebaseio.com/activityLogs/abc123/events.json?orderBy=%22%24key%22&startAt=%222026-09-23%22');
+    expect(reads[0][1].headers.Authorization).toBe("Bearer tok");
+    expect(reads[0][1].method).toBeUndefined();
+  });
+
+  it("refuses a user id or day that could change the path or the query", async () => {
+    const { json } = await makeAccount();
+    for (const uid of ["", "../x", "a/b", "a?b"]) {
+      await expect(readFocusEvents(env(json), uid, "2026-09-23", { fetchImpl: vi.fn() })).rejects.toThrow("Invalid user id");
+    }
+    for (const day of ["", "2026-9-1", "2026-09-23\"&orderBy=1", "2026-09-23/../x", undefined, "yesterday"]) {
+      await expect(readFocusEvents(env(json), "abc", day, { fetchImpl: vi.fn() })).rejects.toThrow("Invalid day");
+    }
+  });
+
+  it("reports a failed read by status only, and drops a refused token", async () => {
+    const { json } = await makeAccount();
+    let tokens = 0;
+    const refused = async (url) => String(url).includes("oauth2") ? (tokens += 1, Response.json({ access_token: `t${tokens}`, expires_in: 3600 })) : new Response("secret", { status: 401 });
+    await expect(readFocusEvents(env(json), "abc", "2026-09-23", { fetchImpl: refused })).rejects.toThrow(/^Database read failed \(401\)\.$/);
+    await expect(readFocusEvents(env(json), "abc", "2026-09-23", { fetchImpl: refused })).rejects.toThrow("(401)");
+    expect(tokens).toBe(2);
   });
 });

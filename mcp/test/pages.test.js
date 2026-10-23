@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDayMap, buildMindBox, buildPlan, buildSettings, buildStuck, buildToday, buildWeek } from "../src/pages.js";
+import { buildCoachBrief, buildCoachReview, buildDayMap, buildFocusHistory, buildMindBox, buildPlan, buildSettings, buildStuck, buildToday, buildWeek } from "../src/pages.js";
 import { buildOverview } from "../src/overview.js";
 
 const IST = "Asia/Kolkata";
@@ -60,6 +60,22 @@ function record(over = {}) {
   };
 }
 const titles = (list) => list.map(x => x.title);
+
+// The focus log as the database holds it: activityLogs/{uid}/events/{lociDay}/{eventId}.
+const sess = (day, taskId, type, startedAt, seconds, snapshot, extra = {}) => ({
+  type, taskId, focusSessionId: `s-${taskId}-${startedAt}`, focusStartedAt: startedAt, focusInitialPlannedSeconds: 3000,
+  focusFinalPlannedSeconds: 3000, focusElapsedSeconds: seconds, focusEndReason: type === "focus_completed" ? "timer" : "stopped",
+  lociDateString: day, taskSnapshot: snapshot, ...extra,
+});
+const FOCUS = {
+  "2026-10-22": {
+    e1: sess("2026-10-22", "u-1", "focus_completed", NOW - 3 * HOUR, 3000, { category: "Work", priority: "P2", horizonLevel: "today", frontId: "" }),
+    e2: sess("2026-10-22", "u-2", "focus_abandoned", NOW - 2 * HOUR, 600, { category: "Work", priority: "P2", horizonLevel: "today", frontId: "f1" }),
+    e3: { type: "focus_started", taskId: "u-1", focusSessionId: "s-x", lociDateString: "2026-10-22" },
+  },
+  "2026-10-21": { e4: sess("2026-10-21", "u-7", "focus_completed", NOW - 26 * HOUR, 1800, { category: "Work", priority: "P2", horizonLevel: "week", frontId: "f1" }) },
+  "2026-08-01": { old: sess("2026-08-01", "u-1", "focus_completed", NOW - 80 * DAY, 3600, { category: "Work", frontId: "" }) },
+};
 
 describe("get_today", () => {
   const out = buildToday(record(), NOW, IST);
@@ -286,8 +302,8 @@ describe("get_settings", () => {
 
 describe("what never leaves", () => {
   it("no tool returns names, anchors, the profile note or chat", () => {
-    const all = [buildOverview, buildToday, buildDayMap, buildPlan, buildMindBox, buildWeek, buildStuck, buildSettings]
-      .map(build => JSON.stringify(build(record(), NOW, IST))).join("\n");
+    const all = [buildOverview, buildToday, buildDayMap, buildPlan, buildMindBox, buildWeek, buildStuck, buildSettings, buildFocusHistory, buildCoachReview, buildCoachBrief]
+      .map(build => JSON.stringify(build(record(), NOW, IST, {}, FOCUS))).join("\n");
     for (const leak of ["Real Name", "Mentor", "anchor text", "private coach note", "secret chat line"]) expect(all).not.toContain(leak);
   });
 });
@@ -316,8 +332,85 @@ describe("big lists", () => {
 
 describe("empty record", () => {
   it("every page copes with nothing at all", () => {
-    for (const build of [buildOverview, buildToday, buildDayMap, buildPlan, buildMindBox, buildWeek, buildStuck, buildSettings]) {
-      expect(() => build(null, NOW, IST)).not.toThrow();
+    for (const build of [buildOverview, buildToday, buildDayMap, buildPlan, buildMindBox, buildWeek, buildStuck, buildSettings, buildFocusHistory, buildCoachReview, buildCoachBrief]) {
+      expect(() => build(null, NOW, IST, {}, null)).not.toThrow();
+      expect(() => build(null, NOW, IST, {}, {})).not.toThrow();
     }
+  });
+});
+
+describe("get_focus_history", () => {
+  const out = buildFocusHistory(record(), NOW, IST, { days: 3 }, FOCUS);
+
+  it("lists each day's sessions in time order, joined to the task and front", () => {
+    expect(out.days.map(d => d.date)).toEqual(["2026-10-20", "2026-10-21", "2026-10-22"]);
+    const today = out.days[2];
+    expect(today.minutes).toBe(60);
+    expect(today.sessions).toHaveLength(2);
+    expect(today.sessions[0]).toMatchObject({ outcome: "completed", minutes: 50, plannedMinutes: 50, taskTitle: "Pinned report", front: "no front", startedAt: "2026-10-22 07:00", endReason: "timer" });
+    expect(today.sessions[1]).toMatchObject({ outcome: "abandoned", minutes: 10, taskTitle: "Email draft", front: "Paper" });
+  });
+
+  it("totals the window, by front, and leaves out starts, other days and events older than the window", () => {
+    expect(out.totals).toMatchObject({ minutes: 90, sessions: 3, daysWithFocus: 2 });
+    expect(out.totals.byFront).toEqual([{ front: "no front", minutes: 50 }, { front: "Paper", minutes: 40 }]);
+    expect(JSON.stringify(out)).not.toContain("focus_started");
+  });
+
+  it("reports a session whose task has since gone, and an empty log", () => {
+    const gone = { "2026-10-22": { e: sess("2026-10-22", "u-gone", "focus_completed", NOW - HOUR, 1200, { category: "Work", frontId: "" }) } };
+    expect(buildFocusHistory(record(), NOW, IST, { days: 1 }, gone).days[0].sessions[0]).toMatchObject({ taskTitle: null, minutes: 20 });
+    expect(buildFocusHistory(record(), NOW, IST, { days: 2 }, {}).totals).toMatchObject({ minutes: 0, sessions: 0 });
+  });
+});
+
+describe("get_week with the focus log", () => {
+  it("adds focus minutes and sessions per day when the log is given", () => {
+    const out = buildWeek(record(), NOW, IST, { days: 3 }, FOCUS);
+    expect(out.days.map(d => d.focusMinutes)).toEqual([0, 30, 60]);
+    expect(out.days.map(d => d.focusSessions)).toEqual([0, 1, 2]);
+    expect(out.totals.focusMinutes).toBe(90);
+  });
+
+  it("leaves the fields out when no log was read", () => {
+    expect(buildWeek(record(), NOW, IST, { days: 3 }).days[0]).not.toHaveProperty("focusMinutes");
+  });
+});
+
+describe("get_coach_review", () => {
+  const out = buildCoachReview(record(), NOW, IST, { period: "7d" }, FOCUS);
+
+  it("computes the app's own review facts from the tasks, ticks and focus log", () => {
+    expect(out.period).toBe("7d");
+    expect(out.focusedMinutes).toBe(90);
+    expect(out.days.at(-1)).toMatchObject({ date: "2026-10-22", minutes: 60, ticks: 2 });
+    expect(out.byFront).toEqual(expect.arrayContaining([{ id: null, name: "work on no front", minutes: 50 }, { id: "f1", name: "Paper", minutes: 40 }]));
+    expect(out.openNow.total).toBeGreaterThan(0);
+  });
+
+  it("covers one day, or 30, and falls back to 7 days for anything else", () => {
+    expect(buildCoachReview(record(), NOW, IST, { period: "today" }, FOCUS).days).toHaveLength(1);
+    expect(buildCoachReview(record(), NOW, IST, { period: "30d" }, FOCUS).days).toHaveLength(30);
+    expect(buildCoachReview(record(), NOW, IST, { period: "nonsense" }, FOCUS).period).toBe("7d");
+  });
+
+  it("reads an empty log as no focus, not as unknown", () => {
+    expect(buildCoachReview(record(), NOW, IST, {}, {}).focusedMinutes).toBe(0);
+  });
+});
+
+describe("get_coach_brief", () => {
+  const brief = { at: NOW - 2 * DAY, howItWent: ["A steady week."], patterns: ["Mornings work best."], next: { uuid: "u-1", title: "Pinned report", line: "Start here." } };
+
+  it("returns the latest saved brief as text and as saved", () => {
+    const out = buildCoachBrief(record({ config: { coachBrief: brief } }), NOW, IST);
+    expect(out.ageDays).toBe(2);
+    expect(out.text).toContain("HOW IT WENT: A steady week.");
+    expect(out.text).toContain('NEXT: "Pinned report". Start here.');
+    expect(out.brief).toEqual(brief);
+  });
+
+  it("says so when there is none", () => {
+    expect(buildCoachBrief(record(), NOW, IST).brief).toBeNull();
   });
 });

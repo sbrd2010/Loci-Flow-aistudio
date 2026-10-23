@@ -1,11 +1,14 @@
 import { z } from "zod";
-import { readUserRecord } from "./firebase.js";
+import { getAccessToken, readFocusEvents, readUserRecord } from "./firebase.js";
 import { buildOverview } from "./overview.js";
-import { buildDayMap, buildMindBox, buildPlan, buildSettings, buildStuck, buildToday, buildWeek } from "./pages.js";
+import { buildCoachBrief, buildCoachReview, buildDayMap, buildFocusHistory, buildMindBox, buildPlan, buildSettings, buildStuck, buildToday, buildWeek } from "./pages.js";
+import { REVIEW_GUIDE } from "./guide.js";
+import { addDays, dateString, wallClock } from "./time.js";
 
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 
 // `parts` are the children of sync/{uid} a tool needs; nothing else is fetched.
+// `ledgerDays` (days back, from the arguments) makes the tool also read the focus log.
 const TOOLS = [
   {
     name: "get_overview", title: "Loci overview", parts: ["tasks", "config", "contributions"], build: buildOverview,
@@ -39,10 +42,10 @@ const TOOLS = [
     description: "The user's Mind Box: every thought as they wrote it, newest first, with when it was written and how many days ago.",
   },
   {
-    name: "get_week", title: "Recent days", parts: ["tasks", "config", "contributions"], build: buildWeek,
+    name: "get_week", title: "Recent days", parts: ["tasks", "config", "contributions"], build: buildWeek, ledgerDays: (args) => args.days ?? 14,
     inputSchema: { days: z.number().int().min(1).max(60).optional().describe("How many days back, ending today. Default 14.") },
     description:
-      "Day by day for the last N days: the app's completion count, the tasks completed that day, and the user's Close-the-day record (done, moved to tomorrow, planned, dropped, focus minutes, their note, first thing for tomorrow).",
+      "Day by day for the last N days: the app's completion count, the tasks completed that day, the focus minutes and sessions logged, and the user's Close-the-day record (done, moved to tomorrow, planned, dropped, focus minutes, their note, first thing for tomorrow).",
   },
   {
     name: "get_stuck", title: "What looks stuck", parts: ["tasks", "config"], build: buildStuck,
@@ -57,17 +60,50 @@ const TOOLS = [
     name: "get_settings", title: "Planning settings", parts: ["config"], build: buildSettings,
     description: "The settings that shape the user's plan: day start and end, focus windows, challenge type, pomodoro length, evening guard, goal-days mode, break name and key-deadline settings. Never names, notes, anchors or display options.",
   },
+  {
+    name: "get_focus_history", title: "Focus log", parts: ["tasks", "config"], build: buildFocusHistory, ledgerDays: (args) => args.days ?? 14,
+    inputSchema: { days: z.number().int().min(1).max(60).optional().describe("How many Loci days back, ending today. Default 14.") },
+    description:
+      "The user's focus log for the last N days: every focus session with when it started, its minutes, planned minutes, whether it was completed or abandoned, why it ended, and the task, category, priority and front it was on; minutes per day and per front.",
+  },
+  {
+    name: "get_coach_review", title: "Coach review", parts: ["tasks", "config", "contributions"], build: buildCoachReview, ledgerDays: () => 30,
+    inputSchema: { period: z.enum(["today", "7d", "30d"]).optional().describe("The period. Default 7d.") },
+    description:
+      "The facts on the user's Coach > Review page, computed with the app's own code: minutes focused and ticks day by day, minutes per front, completed and open work by category, pace, best weekday, what is open now by horizon, and whether today's planned minutes exceed the focus time left.",
+  },
+  {
+    name: "get_coach_brief", title: "Coach brief", parts: ["config"], build: buildCoachBrief,
+    description: "The latest Brief the user's Coach wrote for them (how it went, patterns, what was too much, estimates, what to do next), as text and as saved. Only the latest is kept and it can be out of date; it may name the user's tasks.",
+  },
+  {
+    name: "get_review_guide", title: "How to review a Loci plan", parts: [], build: () => REVIEW_GUIDE,
+    description: "How Loci plans (horizons, fronts, Today, Minimum Day, focus windows, the Day map) and how to review a plan against that. Read this before judging a plan.",
+  },
 ];
 
 export const TOOL_NAMES = TOOLS.map(t => t.name);
 
 export function registerTools(server, env, deps) {
-  for (const { name, title, description, parts, build, inputSchema } of TOOLS) {
+  for (const { name, title, description, parts, build, inputSchema, ledgerDays } of TOOLS) {
     const run = async (args) => {
       try {
-        const record = await readUserRecord(env, deps.uid, deps, parts);
-        const out = build(record, deps.now ?? Date.now(), env.LOCI_TIMEZONE, args);
-        return { content: [{ type: "text", text: JSON.stringify(out) }] };
+        const now = deps.now ?? Date.now();
+        let record = null;
+        let focusRaw = null;
+        if (parts.length || ledgerDays) {
+          // One token for both reads, so they do not each ask Google for one.
+          await getAccessToken(env.FIREBASE_SERVICE_ACCOUNT, deps);
+          const since = ledgerDays ? addDays(dateString(wallClock(now, env.LOCI_TIMEZONE)), -(ledgerDays(args) + 1)) : null;
+          [record, focusRaw] = await Promise.all([
+            parts.length ? readUserRecord(env, deps.uid, deps, parts) : null,
+            ledgerDays ? readFocusEvents(env, deps.uid, since, deps) : null,
+          ]);
+          // An empty log reads back as nothing at all; that is different from one we could not read (which throws).
+          if (ledgerDays && focusRaw == null) focusRaw = {};
+        }
+        const out = build(record, now, env.LOCI_TIMEZONE, args, focusRaw);
+        return { content: [{ type: "text", text: typeof out === "string" ? out : JSON.stringify(out) }] };
       } catch (err) {
         // Log the reason (status only, never data); tell the model something it can relay.
         console.error(`${name} failed:`, err instanceof Error ? err.message : "unknown");
