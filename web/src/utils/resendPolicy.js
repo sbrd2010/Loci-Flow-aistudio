@@ -18,8 +18,14 @@ export function createResendPolicy() {
   let live = false; // whether the SDK reports a live connection right now
   let waitForReconnect = false;
   let quickResends = 0;
-  let failures = 0; // every failed save so far, so a re-send can tell a newer failure from its own
   let busy = false;
+  // Full saves are numbered as they start. A failed save whose edits a later-started
+  // save has already carried to the server is stale: it neither raises the warning
+  // nor is sent again. (A bad connection piles up dozens of saves that all fail
+  // together when the SDK notices; the older ones say nothing about the latest.)
+  let started = 0;
+  let lastOk = 0; // the latest-started save that went through
+  let lastFail = 0; // the latest-started failure that no success has superseded
 
   // Milliseconds to wait before sending again, or null: either nothing to send,
   // or it waits for the next reconnect. If the connection is already back (the
@@ -41,27 +47,35 @@ export function createResendPolicy() {
       if (isLive && waitForReconnect) { waitForReconnect = false; return RESEND_AFTER_RECONNECT_MS; }
       return null;
     },
-    // A full-payload save failed. Returns the delay to send again, or null.
-    failed(err) {
-      failures += 1;
-      return isConnectionDrop(err) ? arm() : null;
+    // A full-payload save starts. Returns its number, to give back to `failed` or `saved`.
+    startSave() { started += 1; return started; },
+    // Save `n` failed. `warn`: whether to raise the warning (false: a later-started save
+    // has gone through, so this one's edits are on the server). `resendIn`: the delay
+    // to send again, or null.
+    failed(err, n = started) {
+      if (n < lastOk) return { warn: false, resendIn: null };
+      lastFail = Math.max(lastFail, n);
+      return { warn: true, resendIn: isConnectionDrop(err) ? arm() : null };
     },
-    // Some other write failed (a child path): it counts as a failure, it is not re-sent.
-    noteFailure() { failures += 1; },
-    // A full-payload save went through.
-    saved() { quickResends = 0; },
+    // Some other write failed (a child path): it counts as a failure newer than every
+    // save so far, and it is not re-sent.
+    noteFailure() { lastFail = Math.max(lastFail, started + 0.5); },
+    // Save `n` went through. Returns whether the warning clears: only if every failure
+    // still standing started before it, since a later one's edit is not on the server.
+    saved(n = started) {
+      quickResends = 0;
+      lastOk = Math.max(lastOk, n);
+      return lastFail < n;
+    },
     // A re-send may start only with something to send, and when no save is queued
     // or in flight: that one carries the latest payload.
     canResend({ hasPayload, savePending }) { return hasPayload && !savePending && !busy; },
-    // Marks a re-send in flight. Returns a mark to give to `clearsWarning`.
-    startResend() { busy = true; return failures; },
+    // Marks a re-send in flight.
+    startResend() { busy = true; },
     endResend() { busy = false; },
-    // A re-send went through: it clears the failure warning only if no save
-    // failed meanwhile, since that save's edit is not on the server.
-    clearsWarning(mark) { return failures === mark; },
     // A re-send failed. Returns the delay to send again, or null.
     resendFailed(err) { return isConnectionDrop(err) ? arm() : null; },
-    // Another account signed in: nothing of the last one's failures carries over.
-    reset() { waitForReconnect = false; quickResends = 0; failures = 0; },
+    // Another account signed in: nothing of the last one's wait or tries carries over.
+    reset() { waitForReconnect = false; quickResends = 0; },
   };
 }

@@ -403,7 +403,7 @@ export default function App() {
     saveConfigPatch: rtdbSaveConfigPatch,
     writeActivityEvents: rtdbWriteActivityEvents, writeActivityEventIfNewer: rtdbWriteActivityEventIfNewer,
     captureTodaySnapshotIfNeeded: rtdbCaptureTodaySnapshot,
-    flushNow: rtdbFlushNow, clearCache: rtdbClearCache, retrySync: rtdbRetrySync,
+    flushNow: rtdbFlushNow, clearCache: rtdbClearCache, retrySync: rtdbRetrySync, syncRetrying: rtdbSyncRetrying,
   } = useSync(demoMode ? null : (user?.uid || null), demoMode ? null : (user?.email || null));
 
   const payload = demoMode ? demoPayload : rtdbPayload;
@@ -1481,7 +1481,7 @@ export default function App() {
           }}
         >
           {syncWarning === "write-failed"
-            ? "⚠️ Changes saved on this device. Syncing again when you're back online. Tap to retry now."
+            ? (rtdbSyncRetrying ? "⚠️ Retrying now…" : "⚠️ Changes saved on this device. Syncing again when you're back online. Tap to retry now.")
             : "⚠️ A suspicious task-count drop was blocked. Your data was not overwritten."}
         </div>
       )}
