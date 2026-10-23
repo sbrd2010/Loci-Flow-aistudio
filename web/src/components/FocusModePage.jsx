@@ -461,9 +461,22 @@ export default function FocusModePage({
             {splitNote?.onUndo && <> <button type="button" className="fm-link" onClick={splitNote.onUndo}>Undo</button></>}
           </p>
           <h1 className="focus-mode-task-title" data-len={titleLength(task.title)}><LinkifyText text={task.title} /></h1>
-          {nextStep && (
+          {/* The next step is ticked here as on Today's hero (#540); without a handler it is just text. */}
+          {nextStep && (onToggleStep ? (
+            <div className="fm-next-step">
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked="false"
+                className="fm-step-check"
+                aria-label={`Mark step done: ${nextStep.text}`}
+                onClick={() => onToggleStep(nextStep.id)}
+              />
+              <p className="focus-mode-concrete-step">Next step — <LinkifyText text={nextStep.text} /></p>
+            </div>
+          ) : (
             <p className="focus-mode-concrete-step">Next step — <LinkifyText text={nextStep.text} /></p>
-          )}
+          ))}
         </section>
 
         <div className="focus-mode-timer-block">

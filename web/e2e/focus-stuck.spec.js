@@ -37,6 +37,31 @@ test("Make the step smaller: it becomes the next step, and the timer runs again"
   await expect(overlay.getByLabel("Pause timer")).toBeVisible();
 });
 
+// #540: the next step has a tick on the focus page, as on Today's hero.
+test("The next step is ticked from the focus page, without leaving it", async ({ page }) => {
+  const overlay = await openSession(page);
+  const sheet = await openStuck(page, overlay);
+  await sheet.getByRole("button", { name: "Make the step smaller" }).click();
+  await page.keyboard.type("Open the inbox");
+  await page.keyboard.press("Enter");
+  await expect(sheet).toHaveCount(0);
+
+  const tick = overlay.getByRole("checkbox", { name: "Mark step done: Open the inbox" });
+  await expect(tick).toBeVisible();
+  const box = await tick.boundingBox();
+  expect(box.width).toBeGreaterThanOrEqual(44);
+  await tick.click();
+
+  // Done: it is no longer the next step, and the session carries on.
+  await expect(overlay.getByRole("checkbox", { name: "Mark step done: Open the inbox" })).toHaveCount(0);
+  await expect(overlay).toBeVisible();
+  await expect(overlay.getByLabel("Pause timer")).toBeVisible();
+  // Back on Today, it is not the next step either.
+  await overlay.getByRole("button", { name: "Leave focus" }).click();
+  await expect(overlay).toHaveCount(0);
+  await expect(page.locator(".today-wall")).not.toContainText("Open the inbox");
+});
+
 test("Switch to the next task: it becomes the one thing, and this one heads Today's list", async ({ page }) => {
   const overlay = await openSession(page);
   const title = (await overlay.getByRole("heading", { level: 1 }).innerText()).trim();
