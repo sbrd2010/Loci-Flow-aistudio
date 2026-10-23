@@ -60,12 +60,13 @@ export function resetTokenCache() {
 // Firebase uids are short alphanumerics. Anything else could change the path.
 const UID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
-// The plan is these three children. chatHistory and brainDump are never fetched,
-// so they never reach the Worker at all.
-const PLAN_PARTS = ["tasks", "config", "contributions"];
+// The only children of sync/{uid} that can be read. chatHistory is not on the
+// list, so it never reaches the Worker whatever a caller asks for.
+export const READABLE_PARTS = ["tasks", "config", "contributions", "brainDump"];
 
-export async function readUserRecord(env, uid, { fetchImpl = fetch, now = Date.now() } = {}) {
+export async function readUserRecord(env, uid, { fetchImpl = fetch, now = Date.now() } = {}, parts = ["tasks", "config", "contributions"]) {
   if (!UID_PATTERN.test(uid)) throw new Error("Invalid user id.");
+  if (!parts.length || !parts.every(p => READABLE_PARTS.includes(p))) throw new Error("Unreadable part requested.");
   const token = await getAccessToken(env.FIREBASE_SERVICE_ACCOUNT, { fetchImpl, now });
   const base = env.FIREBASE_DB_URL.replace(/\/+$/, "");
   const get = async (part) => {
@@ -76,6 +77,6 @@ export async function readUserRecord(env, uid, { fetchImpl = fetch, now = Date.n
     if (!res.ok) throw new Error(`Database read failed (${res.status}).`);
     return res.json();
   };
-  const [tasks, config, contributions] = await Promise.all(PLAN_PARTS.map(get));
-  return { userId: uid, tasks, config, contributions };
+  const values = await Promise.all(parts.map(get));
+  return { userId: uid, ...Object.fromEntries(parts.map((p, i) => [p, values[i]])) };
 }

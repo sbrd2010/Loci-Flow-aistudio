@@ -74,6 +74,21 @@ describe("readUserRecord", () => {
     }
   });
 
+  it("reads only the parts it is asked for, and refuses any other (chatHistory included)", async () => {
+    const { json } = await makeAccount();
+    const seen = [];
+    const fetchImpl = async (url) => {
+      if (String(url).includes("oauth2")) return Response.json({ access_token: "tok", expires_in: 3600 });
+      seen.push(String(url).split("/").pop());
+      return Response.json([{ id: "b" }]);
+    };
+    expect(await readUserRecord(env(json), "abc", { fetchImpl }, ["brainDump"])).toEqual({ userId: "abc", brainDump: [{ id: "b" }] });
+    expect(seen).toEqual(["brainDump.json"]);
+    for (const bad of [["chatHistory"], ["tasks", "chatHistory"], ["../x"], []]) {
+      await expect(readUserRecord(env(json), "abc", { fetchImpl: vi.fn() }, bad)).rejects.toThrow("Unreadable part requested");
+    }
+  });
+
   it("drops the cached token when the database refuses it, so the next read gets a fresh one", async () => {
     const { json } = await makeAccount();
     let tokens = 0;
