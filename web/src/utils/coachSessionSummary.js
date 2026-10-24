@@ -88,8 +88,22 @@ export function shouldIncludeSessionSummaryContext(contextMode, isReference, sum
 // the raw LLM window that have never been folded into the summary — i.e.
 // this turn needs to ask the model for an updated [[SESSION_SUMMARY:...]]
 // before those messages drop out of every future call's raw window.
+// Waits until SUMMARY_UPDATE_MIN_PENDING messages are pending (#545 C12):
+// otherwise, once the chat outgrows the raw window, every turn pays for a
+// rewrite (about +300 output tokens and the pending batch as input). The
+// few messages waiting meanwhile stay stored and are folded in next time;
+// at 4 they sit far from the 40-message cap, so none is trimmed unsummarized.
+export const SUMMARY_UPDATE_MIN_PENDING = 4;
 export function needsSummaryUpdate(rawWindowStart, summarizedThroughIndex) {
-  return rawWindowStart > (summarizedThroughIndex || 0);
+  return rawWindowStart - (summarizedThroughIndex || 0) >= SUMMARY_UPDATE_MIN_PENDING;
+}
+
+// Where the chat-role history sent to the model starts. While fewer than
+// SUMMARY_UPDATE_MIN_PENDING messages wait, they are in no summary yet, so
+// they stay in the history instead of vanishing from this reply (Codex
+// review of #550). On a rewrite turn they go in the pending block instead.
+export function llmHistoryStart(rawWindowStart, summarizedThroughIndex, summaryUpdateNeeded) {
+  return summaryUpdateNeeded ? rawWindowStart : Math.min(rawWindowStart, summarizedThroughIndex || 0);
 }
 
 // The message slice that must be included one final time in this turn's
@@ -196,13 +210,13 @@ export function buildPendingSummaryContext(pendingMessages) {
 // always paired with buildPendingSummaryContext's trigger block when this
 // turn actually needs an update.
 export function buildSessionSummaryWritingInstruction(firstName = "friend") {
-  return `CONVERSATION SUMMARY: If "OLDER MESSAGES LEAVING THE ACTIVE WINDOW" appears below, rewrite the running summary of this conversation — combine the current summary (if any, see CONVERSATION SO FAR above) with those older messages into ONE updated summary, roughly ${SESSION_SUMMARY_TARGET_CHARS} characters and never over ${SESSION_SUMMARY_MAX_CHARS}, using this shape (leave out any line with nothing to say rather than writing "none"):
+  return `CONVERSATION SUMMARY: If "OLDER MESSAGES LEAVING THE ACTIVE WINDOW" appears below, rewrite the running summary of this conversation — combine the current summary (if any, see CONVERSATION SO FAR below) with those older messages into ONE updated summary, roughly ${SESSION_SUMMARY_TARGET_CHARS} characters and never over ${SESSION_SUMMARY_MAX_CHARS}, using this shape (leave out any line with nothing to say rather than writing "none"):
 Current objective: ...
 Important context: ...
 Decisions or commitments: ...
 Unresolved questions: ...
 Relevant emotional or behavioural state: ...
-End your reply with [[SESSION_SUMMARY: <the full rewritten summary>]] on its own line — this REPLACES the old summary, it does not append to it. This tag is invisible and stripped automatically, like CHECKIN_IN — never mention or explain it to ${firstName}. Only emit it when the trigger block above is present in this prompt.`;
+End your reply with [[SESSION_SUMMARY: <the full rewritten summary>]] on its own line — this REPLACES the old summary, it does not append to it. This tag is invisible and stripped automatically, like CHECKIN_IN — never mention or explain it to ${firstName}. Only emit it when the trigger block below is present in this prompt.`;
 }
 
 // Read-back formatting for the system prompt (same pattern as
