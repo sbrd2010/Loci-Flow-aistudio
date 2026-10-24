@@ -3,7 +3,7 @@
 // ticks from contributions[], and the tasks themselves. Every figure is shown
 // with its number; nothing is estimated.
 import { weekSummary, lociDayWindow } from "./focusLedger";
-import { sliceContributions, computeRangeStats, computeCompletionsByDayOfWeek, computeCompletedByCategory, computeActiveMix, getDateRangeDays } from "./insightsContext";
+import { sliceContributions, computeRangeStats, computeCompletionsByDayOfWeek, computeCompletedByCategory, computeActiveMix } from "./insightsContext";
 import { isActiveLociTask } from "./lociAIContext";
 import { isOnToday } from "./deferral";
 import { getRemainingFocusMinutes, getLociDayStr } from "./focusWindows";
@@ -62,15 +62,13 @@ export function reviewFacts({ tasks = [], contributions = [], config = {}, focus
   const days = lociDayWindow(span, now, windows);
   const ledger = focusRaw ? weekSummary(focusRaw, tasks, now, windows, span) : null;
 
-  // Ticks: contributions[] is the one authoritative count (see insightsContext),
-  // stamped by calendar date. Focus is by Loci day; the two lists line up day
-  // for day and differ only between midnight and the end of a late window.
-  const ticks = sliceContributions(contributions, getDateRangeDays(period, now));
+  // Ticks: contributions[] is the one authoritative count (see insightsContext).
+  // Each is stamped with the Loci day, like focus and the completed tasks, so
+  // the three line up day for day, even after midnight in a late window.
+  const ticks = sliceContributions(contributions, days);
   const stats = computeRangeStats(ticks);
-  // Under each bar, the ticks of that same date, matched by date, not by
-  // position: after midnight in a late window the calendar has moved on
-  // while the Loci day hasn't, and a position match would shift every day.
-  const ticksOn = new Map(sliceContributions(contributions, days).map(d => [d.dateString, d.count]));
+  // Under each bar, the ticks of that same date.
+  const ticksOn = new Map(ticks.map(d => [d.dateString, d.count]));
   const perDay = days.map((date, i) => ({
     date,
     minutes: ledger ? ledger.perDay[i]?.minutes || 0 : null,
@@ -89,7 +87,7 @@ export function reviewFacts({ tasks = [], contributions = [], config = {}, focus
     .sort((a, b) => (b.done + b.open) - (a.done + a.open) || a.name.localeCompare(b.name));
 
   // Best weekday always reads the last 30 days of ticks, whatever the period.
-  const weekday = computeCompletionsByDayOfWeek(sliceContributions(contributions, getDateRangeDays("30d", now)));
+  const weekday = computeCompletionsByDayOfWeek(sliceContributions(contributions, lociDayWindow(30, now, windows)));
 
   // Open now, by horizon.
   const active = tasks.filter(isActiveLociTask);

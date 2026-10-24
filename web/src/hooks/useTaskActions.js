@@ -4,6 +4,7 @@ import { celebrate } from "../utils/celebrations";
 import { uiSoundsOn } from "../utils/uiSounds";
 import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
 import { removeScheduleFields } from "./useDayRoute";
+import { addCompletionTick, removeCompletionTick } from "../utils/completionTicks";
 import { buildTaskMutationEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 
 // What a task's sheet does to the task, with the one Undo toast: done, park,
@@ -19,23 +20,6 @@ export default function useTaskActions({ payload, savePayload, savePayloadAsync,
   const [undo, setUndo] = useState(null);
 
   const isVisibleRoadmapTask = (t) => !t.isDeleted && !t.isCompleted && !t.isParked;
-
-  const getTodayDateString = () => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  };
-
-  const incrementContribution = (newContributions, dateStr) => {
-    const index = newContributions.findIndex((c) => c.dateString === dateStr);
-    const uid = payload.userId || payload.config?.userId || "";
-    const compositeKey = `${uid}_${dateStr}`;
-    if (index === -1) {
-      newContributions.push({ compositeKey, userId: uid, dateString: dateStr, count: 1, lastUpdated: Date.now() });
-    } else {
-      newContributions[index] = { ...newContributions[index], count: newContributions[index].count + 1, lastUpdated: Date.now() };
-    }
-    return newContributions;
-  };
 
   const latestTasks = () => payloadRef.current?.tasks || [];
   const patchTask = (uuid, patch) => {
@@ -125,7 +109,6 @@ export default function useTaskActions({ payload, savePayload, savePayloadAsync,
   const handleMarkDone = (task) => {
     celebrate({ sound: uiSoundsOn(payloadRef.current?.config) });
     const actionAt = Date.now();
-    const todayDateStr = getTodayDateString();
     const lociTodayStr = getLociDayStr(new Date(), getFocusWindows(config));
     const event = buildTaskMutationEvent("task_completed", task, { windows, now: actionAt });
     // Marking the actively focused task done clears isNowFocus below without
@@ -138,7 +121,8 @@ export default function useTaskActions({ payload, savePayload, savePayloadAsync,
       tasks: latestTasks().map((t) =>
         t.uuid === task.uuid ? { ...t, isCompleted: true, isNowFocus: false, dateCompletedString: lociTodayStr, lastUpdated: Date.now() } : t
       ),
-      contributions: incrementContribution([...(payloadRef.current.contributions || [])], todayDateStr)
+      // Counted toward the Loci day, the day dateCompletedString carries.
+      contributions: addCompletionTick(payloadRef.current.contributions, lociTodayStr, payloadRef.current)
     })
       .then(() => {
         const events = [event];
@@ -152,7 +136,7 @@ export default function useTaskActions({ payload, savePayload, savePayloadAsync,
         writeActivityEvents(eventsPatch(uid, events));
       })
       .catch(() => {});
-    setUndo({ kind: "done", task, wasFocus: !!task.isNowFocus, at: actionAt, dateStr: todayDateStr });
+    setUndo({ kind: "done", task, wasFocus: !!task.isNowFocus, at: actionAt, dateStr: lociTodayStr });
   };
 
   const handleDelete = (task) => {
@@ -210,9 +194,7 @@ export default function useTaskActions({ payload, savePayload, savePayloadAsync,
       }
     }
     else if (kind === "done" && current.isCompleted) {
-      const contributions = [...(latest.contributions || [])];
-      const idx = contributions.findIndex(c => c.dateString === undo.dateStr);
-      if (idx !== -1 && contributions[idx].count > 0) contributions[idx] = { ...contributions[idx], count: contributions[idx].count - 1, lastUpdated: Date.now() };
+      const contributions = removeCompletionTick(latest.contributions, undo.dateStr);
       put({ isCompleted: false, dateCompletedString: null, ...refocus }, "task_reopened", { contributions });
     }
   };

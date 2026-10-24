@@ -7,7 +7,7 @@ import { buildLocalSafetyReply } from "../utils/crisisSafety";
 import { isEventTask } from "../utils/dayMapRoute";
 import ConfirmDialog from "./ConfirmDialog";
 import { profileToCoachContext } from "../utils/userProfile";
-import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext, buildLociCheckinContext, buildLociClosingContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociRecentlyParkedContext, buildLociRecentlyCompletedContext, buildLociCategoryFilterContext, buildLociTodaySnapshotContext, getLocalDateString, isActiveLociTask } from "../utils/lociAIContext";
+import { buildLociCoreInstruction, buildLociTaskContext, buildLociAnchorsContext, buildLociCheckinContext, buildLociClosingContext, buildLociFocusSessionContext, buildLociNowFocusContext, buildLociDeadlineContext, buildLociDayMapContext, buildLociBrainDumpContext, buildLociVelocityContext, buildLociRemindersContext, buildLociRecentlyParkedContext, buildLociRecentlyCompletedContext, buildLociCategoryFilterContext, buildLociTodaySnapshotContext, isActiveLociTask } from "../utils/lociAIContext";
 import { getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows } from "../utils/focusWindows";
 import { safeUUID } from "../utils/uuid";
@@ -494,11 +494,10 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     // is done, deleted or parked since, the offer is gone: never re-match by
     // title, which could hit another task.
     const fresh = a.task?.uuid ? tasksRef.current.find(t => t.uuid === a.task.uuid && isActiveLociTask(t)) : null;
-    const localDateStr = getLocalDateString(now);
     const { payload: updatedPayload, results } = applyCoachActions(
       { ...payload, tasks: tasksRef.current, config: configRef.current, contributions: contributionsRef.current },
       [{ type: a.type, title: fresh?.title || a.title, ...(fresh ? { taskUuid: fresh.uuid } : {}), ...(a.durationMinutes != null ? { durationMinutes: a.durationMinutes } : {}) }],
-      { lociDateStr: getLociDayStr(now, getFocusWindows(configRef.current)), localDateStr, now: now.getTime(), skipIntentCheck: true }
+      { lociDateStr: getLociDayStr(now, getFocusWindows(configRef.current)), now: now.getTime(), skipIntentCheck: true }
     );
     const r = a.type !== "ADD_TASK" && !fresh ? null : results[0];
     const state = r?.matched ? "applied" : "gone";
@@ -510,7 +509,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     if (a.type === "START_FOCUS" && !started) return;
     // Undo puts back only this change: it checks the task is as the tap left it.
     const appliedLastUpdated = updatedPayload.tasks.find(t => t.uuid === r.task.uuid)?.lastUpdated ?? null;
-    setActionUndo(u => ({ ...u, [actionId]: { type: a.type, taskUuid: r.task.uuid, prevPinnedUuid, localDateStr, appliedLastUpdated, focusSessionId: started?.focusSessionId || null, at: Date.now() } }));
+    setActionUndo(u => ({ ...u, [actionId]: { type: a.type, taskUuid: r.task.uuid, prevPinnedUuid, appliedLastUpdated, focusSessionId: started?.focusSessionId || null, at: Date.now() } }));
   };
   const handleUndoCoachAction = (actionId) => {
     const key = actionId;
@@ -759,7 +758,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     const deadlineContext = buildLociDeadlineContext(config, now);
     const dayMapContext = buildLociDayMapContext(tasks, todayStr);
     const brainDumpContext = buildLociBrainDumpContext(brainDump);
-    const velocityContext = buildLociVelocityContext(contributions, now);
+    const velocityContext = buildLociVelocityContext(contributions, now, getFocusWindows(config));
     const remindersContext = buildLociRemindersContext(tasks, now);
     const pendingCheckinContext = buildCoachCheckinContext(config.coachCheckin, now.getTime());
     const recentlyParkedContext = buildLociRecentlyParkedContext(tasks, now);
@@ -1040,7 +1039,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
         const { results } = applyCoachActions(
           { ...payload, tasks: tasksRef.current, config: configRef.current, contributions: contributionsRef.current },
           actions,
-          { lociDateStr: todayStr, localDateStr: getLocalDateString(now), lastUserMessage: userText, now: now.getTime() }
+          { lociDateStr: todayStr, lastUserMessage: userText, now: now.getTime() }
         );
         actionResults = results.map(r => (r.matched ? { ...r, id: safeUUID(), state: "proposed" } : r));
 

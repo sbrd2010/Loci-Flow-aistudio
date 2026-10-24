@@ -315,7 +315,9 @@ export function buildLociBrainDumpContext(brainDump = []) {
 // Recent completion velocity (last 3 and 7 days) from the contributions
 // heatmap — distinct from the lifetime avgCompletionsPerActiveDay in the
 // behavioural profile, this surfaces short-term momentum or a recent stall.
-export function buildLociVelocityContext(contributions = [], today = new Date()) {
+// Counts are by Loci day, like the ticks they are summed from, so "the last 3
+// days" ends on the day the user is still in, even after midnight in a late window.
+export function buildLociVelocityContext(contributions = [], today = new Date(), windows = getFocusWindows()) {
   if (!contributions || contributions.length === 0) return "";
 
   const byDate = new Map(contributions.map(c => [c.dateString, Number(c.count) || 0]));
@@ -324,7 +326,7 @@ export function buildLociVelocityContext(contributions = [], today = new Date())
     for (let i = 0; i < n; i++) {
       const d = new Date(today);
       d.setDate(d.getDate() - i);
-      total += byDate.get(getLocalDateString(d)) || 0;
+      total += byDate.get(getLociDayStr(d, windows)) || 0;
     }
     return total;
   };

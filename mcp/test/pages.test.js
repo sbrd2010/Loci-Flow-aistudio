@@ -265,6 +265,19 @@ describe("get_week", () => {
     expect(out.totals).toEqual({ ticks: 5, completedTasks: 2 });
   });
 
+  it("ends on the Loci day in the small hours, the day the ticks are stamped with", () => {
+    const rec = record({
+      config: { focusWindows: [{ start: "09:00", end: "02:00" }] },
+      top: { contributions: [{ dateString: "2026-10-22", count: 4 }, { dateString: "2026-10-23", count: 7 }] },
+    });
+    const lateNight = Date.UTC(2026, 9, 22, 19, 30, 0); // 2026-10-23 01:00 in India, still the 22nd's day
+    const out = buildWeek(rec, lateNight, IST, { days: 2 });
+    expect(out.today).toBe("2026-10-23");
+    expect(out.lociDay).toBe("2026-10-22");
+    expect(out.days.map(d => d.date)).toEqual(["2026-10-21", "2026-10-22"]);
+    expect(out.days.at(-1).ticks).toBe(4);
+  });
+
   it("keeps the number of days sensible", () => {
     expect(buildWeek(record(), NOW, IST, { days: 999 }).days).toHaveLength(60);
     expect(buildWeek(record(), NOW, IST, { days: 0 }).days).toHaveLength(14);

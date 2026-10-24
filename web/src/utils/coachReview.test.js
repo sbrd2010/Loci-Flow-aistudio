@@ -112,14 +112,24 @@ describe("reviewFacts", () => {
     expect(facts.openNow.over).toBe(false);
   });
 
-  it("counts a tick made after midnight on its calendar day, inside a late window", () => {
+  it("counts a tick made after midnight toward the Loci day it belongs to, inside a late window", () => {
     const late = getFocusWindows({ focusWindows: [{ start: "07:00", end: "02:00" }] });
     const at1am = new Date(2026, 9, 2, 1, 0); // still the 1 Oct Loci day
-    const f = reviewFacts({ tasks: [], contributions: [{ dateString: "2026-10-02", count: 1 }], period: "today", now: at1am, windows: late });
+    // The tick is stamped with the Loci day, like the task's own dateCompletedString.
+    const f = reviewFacts({ tasks: [], contributions: [{ dateString: "2026-10-01", count: 1 }], period: "today", now: at1am, windows: late });
     expect(f.days[0].date).toBe("2026-10-01");
     expect(f.completed).toBe(1);
-    // The 2 Oct tick isn't put under the 1 Oct bar.
-    expect(f.days[0].ticks).toBe(0);
+    expect(f.days[0].ticks).toBe(1);
+  });
+
+  it("keeps the 7-day bars in step with the Loci day after midnight", () => {
+    const late = getFocusWindows({ focusWindows: [{ start: "07:00", end: "02:00" }] });
+    const at1am = new Date(2026, 9, 2, 1, 0);
+    const contributions = [{ dateString: "2026-09-30", count: 2 }, { dateString: "2026-10-01", count: 3 }];
+    const f = reviewFacts({ tasks: [], contributions, period: "7d", now: at1am, windows: late });
+    expect(f.days.map(d => d.date).slice(-2)).toEqual(["2026-09-30", "2026-10-01"]);
+    expect(f.days.slice(-2).map(d => d.ticks)).toEqual([2, 3]);
+    expect(f.completed).toBe(5);
   });
 
   it("a Today task moved to tomorrow isn't counted under TODAY", () => {
