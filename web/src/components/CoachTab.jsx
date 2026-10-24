@@ -25,10 +25,10 @@ import { buildPersonaInstruction } from "../utils/coachPersona";
 import { buildProfileContext } from "../utils/coachProfile";
 import { addPinnedFact, addRecentObservation, buildLociMemoryContext, forgetFromMemory, isMemoryEnabled, parseMemoryTags, isResurrectedMemoryEntry } from "../utils/coachMemory";
 import { stripReasoningTag } from "../utils/coachReasoning";
-import { classifyContextMode, needsConversationContext, trimHistoryForLLM, historyLimitForMode, detectRequestedCategories } from "../utils/coachContextMode";
+import { classifyContextMode, needsConversationContext, historyLimitForMode, detectRequestedCategories } from "../utils/coachContextMode";
 import { buildCoachSystemPrompt } from "../utils/coachSystemPrompt";
 import {
-  needsSummaryUpdate, pendingSummaryMessages, buildPendingSummaryContext,
+  needsSummaryUpdate, llmHistoryStart, pendingSummaryMessages, buildPendingSummaryContext,
   pendingSummaryIncludedCount, buildSessionSummaryContext, parseSessionSummaryTag,
   trimChatHistoryWithCursor, shouldIncludeSessionSummaryContext,
 } from "../utils/coachSessionSummary";
@@ -722,13 +722,12 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     const lastFullTaskTime = getLastFullTaskTime(userId);
     const contextMode = classifyContextMode(userText, { lastFullTaskTime, hasLastPlan: !!lastPlan });
     const isReference = needsConversationContext(userText);
-    const trimmedForLLM = trimHistoryForLLM(savedHistory, contextMode, isReference);
     const epoch = conversationEpoch;
     const controller = new AbortController();
 
-    // Session summary: same raw-window boundary trimHistoryForLLM just used,
-    // computed via the shared historyLimitForMode so the two can never drift
-    // apart. Messages sitting between the stored cursor and that boundary
+    // Session summary: the raw-window boundary comes from the shared
+    // historyLimitForMode, so the history sent and the summary cursor can
+    // never drift apart. Messages sitting between the stored cursor and that boundary
     // are about to leave the raw window for good — include them one final
     // time (as plain-text context, not chat-role messages) so the model can
     // fold them into an updated summary before they're gone.
@@ -736,6 +735,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     const rawWindowStart = Math.max(0, savedHistory.length - historyLimitForMode(contextMode, isReference));
     const summarizedThroughIndex = coachSessionSummary?.summarizedThroughIndex || 0;
     const summaryUpdateNeeded = needsSummaryUpdate(rawWindowStart, summarizedThroughIndex);
+    const trimmedForLLM = savedHistory.slice(llmHistoryStart(rawWindowStart, summarizedThroughIndex, summaryUpdateNeeded));
     // Same cloud-sync gate as memorySectionEnabled/rescueHandoffContext
     // below, applied to BOTH the stored-summary read and the pending-
     // messages trigger: config/chatHistory can still be the stale cached
