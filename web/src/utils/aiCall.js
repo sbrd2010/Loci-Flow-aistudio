@@ -755,9 +755,13 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPr
   if (serviceUnavailable) throw serviceUnavailable.err;
   if (findAttempt("network")) throw new Error("network");
   if (findAttempt("timeout")) throw new Error("timeout");
-  // Only when waiting could not help: every provider that was really tried
-  // (or, if none was, every one skipped) refused the request for its size.
-  if (decisionAttempts.length > 0 && decisionAttempts.every(a => a.classification === "payload_too_large")) throw new Error("payload_too_large");
+  // A size verdict only when waiting could not help: every provider that was
+  // really tried (or, if none was, every one skipped) refused the request for
+  // its size, and none was merely cooling down from a rate limit or outage.
+  if (decisionAttempts.length > 0 && decisionAttempts.every(a => a.classification === "payload_too_large")) {
+    const coolingDown = attempts.find(a => !a.live && (a.classification === "rate_limit" || a.classification === "service_unavailable"));
+    throw coolingDown ? coolingDown.err : new Error("payload_too_large");
+  }
   throw new Error("all_providers_failed");
 }
 

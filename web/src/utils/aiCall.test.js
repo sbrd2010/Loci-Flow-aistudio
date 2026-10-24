@@ -1264,6 +1264,30 @@ describe("AI call limits: payload size, timeouts and the call deadline", () => {
     await expect(callAI(bigRequest({ cerebrasKey: "test-cerebras-key" }))).rejects.toThrow("429");
   });
 
+  it("does not call a request too large while another provider is only cooling down from a rate limit", async () => {
+    storage.setItem("loci_provider_pref", "groq");
+    // A small call rate-limits Groq, and Cerebras answers it.
+    fetch
+      .mockResolvedValueOnce(providerError(429))
+      .mockResolvedValueOnce(cerebrasOk("Cerebras answered."));
+    expect(await callAI(baseRequest({ cerebrasKey: "test-cerebras-key" }))).toBe("Cerebras answered.");
+
+    // A bigger call: Groq is skipped (cooling down), Cerebras refuses the size.
+    fetch.mockResolvedValueOnce(providerError(413));
+    await expect(callAI(bigRequest({ cerebrasKey: "test-cerebras-key" }))).rejects.toThrow("429");
+  });
+
+  it("does not call a request too large while another provider is only cooling down from an outage", async () => {
+    storage.setItem("loci_provider_pref", "groq");
+    fetch
+      .mockResolvedValueOnce(providerError(503))
+      .mockResolvedValueOnce(cerebrasOk("Cerebras answered."));
+    await callAI(baseRequest({ cerebrasKey: "test-cerebras-key" }));
+
+    fetch.mockResolvedValueOnce(providerError(413));
+    await expect(callAI(bigRequest({ cerebrasKey: "test-cerebras-key" }))).rejects.toThrow("503");
+  });
+
   it("reports a timeout as a timeout, not a connection problem", async () => {
     const abort = new Error("aborted");
     abort.name = "AbortError";
