@@ -84,3 +84,44 @@ test("a brief the provider refuses as too large says so, not that Coach was unre
   await expect(brief.getByRole("alert")).toContainText(/too large/i, { timeout: 8_000 });
   await expect(brief.getByRole("alert")).not.toContainText(/couldn.t reach/i);
 });
+
+// "Ask about this" attaches the brief to the next message. If that call fails,
+// the chip stays so the retry still carries it.
+test("the brief chip stays on a failed message and goes with the one that works", async ({ page }) => {
+  let chatCalls = 0;
+  await page.route("https://api.groq.com/**", async (route) => {
+    const body = JSON.parse(route.request().postData());
+    const isBrief = body.messages.some(m => m.role === "system" && m.content.includes("Coach's brief"));
+    if (isBrief) {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content: JSON.stringify({
+        howItWent: ["2 ticked this week, against 0 the week before."],
+        patterns: ["Saturdays are your best day over 30 days."],
+        tooMuch: { line: "1h15m on Today, 16h left.", items: [{ task: "T2", to: "week" }] },
+        next: { task: "T2", line: "First step: close the other tabs." },
+      }) } }] }) });
+      return;
+    }
+    chatCalls += 1;
+    if (chatCalls === 1) {
+      await route.fulfill({ status: 500, contentType: "application/json", body: "{}" });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content: "The brief says start with the first one." } }] }) });
+  });
+  const brief = await openReview(page);
+  await brief.getByRole("button", { name: "Brief me" }).click();
+  await expect(brief.getByRole("heading", { name: "How it went" })).toBeVisible({ timeout: 8_000 });
+  await brief.getByRole("button", { name: "Ask about this →" }).click();
+  const chip = page.locator(".coach-composer .coach-stuck-chip");
+  await expect(chip).toContainText(/^Brief · /);
+
+  await page.getByPlaceholder("Ask about the brief…").fill("Which one first?");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText(/couldn't answer right now/i)).toBeVisible({ timeout: 8_000 });
+  await expect(chip).toHaveCount(1);
+
+  await page.getByPlaceholder("Ask about the brief…").fill("Which one first? Try again");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText("The brief says start with the first one.").first()).toBeVisible({ timeout: 8_000 });
+  await expect(chip).toHaveCount(0);
+});
