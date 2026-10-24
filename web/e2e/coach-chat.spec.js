@@ -234,6 +234,8 @@ test("Coach actions: a reply offers Mark done; the tap applies it, Undo puts it 
   const reply = page.locator(".coach-msg.is-coach").last();
   await expect(reply).toContainText("Want me to mark it done?");
   await expect(reply).not.toContainText("Marked");
+  // Even a single offered action names its task, so the tap is never blind.
+  await expect(reply.getByRole("button", { name: `Mark done · ${task}` })).toBeVisible();
   await reply.getByRole("button", { name: "Mark done" }).click();
   await expect(reply.locator(".coach-action-done")).toContainText(`✓ Marked done · ${task}`);
   await reply.getByRole("button", { name: "Undo" }).click();
@@ -241,6 +243,74 @@ test("Coach actions: a reply offers Mark done; the tap applies it, Undo puts it 
 
   await reply.getByRole("button", { name: "Not needed" }).click();
   await expect(reply.getByRole("button", { name: "Mark done" })).toHaveCount(0);
+});
+
+// The Coach tab remounts on every tab switch; the Undo for a tapped action
+// must still be there when you come back.
+test("Coach actions: Undo is still there after a visit to another tab", async ({ page }) => {
+  const task = "10-minute walk between tasks to reset your focus";
+  await page.route("https://api.groq.com/**", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ choices: [{ message: { content: `Want me to mark it done?\n[[COMPLETE_TASK:${task}]]` } }] }),
+  }));
+  await page.addInitScript(() => {
+    window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key");
+  });
+  await enterDemo(page, { width: 1600, height: 900 });
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await nav.getByRole("button", { name: "Coach", exact: true }).click();
+  await page.locator(".coach-composer-input").fill(`I finished the ${task}`);
+  await page.getByRole("button", { name: "Send" }).click();
+  await page.locator(".coach-msg.is-coach").last().getByRole("button", { name: "Mark done" }).click();
+  await expect(page.locator(".coach-msg.is-coach").last().locator(".coach-action-done")).toContainText("✓ Marked done");
+
+  await nav.getByRole("button", { name: "Today", exact: true }).click();
+  await nav.getByRole("button", { name: "Coach", exact: true }).click();
+
+  const reply = page.locator(".coach-msg.is-coach").last();
+  await expect(reply.locator(".coach-action-done")).toContainText("✓ Marked done");
+  await reply.getByRole("button", { name: "Undo" }).click();
+  await expect(reply.getByRole("button", { name: "Mark done" })).toBeVisible();
+});
+
+// An error notice is shown in the chat but was never said by the Coach: it must
+// not go back to the model as an assistant turn.
+test("Coach chat: an error notice is not sent back to the model on the next message", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key");
+  });
+  const bodies = [];
+  let calls = 0;
+  await page.route("https://api.groq.com/**", async (route) => {
+    calls += 1;
+    bodies.push(JSON.parse(route.request().postData()));
+    if (calls === 1) {
+      await route.fulfill({ status: 500, contentType: "application/json", body: "{}" });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ choices: [{ message: { content: "Let's pick one tiny next step." } }] }),
+    });
+  });
+  await enterDemo(page);
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
+
+  await page.locator(".coach-composer-input").fill("I feel a bit scattered right now");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText(/couldn't answer right now/i)).toBeVisible({ timeout: 8_000 });
+
+  await page.locator(".coach-composer-input").fill("I feel scattered, try again");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText("Let's pick one tiny next step.").first()).toBeVisible({ timeout: 8_000 });
+
+  const second = bodies[bodies.length - 1];
+  const history = second.messages.map(m => `${m.role}: ${m.content}`).join("\n");
+  expect(history).toContain("I feel a bit scattered right now");
+  expect(history).not.toMatch(/couldn't answer right now/i);
+  expect(second.messages.some(m => m.role === "assistant" && /tasks are safe/i.test(m.content))).toBe(false);
 });
 
 test("Coach actions: the tap really marks the task done on Today", async ({ page }) => {

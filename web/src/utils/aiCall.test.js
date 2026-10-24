@@ -4,7 +4,7 @@ vi.mock("../firebase", () => ({
   auth: { currentUser: null },
 }));
 
-import { buildProviderOrder, callAI, classifyAIError, describeAIError, extractJsonArray, resetProviderCooldowns } from "./aiCall";
+import { buildProviderOrder, callAI, classifyAIError, describeAIError, extractJsonArray, isAISystemReply, resetProviderCooldowns } from "./aiCall";
 
 function makeStorage() {
   const store = new Map();
@@ -177,13 +177,16 @@ describe("AI call resilience", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
-  it("returns a daily-limit message without calling an AI provider after the limit is reached", async () => {
+  it("throws usage_limit, carrying the limit message, without calling an AI provider once the limit is reached", async () => {
     seedUsage(storage, { daily: 120, hourly: 0 });
 
-    const reply = await callAI(baseRequest());
+    const err = await callAI(baseRequest()).catch(e => e);
 
-    expect(reply).toContain("AI daily limit reached");
-    expect(reply).toContain("120/120");
+    expect(err).toBeInstanceOf(Error);
+    expect(err.message).toBe("usage_limit");
+    expect(err.limitMessage).toContain("AI daily limit reached");
+    expect(err.limitMessage).toContain("120/120");
+    expect(describeAIError(err)).toBe(err.limitMessage);
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -1117,10 +1120,16 @@ describe("classifyAIError", () => {
     expect(classifyAIError(new TypeError("Failed to fetch"))).toBe("network");
   });
 
-  it("classifies an AbortError (timeout) as network", () => {
+  it("classifies an AbortError (timeout) as timeout, apart from a network failure", () => {
     const abortErr = new Error("The operation was aborted");
     abortErr.name = "AbortError";
-    expect(classifyAIError(abortErr)).toBe("network");
+    expect(classifyAIError(abortErr)).toBe("timeout");
+  });
+
+  it("classifies a provider 413 and a locally refused Z.ai payload as payload_too_large", () => {
+    expect(classifyAIError(new Error("groq_413"))).toBe("payload_too_large");
+    expect(classifyAIError(new Error("cerebras_413"))).toBe("payload_too_large");
+    expect(classifyAIError(new Error("zai_too_large"))).toBe("payload_too_large");
   });
 
   it("classifies anything else as unknown", () => {
@@ -1138,9 +1147,20 @@ describe("describeAIError", () => {
     expect(describeAIError(new Error("no_key"))).toMatch(/add an ai key in settings/i);
   });
 
-  it("uses the calm rate-limit-style message specifically for all_providers_failed", () => {
-    expect(describeAIError(new Error("all_providers_failed")))
-      .toBe("AI is temporarily busy or rate-limited. Your tasks are safe. Please wait a minute and try again.");
+  it("does not blame a rate limit when every provider failed for another reason", () => {
+    const text = describeAIError(new Error("all_providers_failed"));
+    expect(text).toMatch(/tasks are safe/i);
+    expect(text).not.toMatch(/rate-limit|wait a minute/i);
+  });
+
+  it("gives a too-large request, a timeout and a spent usage limit their own copy", () => {
+    expect(describeAIError(new Error("payload_too_large"))).toMatch(/too large.*new conversation/i);
+    expect(describeAIError(new Error("timeout"))).toMatch(/too long to answer/i);
+    expect(describeAIError(new Error("usage_limit"))).toMatch(/AI limit/i);
+  });
+
+  it("never returns a built-in object property for an unusual message", () => {
+    expect(describeAIError(new Error("constructor"))).toBe("Something went wrong. Your tasks are safe — please try again.");
   });
 
   it("falls back to a neutral generic message for any other unrecognized code, without implying a rate limit", () => {
@@ -1149,11 +1169,145 @@ describe("describeAIError", () => {
   });
 
   it("never leaks a raw status code or provider name into the user-facing copy", () => {
-    const codes = ["429", "503", "invalid_key", "network", "no_key", "all_providers_failed", "groq_401"];
+    const codes = ["429", "503", "invalid_key", "network", "timeout", "payload_too_large", "usage_limit", "no_key", "all_providers_failed", "groq_401"];
     for (const code of codes) {
       const text = describeAIError(new Error(code));
       expect(text).not.toMatch(/groq|nvidia|gemini|\b401\b|\b403\b/i);
     }
+  });
+});
+
+describe("isAISystemReply", () => {
+  it("recognises the error and limit notices the Coach saves as messages", () => {
+    for (const code of ["429", "503", "invalid_key", "network", "timeout", "payload_too_large", "no_key", "all_providers_failed", "anything_else"]) {
+      expect(isAISystemReply(describeAIError(new Error(code)))).toBe(true);
+    }
+    expect(isAISystemReply("AI daily limit reached: you have used 120/120 AI calls today. Loci will reset your AI allowance tomorrow.")).toBe(true);
+    expect(isAISystemReply("AI hourly limit reached: you have used 40/40 AI calls this hour. Try again after the hour resets.")).toBe(true);
+  });
+
+  it("recognises the wording earlier builds saved", () => {
+    expect(isAISystemReply("AI is temporarily busy or rate-limited. Your tasks are safe. Please wait a minute and try again.")).toBe(true);
+  });
+
+  it("does not treat a real reply as a notice, even one that talks about limits", () => {
+    expect(isAISystemReply("Start with the report. Your tasks are safe to reorder.")).toBe(false);
+    expect(isAISystemReply("You hit the AI daily limit reached: three times this week.")).toBe(false);
+    expect(isAISystemReply("")).toBe(false);
+  });
+});
+
+describe("AI call limits: payload size, timeouts and the call deadline", () => {
+  let storage;
+
+  beforeEach(() => {
+    storage = makeStorage();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 5, 4, 15, 30, 0));
+    vi.stubGlobal("localStorage", storage);
+    vi.stubGlobal("fetch", vi.fn());
+    resetProviderCooldowns();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  const bigRequest = (overrides = {}) => baseRequest({ systemPrompt: "x".repeat(30000), ...overrides });
+
+  it("throws payload_too_large, not a rate limit, when the only provider answers 413", async () => {
+    fetch.mockResolvedValueOnce(providerError(413));
+    await expect(callAI(bigRequest())).rejects.toThrow("payload_too_large");
+  });
+
+  it("does not send a request that size to a provider that refused it again, but still serves a smaller one", async () => {
+    fetch.mockResolvedValueOnce(providerError(413));
+    await expect(callAI(bigRequest())).rejects.toThrow("payload_too_large");
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    // Same size again: Groq is skipped without a network call.
+    await expect(callAI(bigRequest())).rejects.toThrow("payload_too_large");
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    // A short request is not blocked.
+    fetch.mockResolvedValueOnce(groqOk("Short one works."));
+    expect(await callAI(baseRequest())).toBe("Short one works.");
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("tries the provider again once the too-large cooldown has passed", async () => {
+    fetch.mockResolvedValueOnce(providerError(413));
+    await expect(callAI(bigRequest())).rejects.toThrow("payload_too_large");
+
+    vi.setSystemTime(new Date(2026, 5, 4, 15, 36, 0));
+    fetch.mockResolvedValueOnce(groqOk("Groq accepts it now."));
+    expect(await callAI(bigRequest())).toBe("Groq accepts it now.");
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls through to the next provider after a 413 and serves the request", async () => {
+    fetch
+      .mockResolvedValueOnce(providerError(413))
+      .mockResolvedValueOnce(cerebrasOk("Cerebras took it."));
+    storage.setItem("loci_provider_pref", "groq");
+    expect(await callAI(bigRequest({ cerebrasKey: "test-cerebras-key" }))).toBe("Cerebras took it.");
+  });
+
+  it("still reports a rate limit when one provider was too large and another is only rate-limited", async () => {
+    storage.setItem("loci_provider_pref", "groq");
+    fetch
+      .mockResolvedValueOnce(providerError(413))
+      .mockResolvedValueOnce(providerError(429));
+    // Waiting can help the rate-limited provider, so that is what the user is told.
+    await expect(callAI(bigRequest({ cerebrasKey: "test-cerebras-key" }))).rejects.toThrow("429");
+  });
+
+  it("does not call a request too large while another provider is only cooling down from a rate limit", async () => {
+    storage.setItem("loci_provider_pref", "groq");
+    // A small call rate-limits Groq, and Cerebras answers it.
+    fetch
+      .mockResolvedValueOnce(providerError(429))
+      .mockResolvedValueOnce(cerebrasOk("Cerebras answered."));
+    expect(await callAI(baseRequest({ cerebrasKey: "test-cerebras-key" }))).toBe("Cerebras answered.");
+
+    // A bigger call: Groq is skipped (cooling down), Cerebras refuses the size.
+    fetch.mockResolvedValueOnce(providerError(413));
+    await expect(callAI(bigRequest({ cerebrasKey: "test-cerebras-key" }))).rejects.toThrow("429");
+  });
+
+  it("does not call a request too large while another provider is only cooling down from an outage", async () => {
+    storage.setItem("loci_provider_pref", "groq");
+    fetch
+      .mockResolvedValueOnce(providerError(503))
+      .mockResolvedValueOnce(cerebrasOk("Cerebras answered."));
+    await callAI(baseRequest({ cerebrasKey: "test-cerebras-key" }));
+
+    fetch.mockResolvedValueOnce(providerError(413));
+    await expect(callAI(bigRequest({ cerebrasKey: "test-cerebras-key" }))).rejects.toThrow("503");
+  });
+
+  it("reports a timeout as a timeout, not a connection problem", async () => {
+    const abort = new Error("aborted");
+    abort.name = "AbortError";
+    fetch.mockRejectedValueOnce(abort);
+    await expect(callAI(baseRequest())).rejects.toThrow("timeout");
+  });
+
+  it("stops trying further providers once the call deadline has passed", async () => {
+    storage.setItem("loci_provider_pref", "groq");
+    fetch.mockImplementationOnce(async () => {
+      vi.setSystemTime(new Date(2026, 5, 4, 15, 31, 5)); // 65 s later
+      throw Object.assign(new Error("aborted"), { name: "AbortError" });
+    });
+    await expect(callAI(baseRequest({ cerebrasKey: "test-cerebras-key", geminiKey: "test-gemini-key" }))).rejects.toThrow("timeout");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("always tries the first provider, however little time there is", async () => {
+    fetch.mockResolvedValueOnce(groqOk("First provider answers."));
+    expect(await callAI(baseRequest())).toBe("First provider answers.");
   });
 });
 

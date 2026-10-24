@@ -72,6 +72,15 @@ test("a failed brief says so and offers Brief me again", async ({ page }) => {
   await page.route("https://api.groq.com/**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content: "Sorry, no JSON here." } }] }) }));
   const brief = await openReview(page);
   await brief.getByRole("button", { name: "Brief me" }).click();
-  await expect(brief.getByRole("alert")).toHaveText("Couldn’t reach Coach. Try again.", { timeout: 8_000 });
+  await expect(brief.getByRole("alert")).toHaveText("Coach’s answer couldn’t be read. Try again.", { timeout: 8_000 });
   await expect(brief.getByRole("button", { name: "Brief me" })).toBeVisible();
+});
+
+// The cause shows: a request the provider refuses for its size is not "couldn't reach Coach".
+test("a brief the provider refuses as too large says so, not that Coach was unreachable", async ({ page }) => {
+  await page.route("https://api.groq.com/**", (route) => route.fulfill({ status: 413, contentType: "application/json", body: "{}" }));
+  const brief = await openReview(page);
+  await brief.getByRole("button", { name: "Brief me" }).click();
+  await expect(brief.getByRole("alert")).toContainText(/too large/i, { timeout: 8_000 });
+  await expect(brief.getByRole("alert")).not.toContainText(/couldn.t reach/i);
 });
