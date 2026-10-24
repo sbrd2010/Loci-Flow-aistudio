@@ -25,7 +25,9 @@ import { buildPersonaInstruction } from "../utils/coachPersona";
 import { buildProfileContext } from "../utils/coachProfile";
 import { addPinnedFact, addRecentObservation, buildLociMemoryContext, forgetFromMemory, isMemoryEnabled, parseMemoryTags, isResurrectedMemoryEntry } from "../utils/coachMemory";
 import { stripReasoningTag } from "../utils/coachReasoning";
-import { classifyContextMode, needsConversationContext, historyLimitForMode, detectRequestedCategories } from "../utils/coachContextMode";
+import { classifyContextMode, needsConversationContext, historyLimitForMode, detectRequestedCategories, detectPeriodIntent } from "../utils/coachContextMode";
+import { buildLociPeriodContext, buildLociDeadlinesContext, detectDeadlineIntent } from "../utils/coachPeriodDigest";
+import { readFocusOnce } from "../utils/readFocusOnce";
 import { buildCoachSystemPrompt } from "../utils/coachSystemPrompt";
 import {
   needsSummaryUpdate, llmHistoryStart, pendingSummaryMessages, buildPendingSummaryContext,
@@ -720,7 +722,15 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
       }
     }
     const lastFullTaskTime = getLastFullTaskTime(userId);
-    const contextMode = classifyContextMode(userText, { lastFullTaskTime, hasLastPlan: !!lastPlan });
+    // A short reply to something Coach just asked or offered ("the report one")
+    // needs the action protocol the light prompt does not carry.
+    const lastShown = chatHistory[chatHistory.length - 1];
+    const lastReplyAsked = !!lastShown && !lastShown.isUser && !isAISystemReply(lastShown.text) &&
+      (String(lastShown.text || "").trim().endsWith("?") || (lastShown.actions || []).some(a => a.state === "proposed"));
+    const contextMode = classifyContextMode(userText, { lastFullTaskTime, hasLastPlan: !!lastPlan, lastReplyAsked });
+    // "How was my week?": the numbers behind it ride with this one message.
+    const periodIntent = detectPeriodIntent(userText);
+    const deadlineIntent = !periodIntent && detectDeadlineIntent(userText);
     const isReference = needsConversationContext(userText);
     const epoch = conversationEpoch;
     const controller = new AbortController();
@@ -782,7 +792,8 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     const deadlineContext = buildLociDeadlineContext(config, now);
     const dayMapContext = buildLociDayMapContext(tasks, todayStr);
     const brainDumpContext = buildLociBrainDumpContext(brainDump);
-    const velocityContext = buildLociVelocityContext(contributions, now, getFocusWindows(config));
+    // The period digest carries the same counts, so the two are never both sent.
+    const velocityContext = periodIntent ? "" : buildLociVelocityContext(contributions, now, getFocusWindows(config));
     const remindersContext = buildLociRemindersContext(tasks, now);
     const pendingCheckinContext = buildCoachCheckinContext(config.coachCheckin, now.getTime());
     const recentlyParkedContext = buildLociRecentlyParkedContext(tasks, now);
@@ -906,7 +917,23 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     // leave the chat stuck on "Thinking…" for every later visit to this tab.
     setReplyInFlight(true, controller);
     try {
-      const reply = await callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPrompt: systemInstruction, messages, maxTokens, contextMode, reasoningEffort: "low", signal: controller.signal });
+      // Only a period or deadline question pays for the extra block. It waits for
+      // the focus log (a short, bounded read) inside the try, so Thinking and Stop
+      // already cover it.
+      let systemPrompt = systemInstruction;
+      if (contextMode === "full_task" && (periodIntent || deadlineIntent)) {
+        let block = "";
+        if (cloudSyncUnconfirmed) {
+          block = "PERIOD DIGEST AND DEADLINES: not available, because this device has not finished syncing. Say so plainly and do not guess any numbers.";
+        } else if (periodIntent) {
+          const focusRaw = await readFocusOnce(uid, periodIntent.days * (periodIntent.offset + 1), getFocusWindows(configRef.current));
+          block = `${buildLociPeriodContext({ tasks: tasksRef.current, contributions: contributionsRef.current, config: configRef.current, now, days: periodIntent.days, offset: periodIntent.offset, focusRaw })}\nAnswer how the period went from the PERIOD DIGEST: quote its numbers, say what it does not cover, and never invent days, tasks, minutes or deadlines.`;
+        } else {
+          block = buildLociDeadlinesContext({ tasks: tasksRef.current, config: configRef.current, now });
+        }
+        if (block) systemPrompt = `${systemInstruction}\n\n${block}`;
+      }
+      const reply = await callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPrompt, messages, maxTokens, contextMode, reasoningEffort: "low", signal: controller.signal });
       // The conversation was cleared while this was on its way: writing the
       // reply would bring the old chat back.
       if (epoch !== conversationEpoch) return;
@@ -1694,7 +1721,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
         )}
         {coachTab === "chat" && (
           <span className={`coach-tabs-end${sessionPill ? " has-focus-pill" : ""}`}>
-            <span className="coach-tabs-note">Reads your lists. Changes only what you tap.</span>
+            <span className="coach-tabs-note">Reads your lists. Changes tasks only when you tap.</span>
             {/* 75k: on a phone a running session takes New's place, as the
                 pill (the header that carries it on a computer is hidden on
                 phone Chat); New moves into the ⋯ menu. */}
@@ -1729,7 +1756,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
 
       {coachTab === "chat" && (
       <section ref={chatColRef} className={`coach-chat-col${hasConversation ? " has-conversation" : ""}`} id="coach-panel-chat" role="tabpanel" aria-labelledby="coach-tab-chat">
-        <div className="chat-window coach-chat">
+        <div className="chat-window coach-chat" role="log" aria-label="Conversation with Coach">
           {!hasConversation && !chatLoading && (
             <div className="coach-empty">
               <h2 className="coach-empty-title">What’s on your mind?</h2>
@@ -1743,8 +1770,17 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
           )}
           {(() => {
             const lastMentorIdx = chatHistory.reduce((last, m, i) => (!m.isUser ? i : last), -1);
+            // Keyed by the message's own time, not its position: the 40-message cap
+            // trims from the front, and a position key would hand the next
+            // message's "Show all" state to the one that shifted into its place.
+            const seen = {};
+            const msgKey = (m, idx) => {
+              const base = m.at ? `${m.at}-${m.isUser ? "u" : "c"}` : `i${idx}`;
+              seen[base] = (seen[base] || 0) + 1;
+              return seen[base] > 1 ? `${base}-${seen[base]}` : base;
+            };
             return chatHistory.map((m, idx) => (
-            <div key={idx} className={`coach-msg ${m.isUser ? "is-you" : "is-coach"}`}>
+            <div key={msgKey(m, idx)} className={`coach-msg ${m.isUser ? "is-you" : "is-coach"}`}>
               {(() => {
                 const kicker = <span className="coach-msg-kicker"><span className="coach-msg-name">{m.isUser ? "You" : coachName}</span>{m.at ? <><span className="coach-msg-sep"> · </span><span className="coach-msg-time">{clockHHMM(m.at)}</span></> : null}</span>;
                 return m.isUser ? kicker : null;
@@ -1871,7 +1907,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
           ));
           })()}
           {chatLoading && (
-            <div className="coach-msg is-coach is-thinking">
+            <div className="coach-msg is-coach is-thinking" role="status">
               <span className="coach-msg-kicker">{coachName}</span>
               <span className="coach-msg-text">Thinking…</span>
               <button type="button" className="coach-stop" onClick={() => replyController?.abort()}>Stop</button>
