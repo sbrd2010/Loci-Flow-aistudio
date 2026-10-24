@@ -51,7 +51,7 @@ function Group({ kicker, warn = false, folded = false, children }) {
   );
 }
 
-export default function CoachBrief({ brief, status = "idle", error = "", lead = null, weekdayLine = null, tasks = [], horizonName = (id) => id, onBriefMe, onAsk, onMove, onMakeOneThing, onSplit, actionsDisabled = false }) {
+export default function CoachBrief({ brief, status = "idle", error = "", lead = null, weekdayLine = null, tasks = [], horizonName = (id) => id, onBriefMe, onAsk, onMove, onMakeOneThing, onSplit, actionsDisabled = false, briefDisabled = false }) {
   // What this session applied, by line: { label, undo }.
   const [done, setDone] = useState({});
   useEffect(() => { setDone({}); }, [brief?.at]);
@@ -81,7 +81,7 @@ export default function CoachBrief({ brief, status = "idle", error = "", lead = 
     <>
       <SectionHead num="01" title="Coach’s brief">
         {brief && status !== "running" && (
-          <span className="br-stamp">Read {stamp(brief.at)} <button type="button" className="br-link br-refresh" onClick={onBriefMe}>Refresh</button></span>
+          <span className="br-stamp">Read {stamp(brief.at)} <button type="button" className="br-link br-refresh" disabled={briefDisabled} onClick={onBriefMe}>Refresh</button></span>
         )}
       </SectionHead>
       {lead && <p className="br-lead">{lead}</p>}
@@ -95,7 +95,7 @@ export default function CoachBrief({ brief, status = "idle", error = "", lead = 
         <p className="br-lede">Coach reads today, the last 7 days and the last 30, and tells you how it went, what it sees, and what could change. Nothing changes until you tap.</p>
         {status === "running"
           ? <p className="br-status" role="status">Reading 3 periods…</p>
-          : <button type="button" className="br-run" onClick={onBriefMe}>Brief me</button>}
+          : <button type="button" className="br-run" disabled={briefDisabled} onClick={onBriefMe}>Brief me</button>}
         {status === "error" && <p className="br-error" role="alert">{error || "Couldn’t reach Coach. Try again."}</p>}
         <p className="br-privacy">Sends summary numbers and up to 10 open tasks (title, first step, front and category) to your AI provider.</p>
       </div>

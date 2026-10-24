@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   appendAIUsageWarning,
+  stripAIUsageNote,
   checkAndRecordAIUsage,
   formatAIUsageWarning,
   getDailyAIUsageWarning,
@@ -117,5 +118,13 @@ describe("AI usage guardrails", () => {
   it("appends the warning without changing replies that do not need a warning", () => {
     expect(appendAIUsageWarning("Start with the first tiny step.", null)).toBe("Start with the first tiny step.");
     expect(appendAIUsageWarning("Start with the first tiny step.", { threshold: "50%", used: 60, limit: 120, remaining: 60 })).toContain("AI usage note");
+  });
+
+  it("strips the appended note back off, and leaves a reply without one alone", () => {
+    const warning = { threshold: "80%", used: 96, limit: 120, remaining: 24 };
+    const withNote = appendAIUsageWarning("Start with the first tiny step.", warning);
+    expect(stripAIUsageNote(withNote)).toBe("Start with the first tiny step.");
+    expect(stripAIUsageNote("Start with the first tiny step.")).toBe("Start with the first tiny step.");
+    expect(stripAIUsageNote(null)).toBe("");
   });
 });

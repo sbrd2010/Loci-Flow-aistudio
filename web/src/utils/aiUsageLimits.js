@@ -165,3 +165,9 @@ export function appendAIUsageWarning(reply, warning) {
   if (!note) return reply;
   return `${String(reply || "").trim()}\n\n${note}`;
 }
+
+// The note appendAIUsageWarning adds is for the person reading the reply. Text
+// kept for the model later (chat history) should not carry it.
+export function stripAIUsageNote(text) {
+  return String(text || "").replace(/\n\nAI usage note:[\s\S]*$/, "");
+}

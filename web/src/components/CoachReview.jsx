@@ -105,7 +105,7 @@ export default function CoachReview({ payload = {}, uid, period = "7d", renderBr
     <div className="rv">
       {renderBrief && (
         <section className="rv-sec rv-brief" aria-label="Coach's brief">
-          {renderBrief({ focusRaw: status === "ready" ? raw || {} : null, frontNameOf, lead, weekdayLine })}
+          {renderBrief({ focusRaw: status === "ready" ? raw || {} : null, focusLoading: status === "loading", frontNameOf, lead, weekdayLine })}
         </section>
       )}
       <section className="rv-facts" aria-label="The facts">

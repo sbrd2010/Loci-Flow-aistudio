@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import FocusPill from "./FocusPill";
 import { auth } from "../firebase";
-import { callAI, describeAIError, getAIKeys, hasAIKey } from "../utils/aiCall";
+import { callAI, describeAIError, getAIKeys, hasAIKey, isAISystemReply } from "../utils/aiCall";
+import { stripAIUsageNote } from "../utils/aiUsageLimits";
 import { buildLocalSafetyReply } from "../utils/crisisSafety";
 import { isEventTask } from "../utils/dayMapRoute";
 import ConfirmDialog from "./ConfirmDialog";
@@ -102,6 +103,15 @@ function getLastFullTaskTime(userId) {
 }
 
 const NO_MESSAGES = [];
+const NO_KEY_REPLY = "🔑 Add an AI key in **Settings → AI Keys** to enable chat.";
+// A tapped chat action's Undo record. The Coach tab remounts on every tab
+// switch, so it is kept here (not in state) for a while. It holds only ids
+// and the time the tap left the task, and Undo re-reads the live task list.
+const ACTION_UNDO_TTL_MS = 30 * 60 * 1000;
+let savedActionUndo = {};
+const readSavedActionUndo = () => Object.fromEntries(
+  Object.entries(savedActionUndo).filter(([, rec]) => Date.now() - (rec.at || 0) < ACTION_UNDO_TTL_MS)
+);
 // Q50: the button under a reply, and what it reads once applied.
 const COACH_ACTION_LABELS = { COMPLETE_TASK: "Mark done", SET_NOW_FOCUS: "Make it your now task", START_FOCUS: "Start focus", ADD_TASK: "Add to Today", PARK_TASK: "Park" };
 const COACH_ACTION_DONE = { COMPLETE_TASK: "Marked done", SET_NOW_FOCUS: "Your now task", START_FOCUS: "Focus started", ADD_TASK: "Added", PARK_TASK: "Parked" };
@@ -458,7 +468,12 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
 
   // Q50: a reply's action is a button. A tap applies it, and the button
   // becomes "✓ Marked done · task" with Undo for this session.
-  const [actionUndo, setActionUndo] = useState({});
+  const [actionUndo, setActionUndoState] = useState(readSavedActionUndo);
+  const setActionUndo = (update) => setActionUndoState(prev => {
+    const next = typeof update === "function" ? update(prev) : update;
+    savedActionUndo = next;
+    return next;
+  });
   // Each offered action has its own id (indexes shift when old messages are
   // trimmed). `update` maps that action, or every action of its reply.
   const withActionState = (history, actionId, update, wholeReply = false) => history.map(m => (
@@ -495,7 +510,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     if (a.type === "START_FOCUS" && !started) return;
     // Undo puts back only this change: it checks the task is as the tap left it.
     const appliedLastUpdated = updatedPayload.tasks.find(t => t.uuid === r.task.uuid)?.lastUpdated ?? null;
-    setActionUndo(u => ({ ...u, [actionId]: { type: a.type, taskUuid: r.task.uuid, prevPinnedUuid, localDateStr, appliedLastUpdated, focusSessionId: started?.focusSessionId || null } }));
+    setActionUndo(u => ({ ...u, [actionId]: { type: a.type, taskUuid: r.task.uuid, prevPinnedUuid, localDateStr, appliedLastUpdated, focusSessionId: started?.focusSessionId || null, at: Date.now() } }));
   };
   const handleUndoCoachAction = (actionId) => {
     const key = actionId;
@@ -664,7 +679,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     // in-memory regardless — only the immediate, separate persistence is
     // removed.
     if (!hasAnyKey) {
-      const replyMsg = { text: "🔑 Add an AI key in **Settings → AI Keys** to enable chat.", isUser: false, at: Date.now() };
+      const replyMsg = { text: NO_KEY_REPLY, isUser: false, at: Date.now() };
       const withReply = [...savedHistory, replyMsg];
       const { history: savedWithReply, removedCount } =
         trimChatHistoryWithCursor(withReply, MAX_DB_HISTORY, summaryAfterEarlyTrim);
@@ -837,7 +852,11 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
       pendingSummaryContext,
     });
 
-    const messages = trimmedForLLM.map(m => ({ role: m.isUser ? "user" : "assistant", content: m.text }));
+    // An error or limit notice shown in the chat was never said by the Coach:
+    // left in, the model repeats it, and the usage note rides along with it.
+    const messages = trimmedForLLM
+      .filter(m => m.isUser || !(m.text === NO_KEY_REPLY || isAISystemReply(m.text)))
+      .map(m => ({ role: m.isUser ? "user" : "assistant", content: m.isUser ? m.text : stripAIUsageNote(m.text) }));
 
     let maxTokens = 450;
     if (contextMode === "light") {
@@ -1441,7 +1460,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     } catch (err) {
       console.error("[CoachTab] Coach's brief failed:", err);
       setBriefStatus("error");
-      setBriefError("Couldn’t reach Coach. Try again.");
+      setBriefError(err?.message === "unreadable brief" ? "Coach’s answer couldn’t be read. Try again." : describeAIError(err));
     }
   };
   const handleAskAboutBrief = (brief) => {
@@ -1742,7 +1761,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
                         return (
                           <button key={i} type="button" className="coach-task-chip" disabled={chatLoading || cloudSyncUnconfirmed}
                             onClick={() => handleCoachAction(a.id)}>
-                            {COACH_ACTION_LABELS[a.type] || a.type}{proposed.length > 1 ? ` · ${title}` : ""}
+                            {COACH_ACTION_LABELS[a.type] || a.type}{title ? ` · ${title}` : ""}
                           </button>
                         );
                       }
@@ -1865,7 +1884,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
       {/* Review (73a/b): Coach's brief first, then the numbers behind it. */}
       {coachTab === "review" && (
       <div id="coach-panel-review" role="tabpanel" aria-labelledby="coach-tab-review">
-        <CoachReview payload={payload} uid={uid} period={reviewPeriod} onOpenDayMap={onOpenDayMap} renderBrief={({ focusRaw, frontNameOf, lead, weekdayLine }) => (
+        <CoachReview payload={payload} uid={uid} period={reviewPeriod} onOpenDayMap={onOpenDayMap} renderBrief={({ focusRaw, focusLoading, frontNameOf, lead, weekdayLine }) => (
           <CoachBrief
             brief={config.coachBrief || null}
             status={briefStatus}
@@ -1880,6 +1899,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
             onMakeOneThing={handleBriefOneThing}
             onSplit={handleBriefSplit}
             actionsDisabled={cloudSyncUnconfirmed}
+            briefDisabled={focusLoading}
           />
         )} />
       </div>

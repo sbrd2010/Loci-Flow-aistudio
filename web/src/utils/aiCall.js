@@ -21,6 +21,14 @@ const AI_TIMEOUT_MS = 30000;
 const RATE_LIMIT_COOLDOWN_MS = 30000;
 const SERVICE_UNAVAILABLE_COOLDOWN_MS = 10000;
 const MAX_RETRY_AFTER_MS = 5 * 60 * 1000;
+// One callAI() may try several providers, each with its own length retry;
+// without a ceiling that adds up to minutes of "Thinking…". The deadline stops
+// new attempts and shortens the per-request timeout, never below the floor.
+const CALL_DEADLINE_MS = 60000;
+const MIN_ATTEMPT_MS = 3000;
+// A request a provider rejected as too large (413) is rejected again every
+// time at that size, so it is not re-sent for a while.
+const TOO_LARGE_COOLDOWN_MS = 5 * 60 * 1000;
 
 // Per-provider cooldown so a rate-limited provider is skipped (not re-hit)
 // on subsequent calls until its cooldown expires. Keyed by provider name +
@@ -28,6 +36,7 @@ const MAX_RETRY_AFTER_MS = 5 * 60 * 1000;
 // old key's 429 isn't blocked by the old key's cooldown.
 const providerCooldownUntil = new Map();
 const providerCooldownReason = new Map();
+const providerTooLarge = new Map(); // cooldown key -> { chars, until }
 
 // One-way bucketing key for cooldown state only — never logged, never used
 // to recover the key.
@@ -114,9 +123,12 @@ function logEmptyReplyDiagnostics(provider, data, message) {
   });
 }
 
-function fetchWithTimeout(url, opts) {
+function fetchWithTimeout(url, opts, deadline) {
   const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+  const timeoutMs = deadline
+    ? Math.min(AI_TIMEOUT_MS, Math.max(MIN_ATTEMPT_MS, deadline - Date.now()))
+    : AI_TIMEOUT_MS;
+  const id = setTimeout(() => controller.abort(), timeoutMs);
   return fetch(url, { ...opts, signal: controller.signal }).finally(() => clearTimeout(id));
 }
 
@@ -141,6 +153,7 @@ function parseRetryAfterMs(res) {
 export function resetProviderCooldowns() {
   providerCooldownUntil.clear();
   providerCooldownReason.clear();
+  providerTooLarge.clear();
 }
 
 // Helper to determine status errors
@@ -162,7 +175,11 @@ export function classifyAIError(err) {
   if (message === "429") return "rate_limit";
   if (message === "503") return "service_unavailable";
   if (/_(401|403)$/.test(message || "")) return "invalid_key";
-  if (err?.name === "AbortError" || err instanceof TypeError) return "network";
+  // 413 is the provider saying this one request is over its size limit;
+  // zai_too_large is the same verdict reached locally before sending.
+  if (message === "zai_too_large" || /_413$/.test(message || "")) return "payload_too_large";
+  if (err?.name === "AbortError") return "timeout";
+  if (err instanceof TypeError) return "network";
   return "unknown";
 }
 
@@ -170,24 +187,39 @@ export function classifyAIError(err) {
 // code). Always makes clear that task data is untouched and this is a
 // provider/connectivity issue, not the Coach "forgetting" or failing to
 // reason — so callers can show this directly without their own mapping.
+const AI_ERROR_COPY = {
+  "429": "AI is temporarily busy or rate-limited. Your tasks are safe — please wait a minute and try again.",
+  "503": "AI service is temporarily unavailable. Your tasks are safe — please try again in a moment.",
+  invalid_key: "Your AI key looks invalid or unauthorized. Your tasks are safe — please check your AI key in Settings.",
+  network: "Couldn't reach the AI service — check your connection. Your tasks are safe, please try again.",
+  timeout: "The AI took too long to answer. Your tasks are safe — please try again.",
+  payload_too_large: "This request was too large for the AI provider. Your tasks are safe — try a shorter message or start a new conversation.",
+  no_key: "Add an AI key in Settings to chat with your Coach.",
+  all_providers_failed: "The AI providers couldn't answer right now. Your tasks are safe — please try again in a moment.",
+  usage_limit: "You've reached your AI limit for now. Your tasks are safe — it resets automatically.",
+  other: "Something went wrong. Your tasks are safe — please try again.",
+};
+
 export function describeAIError(err) {
   const message = (err instanceof Error ? err.message : err) || "";
-  switch (message) {
-    case "429":
-      return "AI is temporarily busy or rate-limited. Your tasks are safe — please wait a minute and try again.";
-    case "503":
-      return "AI service is temporarily unavailable. Your tasks are safe — please try again in a moment.";
-    case "invalid_key":
-      return "Your AI key looks invalid or unauthorized. Your tasks are safe — please check your AI key in Settings.";
-    case "network":
-      return "Couldn't reach the AI service — check your connection. Your tasks are safe, please try again.";
-    case "no_key":
-      return "Add an AI key in Settings to chat with your Coach.";
-    case "all_providers_failed":
-      return "AI is temporarily busy or rate-limited. Your tasks are safe. Please wait a minute and try again.";
-    default:
-      return "Something went wrong. Your tasks are safe — please try again.";
-  }
+  // The limit message carries the live counts ("used 120/120"), so it is read
+  // off the error rather than from this table.
+  if (message === "usage_limit" && err instanceof Error && err.limitMessage) return err.limitMessage;
+  return (Object.prototype.hasOwnProperty.call(AI_ERROR_COPY, message) && AI_ERROR_COPY[message]) || AI_ERROR_COPY.other;
+}
+
+// Earlier builds saved the wording below as Coach messages.
+const LEGACY_AI_ERROR_COPY = [
+  "AI is temporarily busy or rate-limited. Your tasks are safe. Please wait a minute and try again.",
+];
+const AI_ERROR_TEXTS = new Set([...Object.values(AI_ERROR_COPY), ...LEGACY_AI_ERROR_COPY]);
+
+// True for a saved message that is only an error or limit notice, never a real
+// answer: it is shown to the user but must not be replayed to the model as
+// something the assistant said.
+export function isAISystemReply(text) {
+  const t = String(text || "").trim();
+  return AI_ERROR_TEXTS.has(t) || /^AI (daily|hourly) limit reached:/.test(t);
 }
 
 function getAIUsageUserId() {
@@ -201,7 +233,7 @@ function getAIUsageUserId() {
 // budget recovers most of these without retrying indefinitely.
 const GROQ_RETRY_TOKEN_CAP = 4000;
 
-async function requestGroq(groqKey, systemPrompt, messages, tokenBudget, reasoningEffort) {
+async function requestGroq(groqKey, systemPrompt, messages, tokenBudget, reasoningEffort, deadline) {
   const res = await fetchWithTimeout(GROQ_URL, {
     method: "POST",
     headers: {
@@ -216,16 +248,16 @@ async function requestGroq(groqKey, systemPrompt, messages, tokenBudget, reasoni
       top_p: 0.9,
       ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {})
     })
-  });
+  }, deadline);
   if (!res.ok) throw statusError("groq", res.status, res);
   const data = await res.json();
   const message = data.choices?.[0]?.message;
   return { reply: extractMessageContent(message), usage: data.usage, finishReason: data.choices?.[0]?.finish_reason, data, message };
 }
 
-async function callGroq(groqKey, systemPrompt, messages, maxTokens, reasoningEffort) {
+async function callGroq(groqKey, systemPrompt, messages, maxTokens, reasoningEffort, deadline) {
   const initialBudget = maxTokens ?? 300;
-  let { reply, usage, finishReason, data, message } = await requestGroq(groqKey, systemPrompt, messages, initialBudget, reasoningEffort);
+  let { reply, usage, finishReason, data, message } = await requestGroq(groqKey, systemPrompt, messages, initialBudget, reasoningEffort, deadline);
 
   // Retry on finish_reason "length" alone, not just an empty reply — a
   // non-empty-but-truncated reply (hidden reasoning ate most, not all, of
@@ -234,7 +266,7 @@ async function callGroq(groqKey, systemPrompt, messages, maxTokens, reasoningEff
   if (finishReason === "length") {
     const retryBudget = Math.min(Math.max(initialBudget * 2, 1000), GROQ_RETRY_TOKEN_CAP);
     if (retryBudget > initialBudget) {
-      ({ reply, usage, finishReason, data, message } = await requestGroq(groqKey, systemPrompt, messages, retryBudget, reasoningEffort));
+      ({ reply, usage, finishReason, data, message } = await requestGroq(groqKey, systemPrompt, messages, retryBudget, reasoningEffort, deadline));
     }
   }
 
@@ -261,7 +293,7 @@ const CEREBRAS_RETRY_TOKEN_CAP = 4000;
 // same naming GROQ_MODEL above uses) in case a deployment copies that form.
 const CEREBRAS_SUPPORTS_REASONING_EFFORT = /(^|\/)gpt-oss/i.test(CEREBRAS_MODEL);
 
-async function requestCerebras(cerebrasKey, systemPrompt, messages, tokenBudget, reasoningEffort) {
+async function requestCerebras(cerebrasKey, systemPrompt, messages, tokenBudget, reasoningEffort, deadline) {
   const res = await fetchWithTimeout(CEREBRAS_URL, {
     method: "POST",
     headers: {
@@ -279,16 +311,16 @@ async function requestCerebras(cerebrasKey, systemPrompt, messages, tokenBudget,
       top_p: 0.9,
       ...(reasoningEffort && CEREBRAS_SUPPORTS_REASONING_EFFORT ? { reasoning_effort: reasoningEffort } : {})
     })
-  });
+  }, deadline);
   if (!res.ok) throw statusError("cerebras", res.status, res);
   const data = await res.json();
   const message = data.choices?.[0]?.message;
   return { reply: extractMessageContent(message), usage: data.usage, finishReason: data.choices?.[0]?.finish_reason, data, message };
 }
 
-async function callCerebras(cerebrasKey, systemPrompt, messages, maxTokens, reasoningEffort) {
+async function callCerebras(cerebrasKey, systemPrompt, messages, maxTokens, reasoningEffort, deadline) {
   const initialBudget = maxTokens ?? 300;
-  let { reply, usage, finishReason, data, message } = await requestCerebras(cerebrasKey, systemPrompt, messages, initialBudget, reasoningEffort);
+  let { reply, usage, finishReason, data, message } = await requestCerebras(cerebrasKey, systemPrompt, messages, initialBudget, reasoningEffort, deadline);
 
   // Retry on finish_reason "length" alone, not just an empty reply — a
   // non-empty-but-truncated reply (hidden reasoning ate most, not all, of
@@ -303,7 +335,7 @@ async function callCerebras(cerebrasKey, systemPrompt, messages, maxTokens, reas
     // get an identical second request with no chance of a different result.
     const retryBudget = Math.min(Math.max(initialBudget * 2, 1000), CEREBRAS_RETRY_TOKEN_CAP);
     if (retryBudget > initialBudget) {
-      ({ reply, usage, finishReason, data, message } = await requestCerebras(cerebrasKey, systemPrompt, messages, retryBudget, reasoningEffort));
+      ({ reply, usage, finishReason, data, message } = await requestCerebras(cerebrasKey, systemPrompt, messages, retryBudget, reasoningEffort, deadline));
     }
   }
 
@@ -314,7 +346,7 @@ async function callCerebras(cerebrasKey, systemPrompt, messages, maxTokens, reas
   return { reply, usage };
 }
 
-async function callGemini(geminiKey, systemPrompt, messages, maxTokens) {
+async function callGemini(geminiKey, systemPrompt, messages, maxTokens, deadline) {
   // Gemini requires contents to start with "user" role - strip leading AI messages
   let contents = messages.map(m => ({
     role: m.role === "assistant" ? "model" : "user",
@@ -336,7 +368,7 @@ async function callGemini(geminiKey, systemPrompt, messages, maxTokens) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(requestBody)
-  });
+  }, deadline);
   if (!res.ok) throw statusError("gemini", res.status, res);
   const data = await res.json();
   const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
@@ -557,7 +589,7 @@ function compressZaiContext(systemPrompt, messages) {
   return { systemPrompt: trimmedSystemPrompt, messages: trimmedMessages };
 }
 
-async function callZai(zaiKey, systemPrompt, messages, maxTokens) {
+async function callZai(zaiKey, systemPrompt, messages, maxTokens, deadline) {
   if (zaiInFlight) throw new Error("zai_busy");
 
   // A caller requesting more than the cap (e.g. MindBox's JSON organizer) would
@@ -589,7 +621,7 @@ async function callZai(zaiKey, systemPrompt, messages, maxTokens) {
         max_tokens: maxTokens ?? 300,
         temperature: 0.4
       })
-    });
+    }, deadline);
     if (!res.ok) throw statusError("zai", res.status, res);
     const data = await res.json();
     const message = data.choices?.[0]?.message;
@@ -640,7 +672,15 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPr
   if (order.length === 0) throw new Error("no_key");
 
   const usage = checkAndRecordAIUsage({ userId: getAIUsageUserId() });
-  if (!usage.allowed) return usage.message;
+  if (!usage.allowed) {
+    // Thrown, not returned: a returned message reads as a real reply and ends
+    // up saved, parsed and (in Coach) replayed to the model as one.
+    const limitErr = new Error("usage_limit");
+    limitErr.limitMessage = usage.message;
+    throw limitErr;
+  }
+  const deadline = Date.now() + CALL_DEADLINE_MS;
+  const payloadChars = computeZaiPayloadChars(systemPrompt, messages);
 
   // Request-local only (cleared every callAI invocation) — tracks every
   // attempted provider's failure so the final error reflects the real
@@ -656,16 +696,25 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPr
       logAICallDiagnostics({ provider: provider.name, outcome: "cooldown_skip", contextMode, systemPrompt, messages });
       continue; // skip the provider network call; no extra provider attempt
     }
+    const tooLarge = providerTooLarge.get(ckey);
+    if (tooLarge && Date.now() < tooLarge.until && payloadChars >= tooLarge.chars) {
+      const sizeErr = new Error(`${provider.name}_413`);
+      attempts.push({ err: sizeErr, classification: classifyAIError(sizeErr), live: false });
+      logAICallDiagnostics({ provider: provider.name, outcome: "too_large_skip", contextMode, systemPrompt, messages });
+      continue; // this provider already refused a request this size
+    }
+    // Out of time: stop trying providers once at least one has really been tried.
+    if (deadline - Date.now() < MIN_ATTEMPT_MS && attempts.some(a => a.live)) break;
     try {
       let result;
       if (provider.name === "groq") {
-        result = await callGroq(provider.key, systemPrompt, messages, maxTokens, reasoningEffort);
+        result = await callGroq(provider.key, systemPrompt, messages, maxTokens, reasoningEffort, deadline);
       } else if (provider.name === "cerebras") {
-        result = await callCerebras(provider.key, systemPrompt, messages, maxTokens, reasoningEffort);
+        result = await callCerebras(provider.key, systemPrompt, messages, maxTokens, reasoningEffort, deadline);
       } else if (provider.name === "zai") {
-        result = await callZai(provider.key, systemPrompt, messages, maxTokens);
+        result = await callZai(provider.key, systemPrompt, messages, maxTokens, deadline);
       } else {
-        result = await callGemini(provider.key, systemPrompt, messages, maxTokens);
+        result = await callGemini(provider.key, systemPrompt, messages, maxTokens, deadline);
       }
       const { reply, usage: callUsage } = result;
       logAICallDiagnostics({ provider: provider.name, outcome: "ok", contextMode, systemPrompt, messages, usage: callUsage });
@@ -678,6 +727,9 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPr
       } else if (err.message === "503") {
         providerCooldownUntil.set(ckey, Date.now() + (err.retryAfterMs ?? SERVICE_UNAVAILABLE_COOLDOWN_MS));
         providerCooldownReason.set(ckey, "503");
+      } else if (/_413$/.test(err.message)) {
+        const known = providerTooLarge.get(ckey);
+        providerTooLarge.set(ckey, { chars: Math.min(known?.chars ?? Infinity, payloadChars), until: Date.now() + TOO_LARGE_COOLDOWN_MS });
       }
       logAICallDiagnostics({ provider: provider.name, outcome: err.message, retryAfterMs: err.retryAfterMs, contextMode, systemPrompt, messages });
       if (provider !== order[order.length - 1]) {
@@ -702,6 +754,10 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPr
   const serviceUnavailable = findAttempt("service_unavailable");
   if (serviceUnavailable) throw serviceUnavailable.err;
   if (findAttempt("network")) throw new Error("network");
+  if (findAttempt("timeout")) throw new Error("timeout");
+  // Only when waiting could not help: every provider that was really tried
+  // (or, if none was, every one skipped) refused the request for its size.
+  if (decisionAttempts.length > 0 && decisionAttempts.every(a => a.classification === "payload_too_large")) throw new Error("payload_too_large");
   throw new Error("all_providers_failed");
 }
 
