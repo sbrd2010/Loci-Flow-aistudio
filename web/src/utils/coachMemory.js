@@ -211,11 +211,20 @@ export function describeMemoryChange(before = {}, { pinnedFacts = [], observatio
 // The line added under a reply that changed memory or set a check-in. Plain
 // text on purpose: chat messages carry only text, so it is stripped again
 // before the history goes back to the model.
-const SAVED_NOTE_RE = /\n\n\*(?:(?:Saved to|Removed from) Coach memory|Check-in set)[^\n]*\*$/;
+// The closing "*" is optional: the 5,000-character chat limit cuts text from the
+// end, and a cut note must still be stripped before the history is replayed.
+const SAVED_NOTE_RE = /\n\n\*(?:(?:Saved to|Removed from) Coach memory|Check-in set)[^\n]*$/;
+// A note stays short whatever the reply changed: a few entries, each cut.
+const NOTE_MAX_ENTRIES = 3;
+const NOTE_ENTRY_MAX_CHARS = 80;
+const noteEntries = (texts) => {
+  const shown = texts.slice(0, NOTE_MAX_ENTRIES).map(t => `“${t.length > NOTE_ENTRY_MAX_CHARS ? `${t.slice(0, NOTE_ENTRY_MAX_CHARS)}…` : t}”`);
+  return texts.length > NOTE_MAX_ENTRIES ? `${shown.join(", ")} and ${texts.length - NOTE_MAX_ENTRIES} more` : shown.join(", ");
+};
 export function savedNote({ saved = [], removed = [], checkinMinutes = null } = {}) {
   const parts = [];
-  if (saved.length) parts.push(`Saved to Coach memory: ${saved.map(t => `“${t}”`).join(", ")}`);
-  if (removed.length) parts.push(`Removed from Coach memory: ${removed.map(t => `“${t}”`).join(", ")}`);
+  if (saved.length) parts.push(`Saved to Coach memory: ${noteEntries(saved)}`);
+  if (removed.length) parts.push(`Removed from Coach memory: ${noteEntries(removed)}`);
   if (checkinMinutes != null) parts.push(`Check-in set for ${checkinMinutes} min`);
   return parts.length ? `*${parts.join(". ")}*` : "";
 }

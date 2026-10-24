@@ -554,6 +554,15 @@ describe("describeMemoryChange / savedNote", () => {
     expect(savedNote(change)).toBe("");
   });
 
+  it("keeps the note short however many entries a FORGET removes, and still strips a cut-off note", () => {
+    const many = Array.from({ length: 45 }, (_, i) => `User likes mornings for deep work number ${i} ${"x".repeat(150)}`);
+    const note = savedNote({ removed: many });
+    expect(note.length).toBeLessThan(500);
+    expect(note).toContain("and 42 more");
+    const cut = `Noted.\n\n${note}`.slice(0, -40); // the cap cut the end, closing "*" gone
+    expect(stripSavedNote(cut)).toBe("Noted.");
+  });
+
   it("names a check-in, and the note is stripped again before the model sees the reply", () => {
     const note = savedNote({ saved: ["User prefers mornings."], checkinMinutes: 10 });
     expect(note).toContain("Check-in set for 10 min");
