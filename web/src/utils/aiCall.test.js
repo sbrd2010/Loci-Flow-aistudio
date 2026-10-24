@@ -185,13 +185,33 @@ describe("AI call resilience", () => {
     expect(fetch.mock.calls.every(c => String(c[0]).includes("api.groq.com"))).toBe(true);
   });
 
-  it("with Only my provider on but no key for it, nothing is sent", async () => {
+  it("with Only my provider on but no key for it, nothing is sent, and the error says why", async () => {
     storage.setItem("loci_provider_pref", "gemini");
     storage.setItem("loci_provider_only", "1");
 
-    await expect(callAI(baseRequest({ geminiKey: "" }))).rejects.toThrow("no_key");
+    const err = await callAI(baseRequest({ geminiKey: "" })).catch(e => e);
 
+    expect(err.message).toBe("no_key_only");
+    expect(describeAIError(err)).toMatch(/has no key.*turn that setting off/);
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("with Only my provider on and no key anywhere, it is the plain no-key error", async () => {
+    storage.setItem("loci_provider_pref", "gemini");
+    storage.setItem("loci_provider_only", "1");
+
+    await expect(callAI(baseRequest({ groqKey: "", geminiKey: "" }))).rejects.toThrow("no_key");
+  });
+
+  it("with Only my provider on, a failure of the one provider is not reported as 'providers'", async () => {
+    storage.setItem("loci_provider_pref", "groq");
+    storage.setItem("loci_provider_only", "1");
+    fetch.mockResolvedValue(providerError(400));
+
+    const err = await callAI(baseRequest()).catch(e => e);
+
+    expect(err.message).toBe("only_provider_failed");
+    expect(describeAIError(err)).toMatch(/chosen AI provider.*turn off Only use my provider/);
   });
 
   it("appends the 100 percent daily usage warning on the final allowed call", async () => {

@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import FocusPill from "./FocusPill";
 import { auth } from "../firebase";
-import { callAI, describeAIError, getAIKeys, hasAIKey, isAISystemReply } from "../utils/aiCall";
+import { callAI, describeAIError, getAIKeys, hasAIKey, isAISystemReply, isOnlyProviderKeyMissing } from "../utils/aiCall";
 import { stripAIUsageNote } from "../utils/aiUsageLimits";
-import { buildLocalSafetyReply, localSafetyTurns } from "../utils/crisisSafety";
+import { buildLocalSafetyReply, localSafetyTurns, PRIVATE_REPLY_TURN, PRIVATE_USER_TURN } from "../utils/crisisSafety";
 import { isEventTask } from "../utils/dayMapRoute";
 import ConfirmDialog from "./ConfirmDialog";
 import { profileToCoachContext } from "../utils/userProfile";
@@ -703,7 +703,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     // in-memory regardless — only the immediate, separate persistence is
     // removed.
     if (!hasAnyKey) {
-      const replyMsg = { text: NO_KEY_REPLY, isUser: false, at: Date.now() };
+      const replyMsg = { text: isOnlyProviderKeyMissing() ? describeAIError(new Error("no_key_only")) : NO_KEY_REPLY, isUser: false, at: Date.now() };
       const withReply = [...savedHistory, replyMsg];
       const { history: savedWithReply, removedCount } =
         trimChatHistoryWithCursor(withReply, MAX_DB_HISTORY, summaryAfterEarlyTrim);
@@ -759,13 +759,13 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     // while unconfirmed (Codex review finding, PR #347).
     const sessionSummarySectionEnabled = !cloudSyncUnconfirmed;
     // Messages Coach answered on this device (crisis, medical) never go to a
-    // provider, so they stay out of the replayed history and the summary too.
-    // In the summary batch they keep their place (the cursor counts messages)
-    // but not their words.
+    // provider, so their words stay out of the replayed history and the summary
+    // too. The model is told that something private happened, not what; in the
+    // summary batch the turn keeps its place (the cursor counts messages).
     const privateTurns = localSafetyTurns(savedHistory);
     const pendingBatch = sessionSummarySectionEnabled && summaryUpdateNeeded
       ? pendingSummaryMessages(savedHistory, rawWindowStart, summarizedThroughIndex)
-          .map(m => ({ ...m, text: privateTurns.has(m) ? "(private message, answered on this device)" : stripSavedNote(m.text) }))
+          .map(m => ({ ...m, text: privateTurns.has(m) ? (m.isUser ? PRIVATE_USER_TURN : PRIVATE_REPLY_TURN) : stripSavedNote(m.text) }))
       : [];
     const pendingSummaryContext = buildPendingSummaryContext(pendingBatch);
     // How far the cursor may actually advance if this turn's summary write
@@ -893,8 +893,11 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     // An error or limit notice shown in the chat was never said by the Coach:
     // left in, the model repeats it, and the usage note rides along with it.
     const messages = trimmedForLLM
-      .filter(m => !privateTurns.has(m) && (m.isUser || !(m.text === NO_KEY_REPLY || isAISystemReply(m.text))))
-      .map(m => ({ role: m.isUser ? "user" : "assistant", content: m.isUser ? m.text : stripAIUsageNote(stripSavedNote(m.text)) }));
+      .filter(m => m.isUser || !(m.text === NO_KEY_REPLY || isAISystemReply(m.text)))
+      .map(m => ({
+        role: m.isUser ? "user" : "assistant",
+        content: privateTurns.has(m) ? (m.isUser ? PRIVATE_USER_TURN : PRIVATE_REPLY_TURN) : m.isUser ? m.text : stripAIUsageNote(stripSavedNote(m.text)),
+      }));
 
     let maxTokens = 450;
     if (contextMode === "light") {

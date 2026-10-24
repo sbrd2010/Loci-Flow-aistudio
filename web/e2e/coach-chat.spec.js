@@ -138,6 +138,8 @@ test("Coach chat: a crisis message answered on this device is not sent with the 
   const sent = JSON.stringify(bodies.map(b => b.messages.filter(m => m.role !== "system")));
   expect(sent).not.toMatch(/kill myself/i);
   expect(sent).not.toMatch(/emergency services/i);
+  // The model is told something private happened, so it does not carry on as if nothing did.
+  expect(sent).toContain("I shared something private");
 });
 
 test("Coach chat: a memory note is shown under the reply and not sent back to the model", async ({ page }) => {

@@ -182,6 +182,7 @@ test("mobile reliability: Rescue chat never reaches the AI provider on crisis la
   expect(chat).toContain("what should I do next");
   expect(chat).not.toMatch(/kill myself/i);
   expect(chat).not.toMatch(/emergency services/i);
+  expect(chat).toContain("I shared something private");
 });
 
 test("mobile reliability: Rescue chat action tag starts an in-rescue timer", async ({ page }) => {
