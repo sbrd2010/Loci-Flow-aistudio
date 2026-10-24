@@ -168,8 +168,13 @@ const PERIOD_RE = new RegExp([
   "what['’]?s stuck|what is stuck|what['’]?s been stuck|what keeps (?:getting )?(?:moved|slipping|rolling over)",
   "which (?:tasks?|ones?) (?:keep|keeps|are) (?:getting )?(?:moved|slipping|rolling|stuck|pushed)",
   "what (?:have i|am i) (?:been )?avoiding",
+  // "which of my tasks have I been putting off the longest", "what am I ignoring"
+  "(?:which|what)\\s+(?:of\\s+)?(?:my\\s+)?(?:(?:tasks?|things|items|ones?)\\s+)?(?:have|am|do)\\s+i\\s+(?:been\\s+)?(?:putting\\s+off|avoiding|ignoring|neglecting|procrastinating(?:\\s+on)?|delaying|postponing)\\b",
+  "(?:what|which)(?:['’]s| is)? (?:my |the )?oldest (?:open |unfinished )?(?:task|one)s?\\b",
   // focus time
   "how much (?:time )?(?:did|have) i (?:focus\\w*|spend|work\\w*)",
+  // "how long did I focus this week", "how many hours have I focused"
+  "how (?:long|many (?:hours|minutes|hrs|mins)) (?:did|have) i (?:been )?(?:focus\\w*|spen\\w+|work\\w*)",
   "(?:my )?focus time (?:this|last) (?:week|month)",
   // reviews
   "(?:weekly|monthly|week|month) (?:review|recap|summary)",

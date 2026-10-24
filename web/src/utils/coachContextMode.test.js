@@ -1379,6 +1379,29 @@ describe("period questions and the other phrasings that fell through to light (#
     expect(classifyContextMode("I feel terrible, how was my week")).toBe("full_task");
   });
 
+  // #555 F5: wordings the first matchers missed, found in a live probe.
+  it.each([
+    "How long did I focus this week?",
+    "how many hours have I focused this month",
+    "how many hours did I focus last week",
+    "How many hours have I been working this week?",
+    "Which of my tasks have I been putting off the longest?",
+    "what have I been putting off",
+    "which task am I ignoring?",
+    "what am I procrastinating on",
+    "what's my oldest open task?",
+  ])("reads %s as a period question, past the 10-minute downgrade too", (q) => {
+    expect(detectPeriodIntent(q)).not.toBeNull();
+    expect(classifyContextMode(q)).toBe("full_task");
+    expect(classifyContextMode(q, paced)).toBe("full_task");
+  });
+
+  it("does not take a statement or a 'should I' question for the new wordings", () => {
+    for (const q of ["I keep putting off the report, help", "How long should I focus on this?", "how long did the meeting last", "how many hours should I work today?", "should I put off the report?", "which task should I do first?"]) {
+      expect(detectPeriodIntent(q), q).toBeNull();
+    }
+  });
+
   it("does not take ordinary or look-alike messages for a period question", () => {
     for (const q of ["what did I do wrong", "remember to call mom", "how is my thesis front going?", "when should I take a break?"]) {
       expect(detectPeriodIntent(q)).toBeNull();

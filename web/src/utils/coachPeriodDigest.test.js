@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLociPeriodContext, buildLociDeadlinesContext, detectDeadlineIntent, DIGEST_FINISHED_MAX } from "./coachPeriodDigest";
+import { buildLociPeriodContext, buildLociDeadlinesContext, buildLociDeadlinesBlock, detectDeadlineIntent, DIGEST_FINISHED_MAX, DEADLINES_ANSWER_NOTE, NO_DEADLINES_NOTE, PERIOD_ANSWER_NOTE } from "./coachPeriodDigest";
 
 const NOW = new Date(2026, 9, 24, 10, 0); // Sat 24 Oct 2026, 10:00
 const DAY = 86400000;
@@ -182,6 +182,36 @@ describe("buildLociDeadlinesContext", () => {
 
   it("says 'due today' on the day", () => {
     expect(buildLociDeadlinesContext({ now: new Date(2026, 9, 30, 9), config })).toContain("due 30 Oct, due today");
+  });
+});
+
+describe("buildLociDeadlinesBlock (#555 F6, F7)", () => {
+  const config = { fronts: [{ id: "f1", name: "Paper", dueAt: "2026-10-30" }] };
+
+  it("puts the instruction after the fronts: answer from them, no task due dates, no guessed pace", () => {
+    const out = buildLociDeadlinesBlock({ now: NOW, config, message: "what's due this week?" });
+    expect(out).toContain("'Paper': due 30 Oct, in 6 days");
+    expect(out.endsWith(DEADLINES_ANSWER_NOTE)).toBe(true);
+    expect(DEADLINES_ANSWER_NOTE).toContain("Tasks have no due dates of their own");
+    expect(DEADLINES_ANSWER_NOTE).toContain("Start your reply with these front deadlines");
+    expect(DEADLINES_ANSWER_NOTE).toContain("do not list tasks as due");
+    expect(DEADLINES_ANSWER_NOTE).toContain("Say ahead or behind only when a number above shows it");
+  });
+
+  it("says plainly that nothing is due when no front has a date, but only for a real due-date question", () => {
+    expect(buildLociDeadlinesBlock({ now: NOW, config: {}, message: "what's due this week?" })).toBe(NO_DEADLINES_NOTE);
+    expect(buildLociDeadlinesBlock({ now: NOW, config: {}, message: "anything overdue" })).toBe(NO_DEADLINES_NOTE);
+    expect(buildLociDeadlinesBlock({ now: NOW, config: {}, message: "I feel so behind today" })).toBe("");
+    expect(buildLociDeadlinesBlock({ now: NOW, config: {} })).toBe("");
+  });
+});
+
+describe("PERIOD_ANSWER_NOTE (#555 F5, F7)", () => {
+  it("covers stuck questions with the untouched-tasks line, and no pace without a number", () => {
+    expect(PERIOD_ANSWER_NOTE).toContain("PERIOD DIGEST");
+    expect(PERIOD_ANSWER_NOTE).toContain("untouched-tasks line");
+    expect(PERIOD_ANSWER_NOTE).toContain("never invent days, tasks, minutes or deadlines");
+    expect(PERIOD_ANSWER_NOTE).toContain("Say ahead or behind only when a number above shows it");
   });
 });
 
