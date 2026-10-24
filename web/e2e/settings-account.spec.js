@@ -226,6 +226,8 @@ test("laptop: sections on the left, the chosen one on the right; The day's pages
   await page.getByRole("button", { name: /^Privacy What Coach sees/ }).click();
   await expect(page.getByRole("heading", { name: "Privacy", level: 2 })).toBeVisible();
   await expect(page.getByText("Parts of Mind Box")).toBeVisible();
+  await expect(page.getByText("When you ask about a week or month")).toBeVisible();
+  await expect(page.getByText("Which AI provider")).toBeVisible();
 });
 
 test("settings names can be cleared and stay cleared after leaving their pages", async ({ page }) => {

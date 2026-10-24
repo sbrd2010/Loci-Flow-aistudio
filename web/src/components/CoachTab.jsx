@@ -1721,7 +1721,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
         )}
         {coachTab === "chat" && (
           <span className={`coach-tabs-end${sessionPill ? " has-focus-pill" : ""}`}>
-            <span className="coach-tabs-note">Reads your lists. Changes only what you tap.</span>
+            <span className="coach-tabs-note">Reads your lists. Changes tasks only when you tap.</span>
             {/* 75k: on a phone a running session takes New's place, as the
                 pill (the header that carries it on a computer is hidden on
                 phone Chat); New moves into the ⋯ menu. */}
@@ -1756,7 +1756,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
 
       {coachTab === "chat" && (
       <section ref={chatColRef} className={`coach-chat-col${hasConversation ? " has-conversation" : ""}`} id="coach-panel-chat" role="tabpanel" aria-labelledby="coach-tab-chat">
-        <div className="chat-window coach-chat">
+        <div className="chat-window coach-chat" role="log" aria-label="Conversation with Coach">
           {!hasConversation && !chatLoading && (
             <div className="coach-empty">
               <h2 className="coach-empty-title">What’s on your mind?</h2>
@@ -1770,8 +1770,17 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
           )}
           {(() => {
             const lastMentorIdx = chatHistory.reduce((last, m, i) => (!m.isUser ? i : last), -1);
+            // Keyed by the message's own time, not its position: the 40-message cap
+            // trims from the front, and a position key would hand the next
+            // message's "Show all" state to the one that shifted into its place.
+            const seen = {};
+            const msgKey = (m, idx) => {
+              const base = m.at ? `${m.at}-${m.isUser ? "u" : "c"}` : `i${idx}`;
+              seen[base] = (seen[base] || 0) + 1;
+              return seen[base] > 1 ? `${base}-${seen[base]}` : base;
+            };
             return chatHistory.map((m, idx) => (
-            <div key={idx} className={`coach-msg ${m.isUser ? "is-you" : "is-coach"}`}>
+            <div key={msgKey(m, idx)} className={`coach-msg ${m.isUser ? "is-you" : "is-coach"}`}>
               {(() => {
                 const kicker = <span className="coach-msg-kicker"><span className="coach-msg-name">{m.isUser ? "You" : coachName}</span>{m.at ? <><span className="coach-msg-sep"> · </span><span className="coach-msg-time">{clockHHMM(m.at)}</span></> : null}</span>;
                 return m.isUser ? kicker : null;
@@ -1898,7 +1907,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
           ));
           })()}
           {chatLoading && (
-            <div className="coach-msg is-coach is-thinking">
+            <div className="coach-msg is-coach is-thinking" role="status">
               <span className="coach-msg-kicker">{coachName}</span>
               <span className="coach-msg-text">Thinking…</span>
               <button type="button" className="coach-stop" onClick={() => replyController?.abort()}>Stop</button>

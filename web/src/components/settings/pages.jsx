@@ -350,14 +350,17 @@ function shortDate(ts, dayStr) {
 // Q54: exactly what a Coach message sends to the AI provider. The chat's
 // privacy line links here; if what's sent changes, change both together.
 const COACH_SENDS = [
-  { title: "Your lists", sub: "Open tasks on Today and in Plan with their steps, times and reminders, plus tasks finished or parked lately." },
+  { title: "Your lists", sub: "Titles, priority, category and time estimate of your open tasks on Today and in Plan (the first few of each), their reminders, and tasks finished or parked lately. Steps go only for the task in Now Focus." },
   { title: "Your goal", sub: "The key deadline, its date and its daily target." },
   { title: "Your day", sub: "The Day map, the focus session running now, and how many tasks you finished each day." },
   { title: "Parts of Mind Box", sub: "Your 3 newest thoughts and how many wait, your Daily Anchors, and a short note after Rescue Mode." },
   { title: "Check-ins", sub: "Today's committed tasks, your evening reflection and your note for tomorrow." },
   { title: "Coach's memory", sub: "The notes in Coach memory. Nothing when memory is off." },
-  { title: "About you", sub: "What you wrote in About you, and patterns such as how often you finish tasks." },
+  { title: "About you", sub: "What you wrote in About you and Style notes, and patterns such as how often you finish tasks." },
+  { title: "When you ask about a week or month", sub: "Also the titles of up to 8 tasks you finished, your front names and deadlines, tasks left untouched for 14 days or more, and how many minutes you focused each day." },
+  { title: "When you tap Ask about this or I'm stuck", sub: "That Brief, or the task you got stuck on and its next step, goes with your next message." },
   { title: "This conversation", sub: "Recent messages and a summary of older ones." },
+  { title: "Which AI provider", sub: "Your chosen provider first. If it is busy or turns the message down, Coach tries your other providers, including any built-in key the app ships with." },
 ];
 
 export function CoachPrivacyPage({ onBack, backLabel }) {
