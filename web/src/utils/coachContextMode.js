@@ -716,11 +716,6 @@ export function needsConversationContext(message) {
   return REFERENCE_RE.test(text);
 }
 
-export function trimHistoryForDb(history, userText, maxDbHistory = 20) {
-  const withUser = [...(history || []), { text: userText, isUser: true }];
-  return withUser.length > maxDbHistory ? withUser.slice(withUser.length - maxDbHistory) : withUser;
-}
-
 // Exported separately from trimHistoryForLLM (not just inlined there) so the
 // session-summary cursor math in coachSessionSummary.js can compute the same
 // raw-window start index without duplicating the 3/10 constants and risking

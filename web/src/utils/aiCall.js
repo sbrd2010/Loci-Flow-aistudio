@@ -123,12 +123,23 @@ function logEmptyReplyDiagnostics(provider, data, message) {
   });
 }
 
-function fetchWithTimeout(url, opts, deadline) {
+function fetchWithTimeout(url, opts, limits) {
   const controller = new AbortController();
-  const timeoutMs = deadline
-    ? Math.min(AI_TIMEOUT_MS, Math.max(MIN_ATTEMPT_MS, deadline - Date.now()))
+  const timeoutMs = limits?.deadline
+    ? Math.min(AI_TIMEOUT_MS, Math.max(MIN_ATTEMPT_MS, limits.deadline - Date.now()))
     : AI_TIMEOUT_MS;
   const id = setTimeout(() => controller.abort(), timeoutMs);
+  // A caller's own signal (the Coach's Stop button) ends the request too.
+  const outer = limits?.signal;
+  const onOuterAbort = () => controller.abort();
+  if (outer) {
+    if (outer.aborted) controller.abort();
+    else outer.addEventListener("abort", onOuterAbort, { once: true });
+  }
+  // The caller's listener stays attached after the headers arrive: Stop must
+  // still end the request while the body is being read. It is harmless once the
+  // request is done (aborting a finished controller does nothing), and goes
+  // away with the signal.
   return fetch(url, { ...opts, signal: controller.signal }).finally(() => clearTimeout(id));
 }
 
@@ -233,7 +244,7 @@ function getAIUsageUserId() {
 // budget recovers most of these without retrying indefinitely.
 const GROQ_RETRY_TOKEN_CAP = 4000;
 
-async function requestGroq(groqKey, systemPrompt, messages, tokenBudget, reasoningEffort, deadline) {
+async function requestGroq(groqKey, systemPrompt, messages, tokenBudget, reasoningEffort, limits) {
   const res = await fetchWithTimeout(GROQ_URL, {
     method: "POST",
     headers: {
@@ -248,16 +259,16 @@ async function requestGroq(groqKey, systemPrompt, messages, tokenBudget, reasoni
       top_p: 0.9,
       ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {})
     })
-  }, deadline);
+  }, limits);
   if (!res.ok) throw statusError("groq", res.status, res);
   const data = await res.json();
   const message = data.choices?.[0]?.message;
   return { reply: extractMessageContent(message), usage: data.usage, finishReason: data.choices?.[0]?.finish_reason, data, message };
 }
 
-async function callGroq(groqKey, systemPrompt, messages, maxTokens, reasoningEffort, deadline) {
+async function callGroq(groqKey, systemPrompt, messages, maxTokens, reasoningEffort, limits) {
   const initialBudget = maxTokens ?? 300;
-  let { reply, usage, finishReason, data, message } = await requestGroq(groqKey, systemPrompt, messages, initialBudget, reasoningEffort, deadline);
+  let { reply, usage, finishReason, data, message } = await requestGroq(groqKey, systemPrompt, messages, initialBudget, reasoningEffort, limits);
 
   // Retry on finish_reason "length" alone, not just an empty reply — a
   // non-empty-but-truncated reply (hidden reasoning ate most, not all, of
@@ -266,7 +277,7 @@ async function callGroq(groqKey, systemPrompt, messages, maxTokens, reasoningEff
   if (finishReason === "length") {
     const retryBudget = Math.min(Math.max(initialBudget * 2, 1000), GROQ_RETRY_TOKEN_CAP);
     if (retryBudget > initialBudget) {
-      ({ reply, usage, finishReason, data, message } = await requestGroq(groqKey, systemPrompt, messages, retryBudget, reasoningEffort, deadline));
+      ({ reply, usage, finishReason, data, message } = await requestGroq(groqKey, systemPrompt, messages, retryBudget, reasoningEffort, limits));
     }
   }
 
@@ -293,7 +304,7 @@ const CEREBRAS_RETRY_TOKEN_CAP = 4000;
 // same naming GROQ_MODEL above uses) in case a deployment copies that form.
 const CEREBRAS_SUPPORTS_REASONING_EFFORT = /(^|\/)gpt-oss/i.test(CEREBRAS_MODEL);
 
-async function requestCerebras(cerebrasKey, systemPrompt, messages, tokenBudget, reasoningEffort, deadline) {
+async function requestCerebras(cerebrasKey, systemPrompt, messages, tokenBudget, reasoningEffort, limits) {
   const res = await fetchWithTimeout(CEREBRAS_URL, {
     method: "POST",
     headers: {
@@ -311,16 +322,16 @@ async function requestCerebras(cerebrasKey, systemPrompt, messages, tokenBudget,
       top_p: 0.9,
       ...(reasoningEffort && CEREBRAS_SUPPORTS_REASONING_EFFORT ? { reasoning_effort: reasoningEffort } : {})
     })
-  }, deadline);
+  }, limits);
   if (!res.ok) throw statusError("cerebras", res.status, res);
   const data = await res.json();
   const message = data.choices?.[0]?.message;
   return { reply: extractMessageContent(message), usage: data.usage, finishReason: data.choices?.[0]?.finish_reason, data, message };
 }
 
-async function callCerebras(cerebrasKey, systemPrompt, messages, maxTokens, reasoningEffort, deadline) {
+async function callCerebras(cerebrasKey, systemPrompt, messages, maxTokens, reasoningEffort, limits) {
   const initialBudget = maxTokens ?? 300;
-  let { reply, usage, finishReason, data, message } = await requestCerebras(cerebrasKey, systemPrompt, messages, initialBudget, reasoningEffort, deadline);
+  let { reply, usage, finishReason, data, message } = await requestCerebras(cerebrasKey, systemPrompt, messages, initialBudget, reasoningEffort, limits);
 
   // Retry on finish_reason "length" alone, not just an empty reply — a
   // non-empty-but-truncated reply (hidden reasoning ate most, not all, of
@@ -335,7 +346,7 @@ async function callCerebras(cerebrasKey, systemPrompt, messages, maxTokens, reas
     // get an identical second request with no chance of a different result.
     const retryBudget = Math.min(Math.max(initialBudget * 2, 1000), CEREBRAS_RETRY_TOKEN_CAP);
     if (retryBudget > initialBudget) {
-      ({ reply, usage, finishReason, data, message } = await requestCerebras(cerebrasKey, systemPrompt, messages, retryBudget, reasoningEffort, deadline));
+      ({ reply, usage, finishReason, data, message } = await requestCerebras(cerebrasKey, systemPrompt, messages, retryBudget, reasoningEffort, limits));
     }
   }
 
@@ -346,7 +357,7 @@ async function callCerebras(cerebrasKey, systemPrompt, messages, maxTokens, reas
   return { reply, usage };
 }
 
-async function callGemini(geminiKey, systemPrompt, messages, maxTokens, deadline) {
+async function callGemini(geminiKey, systemPrompt, messages, maxTokens, limits) {
   // Gemini requires contents to start with "user" role - strip leading AI messages
   let contents = messages.map(m => ({
     role: m.role === "assistant" ? "model" : "user",
@@ -368,7 +379,7 @@ async function callGemini(geminiKey, systemPrompt, messages, maxTokens, deadline
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(requestBody)
-  }, deadline);
+  }, limits);
   if (!res.ok) throw statusError("gemini", res.status, res);
   const data = await res.json();
   const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
@@ -589,7 +600,7 @@ function compressZaiContext(systemPrompt, messages) {
   return { systemPrompt: trimmedSystemPrompt, messages: trimmedMessages };
 }
 
-async function callZai(zaiKey, systemPrompt, messages, maxTokens, deadline) {
+async function callZai(zaiKey, systemPrompt, messages, maxTokens, limits) {
   if (zaiInFlight) throw new Error("zai_busy");
 
   // A caller requesting more than the cap (e.g. MindBox's JSON organizer) would
@@ -621,7 +632,7 @@ async function callZai(zaiKey, systemPrompt, messages, maxTokens, deadline) {
         max_tokens: maxTokens ?? 300,
         temperature: 0.4
       })
-    }, deadline);
+    }, limits);
     if (!res.ok) throw statusError("zai", res.status, res);
     const data = await res.json();
     const message = data.choices?.[0]?.message;
@@ -661,7 +672,7 @@ export function buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCere
   return (orders[pref] || orders.auto).map(n => available[n]).filter(Boolean);
 }
 
-export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPrompt, messages, maxTokens, contextMode, reasoningEffort }) {
+export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPrompt, messages, maxTokens, contextMode, reasoningEffort, signal }) {
   const cleanGroqKey     = (groqKey     || "").trim();
   const cleanGeminiKey   = (geminiKey   || "").trim();
   const cleanCerebrasKey = (cerebrasKey || "").trim();
@@ -680,6 +691,7 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPr
     throw limitErr;
   }
   const deadline = Date.now() + CALL_DEADLINE_MS;
+  const limits = { deadline, signal };
   const payloadChars = computeZaiPayloadChars(systemPrompt, messages);
 
   // Request-local only (cleared every callAI invocation) — tracks every
@@ -703,23 +715,29 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPr
       logAICallDiagnostics({ provider: provider.name, outcome: "too_large_skip", contextMode, systemPrompt, messages });
       continue; // this provider already refused a request this size
     }
+    if (signal?.aborted) throw new Error("cancelled");
     // Out of time: stop trying providers once at least one has really been tried.
     if (deadline - Date.now() < MIN_ATTEMPT_MS && attempts.some(a => a.live)) break;
     try {
       let result;
       if (provider.name === "groq") {
-        result = await callGroq(provider.key, systemPrompt, messages, maxTokens, reasoningEffort, deadline);
+        result = await callGroq(provider.key, systemPrompt, messages, maxTokens, reasoningEffort, limits);
       } else if (provider.name === "cerebras") {
-        result = await callCerebras(provider.key, systemPrompt, messages, maxTokens, reasoningEffort, deadline);
+        result = await callCerebras(provider.key, systemPrompt, messages, maxTokens, reasoningEffort, limits);
       } else if (provider.name === "zai") {
-        result = await callZai(provider.key, systemPrompt, messages, maxTokens, deadline);
+        result = await callZai(provider.key, systemPrompt, messages, maxTokens, limits);
       } else {
-        result = await callGemini(provider.key, systemPrompt, messages, maxTokens, deadline);
+        result = await callGemini(provider.key, systemPrompt, messages, maxTokens, limits);
       }
+      // Stopped while the reply was arriving: it is not delivered.
+      if (signal?.aborted) throw new Error("cancelled");
       const { reply, usage: callUsage } = result;
       logAICallDiagnostics({ provider: provider.name, outcome: "ok", contextMode, systemPrompt, messages, usage: callUsage });
       return appendAIUsageWarning(reply, usage.warning);
     } catch (err) {
+      // The caller stopped the request: not a provider failure, and no other
+      // provider should be tried.
+      if (signal?.aborted) throw new Error("cancelled");
       attempts.push({ err, classification: classifyAIError(err), live: true });
       if (err.message === "429") {
         providerCooldownUntil.set(ckey, Date.now() + (err.retryAfterMs ?? RATE_LIMIT_COOLDOWN_MS));

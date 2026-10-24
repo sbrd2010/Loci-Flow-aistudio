@@ -1305,6 +1305,80 @@ describe("AI call limits: payload size, timeouts and the call deadline", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("stops at once when the caller cancels mid-request, and tries no other provider", async () => {
+    storage.setItem("loci_provider_pref", "groq");
+    const controller = new AbortController();
+    fetch.mockImplementationOnce(async () => {
+      controller.abort();
+      throw Object.assign(new Error("aborted"), { name: "AbortError" });
+    });
+    await expect(callAI(baseRequest({ cerebrasKey: "test-cerebras-key", geminiKey: "test-gemini-key", signal: controller.signal })))
+      .rejects.toThrow("cancelled");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends no request at all when the signal is already aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(callAI(baseRequest({ signal: controller.signal }))).rejects.toThrow("cancelled");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("hands the caller's signal on to the request, so aborting it ends the fetch", async () => {
+    const controller = new AbortController();
+    let sentSignal = null;
+    fetch.mockImplementationOnce(async (_url, opts) => {
+      sentSignal = opts.signal;
+      expect(sentSignal.aborted).toBe(false);
+      controller.abort();
+      // Like a real fetch: the request signal aborts, and the request rejects.
+      expect(sentSignal.aborted).toBe(true);
+      throw Object.assign(new Error("aborted"), { name: "AbortError" });
+    });
+    await expect(callAI(baseRequest({ signal: controller.signal }))).rejects.toThrow("cancelled");
+    expect(sentSignal).not.toBe(controller.signal);
+  });
+
+  it("still cancels while the reply body is being read", async () => {
+    const controller = new AbortController();
+    let sent = null;
+    let finishBody = null;
+    fetch.mockImplementationOnce(async (_url, opts) => {
+      sent = opts.signal;
+      return {
+        ok: true,
+        status: 200,
+        // Headers are in; the body is still on its way.
+        json: () => new Promise((resolve, reject) => {
+          finishBody = () => (sent.aborted
+            ? reject(Object.assign(new Error("aborted"), { name: "AbortError" }))
+            : resolve({ choices: [{ message: { content: "late reply" } }] }));
+        }),
+      };
+    });
+    const call = callAI(baseRequest({ signal: controller.signal }));
+    for (let i = 0; i < 5; i += 1) await Promise.resolve();
+    expect(finishBody).toBeTypeOf("function");
+
+    controller.abort();
+    expect(sent.aborted).toBe(true);
+    finishBody();
+    await expect(call).rejects.toThrow("cancelled");
+  });
+
+  it("does not deliver a reply that finished arriving after Stop", async () => {
+    const controller = new AbortController();
+    fetch.mockImplementationOnce(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => {
+        controller.abort(); // Stop lands just as the body completes
+        return { choices: [{ message: { content: "late reply" } }] };
+      },
+    }));
+    await expect(callAI(baseRequest({ signal: controller.signal }))).rejects.toThrow("cancelled");
+  });
+
   it("always tries the first provider, however little time there is", async () => {
     fetch.mockResolvedValueOnce(groqOk("First provider answers."));
     expect(await callAI(baseRequest())).toBe("First provider answers.");

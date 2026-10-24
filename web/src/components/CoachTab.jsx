@@ -103,6 +103,23 @@ function getLastFullTaskTime(userId) {
 }
 
 const NO_MESSAGES = [];
+// The Coach tab remounts on every tab switch while a reply can still be on its
+// way, so "a reply is being written" and "stop it" live here, not in state.
+let replyInFlight = false;
+let replyController = null;
+const replyInFlightListeners = new Set();
+function setReplyInFlight(on, controller = null) {
+  replyInFlight = on;
+  replyController = on ? controller : null;
+  replyInFlightListeners.forEach(fn => fn(on));
+}
+// Bumped whenever the conversation is cleared. A reply that was started before
+// the clear checks it and is dropped, instead of writing the old chat back.
+let conversationEpoch = 0;
+function endConversation() {
+  conversationEpoch += 1;
+  replyController?.abort();
+}
 const NO_KEY_REPLY = "🔑 Add an AI key in **Settings → AI Keys** to enable chat.";
 // A tapped chat action's Undo record. The Coach tab remounts on every tab
 // switch, so it is kept here (not in state) for a while. It holds only ids
@@ -173,7 +190,12 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
 
   const chatInput = chatDraft;
   const setChatInput = setChatDraft;
-  const [chatLoading, setChatLoading] = useState(false);
+  const [chatLoading, setChatLoadingState] = useState(replyInFlight);
+  useEffect(() => {
+    replyInFlightListeners.add(setChatLoadingState);
+    setChatLoadingState(replyInFlight);
+    return () => { replyInFlightListeners.delete(setChatLoadingState); };
+  }, []);
   const chatBottomRef = useRef(null);
   const chatInputRef = useRef(null);
   const chatFormRef = useRef(null);
@@ -572,6 +594,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     if (crisisReply || isHi || isThanks || isDay || isWho || isClear || isFocus) {
       if (!pendingChip) setChatInput("");
       if (isClear) {
+        endConversation();
         saveSubPath("chatHistory", null);
         // Session summary is conversation-scoped (unlike coachMemory, which
         // stays untouched here) — reset it alongside the history it
@@ -700,7 +723,8 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     const contextMode = classifyContextMode(userText, { lastFullTaskTime, hasLastPlan: !!lastPlan });
     const isReference = needsConversationContext(userText);
     const trimmedForLLM = trimHistoryForLLM(savedHistory, contextMode, isReference);
-    setChatLoading(true);
+    const epoch = conversationEpoch;
+    const controller = new AbortController();
 
     // Session summary: same raw-window boundary trimHistoryForLLM just used,
     // computed via the shared historyLimitForMode so the two can never drift
@@ -801,12 +825,10 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     const stuckContext = stuck
       ? `STUCK IN A FOCUS SESSION: the user opened Coach from "I'm stuck" on "${stuck.title}"${stuck.step ? `, next step "${stuck.step}"` : ""}. The session is paused. This message is about what's in the way.`
       : "";
-    if (stuck) onClearStuck?.();
     // 62h: "Ask about this" attaches the brief to this message, then it clears.
     const briefContext = briefChip
       ? `COACH'S BRIEF the user is asking about (made ${briefChipLabel(briefChip)}):\n${briefToText(briefChip)}`
       : "";
-    if (briefChip) setBriefChip(null);
 
     const userMessageCount = savedHistory.filter(m => m.isUser).length;
     const isEarlyConversation = userMessageCount <= 1;
@@ -880,8 +902,18 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     // wastes token headroom every such turn (code-review finding, PR #347).
     if (summaryUpdateNeeded && sessionSummarySectionEnabled) maxTokens += 300;
 
+    // Set just before the call (not earlier) so nothing above can throw and
+    // leave the chat stuck on "Thinking…" for every later visit to this tab.
+    setReplyInFlight(true, controller);
     try {
-      const reply = await callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPrompt: systemInstruction, messages, maxTokens, contextMode, reasoningEffort: "low" });
+      const reply = await callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPrompt: systemInstruction, messages, maxTokens, contextMode, reasoningEffort: "low", signal: controller.signal });
+      // The conversation was cleared while this was on its way: writing the
+      // reply would bring the old chat back.
+      if (epoch !== conversationEpoch) return;
+      // The chips ride with the message that carried them, then they are spent
+      // (a failed call keeps them for the retry).
+      if (stuck) onClearStuck?.();
+      if (briefChip) setBriefChip(null);
       if (contextMode === "full_task") {
         localStorage.setItem(`loci_last_full_task_time_${userId}`, String(Date.now()));
       }
@@ -1227,6 +1259,15 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
         applyOrDeferCursorDecrement(historyRemovedCount + earlyRemovedCount, cloudSyncUnconfirmedRef.current);
       }
     } catch (err) {
+      // Stopped by the user (or by clearing the conversation): nothing failed,
+      // so no error notice. The message stays; they can ask again.
+      if (err?.message === "cancelled" || epoch !== conversationEpoch) {
+        // Same conversation: this turn's early trim already shortened the saved
+        // history, so the summary cursor still has to follow it. (A cleared
+        // conversation reset its own summary.)
+        if (epoch === conversationEpoch) applyOrDeferCursorDecrement(earlyRemovedCount, cloudSyncUnconfirmedRef.current);
+        return;
+      }
       console.error("[CoachTab] AI chat failed:", err);
       const hint = describeAIError(err);
 
@@ -1251,7 +1292,8 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
       // callAI(...)` (code-review finding, PR #347).
       applyOrDeferCursorDecrement(removedCount + earlyRemovedCount, cloudSyncUnconfirmedRef.current);
     } finally {
-      setChatLoading(false);
+      // Only the reply that is still the current one switches "Thinking…" off.
+      if (replyController === controller) setReplyInFlight(false);
     }
   };
 
@@ -1536,6 +1578,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
   // -- Render ----------------------------------------------------------------
 
   const clearConversation = () => {
+    endConversation();
     saveSubPath("chatHistory", null);
     clearSessionSummaryDeferredIfNeeded();
     const uId = auth?.currentUser?.uid || "signed-out";
@@ -1831,6 +1874,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
             <div className="coach-msg is-coach is-thinking">
               <span className="coach-msg-kicker">{coachName}</span>
               <span className="coach-msg-text">Thinking…</span>
+              <button type="button" className="coach-stop" onClick={() => replyController?.abort()}>Stop</button>
             </div>
           )}
           <div ref={chatBottomRef} />

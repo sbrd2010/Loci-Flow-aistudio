@@ -313,6 +313,87 @@ test("Coach chat: an error notice is not sent back to the model on the next mess
   expect(second.messages.some(m => m.role === "assistant" && /tasks are safe/i.test(m.content))).toBe(false);
 });
 
+// A reply that is slow to come: the route holds the request until the test lets it go.
+function slowGroq(page, text = "Let's pick one tiny next step.") {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const hits = { count: 0 };
+  const ready = page.route("https://api.groq.com/**", async (route) => {
+    hits.count += 1;
+    await gate;
+    try {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content: text } }] }) });
+    } catch { /* the page already cancelled this request */ }
+  });
+  return { release, hits, ready };
+}
+
+test("Coach chat: Stop ends a slow reply with no error notice", async ({ page }) => {
+  await page.addInitScript(() => { window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key"); });
+  const slow = slowGroq(page);
+  await slow.ready;
+  await enterDemo(page, { width: 1600, height: 900 });
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
+  await page.locator(".coach-composer-input").fill("I feel a bit scattered right now");
+  await page.getByRole("button", { name: "Send" }).click();
+
+  await expect(page.locator(".coach-msg.is-thinking")).toBeVisible();
+  await page.getByRole("button", { name: "Stop" }).click();
+  await expect(page.locator(".coach-msg.is-thinking")).toHaveCount(0);
+  await expect(page.getByText(/tasks are safe/i)).toHaveCount(0);
+  // Only the one provider was asked, and the chat is usable again.
+  expect(slow.hits.count).toBe(1);
+  await page.locator(".coach-composer-input").fill("Let me try again");
+  await expect(page.getByRole("button", { name: "Send" })).toBeEnabled();
+  slow.release();
+});
+
+test("Coach chat: a reply on its way does not bring back a conversation that was cleared", async ({ page }) => {
+  await page.addInitScript(() => { window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key"); });
+  const slow = slowGroq(page, "This reply must not appear.");
+  await slow.ready;
+  await enterDemo(page, { width: 1600, height: 900 });
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
+  await page.locator(".coach-composer-input").fill("I feel a bit scattered right now");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.locator(".coach-msg.is-thinking")).toBeVisible();
+
+  await page.getByRole("button", { name: "New conversation" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "New conversation" }).click();
+  await expect(page.locator(".coach-msg")).toHaveCount(0);
+
+  slow.release();
+  await page.waitForTimeout(1500);
+  await expect(page.locator(".coach-msg")).toHaveCount(0);
+  await expect(page.locator(".coach-empty")).toBeVisible();
+});
+
+test("Coach chat: coming back to the tab mid-reply still shows Thinking, and a second message waits", async ({ page }) => {
+  await page.addInitScript(() => { window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key"); });
+  const slow = slowGroq(page, "Here is the one reply.");
+  await slow.ready;
+  await enterDemo(page, { width: 1600, height: 900 });
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await nav.getByRole("button", { name: "Coach", exact: true }).click();
+  await page.locator(".coach-composer-input").fill("I feel a bit scattered right now");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.locator(".coach-msg.is-thinking")).toBeVisible();
+
+  await nav.getByRole("button", { name: "Today", exact: true }).click();
+  await nav.getByRole("button", { name: "Coach", exact: true }).click();
+
+  await expect(page.locator(".coach-msg.is-thinking")).toBeVisible();
+  // Nothing can be typed or sent until the first reply is in.
+  await expect(page.locator(".coach-composer-input")).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Send" })).toBeDisabled();
+
+  slow.release();
+  await expect(page.getByText("Here is the one reply.").first()).toBeVisible({ timeout: 8_000 });
+  await expect(page.locator(".coach-msg.is-thinking")).toHaveCount(0);
+  expect(slow.hits.count).toBe(1);
+  await expect(page.locator(".coach-msg.is-you")).toHaveCount(1);
+});
+
 test("Coach actions: the tap really marks the task done on Today", async ({ page }) => {
   const task = "10-minute walk between tasks to reset your focus";
   await page.route("https://api.groq.com/**", (route) => route.fulfill({

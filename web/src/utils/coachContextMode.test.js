@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { classifyContextMode, needsConversationContext, trimHistoryForDb, trimHistoryForLLM, detectRequestedCategories, normalizeForClassification } from "./coachContextMode";
+import { classifyContextMode, needsConversationContext, trimHistoryForLLM, detectRequestedCategories, normalizeForClassification } from "./coachContextMode";
+import { trimChatHistoryWithCursor } from "./coachSessionSummary";
 
 describe("classifyContextMode", () => {
   it("defaults casual/light messages to light", () => {
@@ -399,15 +400,19 @@ describe("classifyContextMode", () => {
       expect(needsConversationContext("What should I do today?")).toBe(false);
     });
 
-    it("Amendment 3 — trimHistoryForDb and trimHistoryForLLM helpers preserve/trim history correctly", () => {
+    it("Amendment 3 — trimChatHistoryWithCursor (the save path) and trimHistoryForLLM preserve/trim history correctly", () => {
       // Create 15 existing messages
       const history = Array.from({ length: 15 }, (_, i) => ({
         text: `Message ${i + 1}`,
         isUser: i % 2 === 0
       }));
 
+      // The way CoachTab saves a turn: add the user message, then cap-trim.
+      const withUserTrimmed = (list, text) =>
+        trimChatHistoryWithCursor([...list, { text, isUser: true }], 20, null).history;
+
       // 1. User message is "Hi" (light mode, not reference)
-      const withUserHi = trimHistoryForDb(history, "Hi", 20);
+      const withUserHi = withUserTrimmed(history, "Hi");
       expect(withUserHi.length).toBe(16);
       expect(withUserHi[withUserHi.length - 1]).toEqual({ text: "Hi", isUser: true });
 
@@ -416,7 +421,7 @@ describe("classifyContextMode", () => {
       expect(llmHi[llmHi.length - 1]).toEqual({ text: "Hi", isUser: true });
 
       // 2. User message is "Tell me more" (light mode, but needs context)
-      const withUserMore = trimHistoryForDb(history, "Tell me more", 20);
+      const withUserMore = withUserTrimmed(history, "Tell me more");
       expect(withUserMore.length).toBe(16);
 
       const llmMore = trimHistoryForLLM(withUserMore, "light", true);
@@ -428,7 +433,7 @@ describe("classifyContextMode", () => {
         text: `Msg ${i + 1}`,
         isUser: i % 2 === 0
       }));
-      const withUserCapped = trimHistoryForDb(largeHistory, "Hi", 20);
+      const withUserCapped = withUserTrimmed(largeHistory, "Hi");
       expect(withUserCapped.length).toBe(20);
       expect(withUserCapped[0].text).toBe("Msg 7"); // Wiped older messages past 20
       expect(withUserCapped[19].text).toBe("Hi");
