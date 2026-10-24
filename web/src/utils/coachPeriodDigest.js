@@ -61,23 +61,30 @@ export function buildLociDeadlinesContext({ tasks = [], config = {}, now = new D
 /**
  * @param {object} p
  * @param {number} [p.days]   7 (a week) or 30 (a month)
- * @param {object|null} [p.focusRaw]  the focus ledger read, or null when it could not be read
+ * @param {number} [p.offset] 1 for the period before the current one ("last week"), else 0
+ * @param {object|null} [p.focusRaw]  the focus ledger read (it must reach back `days * (offset + 1)` days), or null when it could not be read
  * @returns {string} the digest block, never empty
  */
-export function buildLociPeriodContext({ tasks = [], contributions = [], config = {}, now = new Date(), windows: given, days = 7, focusRaw = null, staleDays = DIGEST_STALE_DAYS }) {
+export function buildLociPeriodContext({ tasks = [], contributions = [], config = {}, now = new Date(), windows: given, days = 7, offset = 0, focusRaw = null, staleDays = DIGEST_STALE_DAYS }) {
   const windows = given || getFocusWindows(config);
   const span = days === 30 ? 30 : 7;
-  const both = lociDayWindow(span * 2, now, windows); // oldest first: previous period, then this one
-  const current = both.slice(span);
+  const shift = offset === 1 ? 1 : 0;
+  const all = lociDayWindow(span * (shift + 2), now, windows); // oldest first
+  const end = all.length - shift * span;
+  const current = all.slice(end - span, end);
+  const previous = all.slice(end - 2 * span, end - span);
   const inCurrent = new Set(current);
   const name = span === 30 ? "30 days" : "7 days";
+  const dayMonth = (dayStr) => `${parseDay(dayStr).getDate()} ${MONTHS[parseDay(dayStr).getMonth()]}`;
+  const what = shift ? `the ${name} before the last ${name}` : `the last ${name}`;
+  const before = shift ? `the ${name} before that` : `the ${name} before`;
 
-  const ticks = sliceContributions(contributions, both);
+  const ticks = sliceContributions(contributions, [...previous, ...current]);
   const sum = (list) => list.reduce((n, d) => n + d.count, 0);
   const nowTicks = ticks.slice(span);
   const total = sum(nowTicks);
-  const lines = [`PERIOD DIGEST (the last ${name}, by day; a day that runs past midnight counts as the day it started):`];
-  lines.push(`- Finished: ${plural(total, "task")} on ${plural(nowTicks.filter(d => d.count > 0).length, "day")} (the ${name} before: ${sum(ticks.slice(0, span))}).`);
+  const lines = [`PERIOD DIGEST (${what}, ${dayMonth(current[0])} to ${dayMonth(current[span - 1])}, by day; a day that runs past midnight counts as the day it started):`];
+  lines.push(`- Finished: ${plural(total, "task")} on ${plural(nowTicks.filter(d => d.count > 0).length, "day")} (${before}: ${sum(ticks.slice(0, span))}).`);
   if (span === 7) lines.push(`- By day, oldest first: ${nowTicks.map(d => `${dayLabel(d.dateString)} ${d.count}`).join(", ")}.`);
 
   // Titles by the day the task is stamped with, not by when it was last edited.
@@ -91,16 +98,20 @@ export function buildLociPeriodContext({ tasks = [], contributions = [], config 
   }
 
   if (focusRaw) {
-    const f = weekSummary(focusRaw, tasks, now, windows, span);
-    if (f.totalMinutes > 0) {
-      const perDay = span === 7 ? ` (${f.perDay.map(d => `${dayLabel(d.date)} ${formatMinutes(d.minutes)}`).join(", ")})` : "";
-      lines.push(`- Focus time: ${formatMinutes(f.totalMinutes)} on ${plural(f.daysMoved, "day")}${perDay}.`);
+    // The ledger summary runs back from today; this period is its older block when "last".
+    const f = weekSummary(focusRaw, tasks, now, windows, span * (shift + 1));
+    const block = shift ? f.perDay.slice(0, span) : f.perDay;
+    const minutes = block.reduce((n, d) => n + d.minutes, 0);
+    if (minutes > 0) {
+      const perDay = span === 7 ? ` (${block.map(d => `${dayLabel(d.date)} ${formatMinutes(d.minutes)}`).join(", ")})` : "";
+      lines.push(`- Focus time: ${formatMinutes(minutes)} on ${plural(block.filter(d => d.moves > 0).length, "day")}${perDay}.`);
     } else {
-      lines.push(`- Focus time: none logged in the ${name}.`);
+      lines.push(`- Focus time: none logged in those ${name}.`);
     }
   } else {
     lines.push("- Focus time: not available in this message; do not guess it.");
   }
+  if (shift) lines.push("- The deadline and open-task lines below describe today, not that period.");
 
   const deadlines = buildLociDeadlinesContext({ tasks, config, now });
   if (deadlines) lines.push(deadlines);

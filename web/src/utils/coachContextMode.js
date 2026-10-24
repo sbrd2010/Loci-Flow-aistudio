@@ -173,16 +173,24 @@ const PERIOD_RE = new RegExp([
   "(?:my )?focus time (?:this|last) (?:week|month)",
   // reviews
   "(?:weekly|monthly|week|month) (?:review|recap|summary)",
-  "(?:recap|review|summari[sz]e) (?:my|the|this|last) (?:week|month)",
+  "(?:recap|review|summari[sz]e) (?:my|the|this|last|previous|prior)(?: (?:last|previous|prior))? (?:week|month)",
   "(?:week|month) in review",
 ].join("|"), "i");
 
 // Null for an ordinary message; for a period question, how many days it asks
-// about: 30 when it names the month, else 7 (a week, a day, "how am I doing").
+// about (30 when it names the month, else 7: a week, a day, "how am I doing")
+// and how far back it ends: 1 for "last week" / "last month" / "previous week",
+// meaning the whole period before the current one, else 0.
 export function detectPeriodIntent(message) {
   const text = normalizeForClassification(String(message || ""));
   if (!PERIOD_RE.test(text)) return null;
-  return { days: /\b(?:month|monthly|30 days)\b/i.test(text) ? 30 : 7 };
+  // "in the last week" / "the last month" is the rolling window ending today;
+  // "last week", "my last month", "previous week" is the period before this one.
+  const named = text.replace(/\bthe (?:last|past) (week|month)\b/gi, "$1");
+  return {
+    days: /\b(?:month|monthly|30 days)\b/i.test(text) ? 30 : 7,
+    offset: /\b(?:last|previous|prior) (?:week|month)\b/i.test(named) ? 1 : 0,
+  };
 }
 
 // More ways to ask for the plan or a list that earlier fell through to `light`.

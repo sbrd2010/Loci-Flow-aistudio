@@ -79,11 +79,46 @@ describe("buildLociPeriodContext", () => {
     });
 
     it("says none was logged when the log is empty", () => {
-      expect(buildLociPeriodContext({ now: NOW, focusRaw: {} })).toContain("Focus time: none logged in the 7 days.");
+      expect(buildLociPeriodContext({ now: NOW, focusRaw: {} })).toContain("Focus time: none logged in those 7 days.");
     });
 
     it("tells the model not to guess when the log could not be read", () => {
       expect(buildLociPeriodContext({ now: NOW, focusRaw: null })).toContain("Focus time: not available in this message; do not guess it.");
+    });
+  });
+
+  describe("last week and last month (offset 1)", () => {
+    const contributions = [tick("2026-10-23", 3), tick("2026-10-16", 4), tick("2026-10-12", 2), tick("2026-10-05", 6)];
+    const tasks = [done("This week win", "2026-10-23"), done("Last week win", "2026-10-16"), done("Week before win", "2026-10-05")];
+
+    it("covers the period before the current one, with its own dates, and compares with the one before that", () => {
+      const out = buildLociPeriodContext({ now: NOW, contributions, tasks, offset: 1 });
+      expect(out).toContain("(the 7 days before the last 7 days, 11 Oct to 17 Oct,");
+      expect(out).toContain("Finished: 6 tasks on 2 days (the 7 days before that: 6).");
+      expect(out).toContain("By day, oldest first: Sun 11 0, Mon 12 2, Tue 13 0, Wed 14 0, Thu 15 0, Fri 16 4, Sat 17 0.");
+      expect(out).toContain("'Last week win'");
+      expect(out).not.toContain("This week win");
+      expect(out).not.toContain("Week before win");
+    });
+
+    it("takes the focus minutes from that period, not the current one", () => {
+      const raw = {
+        "2026-10-23": { a: { type: "focus_completed", taskId: "t", lociDateString: "2026-10-23", focusElapsedSeconds: 3600 } }, // this week
+        "2026-10-16": { b: { type: "focus_completed", taskId: "t", lociDateString: "2026-10-16", focusElapsedSeconds: 1800 } }, // last week
+      };
+      expect(buildLociPeriodContext({ now: NOW, focusRaw: raw, offset: 1 })).toContain("Focus time: 30m on 1 day (");
+      expect(buildLociPeriodContext({ now: NOW, focusRaw: raw, offset: 0 })).toContain("Focus time: 1h on 1 day (");
+    });
+
+    it("for 'last month' covers the 30 days before the current 30", () => {
+      const out = buildLociPeriodContext({ now: NOW, days: 30, offset: 1, contributions: [tick("2026-10-01", 4), tick("2026-09-10", 6), tick("2026-08-20", 1)] });
+      expect(out).toContain("the 30 days before the last 30 days");
+      expect(out).toContain("Finished: 6 tasks on 1 day (the 30 days before that: 1).");
+    });
+
+    it("says the deadline and open-task lines describe today", () => {
+      expect(buildLociPeriodContext({ now: NOW, offset: 1 })).toContain("The deadline and open-task lines below describe today, not that period.");
+      expect(buildLociPeriodContext({ now: NOW, offset: 0 })).not.toContain("describe today");
     });
   });
 

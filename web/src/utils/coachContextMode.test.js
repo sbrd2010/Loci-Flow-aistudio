@@ -1387,12 +1387,23 @@ describe("period questions and the other phrasings that fell through to light (#
   });
 
   it("reads the period asked about: a month for 'month', otherwise a week", () => {
-    expect(detectPeriodIntent("how was my month?")).toEqual({ days: 30 });
-    expect(detectPeriodIntent("monthly review")).toEqual({ days: 30 });
-    expect(detectPeriodIntent("how was my week?")).toEqual({ days: 7 });
-    expect(detectPeriodIntent("how am I doing")).toEqual({ days: 7 });
+    expect(detectPeriodIntent("how was my month?")).toEqual({ days: 30, offset: 0 });
+    expect(detectPeriodIntent("monthly review")).toEqual({ days: 30, offset: 0 });
+    expect(detectPeriodIntent("how was my week?")).toEqual({ days: 7, offset: 0 });
+    expect(detectPeriodIntent("how am I doing")).toEqual({ days: 7, offset: 0 });
     expect(detectPeriodIntent("")).toBeNull();
     expect(detectPeriodIntent(undefined)).toBeNull();
+  });
+
+  it("reads 'last week' and 'last month' as the whole period before the current one", () => {
+    expect(detectPeriodIntent("how much did I focus last month?")).toEqual({ days: 30, offset: 1 });
+    expect(detectPeriodIntent("how was last week?")).toEqual({ days: 7, offset: 1 });
+    expect(detectPeriodIntent("recap my previous week")).toEqual({ days: 7, offset: 1 });
+    expect(detectPeriodIntent("how was my last month")).toEqual({ days: 30, offset: 1 });
+    // The last N days is the current window, not the one before it.
+    expect(detectPeriodIntent("what did I get done in the last week")).toEqual({ days: 7, offset: 0 });
+    expect(detectPeriodIntent("how was the last month")).toEqual({ days: 30, offset: 0 });
+    expect(detectPeriodIntent("how many tasks did I finish this week")).toEqual({ days: 7, offset: 0 });
   });
 
   it("'remember that…' and 'do you remember…' go to the mode that can keep memory", () => {

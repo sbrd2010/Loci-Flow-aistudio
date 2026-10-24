@@ -429,6 +429,23 @@ test("Coach chat: 'how was my week?' carries the period digest, even right after
   expect(asked).not.toContain("Loci context issue");
 });
 
+test("Coach chat: 'how was last week?' asks for the week before this one, not this week", async ({ page }) => {
+  await page.addInitScript(() => { window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key"); });
+  const bodies = [];
+  await page.route("https://api.groq.com/**", async (route) => {
+    bodies.push(JSON.parse(route.request().postData()));
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content: "Here is how it went." } }] }) });
+  });
+  await enterDemo(page, { width: 1600, height: 900 });
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
+  await page.locator(".coach-composer-input").fill("how was last week?");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.locator(".coach-msg.is-coach")).toHaveCount(1, { timeout: 10_000 });
+  const system = bodies[0].messages.find(m => m.role === "system").content;
+  expect(system).toContain("the 7 days before the last 7 days");
+  expect(system).toContain("The deadline and open-task lines below describe today, not that period.");
+});
+
 test("Coach chat: a question that is not about a period does not pay for the digest", async ({ page }) => {
   await page.addInitScript(() => { window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key"); });
   const bodies = [];

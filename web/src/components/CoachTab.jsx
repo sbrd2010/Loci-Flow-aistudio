@@ -926,8 +926,8 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
         if (cloudSyncUnconfirmed) {
           block = "PERIOD DIGEST AND DEADLINES: not available, because this device has not finished syncing. Say so plainly and do not guess any numbers.";
         } else if (periodIntent) {
-          const focusRaw = await readFocusOnce(uid, periodIntent.days, getFocusWindows(configRef.current));
-          block = `${buildLociPeriodContext({ tasks: tasksRef.current, contributions: contributionsRef.current, config: configRef.current, now, days: periodIntent.days, focusRaw })}\nAnswer how the period went from the PERIOD DIGEST: quote its numbers, say what it does not cover, and never invent days, tasks, minutes or deadlines.`;
+          const focusRaw = await readFocusOnce(uid, periodIntent.days * (periodIntent.offset + 1), getFocusWindows(configRef.current));
+          block = `${buildLociPeriodContext({ tasks: tasksRef.current, contributions: contributionsRef.current, config: configRef.current, now, days: periodIntent.days, offset: periodIntent.offset, focusRaw })}\nAnswer how the period went from the PERIOD DIGEST: quote its numbers, say what it does not cover, and never invent days, tasks, minutes or deadlines.`;
         } else {
           block = buildLociDeadlinesContext({ tasks: tasksRef.current, config: configRef.current, now });
         }
