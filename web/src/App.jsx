@@ -60,10 +60,6 @@ import { plainThought } from "./utils/thoughtFormat";
 const PLAN_COLUMN_NAMES = { today: "Today", week: "Week", month: "Month", quarter: "Quarter", halfyear: "6 months", office: "Work" };
 
 
-function toLocalDateStr(date) {
-  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
-}
-
 export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -1087,7 +1083,7 @@ export default function App() {
     // Use ended.task, not `task` — see handleEndFocusSession for why these
     // can diverge (a pin change that never ended the prior session).
     if (ended && ended.task) events.push(buildFocusTerminalEvent("focus_completed", ended.task, ended.focusSessionId, { ...ended, windows, now }));
-    savePayloadAsync(buildFocusCompletionPayload(payload, task, toLocalDateStr(now), now))
+    savePayloadAsync(buildFocusCompletionPayload(payload, task, now))
       .then(() => writeActivityEvents(eventsPatch(activityUid, events)))
       .catch(() => {});
     focusTimer.setIsFocusMode(false);

@@ -737,6 +737,18 @@ describe("buildLociVelocityContext", () => {
     expect(context).toContain("Last 7 days: 7 tasks completed");
   });
 
+  it("counts by Loci day: at 00:30 in a window that runs to 02:00, 'today' is still the day before", () => {
+    const lateWindows = getFocusWindows({ focusWindows: [{ start: "07:00", end: "02:00" }] });
+    const lateNight = new Date(2026, 5, 13, 0, 30); // Loci day 2026-06-12
+    const contributions = [
+      { dateString: "2026-06-12", count: 2 }, // finished a minute ago, stamped with the Loci day
+      { dateString: "2026-06-10", count: 1 },
+      { dateString: "2026-06-09", count: 5 }, // outside the last 3 Loci days (12, 11, 10)
+    ];
+    const context = buildLociVelocityContext(contributions, lateNight, lateWindows);
+    expect(context).toContain("Last 3 days: 3 tasks completed");
+  });
+
   it("reports a stall as zero completions rather than hiding it", () => {
     const contributions = [{ dateString: "2026-05-01", count: 5 }];
     const context = buildLociVelocityContext(contributions, TODAY);

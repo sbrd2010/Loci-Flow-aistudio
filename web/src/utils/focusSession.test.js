@@ -119,13 +119,13 @@ describe("buildFocusCompletionPayload", () => {
 
   it("marks the focused task complete, clears isNowFocus, and stamps the completion date", () => {
     const payload = { tasks: [task], config: { totalXp: 100 }, contributions: [] };
-    const result = buildFocusCompletionPayload(payload, task, "2026-06-10", new Date(2026, 5, 10, 12));
+    const result = buildFocusCompletionPayload(payload, task, new Date(2026, 5, 10, 12));
     expect(result.tasks[0].isCompleted).toBe(true);
     expect(result.tasks[0].isNowFocus).toBe(false);
     expect(result.tasks[0].dateCompletedString).toBe("2026-06-10");
   });
 
-  it("stamps dateCompletedString with the Loci day, decoupled from the calendar-day contribution, during an overnight focus window", () => {
+  it("stamps the task and its tick with the same Loci day during an overnight focus window", () => {
     const payload = {
       tasks: [task],
       config: { totalXp: 0, focusWindows: [{ start: "22:00", end: "04:00" }] },
@@ -133,26 +133,26 @@ describe("buildFocusCompletionPayload", () => {
     };
     // 2026-06-11 at 1:00 AM: still inside the 22:00-04:00 window that started
     // the previous calendar day, so the Loci day is 2026-06-10.
-    const result = buildFocusCompletionPayload(payload, task, "2026-06-11", new Date(2026, 5, 11, 1, 0));
+    const result = buildFocusCompletionPayload(payload, task, new Date(2026, 5, 11, 1, 0));
     expect(result.tasks[0].dateCompletedString).toBe("2026-06-10");
-    expect(result.contributions[0].dateString).toBe("2026-06-11");
+    expect(result.contributions[0].dateString).toBe("2026-06-10");
   });
 
   it("leaves config alone (no XP)", () => {
     const payload = { tasks: [task], config: { totalXp: 100 }, contributions: [] };
-    const result = buildFocusCompletionPayload(payload, task, "2026-06-10");
+    const result = buildFocusCompletionPayload(payload, task, new Date(2026, 5, 10, 12));
     expect(result.config).toBe(payload.config);
   });
 
   it("does not touch other tasks", () => {
     const payload = { tasks: [task, other], config: { totalXp: 0 }, contributions: [] };
-    const result = buildFocusCompletionPayload(payload, task, "2026-06-10");
+    const result = buildFocusCompletionPayload(payload, task, new Date(2026, 5, 10, 12));
     expect(result.tasks[1]).toBe(other);
   });
 
   it("creates a new contribution entry for today when none exists", () => {
     const payload = { tasks: [task], config: { totalXp: 0 }, contributions: [] };
-    const result = buildFocusCompletionPayload(payload, task, "2026-06-10");
+    const result = buildFocusCompletionPayload(payload, task, new Date(2026, 5, 10, 12));
     expect(result.contributions).toHaveLength(1);
     expect(result.contributions[0]).toMatchObject({ dateString: "2026-06-10", count: 1 });
   });
@@ -162,7 +162,7 @@ describe("buildFocusCompletionPayload", () => {
       tasks: [task], config: { totalXp: 0 },
       contributions: [{ dateString: "2026-06-10", count: 2 }],
     };
-    const result = buildFocusCompletionPayload(payload, task, "2026-06-10");
+    const result = buildFocusCompletionPayload(payload, task, new Date(2026, 5, 10, 12));
     expect(result.contributions).toHaveLength(1);
     expect(result.contributions[0].count).toBe(3);
   });

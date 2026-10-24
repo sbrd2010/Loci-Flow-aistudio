@@ -101,9 +101,10 @@ describe("buildOverview", () => {
       expect(out.taskDeadlines.overdue.map(d => d.title)).toEqual(["due 22nd"]);
     });
 
-    it("keys the last seven days by calendar date, as contributions are stored", () => {
-      const out = buildOverview(late([], {}, { contributions: [{ dateString: "2026-10-23", count: 2 }] }), LATE, IST);
-      expect(out.last7Days.at(-1)).toEqual({ date: "2026-10-23", completed: 2 });
+    it("keys the last seven days by Loci day, as contributions are stored: in the small hours the last day is still yesterday", () => {
+      const out = buildOverview(late([], {}, { contributions: [{ dateString: "2026-10-22", count: 2 }, { dateString: "2026-10-23", count: 9 }] }), LATE, IST);
+      expect(out.today).toBe("2026-10-23");
+      expect(out.last7Days.at(-1)).toEqual({ date: "2026-10-22", completed: 2 });
     });
 
     it("keeps the Loci day for the Today list: yesterday's completions count, 'tomorrow' tasks stay out", () => {

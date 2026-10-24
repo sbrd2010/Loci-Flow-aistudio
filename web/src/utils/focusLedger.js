@@ -14,7 +14,7 @@
 // a front joins taskId back to the live tasks array, and gracefully reports
 // nothing rather than guessing when that task is gone.
 
-import { getLociDayStr, getFocusWindows } from "./focusWindows";
+import { getFocusWindows, lociDaysBack } from "./focusWindows";
 
 // Both terminal types count toward time. An abandoned session still moved the
 // work — the addendum asks for the partial to be written precisely so it can.
@@ -68,13 +68,7 @@ export function lociDayWindow(days = 7, now = new Date(), windows) {
   // resolveWindows), so a session reads back into the same day-bucket it was
   // written to. getLociDayStr itself requires a real array.
   const resolved = windows || getFocusWindows();
-  const out = [];
-  for (let i = days - 1; i >= 0; i -= 1) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    out.push(getLociDayStr(d, resolved));
-  }
-  return out;
+  return lociDaysBack(now, resolved, days).reverse();
 }
 
 // { [lociDateString]: { minutes, moves } }

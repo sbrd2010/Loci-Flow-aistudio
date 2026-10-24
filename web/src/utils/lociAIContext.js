@@ -1,7 +1,7 @@
 import { getValidCommittedTaskIds, REFLECTION_MOODS } from "./dailyCoachCheckins";
 import { horizonsFromConfig } from "./horizons";
 import { buildDeadlineProgressMirror } from "./deadlineProgressMirror";
-import { formatMinutesToTime, getFocusWindows, getLociDayStr } from "./focusWindows";
+import { formatMinutesToTime, getFocusWindows, getLociDayStr, lociDaysBack } from "./focusWindows";
 import { isDeferred } from "./deferral";
 import { isEventTask } from "./dayMapRoute";
 import { newestThoughtsFirst, thoughtText } from "./thoughts";
@@ -315,19 +315,13 @@ export function buildLociBrainDumpContext(brainDump = []) {
 // Recent completion velocity (last 3 and 7 days) from the contributions
 // heatmap — distinct from the lifetime avgCompletionsPerActiveDay in the
 // behavioural profile, this surfaces short-term momentum or a recent stall.
-export function buildLociVelocityContext(contributions = [], today = new Date()) {
+// Counts are by Loci day, like the ticks they are summed from, so "the last 3
+// days" ends on the day the user is still in, even after midnight in a late window.
+export function buildLociVelocityContext(contributions = [], today = new Date(), windows = getFocusWindows()) {
   if (!contributions || contributions.length === 0) return "";
 
   const byDate = new Map(contributions.map(c => [c.dateString, Number(c.count) || 0]));
-  const sumLastNDays = (n) => {
-    let total = 0;
-    for (let i = 0; i < n; i++) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      total += byDate.get(getLocalDateString(d)) || 0;
-    }
-    return total;
-  };
+  const sumLastNDays = (n) => lociDaysBack(today, windows, n).reduce((total, day) => total + (byDate.get(day) || 0), 0);
 
   const last3 = sumLastNDays(3);
   const last7 = sumLastNDays(7);

@@ -21,6 +21,7 @@
 // clearly requesting that kind of action before any tag is allowed to mutate.
 
 import { buildToggleCompletedTasks } from "./taskOps";
+import { addCompletionTick, takeBackTick } from "./completionTicks";
 import { isEveningGuardBlocked } from "./eveningGuard";
 import { isActiveLociTask } from "./lociAIContext";
 import { safeUUID } from "./uuid";
@@ -516,21 +517,14 @@ function buildAddTaskPayload(payload, rawTitle, now = Date.now()) {
 }
 
 // Marks a task complete and applies the same +1 contribution
-// bookkeeping as TodayTab's handleToggleComplete.
-function buildCompleteTaskPayload(payload, task, lociDateStr, localDateStr) {
-  const { tasks = [], config = {}, contributions = [] } = payload;
-  const nextContributions = [...contributions];
-  const idx = nextContributions.findIndex(c => c.dateString === localDateStr);
-  const uid = payload.userId || config.userId || "";
-  if (idx === -1) {
-    nextContributions.push({ compositeKey: `${uid}_${localDateStr}`, userId: uid, dateString: localDateStr, count: 1, lastUpdated: Date.now() });
-  } else {
-    nextContributions[idx] = { ...nextContributions[idx], count: nextContributions[idx].count + 1, lastUpdated: Date.now() };
-  }
+// bookkeeping as TodayTab's handleToggleComplete: the tick counts toward the
+// Loci day, the day the task is stamped with.
+function buildCompleteTaskPayload(payload, task, lociDateStr) {
+  const { tasks = [], contributions = [] } = payload;
   return {
     ...payload,
     tasks: buildToggleCompletedTasks(tasks, task.uuid, true, lociDateStr),
-    contributions: nextContributions,
+    contributions: addCompletionTick(contributions, lociDateStr, payload),
   };
 }
 
@@ -540,7 +534,7 @@ function buildCompleteTaskPayload(payload, task, lociDateStr, localDateStr) {
 // `matched` flag (and the matched `task`, where applicable) for each entry.
 // skipIntentCheck: the user tapped the action's button (Q50), which is the
 // request itself.
-export function applyCoachActions(payload, actions, { lociDateStr, localDateStr, lastUserMessage = "", now = Date.now(), skipIntentCheck = false } = {}) {
+export function applyCoachActions(payload, actions, { lociDateStr, lastUserMessage = "", now = Date.now(), skipIntentCheck = false } = {}) {
   let nextPayload = payload;
   const results = [];
   const currentFocusTitle = (payload.tasks || []).find(t => isActiveLociTask(t) && t.isNowFocus)?.title || null;
@@ -593,7 +587,7 @@ export function applyCoachActions(payload, actions, { lociDateStr, localDateStr,
       // caller's timer launcher to use directly, never written into the task.
       resultTask = nextPayload.tasks.find(t => t.uuid === task.uuid) || task;
     } else if (action.type === "COMPLETE_TASK") {
-      nextPayload = buildCompleteTaskPayload(nextPayload, task, lociDateStr, localDateStr);
+      nextPayload = buildCompleteTaskPayload(nextPayload, task, lociDateStr);
     } else if (action.type === "PARK_TASK") {
       nextPayload = { ...nextPayload, tasks: buildParkTaskTasks(nextPayload.tasks, task.uuid) };
     }
@@ -704,7 +698,7 @@ export function buildActionReplyText(cleanText, results = [], lastUserMessage = 
 // the change put back, or null when the task has moved on since.
 export function undoCoachAction(payload, record, now = Date.now()) {
   const tasks = payload.tasks || [];
-  const { type, taskUuid, prevPinnedUuid = null, localDateStr, appliedLastUpdated = null } = record;
+  const { type, taskUuid, prevPinnedUuid = null, appliedLastUpdated = null } = record;
   const current = tasks.find(t => t.uuid === taskUuid && !t.isDeleted);
   if (!current) return null;
   // Changed again since the tap (reopened and done again, edited…): that
@@ -715,9 +709,9 @@ export function undoCoachAction(payload, record, now = Date.now()) {
   const put = (patch) => tasks.map(t => (t.uuid === taskUuid ? { ...t, ...patch, lastUpdated: now } : t));
   if (type === "COMPLETE_TASK") {
     if (!current.isCompleted) return null;
-    const contributions = [...(payload.contributions || [])];
-    const i = contributions.findIndex(c => c.dateString === localDateStr);
-    if (i !== -1 && contributions[i].count > 0) contributions[i] = { ...contributions[i], count: contributions[i].count - 1, lastUpdated: now };
+    // The tick came off the day the task is stamped with (the check above
+    // means it is still the tap's own completion).
+    const contributions = takeBackTick(payload.contributions, current, null, now);
     return { ...payload, contributions, tasks: put({ isCompleted: false, dateCompletedString: null, ...repinSelf }) };
   }
   if (type === "SET_NOW_FOCUS" || type === "START_FOCUS") {

@@ -6,8 +6,8 @@
 // Nothing here changes data on its own: an action is a button the user taps
 // (Q50), and every move has an Undo.
 import { reviewFacts } from "./coachReview";
-import { weekSummary } from "./focusLedger";
-import { sliceContributions, getDateRangeDays } from "./insightsContext";
+import { weekSummary, lociDayWindow } from "./focusLedger";
+import { sliceContributions } from "./insightsContext";
 import { isActiveLociTask } from "./lociAIContext";
 import { isOnToday } from "./deferral";
 import { getLociDayStr } from "./focusWindows";
@@ -50,7 +50,7 @@ export function buildBriefInput({ tasks = [], contributions = [], config = {}, f
   // The 7 days before the last 7, for "compared with the previous period".
   const prev14 = focusRaw ? weekSummary(focusRaw, tasks, now, windows, 14) : null;
   const last7 = focusRaw ? weekSummary(focusRaw, tasks, now, windows, 7) : null;
-  const ticks14 = sliceContributions(contributions, getDateRangeDays("30d", now).slice(-14));
+  const ticks14 = sliceContributions(contributions, lociDayWindow(14, now, windows));
   const facts30 = reviewFacts({ tasks, contributions, config, focusRaw, period: "30d", now, windows, frontNameOf });
   const refs = briefTaskRefs(tasks, { now, windows });
   const todayStr = getLociDayStr(now, windows);

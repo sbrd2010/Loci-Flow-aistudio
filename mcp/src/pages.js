@@ -238,7 +238,7 @@ export function buildWeek(raw, nowMs, timeZone, args = {}, focusRaw = null) {
   const ticks = new Map(c.contributions.filter(x => x && typeof x === "object").map(x => [x.dateString, Number(x.count) || 0]));
   const log = Array.isArray(c.config.dayCloseLog) ? c.config.dayCloseLog.filter(e => e && typeof e === "object") : [];
   const dates = [];
-  for (let back = count - 1; back >= 0; back -= 1) dates.push(addDays(c.calendarToday, -back));
+  for (let back = count - 1; back >= 0; back -= 1) dates.push(addDays(c.lociDay, -back));
   const truncated = [];
   const focus = focusRaw ? dailyTotals(flattenFocusEvents(focusRaw)) : null;
   const perDay = dates.map(date => ({
@@ -259,7 +259,7 @@ export function buildWeek(raw, nowMs, timeZone, args = {}, focusRaw = null) {
       completedTasks: perDay.reduce((s, d) => s + d.completedTasks.length, 0),
       ...(focus ? { focusMinutes: perDay.reduce((s, d) => s + d.focusMinutes, 0) } : {}),
     },
-    note: "ticks are the app's daily completion counts (calendar dates); completedTasks and focusMinutes are grouped by the Loci day they happened on, so they can differ from ticks for a day that runs past midnight. dayClose is the user's Close-the-day record, when there is one."
+    note: "ticks are the app's daily completion counts. Like completedTasks and focusMinutes they are grouped by the Loci day (a day that runs past midnight counts as the day it started), and the last day is the Loci day, which is still yesterday in the small hours. Ticks recorded before this was changed may sit on the calendar day instead. dayClose is the user's Close-the-day record, when there is one."
   }, truncated);
 }
 

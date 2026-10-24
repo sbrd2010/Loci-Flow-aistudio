@@ -9,7 +9,7 @@ export const LOCI_METHOD = `HOW LOCI PLANS (judge the plan against this)
 - Time: focus windows set the working day. The Day map lays Today out as a route inside them, in order; a stop that does not end by the end of the day "won't fit". A task's estimate is its minutes. A plan is sound when its minutes fit the focus time left (get_day_map, fit).
 - A task's next step should be a concrete first action. The text "Do first tiny step" is only a placeholder, not a step.
 - Mind Box holds thoughts that are not tasks yet. Close the day records what was done, moved to tomorrow, planned and dropped, and the first thing for tomorrow.
-- Two kinds of "today": the calendar date (deadlines, daily completion counts) and the Loci day (the Today list, completions, the focus log; it runs until the end of a window that passes midnight). The day-based tools (get_overview, get_today, get_day_map, get_plan, get_week, get_stuck, get_focus_history, get_coach_review) return both.`;
+- Two kinds of "today": the calendar date (deadlines) and the Loci day (the Today list, completions and their daily counts, the focus log; it runs until the end of a window that passes midnight). The day-based tools (get_overview, get_today, get_day_map, get_plan, get_week, get_stuck, get_focus_history, get_coach_review) return both.`;
 
 // The user's own rules for a good plan. Edit this when they decide them: the three
 // questions below are the ones a review most needs answered.

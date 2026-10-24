@@ -235,6 +235,19 @@ export function getLociDayStr(now, windows) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+// The `count` Loci days ending today, newest first. The days are stepped by
+// calendar date from today's Loci day, not by subtracting 24 hours of clock
+// time: on a daylight-saving change that would repeat one day and skip another.
+export function lociDaysBack(now, windows, count) {
+  const [y, m, d] = getLociDayStr(now, windows).split("-").map(Number);
+  const out = [];
+  for (let i = 0; i < count; i += 1) {
+    const day = new Date(y, m - 1, d - i, 12);
+    out.push(`${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`);
+  }
+  return out;
+}
+
 
 // When the Loci day `dayStr` ("YYYY-MM-DD") ends — the moment getLociDayStr
 // moves on: the next midnight, or the end of the latest overnight window
