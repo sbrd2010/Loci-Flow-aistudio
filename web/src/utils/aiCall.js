@@ -136,10 +136,11 @@ function fetchWithTimeout(url, opts, limits) {
     if (outer.aborted) controller.abort();
     else outer.addEventListener("abort", onOuterAbort, { once: true });
   }
-  return fetch(url, { ...opts, signal: controller.signal }).finally(() => {
-    clearTimeout(id);
-    outer?.removeEventListener("abort", onOuterAbort);
-  });
+  // The caller's listener stays attached after the headers arrive: Stop must
+  // still end the request while the body is being read. It is harmless once the
+  // request is done (aborting a finished controller does nothing), and goes
+  // away with the signal.
+  return fetch(url, { ...opts, signal: controller.signal }).finally(() => clearTimeout(id));
 }
 
 // Reads Retry-After (seconds or HTTP-date) off a 429/503 response.
@@ -728,6 +729,8 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPr
       } else {
         result = await callGemini(provider.key, systemPrompt, messages, maxTokens, limits);
       }
+      // Stopped while the reply was arriving: it is not delivered.
+      if (signal?.aborted) throw new Error("cancelled");
       const { reply, usage: callUsage } = result;
       logAICallDiagnostics({ provider: provider.name, outcome: "ok", contextMode, systemPrompt, messages, usage: callUsage });
       return appendAIUsageWarning(reply, usage.warning);

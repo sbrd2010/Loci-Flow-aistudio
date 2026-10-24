@@ -1262,7 +1262,13 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     } catch (err) {
       // Stopped by the user (or by clearing the conversation): nothing failed,
       // so no error notice. The message stays; they can ask again.
-      if (err?.message === "cancelled" || epoch !== conversationEpoch) return;
+      if (err?.message === "cancelled" || epoch !== conversationEpoch) {
+        // Same conversation: this turn's early trim already shortened the saved
+        // history, so the summary cursor still has to follow it. (A cleared
+        // conversation reset its own summary.)
+        if (epoch === conversationEpoch) applyOrDeferCursorDecrement(earlyRemovedCount, cloudSyncUnconfirmedRef.current);
+        return;
+      }
       console.error("[CoachTab] AI chat failed:", err);
       const hint = describeAIError(err);
 
