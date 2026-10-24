@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyContextMode, needsConversationContext, trimHistoryForLLM, detectRequestedCategories, normalizeForClassification } from "./coachContextMode";
+import { classifyContextMode, needsConversationContext, trimHistoryForLLM, detectRequestedCategories, normalizeForClassification, detectPeriodIntent } from "./coachContextMode";
 import { trimChatHistoryWithCursor } from "./coachSessionSummary";
 
 describe("classifyContextMode", () => {
@@ -1340,5 +1340,78 @@ describe("detectRequestedCategories", () => {
     expect(classifyContextMode("what are my errand priorities?")).toBe("full_task");
     expect(classifyContextMode("which errand should I do first?")).toBe("full_task");
     expect(detectRequestedCategories("which errand task should I do first?")).toEqual(["Personal"]);
+  });
+});
+
+describe("period questions and the other phrasings that fell through to light (#535)", () => {
+  const paced = { lastFullTaskTime: Date.now() - 60_000, hasLastPlan: true };
+
+  it.each([
+    "how was my week?",
+    "what did I get done this week?",
+    "how many tasks did I finish this week",
+    "what did I finish yesterday?",
+    "am I on track for my deadline?",
+    "which tasks keep getting moved?",
+    "what's stuck?",
+    "how much did I focus today?",
+    "how am I doing",
+    "how was my month?",
+    "weekly review",
+    "recap my week",
+    "what did I do yesterday",
+  ])("%s goes to full_task, paced or not (never the shortened prompts)", (q) => {
+    expect(classifyContextMode(q)).toBe("full_task");
+    expect(classifyContextMode(q, paced)).toBe("full_task");
+  });
+
+  it.each([
+    "when is my deadline?",
+    "what's in my mind box?",
+    "what's on my week horizon?",
+    "what are my week tasks?",
+    "show my plan for this month",
+  ])("%s is a broad ask: full_task even right after a full scan", (q) => {
+    expect(classifyContextMode(q, paced)).toBe("full_task");
+  });
+
+  it("a period question inside a distressed message still gets the data", () => {
+    expect(classifyContextMode("I feel terrible, how was my week")).toBe("full_task");
+  });
+
+  it("does not take ordinary or look-alike messages for a period question", () => {
+    for (const q of ["what did I do wrong", "remember to call mom", "how is my thesis front going?", "when should I take a break?"]) {
+      expect(detectPeriodIntent(q)).toBeNull();
+      expect(classifyContextMode(q)).toBe("light");
+    }
+  });
+
+  it("reads the period asked about: a month for 'month', otherwise a week", () => {
+    expect(detectPeriodIntent("how was my month?")).toEqual({ days: 30 });
+    expect(detectPeriodIntent("monthly review")).toEqual({ days: 30 });
+    expect(detectPeriodIntent("how was my week?")).toEqual({ days: 7 });
+    expect(detectPeriodIntent("how am I doing")).toEqual({ days: 7 });
+    expect(detectPeriodIntent("")).toBeNull();
+    expect(detectPeriodIntent(undefined)).toBeNull();
+  });
+
+  it("'remember that…' and 'do you remember…' go to the mode that can keep memory", () => {
+    expect(classifyContextMode("remember that I prefer mornings for deep work")).toBe("profile_reflection");
+    expect(classifyContextMode("please remember I hate meetings after 4")).toBe("profile_reflection");
+    expect(classifyContextMode("do you remember my goal?")).toBe("profile_reflection");
+    expect(classifyContextMode("forget that, I changed my mind")).toBe("profile_reflection");
+  });
+
+  it("a short reply to something Coach just asked keeps an action-capable mode", () => {
+    expect(classifyContextMode("the report one", { lastReplyAsked: true })).toBe("compact_task");
+    expect(classifyContextMode("yes", { lastReplyAsked: true })).toBe("compact_task");
+    // Without a question to answer it is just light, as before.
+    expect(classifyContextMode("the report one")).toBe("light");
+    // A long message is a new topic, not an answer.
+    expect(classifyContextMode("x".repeat(120), { lastReplyAsked: true })).toBe("light");
+  });
+
+  it("an answer that is itself a task ask still gets the full prompt", () => {
+    expect(classifyContextMode("what should I work on first", { lastReplyAsked: true })).toBe("full_task");
   });
 });
