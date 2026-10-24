@@ -104,25 +104,39 @@ export function RadioList({ label, options, value, onChange }) {
 // Text that saves as you type (44c: "Changes save as you type"): held locally,
 // written 600ms after the last keystroke and on blur, so typing a paragraph is
 // a handful of writes rather than one per key. A value arriving from another
-// device replaces the draft only while the field isn't being edited.
+// device replaces the draft unless there is typing not yet saved.
+//
+// What comes back from our own save is not "another device". A save usually
+// trims, so it returns without the space just typed; putting that into a field
+// that is still focused ate the space ("tuhin" + space + a pause + "da" gave
+// "tuhinda"). So the text last saved is remembered until the first saved value
+// arrives, and one that matches it apart from the edges is the echo and is left
+// alone.
 export function useAutosave(saved, commit, delay = 600) {
   const [draft, setDraft] = useState(saved ?? "");
-  const editing = useRef(false);
+  const dirty = useRef(false);
+  const lastSaved = useRef(null);
   const timer = useRef(null);
   const latest = useRef(draft);
   const commitRef = useRef(commit);
   commitRef.current = commit;
 
-  useEffect(() => { if (!editing.current) { setDraft(saved ?? ""); latest.current = saved ?? ""; } }, [saved]);
+  useEffect(() => {
+    const echo = lastSaved.current !== null && String(saved ?? "").trim() === lastSaved.current.trim();
+    lastSaved.current = null;
+    if (dirty.current || echo) return;
+    setDraft(saved ?? "");
+    latest.current = saved ?? "";
+  }, [saved]);
 
   const flush = () => {
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }
-    if (editing.current) { editing.current = false; commitRef.current(latest.current); }
+    if (dirty.current) { dirty.current = false; lastSaved.current = latest.current; commitRef.current(latest.current); }
   };
   useEffect(() => () => flush(), []);
 
   const change = (v) => {
-    editing.current = true;
+    dirty.current = true;
     latest.current = v;
     setDraft(v);
     if (timer.current) clearTimeout(timer.current);

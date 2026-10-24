@@ -305,3 +305,19 @@ test("the title wraps while edited, stays one line, and Enter saves it", async (
   await field.press("Enter");
   await expect(sheet(page).locator(".detail-title")).toHaveText("Ask whether the fixed rate can be extended for another five years first");
 });
+
+// A pause right after a space must not eat the space. The autosave saves the title
+// trimmed, and that trimmed value used to come back and replace the draft while the
+// field was still focused, so "tuhin" + space + a pause + "da" became "tuhinda".
+test("a space typed before a pause in the title is kept", async ({ page }) => {
+  await enterDemo(page);
+  await openFromDetails(page);
+  await sheet(page).locator(".detail-title").click();
+  const field = sheet(page).locator(".detail-title-input");
+  await field.fill("Call tuhin");
+  await field.press("End");
+  await field.pressSequentially(" ");
+  await page.waitForTimeout(1200); // longer than the 600 ms autosave, and the save has come back
+  await field.pressSequentially("da");
+  await expect(field).toHaveValue("Call tuhin da");
+});
