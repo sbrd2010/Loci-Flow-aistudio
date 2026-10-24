@@ -588,3 +588,17 @@
 .coach-action-undo:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .coach-msg .coach-action-done.is-gone { color: var(--ink-2); font-weight: 600; }
 .coach-action-undo:disabled { opacity: 0.45; cursor: default; }
+/* Stop, under "Thinking…": ends the request. Same quiet link look as Undo. */
+.coach-stop {
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--accent-muted);
+  cursor: pointer;
+}
+.coach-stop:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
