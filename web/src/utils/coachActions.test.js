@@ -1003,13 +1003,12 @@ describe("applyCoachActions", () => {
     }
   });
 
-  it("uses the Loci day for dateCompletedString and the local calendar day for contributions across midnight", () => {
+  it("counts the task and its tick toward the same Loci day across midnight", () => {
     const windows = getFocusWindows({ focusWindows: [{ start: "22:00", end: "04:00" }] });
     const now = new Date(2026, 5, 14, 1, 0); // June 14, 1:00 AM — still the June 13 Loci day
     const lociDateStr = getLociDayStr(now, windows);
-    const localDateStr = getLocalDateString(now);
     expect(lociDateStr).toBe("2026-06-13");
-    expect(localDateStr).toBe("2026-06-14");
+    expect(getLocalDateString(now)).toBe("2026-06-14");
 
     const payload = {
       userId: "user-1",
@@ -1017,9 +1016,23 @@ describe("applyCoachActions", () => {
       config: {},
       contributions: [],
     };
-    const { payload: next } = applyCoachActions(payload, [{ type: "COMPLETE_TASK", title: "Write report" }], { lociDateStr, localDateStr, lastUserMessage: "I'm done with the report" });
+    const { payload: next } = applyCoachActions(payload, [{ type: "COMPLETE_TASK", title: "Write report" }], { lociDateStr, lastUserMessage: "I'm done with the report" });
     expect(next.tasks[0].dateCompletedString).toBe("2026-06-13");
-    expect(next.contributions).toEqual([expect.objectContaining({ dateString: "2026-06-14" })]);
+    expect(next.contributions).toEqual([expect.objectContaining({ dateString: "2026-06-13", count: 1 })]);
+  });
+
+  it("Undo of a completion takes the tick back from the day the task was stamped with, not today's", () => {
+    const payload = {
+      userId: "user-1",
+      tasks: [{ uuid: "1", title: "Write report", isCompleted: false, isDeleted: false, isParked: false }],
+      config: {},
+      contributions: [],
+    };
+    const { payload: done } = applyCoachActions(payload, [{ type: "COMPLETE_TASK", title: "Write report" }], { lociDateStr: "2026-06-13", lastUserMessage: "I'm done with the report" });
+    // A tick for a later day exists too; Undo must not touch it.
+    const withLater = { ...done, contributions: [...done.contributions, { compositeKey: "user-1_2026-06-14", userId: "user-1", dateString: "2026-06-14", count: 2 }] };
+    const back = undoCoachAction(withLater, { type: "COMPLETE_TASK", taskUuid: "1" }, 5);
+    expect(back.contributions.map(c => [c.dateString, c.count])).toEqual([["2026-06-13", 0], ["2026-06-14", 2]]);
   });
 
   it("ADD_TASK rejects an empty or whitespace-only title", () => {

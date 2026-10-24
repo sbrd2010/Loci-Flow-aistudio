@@ -65,7 +65,7 @@ export function buildOverview(raw, nowMs, timeZone) {
   const completedByDay = new Map(c.contributions.filter(x => x && typeof x === "object").map(x => [x.dateString, Number(x.count) || 0]));
   const last7Days = [];
   for (let back = 6; back >= 0; back -= 1) {
-    const day = addDays(calendarToday, -back);
+    const day = addDays(lociDay, -back);
     last7Days.push({ date: day, completed: completedByDay.get(day) || 0 });
   }
 

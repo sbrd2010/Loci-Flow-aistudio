@@ -17,6 +17,7 @@ import { safeUUID } from "../utils/uuid";
 import { endSessionTasks, switchToNextTasks, withNextStep } from "../utils/focusEnd";
 import { taskSteps, stepsPatch, applyStepsPatch } from "../utils/taskSteps";
 import { buildToggleCompletedTasks } from "../utils/taskOps";
+import { addCompletionTick, takeBackTick } from "../utils/completionTicks";
 import { buildParkTaskTasks } from "../utils/coachActions";
 import { shouldStopFocusOnComplete, focusBlockSeconds, chosenStartOption } from "../utils/focusSession";
 import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
@@ -382,23 +383,6 @@ export default function TodayTab({
   // they are when Undo is tapped, not as they were 5 seconds earlier.
   const [undo, setUndo] = useState(null);
 
-  const getTodayDateString = () => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  };
-
-  const incrementContribution = (newContributions, dateStr) => {
-    const index = newContributions.findIndex((c) => c.dateString === dateStr);
-    const uid = payload.userId || payload.config?.userId || "";
-    const compositeKey = `${uid}_${dateStr}`;
-    if (index === -1) {
-      newContributions.push({ compositeKey, userId: uid, dateString: dateStr, count: 1, lastUpdated: Date.now() });
-    } else {
-      newContributions[index] = { ...newContributions[index], count: newContributions[index].count + 1, lastUpdated: Date.now() };
-    }
-    return newContributions;
-  };
-
   // restorePin: Undo of a Mark done puts the task back on the wall — but only
   // if nothing else has been made the one thing in the meantime.
   const handleToggleComplete = (task, { restorePin = false } = {}) => {
@@ -408,7 +392,6 @@ export default function TodayTab({
     // the wrong side of a Loci-day boundary if the action itself happened
     // right before it.
     const actionAt = Date.now();
-    const todayDateStr = getTodayDateString();
     const isCompleted = !task.isCompleted;
     if (isCompleted && task.reminderAt) cancelReminder(task.uuid);
     // Synchronously stop timer/focus overlay when completing the active focused task,
@@ -435,15 +418,12 @@ export default function TodayTab({
       celebrate({ sound: uiSoundsOn(config) });
       track("task_completed", { horizon: task.horizonLevel });
     }
-    let nextContributions = [...contributions];
-    if (isCompleted) {
-      nextContributions = incrementContribution(nextContributions, todayDateStr);
-    } else {
-      const contrIdx = nextContributions.findIndex((c) => c.dateString === todayDateStr);
-      if (contrIdx !== -1 && nextContributions[contrIdx].count > 0) {
-        nextContributions[contrIdx] = { ...nextContributions[contrIdx], count: nextContributions[contrIdx].count - 1, lastUpdated: Date.now() };
-      }
-    }
+    // The tick counts toward the Loci day, the same day dateCompletedString
+    // carries. Reopening takes it back from the day the task was finished on,
+    // which is not always today.
+    const nextContributions = isCompleted
+      ? addCompletionTick(contributions, todayStr, payload)
+      : takeBackTick(contributions, task, todayStr);
     savePayloadAsync({ ...payload, tasks: updatedTasks, contributions: nextContributions })
       .then(() => {
         const events = [buildTaskMutationEvent(isCompleted ? "task_completed" : "task_reopened", task, { windows, now: actionAt })];

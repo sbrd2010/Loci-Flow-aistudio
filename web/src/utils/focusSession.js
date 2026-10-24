@@ -1,4 +1,5 @@
 import { buildToggleCompletedTasks } from "./taskOps";
+import { addCompletionTick } from "./completionTicks";
 import { getFocusWindows, getLociDayStr } from "./focusWindows";
 
 // Whether the focus bar (59e) shows: while a session runs, off the focus
@@ -121,21 +122,14 @@ export function shouldTriggerSessionComplete({ isTimerRunning, timerSecondsLeft 
 
 // Build the updated payload for completing the focused task from the global
 // Focus completion prompt's "Finish task" choice — mirrors the
-// contribution rules of the existing in-Today completion flow.
-export function buildFocusCompletionPayload(payload, task, todayDateStr, date = new Date()) {
+// contribution rules of the existing in-Today completion flow: the task and
+// its tick both count toward the Loci day.
+export function buildFocusCompletionPayload(payload, task, date = new Date()) {
   const { tasks = [], config = {}, contributions = [] } = payload;
   const lociTodayStr = getLociDayStr(date, getFocusWindows(config));
-  const nextContributions = [...contributions];
-  const idx = nextContributions.findIndex((c) => c.dateString === todayDateStr);
-  const uid = payload.userId || config.userId || "";
-  if (idx === -1) {
-    nextContributions.push({ compositeKey: `${uid}_${todayDateStr}`, userId: uid, dateString: todayDateStr, count: 1, lastUpdated: Date.now() });
-  } else {
-    nextContributions[idx] = { ...nextContributions[idx], count: nextContributions[idx].count + 1, lastUpdated: Date.now() };
-  }
   return {
     ...payload,
     tasks: buildToggleCompletedTasks(tasks, task.uuid, true, lociTodayStr),
-    contributions: nextContributions,
+    contributions: addCompletionTick(contributions, lociTodayStr, payload),
   };
 }

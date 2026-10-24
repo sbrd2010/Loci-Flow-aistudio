@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { getFocusWindows } from "./focusWindows";
 import {
   MIN_COUNTABLE_MINUTES,
   eventMinutes,
@@ -102,6 +103,18 @@ describe("lociDayWindow", () => {
   it("crosses a month boundary correctly", () => {
     const w = lociDayWindow(5, new Date(2026, 11, 2, 12, 0), WINDOWS);
     expect(w).toEqual(["2026-11-28", "2026-11-29", "2026-11-30", "2026-12-01", "2026-12-02"]);
+  });
+
+  it("neither repeats nor skips a day across a daylight-saving change in a late window", () => {
+    const previous = process.env.TZ;
+    process.env.TZ = "America/New_York";
+    try {
+      const late = getFocusWindows({ focusWindows: [{ start: "09:00", end: "03:00" }] });
+      // 02:30 on 9 Mar 2026, the morning after the clocks went forward: still the 8th's day.
+      expect(lociDayWindow(3, new Date(2026, 2, 9, 2, 30), late)).toEqual(["2026-03-06", "2026-03-07", "2026-03-08"]);
+    } finally {
+      if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous;
+    }
   });
 });
 

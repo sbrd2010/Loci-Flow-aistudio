@@ -43,7 +43,7 @@ const TOOLS = [
   },
   {
     name: "get_week", title: "Recent days", parts: ["tasks", "config", "contributions"], build: buildWeek, ledgerDays: (args) => args.days ?? 14, ledgerOptional: true,
-    inputSchema: { days: z.number().int().min(1).max(60).optional().describe("How many days back, ending today. Default 14.") },
+    inputSchema: { days: z.number().int().min(1).max(60).optional().describe("How many days back, ending on the Loci day. Default 14.") },
     description:
       "Day by day for the last N days: the app's completion count, the tasks completed that day, the focus minutes and sessions logged, and the user's Close-the-day record (done, moved to tomorrow, planned, dropped, focus minutes, their note, first thing for tomorrow).",
   },
