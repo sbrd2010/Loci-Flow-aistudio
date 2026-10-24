@@ -25,7 +25,9 @@ import { buildPersonaInstruction } from "../utils/coachPersona";
 import { buildProfileContext } from "../utils/coachProfile";
 import { addPinnedFact, addRecentObservation, buildLociMemoryContext, forgetFromMemory, isMemoryEnabled, parseMemoryTags, isResurrectedMemoryEntry } from "../utils/coachMemory";
 import { stripReasoningTag } from "../utils/coachReasoning";
-import { classifyContextMode, needsConversationContext, historyLimitForMode, detectRequestedCategories } from "../utils/coachContextMode";
+import { classifyContextMode, needsConversationContext, historyLimitForMode, detectRequestedCategories, detectPeriodIntent } from "../utils/coachContextMode";
+import { buildLociPeriodContext, buildLociDeadlinesContext, detectDeadlineIntent } from "../utils/coachPeriodDigest";
+import { readFocusOnce } from "../utils/readFocusOnce";
 import { buildCoachSystemPrompt } from "../utils/coachSystemPrompt";
 import {
   needsSummaryUpdate, llmHistoryStart, pendingSummaryMessages, buildPendingSummaryContext,
@@ -720,7 +722,15 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
       }
     }
     const lastFullTaskTime = getLastFullTaskTime(userId);
-    const contextMode = classifyContextMode(userText, { lastFullTaskTime, hasLastPlan: !!lastPlan });
+    // A short reply to something Coach just asked or offered ("the report one")
+    // needs the action protocol the light prompt does not carry.
+    const lastShown = chatHistory[chatHistory.length - 1];
+    const lastReplyAsked = !!lastShown && !lastShown.isUser && !isAISystemReply(lastShown.text) &&
+      (String(lastShown.text || "").trim().endsWith("?") || (lastShown.actions || []).some(a => a.state === "proposed"));
+    const contextMode = classifyContextMode(userText, { lastFullTaskTime, hasLastPlan: !!lastPlan, lastReplyAsked });
+    // "How was my week?": the numbers behind it ride with this one message.
+    const periodIntent = detectPeriodIntent(userText);
+    const deadlineIntent = !periodIntent && detectDeadlineIntent(userText);
     const isReference = needsConversationContext(userText);
     const epoch = conversationEpoch;
     const controller = new AbortController();
@@ -782,7 +792,8 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     const deadlineContext = buildLociDeadlineContext(config, now);
     const dayMapContext = buildLociDayMapContext(tasks, todayStr);
     const brainDumpContext = buildLociBrainDumpContext(brainDump);
-    const velocityContext = buildLociVelocityContext(contributions, now, getFocusWindows(config));
+    // The period digest carries the same counts, so the two are never both sent.
+    const velocityContext = periodIntent ? "" : buildLociVelocityContext(contributions, now, getFocusWindows(config));
     const remindersContext = buildLociRemindersContext(tasks, now);
     const pendingCheckinContext = buildCoachCheckinContext(config.coachCheckin, now.getTime());
     const recentlyParkedContext = buildLociRecentlyParkedContext(tasks, now);
@@ -906,7 +917,23 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     // leave the chat stuck on "Thinking…" for every later visit to this tab.
     setReplyInFlight(true, controller);
     try {
-      const reply = await callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPrompt: systemInstruction, messages, maxTokens, contextMode, reasoningEffort: "low", signal: controller.signal });
+      // Only a period or deadline question pays for the extra block. It waits for
+      // the focus log (a short, bounded read) inside the try, so Thinking and Stop
+      // already cover it.
+      let systemPrompt = systemInstruction;
+      if (contextMode === "full_task" && (periodIntent || deadlineIntent)) {
+        let block = "";
+        if (cloudSyncUnconfirmed) {
+          block = "PERIOD DIGEST AND DEADLINES: not available, because this device has not finished syncing. Say so plainly and do not guess any numbers.";
+        } else if (periodIntent) {
+          const focusRaw = await readFocusOnce(uid, periodIntent.days, getFocusWindows(configRef.current));
+          block = `${buildLociPeriodContext({ tasks: tasksRef.current, contributions: contributionsRef.current, config: configRef.current, now, days: periodIntent.days, focusRaw })}\nAnswer how the period went from the PERIOD DIGEST: quote its numbers, say what it does not cover, and never invent days, tasks, minutes or deadlines.`;
+        } else {
+          block = buildLociDeadlinesContext({ tasks: tasksRef.current, config: configRef.current, now });
+        }
+        if (block) systemPrompt = `${systemInstruction}\n\n${block}`;
+      }
+      const reply = await callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPrompt, messages, maxTokens, contextMode, reasoningEffort: "low", signal: controller.signal });
       // The conversation was cleared while this was on its way: writing the
       // reply would bring the old chat back.
       if (epoch !== conversationEpoch) return;

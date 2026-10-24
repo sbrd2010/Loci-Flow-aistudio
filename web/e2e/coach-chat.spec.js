@@ -394,6 +394,56 @@ test("Coach chat: coming back to the tab mid-reply still shows Thinking, and a s
   await expect(page.locator(".coach-msg.is-you")).toHaveCount(1);
 });
 
+// #535: "how was my week?" got the scripted "Loci context issue" line, because it
+// went to the light prompt, which does not carry the week's numbers. It now goes
+// to the full prompt with a digest of the period, even right after another full
+// scan (which used to downgrade it).
+test("Coach chat: 'how was my week?' carries the period digest, even right after a full scan", async ({ page }) => {
+  await page.addInitScript(() => { window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key"); });
+  const bodies = [];
+  await page.route("https://api.groq.com/**", async (route) => {
+    bodies.push(JSON.parse(route.request().postData()));
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content: "Here is how it went." } }] }) });
+  });
+  await enterDemo(page, { width: 1600, height: 900 });
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
+  const input = page.locator(".coach-composer-input");
+
+  // A full scan first, so the next question is inside the ten-minute window.
+  await input.fill("What should I work on first today?");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.locator(".coach-msg.is-coach")).toHaveCount(1, { timeout: 10_000 });
+  const system = (b) => b.messages.find(m => m.role === "system").content;
+  expect(system(bodies[0])).not.toContain("PERIOD DIGEST");
+  expect(system(bodies[0])).toContain("COMPLETION VELOCITY");
+
+  await input.fill("how was my week?");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.locator(".coach-msg.is-coach")).toHaveCount(2, { timeout: 10_000 });
+  const asked = system(bodies[1]);
+  expect(asked).toContain("PERIOD DIGEST (the last 7 days");
+  expect(asked).toMatch(/- Finished: \d+ tasks? on \d+ days?/);
+  expect(asked).toContain("CURRENT CAPPED TASK CONTEXT"); // the full prompt, not the light one
+  expect(asked).toContain("not available in this message; do not guess it"); // demo has no focus log
+  expect(asked).not.toContain("COMPLETION VELOCITY"); // the digest replaces it
+  expect(asked).not.toContain("Loci context issue");
+});
+
+test("Coach chat: a question that is not about a period does not pay for the digest", async ({ page }) => {
+  await page.addInitScript(() => { window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key"); });
+  const bodies = [];
+  await page.route("https://api.groq.com/**", async (route) => {
+    bodies.push(JSON.parse(route.request().postData()));
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content: "Let's pick one tiny next step." } }] }) });
+  });
+  await enterDemo(page, { width: 1600, height: 900 });
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
+  await page.locator(".coach-composer-input").fill("I feel a bit scattered right now");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.locator(".coach-msg.is-coach")).toHaveCount(1, { timeout: 10_000 });
+  expect(bodies[0].messages.find(m => m.role === "system").content).not.toContain("PERIOD DIGEST");
+});
+
 test("Coach actions: the tap really marks the task done on Today", async ({ page }) => {
   const task = "10-minute walk between tasks to reset your focus";
   await page.route("https://api.groq.com/**", (route) => route.fulfill({
