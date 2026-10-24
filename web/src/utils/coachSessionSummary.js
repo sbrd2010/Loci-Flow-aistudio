@@ -98,6 +98,14 @@ export function needsSummaryUpdate(rawWindowStart, summarizedThroughIndex) {
   return rawWindowStart - (summarizedThroughIndex || 0) >= SUMMARY_UPDATE_MIN_PENDING;
 }
 
+// Where the chat-role history sent to the model starts. While fewer than
+// SUMMARY_UPDATE_MIN_PENDING messages wait, they are in no summary yet, so
+// they stay in the history instead of vanishing from this reply (Codex
+// review of #550). On a rewrite turn they go in the pending block instead.
+export function llmHistoryStart(rawWindowStart, summarizedThroughIndex, summaryUpdateNeeded) {
+  return summaryUpdateNeeded ? rawWindowStart : Math.min(rawWindowStart, summarizedThroughIndex || 0);
+}
+
 // The message slice that must be included one final time in this turn's
 // prompt so the model can fold it into the summary before it's excluded
 // going forward. Never trims/drops these before they've actually been

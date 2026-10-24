@@ -4,6 +4,7 @@ import {
   parseSessionSummaryTag,
   needsSummaryUpdate,
   SUMMARY_UPDATE_MIN_PENDING,
+  llmHistoryStart,
   pendingSummaryMessages,
   buildPendingSummaryContext,
   pendingSummaryIncludedCount,
@@ -116,6 +117,22 @@ describe("needsSummaryUpdate", () => {
   it("treats a missing cursor as 0", () => {
     expect(needsSummaryUpdate(4, undefined)).toBe(true);
     expect(needsSummaryUpdate(3, undefined)).toBe(false);
+  });
+});
+
+describe("llmHistoryStart", () => {
+  it("keeps 1-3 unsummarized messages in the history while the rewrite waits (Codex review of #550)", () => {
+    // 13 messages, a 10-message window, cursor 0: messages 0-2 stay in.
+    expect(llmHistoryStart(3, 0, false)).toBe(0);
+    expect(llmHistoryStart(10, 7, false)).toBe(7);
+  });
+
+  it("starts at the window on a rewrite turn, where the pending block carries the older messages", () => {
+    expect(llmHistoryStart(4, 0, true)).toBe(4);
+  });
+
+  it("never starts past the window when the cursor is ahead of it (e.g. after a light turn)", () => {
+    expect(llmHistoryStart(5, 8, false)).toBe(5);
   });
 });
 
@@ -385,6 +402,10 @@ describe("full-conversation simulation across the 40-message boundary (loopcheck
       const rawWindowStart = Math.max(0, savedHistory.length - historyLimitForMode("full_task", false));
       const summarizedThroughIndex = coachSessionSummary?.summarizedThroughIndex || 0;
       const updateNeeded = needsSummaryUpdate(rawWindowStart, summarizedThroughIndex);
+      // Every message not yet summarized reaches the model this turn: in the
+      // chat history, or in the pending block on a rewrite turn.
+      const historyStart = llmHistoryStart(rawWindowStart, summarizedThroughIndex, updateNeeded);
+      expect(updateNeeded ? historyStart === rawWindowStart : historyStart <= summarizedThroughIndex).toBe(true);
       if (updateNeeded) {
         // 2 messages age out of the 10-message window per turn, so this
         // fires every second turn once 4 are pending (#545 C12). What must

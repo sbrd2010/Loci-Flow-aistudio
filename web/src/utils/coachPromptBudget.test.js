@@ -58,10 +58,10 @@ function fixture(large) {
 }
 
 // The same inputs CoachTab.jsx passes, with 10 earlier messages of 250 chars.
-function buildRequest(mode, { large = false, summaryTurn = false } = {}) {
+function buildRequest(mode, { large = false, summaryTurn = false, carried = 0 } = {}) {
   const { tasks, config, brainDump, contributions, summary } = fixture(large);
   const userText = "What should I work on next today?";
-  const history = Array.from({ length: 10 }, (_, i) => ({ isUser: i % 2 === 0, text: filler(`Message ${i + 1}.`, 250) }));
+  const history = Array.from({ length: 10 + carried }, (_, i) => ({ isUser: i % 2 === 0, text: filler(`Message ${i + 1}.`, 250) }));
   history.push({ isUser: true, text: userText });
   const rawWindowStart = Math.max(0, history.length - historyLimitForMode(mode, false));
   // A summary turn has SUMMARY_UPDATE_MIN_PENDING messages waiting.
@@ -99,7 +99,8 @@ function buildRequest(mode, { large = false, summaryTurn = false } = {}) {
     sessionSummaryContext: mode === "light" ? "" : buildSessionSummaryContext(summary),
     pendingSummaryContext: buildPendingSummaryContext(pending),
   });
-  const messages = trimHistoryForLLM(history, mode, false);
+  // carried: unsummarized messages kept in the history while the rewrite waits.
+  const messages = carried ? history.slice(rawWindowStart - carried) : trimHistoryForLLM(history, mode, false);
   const chars = system.length + messages.reduce((n, m) => n + m.text.length, 0);
   const maxTokens = MAX_TOKENS[mode] + (summaryTurn ? SUMMARY_TURN_EXTRA_TOKENS : 0);
   return { system, chars, groqTokens: Math.ceil(chars / CHARS_PER_TOKEN) + maxTokens };
@@ -117,6 +118,10 @@ describe("Coach prompt budgets (#545 C8)", () => {
 
   it("a typical full_task turn fits Groq's free tier with 5% headroom", () => {
     expect(buildRequest("full_task").groqTokens).toBeLessThanOrEqual(GROQ_TPM * 0.95);
+  });
+
+  it("a typical full_task turn carrying the most messages a deferred rewrite leaves out still fits with 5% headroom", () => {
+    expect(buildRequest("full_task", { carried: SUMMARY_UPDATE_MIN_PENDING - 1 }).groqTokens).toBeLessThanOrEqual(GROQ_TPM * 0.95);
   });
 
   it("a typical full_task summary-rewrite turn still fits Groq's free tier", () => {
