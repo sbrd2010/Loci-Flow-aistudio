@@ -92,9 +92,11 @@ export function buildLociPeriodContext({ tasks = [], contributions = [], config 
     .filter(t => t && !t.isDeleted && t.isCompleted && inCurrent.has(t.dateCompletedString))
     .sort((a, b) => String(b.dateCompletedString).localeCompare(String(a.dateCompletedString)) || (b.lastUpdated || 0) - (a.lastUpdated || 0));
   if (finished.length > 0) {
-    const shown = finished.slice(0, DIGEST_FINISHED_MAX).map(t => `'${clip(t.title)}'`).join(", ");
+    // The day goes with each title, so "what did I finish yesterday?" is answered
+    // from the titles stamped with that day, not the whole period's.
+    const shown = finished.slice(0, DIGEST_FINISHED_MAX).map(t => `'${clip(t.title)}' (${dayLabel(t.dateCompletedString)})`).join(", ");
     const more = finished.length > DIGEST_FINISHED_MAX ? ` … +${finished.length - DIGEST_FINISHED_MAX} more` : "";
-    lines.push(`- Finished tasks still on file, newest first: ${shown}${more}.`);
+    lines.push(`- Finished tasks still on file, newest first, with the day each was finished: ${shown}${more}.`);
   }
 
   if (focusRaw) {

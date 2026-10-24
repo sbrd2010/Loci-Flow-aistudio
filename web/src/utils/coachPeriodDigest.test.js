@@ -29,8 +29,14 @@ describe("buildLociPeriodContext", () => {
       done("Fixed figure 2", "2026-10-22"),
     ];
     const out = buildLociPeriodContext({ now: NOW, tasks });
-    expect(out).toContain("newest first: 'Wrote the intro', 'Fixed figure 2'.");
+    expect(out).toContain("newest first, with the day each was finished: 'Wrote the intro' (Fri 23), 'Fixed figure 2' (Thu 22).");
     expect(out).not.toContain("Old win");
+  });
+
+  it("puts the day on every title, so yesterday's can be told from the rest of the week's", () => {
+    const tasks = [done("Yesterday's win", "2026-10-23"), done("Wednesday's win", "2026-10-21"), done("Today's win", "2026-10-24")];
+    const out = buildLociPeriodContext({ now: NOW, tasks });
+    expect(out).toContain("'Today's win' (Sat 24), 'Yesterday's win' (Fri 23), 'Wednesday's win' (Wed 21)");
   });
 
   it("leaves out deleted tasks, and caps the list with a count of the rest", () => {
@@ -41,12 +47,12 @@ describe("buildLociPeriodContext", () => {
     const out = buildLociPeriodContext({ now: NOW, tasks });
     expect(out).toContain("… +3 more");
     expect(out).not.toContain("Deleted one");
-    expect(out.match(/'Task \d+'/g)).toHaveLength(DIGEST_FINISHED_MAX);
+    expect(out.match(/'Task \d+' \(Fri 23\)/g)).toHaveLength(DIGEST_FINISHED_MAX);
   });
 
   it("clips a very long title", () => {
     const out = buildLociPeriodContext({ now: NOW, tasks: [done("x".repeat(300), "2026-10-23")] });
-    expect(out).toContain(`'${"x".repeat(59)}…'`);
+    expect(out).toContain(`'${"x".repeat(59)}…' (Fri 23)`);
   });
 
   it("counts by Loci day: at 00:30 in a window that runs to 02:00 the last day is still yesterday", () => {
@@ -56,7 +62,7 @@ describe("buildLociPeriodContext", () => {
     expect(out).toContain("Finished: 2 tasks on 1 day");
     expect(out).toContain("Fri 23 2");
     expect(out).not.toContain("Sat 24");
-    expect(out).toContain("'Late finish'");
+    expect(out).toContain("'Late finish' (Fri 23)");
   });
 
   it("for a month gives the 30-day total and comparison, with no per-day list", () => {
@@ -96,7 +102,7 @@ describe("buildLociPeriodContext", () => {
       expect(out).toContain("(the 7 days before the last 7 days, 11 Oct to 17 Oct,");
       expect(out).toContain("Finished: 6 tasks on 2 days (the 7 days before that: 6).");
       expect(out).toContain("By day, oldest first: Sun 11 0, Mon 12 2, Tue 13 0, Wed 14 0, Thu 15 0, Fri 16 4, Sat 17 0.");
-      expect(out).toContain("'Last week win'");
+      expect(out).toContain("'Last week win' (Fri 16)");
       expect(out).not.toContain("This week win");
       expect(out).not.toContain("Week before win");
     });
