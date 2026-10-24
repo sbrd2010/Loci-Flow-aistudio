@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { callAI, getAIKeys, buildProviderOrder, isProviderOnly } from "../utils/aiCall";
+import { localSafetyTurns } from "../utils/crisisSafety";
 import { buildLocalSafetyReply, buildOfflineRescueReply, buildRescuePrompt, filterApplicableRescueActions, parseRescueActionTags } from "../utils/rescueCoachPrompt";
 import { buildRescueHandoffSummary } from "../utils/rescueHandoff";
 import { CLEAR_DESTINATIONS, clearMyDayPlan } from "../utils/clearMyDay";
@@ -257,9 +258,12 @@ export default function RescueMode({
     setLoading(true);
     try {
       // history is [{role: "user"|"ai", text}] — convert to OpenAI format
-      const messages = history.map(m => ({
-        role: m.role === "ai" ? "assistant" : "user",
-        content: m.text || m.parts?.[0]?.text || ""
+      // A crisis message answered on this device, and its canned reply, stay on it.
+      const asChat = history.map(m => ({ isUser: m.role !== "ai", text: m.text || m.parts?.[0]?.text || "" }));
+      const privateTurns = localSafetyTurns(asChat);
+      const messages = asChat.filter(m => !privateTurns.has(m)).map(m => ({
+        role: m.isUser ? "user" : "assistant",
+        content: m.text
       })).filter(m => m.content);
 
       const lastUserText = [...messages].reverse().find(m => m.role === "user")?.content || "";

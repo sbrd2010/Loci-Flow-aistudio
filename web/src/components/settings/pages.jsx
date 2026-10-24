@@ -546,6 +546,8 @@ export function AiProviderPage({ onBack, backLabel }) {
   const choose = (p) => {
     setPref(p);
     try { localStorage.setItem("loci_provider_pref", p); } catch { /* storage blocked */ }
+    // Auto has no one provider to keep to; the switch is gone, so it goes off too rather than coming back unseen.
+    if (p === "auto") chooseOnly(false);
   };
   const chooseOnly = (v) => {
     setOnly(v);

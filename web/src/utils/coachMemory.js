@@ -228,6 +228,13 @@ export function savedNote({ saved = [], removed = [], checkinMinutes = null } = 
   if (checkinMinutes != null) parts.push(`Check-in set for ${checkinMinutes} min`);
   return parts.length ? `*${parts.join(". ")}*` : "";
 }
+// The reply and its note apart, so the note can be shown outside the four-line
+// clamp (a long reply would otherwise hide it behind "Show all").
+export function splitSavedNote(text = "") {
+  const t = String(text);
+  const m = SAVED_NOTE_RE.exec(t);
+  return m ? { body: t.slice(0, m.index), note: m[0].trim().replace(/^\*|\*$/g, "") } : { body: t, note: "" };
+}
 export function stripSavedNote(text = "") {
   return String(text).replace(SAVED_NOTE_RE, "");
 }

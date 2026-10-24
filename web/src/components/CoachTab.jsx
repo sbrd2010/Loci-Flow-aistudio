@@ -23,7 +23,7 @@ import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, parseCheckinReques
 import { parseCoachActionTags, applyCoachActions, buildActionReplyText, buildSetNowFocusTasks, buildParkTaskTasks, findTaskByTitle, undoCoachAction } from "../utils/coachActions";
 import { buildPersonaInstruction } from "../utils/coachPersona";
 import { buildProfileContext } from "../utils/coachProfile";
-import { addPinnedFact, addRecentObservation, buildLociMemoryContext, describeMemoryChange, forgetFromMemory, isMemoryEnabled, parseMemoryTags, isResurrectedMemoryEntry, savedNote, stripSavedNote } from "../utils/coachMemory";
+import { addPinnedFact, addRecentObservation, buildLociMemoryContext, describeMemoryChange, forgetFromMemory, isMemoryEnabled, parseMemoryTags, isResurrectedMemoryEntry, savedNote, splitSavedNote, stripSavedNote } from "../utils/coachMemory";
 import { stripReasoningTag } from "../utils/coachReasoning";
 import { classifyContextMode, needsConversationContext, historyLimitForMode, detectRequestedCategories, detectPeriodIntent } from "../utils/coachContextMode";
 import { buildLociPeriodContext, buildLociDeadlinesContext, detectDeadlineIntent } from "../utils/coachPeriodDigest";
@@ -1229,7 +1229,12 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
       const savedLine = savedNote({
         ...(memoryPatch ? describeMemoryChange(
           configRef.current.coachMemory || {},
-          { pinnedFacts: willAddMemory ? pinnedFacts : [], observations: willAddMemory ? observations : [], forgets: willForget ? forgets : [] },
+          {
+            // The same entries the save will skip (deleted in Settings while the reply was on its way) are left out here too.
+            pinnedFacts: willAddMemory ? pinnedFacts.filter(t => !isResurrectedMemoryEntry(coachMemoryAtSendTime, configRef.current.coachMemory || {}, t)) : [],
+            observations: willAddMemory ? observations.filter(t => !isResurrectedMemoryEntry(coachMemoryAtSendTime, configRef.current.coachMemory || {}, t)) : [],
+            forgets: willForget ? forgets : [],
+          },
           todayStr
         ) : {}),
         checkinMinutes: configPatch?.coachCheckin ? checkinMinutes : null,
@@ -1813,7 +1818,8 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
               ) : (
                 // 74: a reply longer than four lines shows four and "Show all";
                 // its action buttons and chips stay in view under it.
-                <ClampedReply text={m.text} head={<span className="coach-msg-kicker"><span className="coach-msg-name">{coachName}</span>{m.at ? <><span className="coach-msg-sep"> · </span><span className="coach-msg-time">{clockHHMM(m.at)}</span></> : null}</span>}>
+                <>
+                <ClampedReply text={splitSavedNote(m.text).body} head={<span className="coach-msg-kicker"><span className="coach-msg-name">{coachName}</span>{m.at ? <><span className="coach-msg-sep"> · </span><span className="coach-msg-time">{clockHHMM(m.at)}</span></> : null}</span>}>
                 <ReactMarkdown
                   className="coach-md coach-msg-text"
                   remarkPlugins={[remarkGfm]}
@@ -1826,16 +1832,18 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
                     img: ({ alt }) => (alt ? <span>{alt}</span> : null),
                   }}
                 >
-                  {m.text}
+                  {splitSavedNote(m.text).body}
                 </ReactMarkdown>
                 </ClampedReply>
+                {splitSavedNote(m.text).note && <p className="coach-saved-note">{splitSavedNote(m.text).note}</p>}
+                </>
               )}
               <button
                 type="button"
                 className="chat-bubble-copy-btn"
                 aria-label="Copy message"
                 onClick={() => {
-                  safeCopyToClipboard(m.text).then(ok => {
+                  safeCopyToClipboard(stripSavedNote(m.text)).then(ok => {
                     if (ok) {
                       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
                       setCopiedMsgIdx(idx);
@@ -1888,7 +1896,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
               })()}
               {/* Phase A — prompt chips: last mentor message only, ephemeral */}
               {!m.isUser && idx === lastMentorIdx && (() => {
-                const chips = getPromptChips(m.text);
+                const chips = getPromptChips(stripSavedNote(m.text));
                 return chips.length > 0 ? (
                   <div className="coach-prompt-chips">
                     {chips.map((c, i) => (

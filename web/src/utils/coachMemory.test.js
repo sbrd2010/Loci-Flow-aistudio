@@ -10,6 +10,7 @@ import {
   forgetFromMemory,
   describeMemoryChange,
   savedNote,
+  splitSavedNote,
   stripSavedNote,
   clearAllMemory,
   isMemoryEnabled,
@@ -561,6 +562,15 @@ describe("describeMemoryChange / savedNote", () => {
     expect(note).toContain("and 42 more");
     const cut = `Noted.\n\n${note}`.slice(0, -40); // the cap cut the end, closing "*" gone
     expect(stripSavedNote(cut)).toBe("Noted.");
+  });
+
+  it("splits the note off the reply so it can be shown outside the clamp", () => {
+    const note = savedNote({ saved: ["User prefers mornings."] });
+    expect(splitSavedNote(`Line one.\nLine two.\n\n${note}`)).toEqual({
+      body: "Line one.\nLine two.",
+      note: "Saved to Coach memory: “User prefers mornings.”",
+    });
+    expect(splitSavedNote("No note here.")).toEqual({ body: "No note here.", note: "" });
   });
 
   it("names a check-in, and the note is stripped again before the model sees the reply", () => {

@@ -142,8 +142,10 @@ test("mobile reliability: Rescue chat never reaches the AI provider on crisis la
   });
 
   let groqCalled = false;
+  const groqBodies = [];
   await page.route("https://api.groq.com/**", async (route) => {
     groqCalled = true;
+    groqBodies.push(JSON.parse(route.request().postData()));
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -171,6 +173,15 @@ test("mobile reliability: Rescue chat never reaches the AI provider on crisis la
 
   await expect(page.getByText(/emergency services/i)).toBeVisible({ timeout: 8_000 });
   expect(groqCalled).toBe(false);
+
+  // The crisis line was answered here; the next message must not carry it to the provider.
+  await page.getByPlaceholder(/Tell me what's going on/).fill("okay, what should I do next?");
+  await page.keyboard.press("Enter");
+  await expect.poll(() => groqCalled, { timeout: 8_000 }).toBe(true);
+  const chat = JSON.stringify(groqBodies[groqBodies.length - 1].messages.filter(m => m.role !== "system"));
+  expect(chat).toContain("what should I do next");
+  expect(chat).not.toMatch(/kill myself/i);
+  expect(chat).not.toMatch(/emergency services/i);
 });
 
 test("mobile reliability: Rescue chat action tag starts an in-rescue timer", async ({ page }) => {

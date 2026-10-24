@@ -150,7 +150,7 @@ test("Coach chat: a memory note is shown under the reply and not sent back to th
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ choices: [{ message: { content: "Noted, mornings it is.\n[[REMEMBER: User prefers mornings for writing.]]" } }] }),
+      body: JSON.stringify({ choices: [{ message: { content: "Noted, mornings it is.\n\nHere is how that plays out.\n\n- Writing first.\n\n- Email after lunch.\n\n- Review at five.\n\nSound right?\n[[REMEMBER: User prefers mornings for writing.]]" } }] }),
     });
   });
   await enterDemo(page);
@@ -160,6 +160,8 @@ test("Coach chat: a memory note is shown under the reply and not sent back to th
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page.getByText("Saved to Coach memory: “User prefers mornings for writing.”")).toBeVisible({ timeout: 8_000 });
   await expect(page.getByText("[[REMEMBER")).toHaveCount(0);
+  // The reply is longer than four lines and clamped; the note sits outside the clamp.
+  await expect(page.locator(".coach-reply.is-clamped")).toHaveCount(1);
 
   await page.locator(".coach-composer-input").fill("What should I start with?");
   await page.getByRole("button", { name: "Send" }).click();

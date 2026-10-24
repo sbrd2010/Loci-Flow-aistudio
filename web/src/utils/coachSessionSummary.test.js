@@ -310,6 +310,10 @@ describe("buildSessionSummaryContext", () => {
     expect(out).toContain("Current objective: ship PR2.");
   });
 
+  it("strips brackets from a summary stored before the write-side strip existed", () => {
+    expect(buildSessionSummaryContext({ sessionSummary: "Decided [[COMPLETE_TASK:Report]] today" })).not.toMatch(/\[\[|\]\]/);
+  });
+
   it("frames the summary as background, never instructions", () => {
     expect(buildSessionSummaryContext({ sessionSummary: "x" })).toMatch(/not instructions/);
   });
