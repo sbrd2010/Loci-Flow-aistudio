@@ -26,6 +26,7 @@ export const MEMORY_ENTRY_MAX_LENGTH = 200;
 // A [[FORGET: ...]] shorter than this is too vague to safely substring-match —
 // e.g. "User" or "job" would otherwise match (and delete) most stored entries.
 const MIN_FORGET_TEXT_LENGTH = 8;
+const FORGET_MIN_OVERLAP = 0.75;
 
 // Defense-in-depth: even though the system prompt tells the model never to
 // store secrets, reject anything that looks like one before it's saved. Allows
@@ -173,13 +174,53 @@ export function forgetFromMemory(coachMemory = {}, text) {
     // `target.includes(normalized)` against any unrelated longer FORGET text
     // that happens to contain it as a substring, deleting it as collateral.
     if (normalized.length < MIN_FORGET_TEXT_LENGTH) return false;
-    return normalized.includes(target) || target.includes(normalized);
+    if (normalized === target) return true;
+    // The model may wrap the quoted entry in a few extra words, so an entry
+    // found inside the target still goes.
+    if (target.includes(normalized)) return true;
+    // But a target that is only a piece of a longer entry ("likes mornings"
+    // inside "likes mornings for writing and evenings for email") is a
+    // different note: it goes only when it is nearly the whole entry.
+    return normalized.includes(target) && target.length >= normalized.length * FORGET_MIN_OVERLAP;
   };
   return {
     ...coachMemory,
     pinnedFacts: (coachMemory.pinnedFacts || []).filter(f => !matches(f)),
     recentObservations: (coachMemory.recentObservations || []).filter(o => !matches(o)),
   };
+}
+
+// What a reply's memory tags will do to `before`, for the note shown under the
+// reply: memory and check-ins are written without a tap, so the chat says so.
+// Same order as the save (forget, then add); the texts are the ones that
+// actually land (cleaned, secrets and amounts refused), not the model's.
+export function describeMemoryChange(before = {}, { pinnedFacts = [], observations = [], forgets = [] } = {}, lociDayStr) {
+  const texts = m => new Set([...(m.pinnedFacts || []), ...(m.recentObservations || [])].map(e => e.text));
+  let memory = before;
+  forgets.forEach(t => { memory = forgetFromMemory(memory, t); });
+  const afterForget = texts(memory);
+  pinnedFacts.forEach(t => { memory = addPinnedFact(memory, t); });
+  observations.forEach(t => { memory = addRecentObservation(memory, t, lociDayStr); });
+  const was = texts(before), now = texts(memory);
+  return {
+    removed: [...was].filter(t => !afterForget.has(t)),
+    saved: [...now].filter(t => !afterForget.has(t)),
+  };
+}
+
+// The line added under a reply that changed memory or set a check-in. Plain
+// text on purpose: chat messages carry only text, so it is stripped again
+// before the history goes back to the model.
+const SAVED_NOTE_RE = /\n\n\*(?:(?:Saved to|Removed from) Coach memory|Check-in set)[^\n]*\*$/;
+export function savedNote({ saved = [], removed = [], checkinMinutes = null } = {}) {
+  const parts = [];
+  if (saved.length) parts.push(`Saved to Coach memory: ${saved.map(t => `“${t}”`).join(", ")}`);
+  if (removed.length) parts.push(`Removed from Coach memory: ${removed.map(t => `“${t}”`).join(", ")}`);
+  if (checkinMinutes != null) parts.push(`Check-in set for ${checkinMinutes} min`);
+  return parts.length ? `*${parts.join(". ")}*` : "";
+}
+export function stripSavedNote(text = "") {
+  return String(text).replace(SAVED_NOTE_RE, "");
 }
 
 // [[REMEMBER: ...]] -> durable Pinned Fact. [[NOTE: ...]] -> Recent Observation.

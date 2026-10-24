@@ -20,6 +20,28 @@
 export const CRISIS_RE = /\b(suicid(?:e|al)|kill(?:ing)? myself|want(?:s|ed)? to die|don['’]?t want to (?:exist|be here|live)|end(?:ing)? (?:it all|my life)|self[-\s]?harm|hurt(?:ing)? myself|might hurt myself|better off (?:dead|without me)|i feel unsafe|done with life)\b/i;
 export const MEDICAL_RISK_RE = /\b(can['’]?t breathe|chest (?:pain|tight\w*)|heart\w*.{0,15}racing|faint(?:ing)?|passed out|overdose|medical emergency)\b/i;
 
+const CRISIS_TAIL = "this sounds serious and you should not be alone with it.";
+const MEDICAL_TAIL = "that could be urgent.";
+
+// The messages of `history` that Coach answered locally on a crisis or medical
+// message: that user message and the canned reply under it. They were kept off
+// the provider when sent, so they stay off it when the history is replayed to
+// the model or folded into the conversation summary. A reply is matched by its
+// fixed wording, not the name before it, which the user can change later.
+export function localSafetyTurns(history = []) {
+  const turns = new Set();
+  history.forEach((m, i) => {
+    const next = history[i + 1];
+    if (!m?.isUser || !next || next.isUser) return;
+    if (!CRISIS_RE.test(m.text || "") && !MEDICAL_RISK_RE.test(m.text || "")) return;
+    const reply = String(next.text || "");
+    if (!reply.includes(CRISIS_TAIL) && !reply.includes(MEDICAL_TAIL)) return;
+    turns.add(m);
+    turns.add(next);
+  });
+  return turns;
+}
+
 // Returns the reply to give locally, or null to carry on to the provider.
 export function buildLocalSafetyReply(userText = "", firstName = "friend") {
   const name = firstName || "friend";

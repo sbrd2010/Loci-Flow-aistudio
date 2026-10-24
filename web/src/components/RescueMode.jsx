@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { callAI, getAIKeys, buildProviderOrder } from "../utils/aiCall";
+import { callAI, getAIKeys, buildProviderOrder, isProviderOnly } from "../utils/aiCall";
 import { buildLocalSafetyReply, buildOfflineRescueReply, buildRescuePrompt, filterApplicableRescueActions, parseRescueActionTags } from "../utils/rescueCoachPrompt";
 import { buildRescueHandoffSummary } from "../utils/rescueHandoff";
 import { CLEAR_DESTINATIONS, clearMyDayPlan } from "../utils/clearMyDay";
@@ -229,7 +229,7 @@ export default function RescueMode({
   const { groqKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
   const effectiveGeminiKey = geminiKey || (apiKey || "").trim();
   const pref = localStorage.getItem("loci_provider_pref") || "auto";
-  const hasKey = buildProviderOrder(pref, groqKey, effectiveGeminiKey, cerebrasKey, zaiKey).length > 0;
+  const hasKey = buildProviderOrder(pref, groqKey, effectiveGeminiKey, cerebrasKey, zaiKey, isProviderOnly()).length > 0;
 
   // Applies whichever actions filterApplicableRescueActions (rescueCoachPrompt.js)
   // let through, and reports whether a mutation was withheld specifically

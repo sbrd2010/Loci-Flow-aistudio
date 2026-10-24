@@ -3,7 +3,7 @@ import FocusPill from "./FocusPill";
 import { auth } from "../firebase";
 import { callAI, describeAIError, getAIKeys, hasAIKey, isAISystemReply } from "../utils/aiCall";
 import { stripAIUsageNote } from "../utils/aiUsageLimits";
-import { buildLocalSafetyReply } from "../utils/crisisSafety";
+import { buildLocalSafetyReply, localSafetyTurns } from "../utils/crisisSafety";
 import { isEventTask } from "../utils/dayMapRoute";
 import ConfirmDialog from "./ConfirmDialog";
 import { profileToCoachContext } from "../utils/userProfile";
@@ -23,7 +23,7 @@ import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, parseCheckinReques
 import { parseCoachActionTags, applyCoachActions, buildActionReplyText, buildSetNowFocusTasks, buildParkTaskTasks, findTaskByTitle, undoCoachAction } from "../utils/coachActions";
 import { buildPersonaInstruction } from "../utils/coachPersona";
 import { buildProfileContext } from "../utils/coachProfile";
-import { addPinnedFact, addRecentObservation, buildLociMemoryContext, forgetFromMemory, isMemoryEnabled, parseMemoryTags, isResurrectedMemoryEntry } from "../utils/coachMemory";
+import { addPinnedFact, addRecentObservation, buildLociMemoryContext, describeMemoryChange, forgetFromMemory, isMemoryEnabled, parseMemoryTags, isResurrectedMemoryEntry, savedNote, stripSavedNote } from "../utils/coachMemory";
 import { stripReasoningTag } from "../utils/coachReasoning";
 import { classifyContextMode, needsConversationContext, historyLimitForMode, detectRequestedCategories, detectPeriodIntent } from "../utils/coachContextMode";
 import { buildLociPeriodContext, buildLociDeadlinesContext, detectDeadlineIntent } from "../utils/coachPeriodDigest";
@@ -726,7 +726,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     // needs the action protocol the light prompt does not carry.
     const lastShown = chatHistory[chatHistory.length - 1];
     const lastReplyAsked = !!lastShown && !lastShown.isUser && !isAISystemReply(lastShown.text) &&
-      (String(lastShown.text || "").trim().endsWith("?") || (lastShown.actions || []).some(a => a.state === "proposed"));
+      (stripSavedNote(String(lastShown.text || "")).trim().endsWith("?") || (lastShown.actions || []).some(a => a.state === "proposed"));
     const contextMode = classifyContextMode(userText, { lastFullTaskTime, hasLastPlan: !!lastPlan, lastReplyAsked });
     // "How was my week?": the numbers behind it ride with this one message.
     const periodIntent = detectPeriodIntent(userText);
@@ -758,8 +758,14 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     // — even though the resulting write is separately never persisted
     // while unconfirmed (Codex review finding, PR #347).
     const sessionSummarySectionEnabled = !cloudSyncUnconfirmed;
+    // Messages Coach answered on this device (crisis, medical) never go to a
+    // provider, so they stay out of the replayed history and the summary too.
+    // In the summary batch they keep their place (the cursor counts messages)
+    // but not their words.
+    const privateTurns = localSafetyTurns(savedHistory);
     const pendingBatch = sessionSummarySectionEnabled && summaryUpdateNeeded
       ? pendingSummaryMessages(savedHistory, rawWindowStart, summarizedThroughIndex)
+          .map(m => ({ ...m, text: privateTurns.has(m) ? "(private message, answered on this device)" : stripSavedNote(m.text) }))
       : [];
     const pendingSummaryContext = buildPendingSummaryContext(pendingBatch);
     // How far the cursor may actually advance if this turn's summary write
@@ -887,8 +893,8 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     // An error or limit notice shown in the chat was never said by the Coach:
     // left in, the model repeats it, and the usage note rides along with it.
     const messages = trimmedForLLM
-      .filter(m => m.isUser || !(m.text === NO_KEY_REPLY || isAISystemReply(m.text)))
-      .map(m => ({ role: m.isUser ? "user" : "assistant", content: m.isUser ? m.text : stripAIUsageNote(m.text) }));
+      .filter(m => !privateTurns.has(m) && (m.isUser || !(m.text === NO_KEY_REPLY || isAISystemReply(m.text))))
+      .map(m => ({ role: m.isUser ? "user" : "assistant", content: m.isUser ? m.text : stripAIUsageNote(stripSavedNote(m.text)) }));
 
     let maxTokens = 450;
     if (contextMode === "light") {
@@ -1217,11 +1223,28 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
                          currentHistory[currentHistory.length - 1].text === userText;
       const baseHistory = hasUserMsg ? currentHistory : savedHistory;
 
+      // Memory notes and check-ins are written without a tap, so the reply says
+      // what was kept. Worked out against the memory as it is now; the save
+      // below re-checks against the latest, so a rare race can differ by an entry.
+      const savedLine = savedNote({
+        ...(memoryPatch ? describeMemoryChange(
+          configRef.current.coachMemory || {},
+          { pinnedFacts: willAddMemory ? pinnedFacts : [], observations: willAddMemory ? observations : [], forgets: willForget ? forgets : [] },
+          todayStr
+        ) : {}),
+        checkinMinutes: configPatch?.coachCheckin ? checkinMinutes : null,
+      });
+      if (savedLine) replyText = `${replyText || "Got it."}\n\n${savedLine}`;
+
       const replyMsg = {
         text: replyText || "Got it.",
         isUser: false,
         at: Date.now(),
-        ...(actionResults.some(r => r.matched) && { actions: actionResults.filter(r => r.matched) }),
+        // The button needs only which task it is and its name; the whole task
+        // (steps, notes) is not copied into the chat history.
+        ...(actionResults.some(r => r.matched) && {
+          actions: actionResults.filter(r => r.matched).map(r => (r.task ? { ...r, task: { uuid: r.task.uuid, title: r.task.title } } : r)),
+        }),
       };
       const withReply = [...baseHistory, replyMsg];
       const { history: savedWithReply, coachSessionSummary: finalSessionSummary, removedCount: historyRemovedCount } =
@@ -1799,6 +1822,8 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
                     a: ({ node, href, children, ...props }) => (
                       <a href={href} target="_blank" rel="noopener noreferrer" {...props}>{children}</a>
                     ),
+                    // A model-written image would load from any address the moment it renders; show its description instead.
+                    img: ({ alt }) => (alt ? <span>{alt}</span> : null),
                   }}
                 >
                   {m.text}

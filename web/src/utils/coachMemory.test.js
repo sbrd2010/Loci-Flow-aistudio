@@ -8,6 +8,9 @@ import {
   addRecentObservation,
   removeRecentObservation,
   forgetFromMemory,
+  describeMemoryChange,
+  savedNote,
+  stripSavedNote,
   clearAllMemory,
   isMemoryEnabled,
   parseMemoryTags,
@@ -190,6 +193,19 @@ describe("forgetFromMemory", () => {
   it("matches when the forget text is more verbose than the stored entry", () => {
     let memory = addPinnedFact({}, "Likes mornings.");
     memory = forgetFromMemory(memory, "User likes mornings, noted earlier.");
+    expect(memory.pinnedFacts).toEqual([]);
+  });
+
+  it("does not delete a longer note that only contains the FORGET text", () => {
+    let memory = addPinnedFact({}, "User likes mornings for writing and evenings for email.");
+    memory = addPinnedFact(memory, "User likes mornings for deep work.");
+    memory = forgetFromMemory(memory, "likes mornings");
+    expect(memory.pinnedFacts).toHaveLength(2);
+  });
+
+  it("still removes a note when the FORGET text is nearly all of it", () => {
+    let memory = addPinnedFact({}, "User likes mornings for deep work.");
+    memory = forgetFromMemory(memory, "likes mornings for deep work");
     expect(memory.pinnedFacts).toEqual([]);
   });
 
@@ -517,5 +533,32 @@ describe("editMemoryEntry (Settings › Coach memory)", () => {
       expect(res.ok).toBe(false);
       expect(res.coachMemory).toBe(mem);
     }
+  });
+});
+
+describe("describeMemoryChange / savedNote", () => {
+  it("lists what a reply will save and what it will remove", () => {
+    const before = addPinnedFact({}, "User likes mornings for deep work.");
+    const change = describeMemoryChange(before, {
+      pinnedFacts: ["User studies on weekends."],
+      forgets: ["User likes mornings for deep work."],
+    }, "2026-06-13");
+    expect(change).toEqual({ removed: ["User likes mornings for deep work."], saved: ["User studies on weekends."] });
+    expect(savedNote(change)).toBe("*Saved to Coach memory: “User studies on weekends.”. Removed from Coach memory: “User likes mornings for deep work.”*");
+  });
+
+  it("says nothing when the tags change nothing (a FORGET with no match, a refused secret)", () => {
+    const before = addPinnedFact({}, "User likes mornings for deep work.");
+    const change = describeMemoryChange(before, { pinnedFacts: ["My password is hunter2hunter2"], forgets: ["something else entirely here"] }, "2026-06-13");
+    expect(change).toEqual({ removed: [], saved: [] });
+    expect(savedNote(change)).toBe("");
+  });
+
+  it("names a check-in, and the note is stripped again before the model sees the reply", () => {
+    const note = savedNote({ saved: ["User prefers mornings."], checkinMinutes: 10 });
+    expect(note).toContain("Check-in set for 10 min");
+    const reply = `Noted.\n\n${note}`;
+    expect(stripSavedNote(reply)).toBe("Noted.");
+    expect(stripSavedNote("Noted, I'll check in.")).toBe("Noted, I'll check in.");
   });
 });

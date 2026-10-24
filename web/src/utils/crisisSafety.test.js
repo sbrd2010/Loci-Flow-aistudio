@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildLocalSafetyReply, CRISIS_RE, MEDICAL_RISK_RE } from "./crisisSafety";
+import { buildLocalSafetyReply, localSafetyTurns, CRISIS_RE, MEDICAL_RISK_RE } from "./crisisSafety";
 import * as rescuePrompt from "./rescueCoachPrompt";
 
 // Addendum H: "the crisis check is a property of every free-text path to the
@@ -50,5 +50,29 @@ describe("crisisSafety — the one check both free-text paths use", () => {
     expect(buildLocalSafetyReply("I want to die")).toContain("friend");
     expect(buildLocalSafetyReply(null, "Rohan")).toBeNull();
     expect(buildLocalSafetyReply(undefined, undefined)).toBeNull();
+  });
+});
+
+describe("localSafetyTurns", () => {
+  it("finds the message answered on this device and its canned reply, even after a rename", () => {
+    const user = { isUser: true, text: "I want to die" };
+    const reply = { isUser: false, text: buildLocalSafetyReply("I want to die", "Rohan") };
+    const later = { isUser: true, text: "What next?" };
+    const turns = localSafetyTurns([user, reply, later, { isUser: false, text: "Pick the report." }]);
+    expect(turns.has(user)).toBe(true);
+    expect(turns.has(reply)).toBe(true);
+    expect(turns.has(later)).toBe(false);
+  });
+
+  it("leaves a message that only looks like one: a provider answered it", () => {
+    const user = { isUser: true, text: "I feel like I might hurt myself" };
+    const answered = { isUser: false, text: "I'm here with you. Tell me more." };
+    expect(localSafetyTurns([user, answered]).size).toBe(0);
+  });
+
+  it("covers the medical reply too", () => {
+    const user = { isUser: true, text: "I have chest pain" };
+    const reply = { isUser: false, text: buildLocalSafetyReply("I have chest pain", "Sam") };
+    expect(localSafetyTurns([user, reply]).size).toBe(2);
   });
 });

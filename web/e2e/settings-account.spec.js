@@ -169,6 +169,15 @@ test("AI provider: Auto, Groq, Cerebras, Gemini, Z.ai — no NVIDIA; a key is ad
   await expect(page.getByText(/NVIDIA/i)).toHaveCount(0);
   await page.getByRole("radio", { name: /^Gemini/ }).click();
   await expect(page.getByRole("radio", { name: /^Gemini/ })).toHaveAttribute("aria-checked", "true");
+  // A chosen provider can be kept as the only one; Auto has none to keep to.
+  const only = page.getByRole("switch", { name: "Only use my provider" });
+  await expect(only).toHaveAttribute("aria-checked", "false");
+  await only.click();
+  await expect(only).toHaveAttribute("aria-checked", "true");
+  expect(await page.evaluate(() => localStorage.getItem("loci_provider_only"))).toBe("1");
+  await page.getByRole("radio", { name: /^Auto/ }).click();
+  await expect(only).toHaveCount(0);
+  await page.getByRole("radio", { name: /^Gemini/ }).click();
 
   await page.getByRole("button", { name: /^Groq/ }).click();
   const sheet = page.getByRole("dialog", { name: "Groq key" });

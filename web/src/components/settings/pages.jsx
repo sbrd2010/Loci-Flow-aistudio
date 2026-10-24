@@ -360,7 +360,7 @@ const COACH_SENDS = [
   { title: "When you ask about a week or month", sub: "Also the titles of up to 8 tasks you finished, your front names and deadlines, tasks left untouched for 14 days or more, and how many minutes you focused each day." },
   { title: "When you tap Ask about this or I'm stuck", sub: "That Brief, or the task you got stuck on and its next step, goes with your next message." },
   { title: "This conversation", sub: "Recent messages and a summary of older ones." },
-  { title: "Which AI provider", sub: "Your chosen provider first. If it is busy or turns the message down, Coach tries your other providers, including any built-in key the app ships with." },
+  { title: "Which AI provider", sub: "Your chosen provider first. Unless you turn on Only use my provider (Settings › AI provider), Coach tries your other providers when it is busy or turns the message down, including any key built into the app." },
 ];
 
 export function CoachPrivacyPage({ onBack, backLabel }) {
@@ -516,8 +516,13 @@ export function readProviderPref() {
 }
 
 // Which provider answers now: the first in the chosen chain with a key.
-export function activeProvider(pref = readProviderPref()) {
-  const key = PREF_CHAINS[pref].find(k => {
+export function readProviderOnly() {
+  return readStore("loci_provider_only") === "1";
+}
+
+export function activeProvider(pref = readProviderPref(), only = readProviderOnly()) {
+  const chain = only && pref !== "auto" ? PREF_CHAINS[pref].slice(0, 1) : PREF_CHAINS[pref];
+  const key = chain.find(k => {
     const p = PROVIDERS.find(x => x.key === k);
     return readStore(p.storage) || p.builtin;
   });
@@ -533,13 +538,18 @@ export function providerLine() {
 
 export function AiProviderPage({ onBack, backLabel }) {
   const [pref, setPref] = useState(readProviderPref);
+  const [only, setOnly] = useState(readProviderOnly);
   const [, bump] = useState(0);
   const [sheet, setSheet] = useState(null);
-  const active = activeProvider(pref);
+  const active = activeProvider(pref, only);
 
   const choose = (p) => {
     setPref(p);
     try { localStorage.setItem("loci_provider_pref", p); } catch { /* storage blocked */ }
+  };
+  const chooseOnly = (v) => {
+    setOnly(v);
+    try { v ? localStorage.setItem("loci_provider_only", "1") : localStorage.removeItem("loci_provider_only"); } catch { /* storage blocked */ }
   };
   const uses = [
     { value: "auto", label: "Auto (recommended)", sub: "Cerebras → Groq → Z.ai → Gemini" },
@@ -554,6 +564,13 @@ export function AiProviderPage({ onBack, backLabel }) {
       <Group label="Use">
         <RadioList label="AI provider" options={uses} value={pref} onChange={choose} />
       </Group>
+      {pref !== "auto" && (
+        <Group label="Fallback" note={only
+          ? `Messages go only to ${PROVIDERS.find(p => p.key === pref)?.name}. When it is busy, you wait or get an error.`
+          : "When your provider is busy, Coach tries the others, including any key built into the app."}>
+          <SwitchRow title="Only use my provider" checked={only} onChange={chooseOnly} />
+        </Group>
+      )}
       <Group label="Your keys" note="Keys are stored only on this device. Tap a row to add or change a key.">
         {PROVIDERS.map(p => {
           const own = readStore(p.storage);

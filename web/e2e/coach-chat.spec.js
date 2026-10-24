@@ -107,6 +107,67 @@ test("mobile reliability: Coach chat never reaches the AI provider on crisis lan
   expect(hits).toEqual([]);
 });
 
+test("Coach chat: a crisis message answered on this device is not sent with the next message", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key");
+  });
+  const bodies = [];
+  await page.route("https://api.groq.com/**", async (route) => {
+    bodies.push(JSON.parse(route.request().postData()));
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ choices: [{ message: { content: "Let's pick one tiny next step." } }] }),
+    });
+  });
+  await enterDemo(page);
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
+  const composer = page.locator(".coach-composer-input");
+  await expect(composer).toBeVisible({ timeout: 10_000 });
+
+  await composer.fill("I want to kill myself");
+  await page.keyboard.press("Enter");
+  await expect(page.getByText(/emergency services/i)).toBeVisible({ timeout: 8_000 });
+  expect(bodies).toEqual([]);
+
+  await composer.fill("What should I work on next?");
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Let's pick one tiny next step.").first()).toBeVisible({ timeout: 8_000 });
+
+  // The system prompt has its own safety wording; the chat turns are what matter.
+  const sent = JSON.stringify(bodies.map(b => b.messages.filter(m => m.role !== "system")));
+  expect(sent).not.toMatch(/kill myself/i);
+  expect(sent).not.toMatch(/emergency services/i);
+});
+
+test("Coach chat: a memory note is shown under the reply and not sent back to the model", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key");
+  });
+  const bodies = [];
+  await page.route("https://api.groq.com/**", async (route) => {
+    bodies.push(JSON.parse(route.request().postData()));
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ choices: [{ message: { content: "Noted, mornings it is.\n[[REMEMBER: User prefers mornings for writing.]]" } }] }),
+    });
+  });
+  await enterDemo(page);
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
+
+  await page.locator(".coach-composer-input").fill("Remember that I prefer mornings for writing");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText("Saved to Coach memory: “User prefers mornings for writing.”")).toBeVisible({ timeout: 8_000 });
+  await expect(page.getByText("[[REMEMBER")).toHaveCount(0);
+
+  await page.locator(".coach-composer-input").fill("What should I start with?");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect.poll(() => bodies.length, { timeout: 10_000 }).toBeGreaterThan(1);
+  const second = bodies[bodies.length - 1];
+  expect(second.messages.map(m => m.content).join("\n")).not.toContain("Saved to Coach memory");
+});
+
 test("mobile reliability: Coach still reaches the provider for an ordinary message", async ({ page }) => {
   // The guard above must not have turned the composer into a dead end.
   await page.addInitScript(() => {

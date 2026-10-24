@@ -375,9 +375,10 @@ async function callGemini(geminiKey, systemPrompt, messages, maxTokens, limits) 
   if (Number.isInteger(parsedMaxTokens) && parsedMaxTokens > 0) {
     requestBody.generationConfig = { maxOutputTokens: parsedMaxTokens };
   }
-  const res = await fetchWithTimeout(`${GEMINI_URL}?key=${geminiKey}`, {
+  // The key goes in a header, not the URL, so it stays out of logs and history.
+  const res = await fetchWithTimeout(GEMINI_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey },
     body: JSON.stringify(requestBody)
   }, limits);
   if (!res.ok) throw statusError("gemini", res.status, res);
@@ -649,7 +650,13 @@ async function callZai(zaiKey, systemPrompt, messages, maxTokens, limits) {
 
 // Returns ordered list of providers to try based on user's preference.
 // Providers with no key are skipped automatically.
-export function buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey) {
+// "Only my provider" (Settings › AI provider) keeps a message from reaching any
+// provider but the chosen one. Auto has no single provider to keep it to.
+export function isProviderOnly() {
+  try { return localStorage.getItem("loci_provider_only") === "1"; } catch { return false; }
+}
+
+export function buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey, only = false) {
   const available = {
     groq:     cleanGroqKey     ? { name: "groq",     key: cleanGroqKey }     : null,
     gemini:   cleanGeminiKey   ? { name: "gemini",    key: cleanGeminiKey }   : null,
@@ -669,7 +676,8 @@ export function buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCere
     zai:      ["zai", "groq", "cerebras", "gemini"],
     gemini:   ["gemini", "groq", "cerebras", "zai"],
   };
-  return (orders[pref] || orders.auto).map(n => available[n]).filter(Boolean);
+  const chain = orders[pref] || orders.auto;
+  return (only && orders[pref] && pref !== "auto" ? chain.slice(0, 1) : chain).map(n => available[n]).filter(Boolean);
 }
 
 export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPrompt, messages, maxTokens, contextMode, reasoningEffort, signal }) {
@@ -679,7 +687,7 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPr
   const cleanZaiKey      = (zaiKey      || "").trim();
 
   const pref  = localStorage.getItem("loci_provider_pref") || "auto";
-  const order = buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey);
+  const order = buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey, isProviderOnly());
   if (order.length === 0) throw new Error("no_key");
 
   const usage = checkAndRecordAIUsage({ userId: getAIUsageUserId() });
@@ -802,7 +810,7 @@ export function getAIKeys() {
 export function hasAIKey() {
   const { groqKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
   const pref = localStorage.getItem("loci_provider_pref") || "auto";
-  return buildProviderOrder(pref, groqKey, geminiKey, cerebrasKey, zaiKey).length > 0;
+  return buildProviderOrder(pref, groqKey, geminiKey, cerebrasKey, zaiKey, isProviderOnly()).length > 0;
 }
 
 // Parses a JSON array out of an AI reply, tolerating markdown code fences,
