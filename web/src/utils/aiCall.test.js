@@ -165,6 +165,55 @@ describe("AI call resilience", () => {
     expect(String(fetch.mock.calls[1][0])).toContain("generativelanguage.googleapis.com");
   });
 
+  it("sends the Gemini key in a header, not the URL", async () => {
+    storage.setItem("loci_provider_pref", "gemini");
+    fetch.mockResolvedValueOnce(geminiOk("Start with one step."));
+
+    await callAI(baseRequest({ groqKey: "", geminiKey: "test-gemini-key" }));
+
+    expect(String(fetch.mock.calls[0][0])).not.toContain("test-gemini-key");
+    expect(fetch.mock.calls[0][1].headers["x-goog-api-key"]).toBe("test-gemini-key");
+  });
+
+  it("with Only my provider on, a busy Groq is not retried on another provider", async () => {
+    storage.setItem("loci_provider_pref", "groq");
+    storage.setItem("loci_provider_only", "1");
+    fetch.mockResolvedValue(providerError(429));
+
+    await expect(callAI(baseRequest({ geminiKey: "test-gemini-key", cerebrasKey: "test-cerebras-key" }))).rejects.toThrow();
+
+    expect(fetch.mock.calls.every(c => String(c[0]).includes("api.groq.com"))).toBe(true);
+  });
+
+  it("with Only my provider on but no key for it, nothing is sent, and the error says why", async () => {
+    storage.setItem("loci_provider_pref", "gemini");
+    storage.setItem("loci_provider_only", "1");
+
+    const err = await callAI(baseRequest({ geminiKey: "" })).catch(e => e);
+
+    expect(err.message).toBe("no_key_only");
+    expect(describeAIError(err)).toMatch(/has no key.*turn that setting off/);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("with Only my provider on and no key anywhere, it is the plain no-key error", async () => {
+    storage.setItem("loci_provider_pref", "gemini");
+    storage.setItem("loci_provider_only", "1");
+
+    await expect(callAI(baseRequest({ groqKey: "", geminiKey: "" }))).rejects.toThrow("no_key");
+  });
+
+  it("with Only my provider on, a failure of the one provider is not reported as 'providers'", async () => {
+    storage.setItem("loci_provider_pref", "groq");
+    storage.setItem("loci_provider_only", "1");
+    fetch.mockResolvedValue(providerError(400));
+
+    const err = await callAI(baseRequest()).catch(e => e);
+
+    expect(err.message).toBe("only_provider_failed");
+    expect(describeAIError(err)).toMatch(/chosen AI provider.*turn off Only use my provider/);
+  });
+
   it("appends the 100 percent daily usage warning on the final allowed call", async () => {
     seedUsage(storage, { daily: 119, hourly: 0 });
     fetch.mockResolvedValue(groqOk("One tiny step is enough."));
@@ -1569,6 +1618,11 @@ describe("extractJsonArray", () => {
 describe("buildProviderOrder without NVIDIA", () => {
   it("a saved 'nvidia' preference (no longer offered) falls back to Auto", () => {
     expect(buildProviderOrder("nvidia", "g", "", "c", "").map(p => p.name)).toEqual(["cerebras", "groq"]);
+  });
+  it("Only my provider keeps just the chosen provider, and ignores Auto", () => {
+    expect(buildProviderOrder("gemini", "g", "m", "c", "z", true).map(p => p.name)).toEqual(["gemini"]);
+    expect(buildProviderOrder("gemini", "g", "", "c", "z", true)).toEqual([]);
+    expect(buildProviderOrder("auto", "g", "m", "c", "z", true).map(p => p.name)).toEqual(["cerebras", "groq", "zai", "gemini"]);
   });
   it("orders Groq, Gemini, Cerebras and Z.ai by the chosen chain", () => {
     expect(buildProviderOrder("gemini", "g", "m", "c", "z").map(p => p.name)).toEqual(["gemini", "groq", "cerebras", "zai"]);

@@ -206,6 +206,8 @@ const AI_ERROR_COPY = {
   timeout: "The AI took too long to answer. Your tasks are safe — please try again.",
   payload_too_large: "This request was too large for the AI provider. Your tasks are safe — try a shorter message or start a new conversation.",
   no_key: "Add an AI key in Settings to chat with your Coach.",
+  no_key_only: "Only use my provider is on, and that provider has no key. Add its key in Settings → AI provider, or turn that setting off.",
+  only_provider_failed: "Your chosen AI provider couldn't answer right now. Your tasks are safe — try again in a moment, or turn off Only use my provider in Settings to let Coach try the others.",
   all_providers_failed: "The AI providers couldn't answer right now. Your tasks are safe — please try again in a moment.",
   usage_limit: "You've reached your AI limit for now. Your tasks are safe — it resets automatically.",
   other: "Something went wrong. Your tasks are safe — please try again.",
@@ -375,9 +377,10 @@ async function callGemini(geminiKey, systemPrompt, messages, maxTokens, limits) 
   if (Number.isInteger(parsedMaxTokens) && parsedMaxTokens > 0) {
     requestBody.generationConfig = { maxOutputTokens: parsedMaxTokens };
   }
-  const res = await fetchWithTimeout(`${GEMINI_URL}?key=${geminiKey}`, {
+  // The key goes in a header, not the URL, so it stays out of logs and history.
+  const res = await fetchWithTimeout(GEMINI_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey },
     body: JSON.stringify(requestBody)
   }, limits);
   if (!res.ok) throw statusError("gemini", res.status, res);
@@ -649,7 +652,23 @@ async function callZai(zaiKey, systemPrompt, messages, maxTokens, limits) {
 
 // Returns ordered list of providers to try based on user's preference.
 // Providers with no key are skipped automatically.
-export function buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey) {
+// "Only my provider" (Settings › AI provider) keeps a message from reaching any
+// provider but the chosen one. Auto has no single provider to keep it to.
+export function isProviderOnly() {
+  try { return localStorage.getItem("loci_provider_only") === "1"; } catch { return false; }
+}
+
+// True when a missing key is only because "Only use my provider" is on and the
+// chosen provider has none, while other providers do have keys.
+export function isOnlyProviderKeyMissing() {
+  const pref = localStorage.getItem("loci_provider_pref") || "auto";
+  if (!isProviderOnly() || pref === "auto") return false;
+  const { groqKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
+  const keys = { groq: groqKey, gemini: geminiKey, cerebras: cerebrasKey, zai: zaiKey };
+  return !keys[pref] && Object.values(keys).some(Boolean);
+}
+
+export function buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey, only = false) {
   const available = {
     groq:     cleanGroqKey     ? { name: "groq",     key: cleanGroqKey }     : null,
     gemini:   cleanGeminiKey   ? { name: "gemini",    key: cleanGeminiKey }   : null,
@@ -669,7 +688,8 @@ export function buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCere
     zai:      ["zai", "groq", "cerebras", "gemini"],
     gemini:   ["gemini", "groq", "cerebras", "zai"],
   };
-  return (orders[pref] || orders.auto).map(n => available[n]).filter(Boolean);
+  const chain = orders[pref] || orders.auto;
+  return (only && orders[pref] && pref !== "auto" ? chain.slice(0, 1) : chain).map(n => available[n]).filter(Boolean);
 }
 
 export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPrompt, messages, maxTokens, contextMode, reasoningEffort, signal }) {
@@ -679,8 +699,11 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPr
   const cleanZaiKey      = (zaiKey      || "").trim();
 
   const pref  = localStorage.getItem("loci_provider_pref") || "auto";
-  const order = buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey);
-  if (order.length === 0) throw new Error("no_key");
+  const order = buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey, isProviderOnly());
+  if (order.length === 0) {
+    const others = [cleanGroqKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey].some(Boolean);
+    throw new Error(isProviderOnly() && pref !== "auto" && others ? "no_key_only" : "no_key");
+  }
 
   const usage = checkAndRecordAIUsage({ userId: getAIUsageUserId() });
   if (!usage.allowed) {
@@ -780,7 +803,7 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPr
     const coolingDown = attempts.find(a => !a.live && (a.classification === "rate_limit" || a.classification === "service_unavailable"));
     throw coolingDown ? coolingDown.err : new Error("payload_too_large");
   }
-  throw new Error("all_providers_failed");
+  throw new Error(order.length === 1 && isProviderOnly() && pref !== "auto" ? "only_provider_failed" : "all_providers_failed");
 }
 
 // Private-alpha build-key pattern: localStorage (user-entered BYOK) wins,
@@ -802,7 +825,7 @@ export function getAIKeys() {
 export function hasAIKey() {
   const { groqKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
   const pref = localStorage.getItem("loci_provider_pref") || "auto";
-  return buildProviderOrder(pref, groqKey, geminiKey, cerebrasKey, zaiKey).length > 0;
+  return buildProviderOrder(pref, groqKey, geminiKey, cerebrasKey, zaiKey, isProviderOnly()).length > 0;
 }
 
 // Parses a JSON array out of an AI reply, tolerating markdown code fences,

@@ -587,6 +587,8 @@
 }
 .coach-action-undo:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .coach-msg .coach-action-done.is-gone { color: var(--ink-2); font-weight: 600; }
+/* What the reply saved or set without a tap; outside the four-line clamp so it is always seen. */
+.coach-msg .coach-saved-note { margin: 6px 0 0; font-size: 12.5px; font-style: italic; color: var(--ink-2); }
 .coach-action-undo:disabled { opacity: 0.45; cursor: default; }
 /* Stop, under "Thinking…": ends the request. Same quiet link look as Undo. */
 .coach-stop {

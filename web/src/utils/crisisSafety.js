@@ -20,6 +20,34 @@
 export const CRISIS_RE = /\b(suicid(?:e|al)|kill(?:ing)? myself|want(?:s|ed)? to die|don['’]?t want to (?:exist|be here|live)|end(?:ing)? (?:it all|my life)|self[-\s]?harm|hurt(?:ing)? myself|might hurt myself|better off (?:dead|without me)|i feel unsafe|done with life)\b/i;
 export const MEDICAL_RISK_RE = /\b(can['’]?t breathe|chest (?:pain|tight\w*)|heart\w*.{0,15}racing|faint(?:ing)?|passed out|overdose|medical emergency)\b/i;
 
+// What the model sees in place of such a turn: that something private was said
+// and answered here, but not what. Silence would let the next reply carry on
+// as if nothing had happened.
+export const PRIVATE_USER_TURN = "(I shared something private. It was answered on my device and not shown to you.)";
+export const PRIVATE_REPLY_TURN = "(A safety reply was given on the user's device.)";
+
+const CRISIS_TAIL = "this sounds serious and you should not be alone with it.";
+const MEDICAL_TAIL = "that could be urgent.";
+
+// The messages of `history` that Coach answered locally on a crisis or medical
+// message: that user message and the canned reply under it. They were kept off
+// the provider when sent, so they stay off it when the history is replayed to
+// the model or folded into the conversation summary. A reply is matched by its
+// fixed wording, not the name before it, which the user can change later.
+export function localSafetyTurns(history = []) {
+  const turns = new Set();
+  history.forEach((m, i) => {
+    const next = history[i + 1];
+    if (!m?.isUser || !next || next.isUser) return;
+    if (!CRISIS_RE.test(m.text || "") && !MEDICAL_RISK_RE.test(m.text || "")) return;
+    const reply = String(next.text || "");
+    if (!reply.includes(CRISIS_TAIL) && !reply.includes(MEDICAL_TAIL)) return;
+    turns.add(m);
+    turns.add(next);
+  });
+  return turns;
+}
+
 // Returns the reply to give locally, or null to carry on to the provider.
 export function buildLocalSafetyReply(userText = "", firstName = "friend") {
   const name = firstName || "friend";

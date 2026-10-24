@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
-import { callAI, getAIKeys, buildProviderOrder } from "../utils/aiCall";
+import { callAI, getAIKeys, buildProviderOrder, isProviderOnly } from "../utils/aiCall";
+import { localSafetyTurns, PRIVATE_REPLY_TURN, PRIVATE_USER_TURN } from "../utils/crisisSafety";
 import { buildLocalSafetyReply, buildOfflineRescueReply, buildRescuePrompt, filterApplicableRescueActions, parseRescueActionTags } from "../utils/rescueCoachPrompt";
 import { buildRescueHandoffSummary } from "../utils/rescueHandoff";
 import { CLEAR_DESTINATIONS, clearMyDayPlan } from "../utils/clearMyDay";
@@ -229,7 +230,7 @@ export default function RescueMode({
   const { groqKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
   const effectiveGeminiKey = geminiKey || (apiKey || "").trim();
   const pref = localStorage.getItem("loci_provider_pref") || "auto";
-  const hasKey = buildProviderOrder(pref, groqKey, effectiveGeminiKey, cerebrasKey, zaiKey).length > 0;
+  const hasKey = buildProviderOrder(pref, groqKey, effectiveGeminiKey, cerebrasKey, zaiKey, isProviderOnly()).length > 0;
 
   // Applies whichever actions filterApplicableRescueActions (rescueCoachPrompt.js)
   // let through, and reports whether a mutation was withheld specifically
@@ -257,9 +258,12 @@ export default function RescueMode({
     setLoading(true);
     try {
       // history is [{role: "user"|"ai", text}] — convert to OpenAI format
-      const messages = history.map(m => ({
-        role: m.role === "ai" ? "assistant" : "user",
-        content: m.text || m.parts?.[0]?.text || ""
+      // A crisis message answered on this device, and its canned reply, stay on it; the model only hears that one happened.
+      const asChat = history.map(m => ({ isUser: m.role !== "ai", text: m.text || m.parts?.[0]?.text || "" }));
+      const privateTurns = localSafetyTurns(asChat);
+      const messages = asChat.map(m => ({
+        role: m.isUser ? "user" : "assistant",
+        content: privateTurns.has(m) ? (m.isUser ? PRIVATE_USER_TURN : PRIVATE_REPLY_TURN) : m.text
       })).filter(m => m.content);
 
       const lastUserText = [...messages].reverse().find(m => m.role === "user")?.content || "";
