@@ -146,6 +146,60 @@ const EMOTIONAL_RE = /\b(comfort me|i feel (?:terrible|awful|horrible|useless|do
 
 const FRESH_SCAN_RE = /\b(scan (everything|all|my list|all my tasks|my whole list) again|re-plan|look at (everything|all my tasks) again|fresh scan|full scan|check all my tasks|review my whole list|re-plan from my full list|look at all my tasks|scan all my tasks)\b/i;
 
+// How a stretch of time went: the questions the light and compact prompts
+// cannot answer, because the week's numbers are not in them. One match sends
+// the message to full_task (and past the 10-minute downgrade), and the caller
+// adds the period digest (see detectPeriodIntent).
+const PERIOD_RE = new RegExp([
+  // "how was my week", "how did my last week go", "how is the month going", "how was yesterday"
+  "how (?:was|is|has|did|have|were) (?:my|the|this|last|our)\\s+(?:(?:last|past|this)\\s+)?(?:day|week|month)\\b",
+  "how (?:was|is|has|did) yesterday\\b",
+  // "what did I get done this week", "what did I finish yesterday"
+  "what did i (?:get done|finish|complete|accomplish|achieve)\\b",
+  "what did i do (?:this|last|the last|the past|over the) (?:week|month|few days)\\b",
+  "what did i do (?:yesterday|today)\\b",
+  "how many (?:tasks|things|items) (?:did|have) i (?:finish|finished|complete|completed|do|done|get done)\\b",
+  // progress
+  "how am i (?:doing|progressing|tracking|going)\\b",
+  "am i (?:on track|behind|falling behind|making progress)\\b",
+  "(?:how['’]?s|how is|what['’]?s|what is) my progress\\b",
+  "my progress\\b",
+  // stuck
+  "what['’]?s stuck|what is stuck|what['’]?s been stuck|what keeps (?:getting )?(?:moved|slipping|rolling over)",
+  "which (?:tasks?|ones?) (?:keep|keeps|are) (?:getting )?(?:moved|slipping|rolling|stuck|pushed)",
+  "what (?:have i|am i) (?:been )?avoiding",
+  // focus time
+  "how much (?:time )?(?:did|have) i (?:focus\\w*|spend|work\\w*)",
+  "(?:my )?focus time (?:this|last) (?:week|month)",
+  // reviews
+  "(?:weekly|monthly|week|month) (?:review|recap|summary)",
+  "(?:recap|review|summari[sz]e) (?:my|the|this|last|previous|prior)(?: (?:last|previous|prior))? (?:week|month)",
+  "(?:week|month) in review",
+].join("|"), "i");
+
+// Null for an ordinary message; for a period question, how many days it asks
+// about (30 when it names the month, else 7: a week, a day, "how am I doing")
+// and how far back it ends: 1 for "last week" / "last month" / "previous week",
+// meaning the whole period before the current one, else 0.
+export function detectPeriodIntent(message) {
+  const text = normalizeForClassification(String(message || ""));
+  if (!PERIOD_RE.test(text)) return null;
+  // "in the last week" / "the last month" is the rolling window ending today;
+  // "last week", "my last month", "previous week" is the period before this one.
+  const named = text.replace(/\bthe (?:last|past) (week|month)\b/gi, "$1");
+  return {
+    days: /\b(?:month|monthly|30 days)\b/i.test(text) ? 30 : 7,
+    offset: /\b(?:last|previous|prior) (?:week|month)\b/i.test(named) ? 1 : 0,
+  };
+}
+
+// More ways to ask for the plan or a list that earlier fell through to `light`.
+const EXTRA_BROAD_RE = /\b(?:(?:what['’]?s|what is) in my (?:mind\s?box|brain dump)|(?:check|show|open|list) my (?:mind\s?box)|when(?:['’]s| is) my deadline|(?:what['’]?s|what is) on my (?:week|month|quarter|work|today)(?: horizon| list| plan)?|what are my (?:week|month|quarter|work|today)['’]?s? tasks|show (?:me )?my plan for (?:this|the) (?:week|month|quarter))\b/i;
+
+// "Remember that I prefer mornings": only the modes that carry memory (and its
+// writing rules) can keep it.
+const REMEMBER_RE = /\b(?:remember (?:that|this)|please remember|keep in mind that|forget (?:that|what i (?:said|told you))|do you remember (?:my|that|what|when|the))\b/i;
+
 const COMPACT_FOLLOWUP_RE = /\b(key point|one sentence|10[-\s]?min(?:ute)?s?\s*version|make it smaller|shorter|how do i start|make this easier|concrete steps|turn (?:that|this|it) into .{0,30}steps|what should i do next|set that|do next|tell me more|what did you mean|how do i do that|which one|why\??|explain that|elaborate|clarify)\b/i;
 
 // "want to focus on"/"dive into"/"jump into"/"time to work on" exclude a
@@ -625,16 +679,17 @@ export function detectRequestedCategories(message) {
  * still serves it well: "light", "emotional", "full_task", "compact_task", or
  * "profile_reflection".
  */
-export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan = false } = {}) {
+export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan = false, lastReplyAsked = false } = {}) {
   const text = normalizeForClassification(String(message || ""));
 
   if (CRISIS_RE.test(text) || PANIC_RE.test(text)) return "emotional";
   if (PROFILE_RE.test(text)) return "profile_reflection";
+  if (REMEMBER_RE.test(text)) return "profile_reflection";
 
   // Check full-task pacing (10 minutes)
   const isPaced = lastFullTaskTime > 0 && (Date.now() - lastFullTaskTime < 10 * 60 * 1000);
   const isFreshScanRequested = FRESH_SCAN_RE.test(text);
-  const isBroadQuery = BROAD_TASK_QUERY_RE.test(text) || PRIORITY_SYNONYM_RE.test(text) || NEGATION_PRIORITY_RE.test(text);
+  const isBroadQuery = BROAD_TASK_QUERY_RE.test(text) || EXTRA_BROAD_RE.test(text) || PERIOD_RE.test(text) || PRIORITY_SYNONYM_RE.test(text) || NEGATION_PRIORITY_RE.test(text);
   const isCheckin = isCheckinRequest(text);
   const isLowEnergy = LOW_ENERGY_RE.test(text);
   const isPriorityFiltered = PRIORITY_FILTER_RE.test(text);
@@ -698,6 +753,10 @@ export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan
   if (isPaced && hasLastPlan && !isFreshScanRequested && !isCheckin && COMPACT_FOLLOWUP_RE.test(text)) {
     return "compact_task";
   }
+
+  // 5. A short answer to something Coach just asked or offered ("the report
+  // one", "yes do it") needs the action protocol that `light` does not carry.
+  if (lastReplyAsked && text.trim().length <= 80) return "compact_task";
 
   return "light";
 }
