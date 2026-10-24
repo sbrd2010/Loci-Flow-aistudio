@@ -9,6 +9,7 @@ import { buildCoachSystemPrompt } from "./coachSystemPrompt";
 import { historyLimitForMode } from "./coachContextMode";
 import { buildSessionSummaryContext, buildPendingSummaryContext, pendingSummaryMessages, shouldIncludeSessionSummaryContext, llmHistoryStart, SUMMARY_UPDATE_MIN_PENDING } from "./coachSessionSummary";
 import { profileToCoachContext } from "./userProfile";
+import { buildLociPeriodContext } from "./coachPeriodDigest";
 
 // Prompt-size budgets per Coach mode (#545 C8, C39). Groq's free tier counts
 // prompt + max_tokens against 8,000 tokens per minute before it runs anything,
@@ -58,8 +59,14 @@ function fixture(large) {
   return { tasks, config, brainDump, contributions, summary };
 }
 
+// A week of focus sessions for the digest's focus line.
+const focusLog = () => Object.fromEntries(Array.from({ length: 6 }, (_, i) => {
+  const day = getLociDayStr(new Date(NOW.getTime() - i * 86400000), WINDOWS);
+  return [day, { a: { type: "focus_completed", taskId: "t0001-aaaa-bbbb", lociDateString: day, focusElapsedSeconds: 1500 + i * 300 } }];
+}));
+
 // The same inputs CoachTab.jsx passes, with 10 earlier messages of 250 chars.
-function buildRequest(mode, { large = false, summaryTurn = false, carried = 0 } = {}) {
+function buildRequest(mode, { large = false, summaryTurn = false, carried = 0, period = false } = {}) {
   const { tasks, config, brainDump, contributions, summary } = fixture(large);
   const userText = "What should I work on next today?";
   // Enough earlier messages that a summary turn really has SUMMARY_UPDATE_MIN_PENDING
@@ -72,7 +79,7 @@ function buildRequest(mode, { large = false, summaryTurn = false, carried = 0 } 
   // waiting on a summary turn, `carried` ones on a turn whose rewrite waits.
   const cursor = rawWindowStart - (summaryTurn ? SUMMARY_UPDATE_MIN_PENDING : carried);
   const pending = summaryTurn ? pendingSummaryMessages(history, rawWindowStart, cursor) : [];
-  const system = buildCoachSystemPrompt(mode, {
+  const base = buildCoachSystemPrompt(mode, {
     lociCoreInstruction: L.buildLociCoreInstruction({ firstName: FIRST }),
     mentorName: "Loci AI Coach", firstName: FIRST, userName: FIRST,
     challengeLabel: "Breaking Initiation Freeze",
@@ -91,7 +98,7 @@ function buildRequest(mode, { large = false, summaryTurn = false, carried = 0 } 
     pendingCheckinContext: "",
     deadlineContext: L.buildLociDeadlineContext(config, NOW),
     brainDumpContext: L.buildLociBrainDumpContext(brainDump),
-    velocityContext: L.buildLociVelocityContext(contributions, NOW),
+    velocityContext: period ? "" : L.buildLociVelocityContext(contributions, NOW),
     recentlyParkedContext: L.buildLociRecentlyParkedContext(tasks, NOW),
     recentlyCompletedContext: L.buildLociRecentlyCompletedContext(tasks, NOW),
     categoryFilterContext: "",
@@ -105,6 +112,11 @@ function buildRequest(mode, { large = false, summaryTurn = false, carried = 0 } 
     sessionSummaryContext: shouldIncludeSessionSummaryContext(mode, false, summaryTurn) ? buildSessionSummaryContext(summary) : "",
     pendingSummaryContext: buildPendingSummaryContext(pending),
   });
+  // CoachTab appends this for a "how was my week?" question (and only then).
+  const periodBlock = period
+    ? `\n\n${buildLociPeriodContext({ tasks, contributions, config, now: NOW, days: 7, focusRaw: focusLog() })}\nAnswer how the period went from the PERIOD DIGEST: quote its numbers, say what it does not cover, and never invent days, tasks, minutes or deadlines.`
+    : "";
+  const system = base + periodBlock;
   const messages = history.slice(llmHistoryStart(rawWindowStart, cursor, summaryTurn));
   const chars = system.length + messages.reduce((n, m) => n + m.text.length, 0);
   const maxTokens = MAX_TOKENS[mode] + (summaryTurn ? SUMMARY_TURN_EXTRA_TOKENS : 0);
@@ -132,6 +144,19 @@ describe("Coach prompt budgets (#545 C8)", () => {
   it("a typical full_task summary-rewrite turn still fits Groq's free tier", () => {
     expect(buildRequest("full_task", { summaryTurn: true }).pendingCount).toBe(SUMMARY_UPDATE_MIN_PENDING);
     expect(buildRequest("full_task", { summaryTurn: true }).groqTokens).toBeLessThanOrEqual(GROQ_TPM);
+  });
+
+  // #535: a period question adds the digest (about 1.7k chars at most) and drops
+  // the velocity lines it replaces. It must still fit, including on a turn that
+  // also rewrites the session summary.
+  it("a typical full_task period turn fits Groq's free tier, with and without a summary rewrite", () => {
+    expect(buildRequest("full_task", { period: true }).groqTokens).toBeLessThanOrEqual(GROQ_TPM);
+    expect(buildRequest("full_task", { period: true, summaryTurn: true }).groqTokens).toBeLessThanOrEqual(GROQ_TPM);
+  });
+
+  it("the period digest adds well under 2k chars to the prompt", () => {
+    const grown = buildRequest("full_task", { period: true }).system.length - buildRequest("full_task").system.length;
+    expect(grown).toBeLessThan(2000);
   });
 
   it("every smaller mode fits Groq's free tier on a large plan", () => {

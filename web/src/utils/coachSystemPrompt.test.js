@@ -129,11 +129,21 @@ describe("buildCoachSystemPrompt", () => {
     expect(out).toEqual(buildCoachSystemPrompt("light", baseCtx()));
   });
 
-  it("light mode never denies access to Loci task data and gives the context-issue line instead", () => {
+  it("light mode never denies access to Loci task data, and never blames a Loci error for what it was not given (#535)", () => {
     const out = buildCoachSystemPrompt("light", baseCtx());
     expect(out).not.toContain("no direct access to Loci app data");
     expect(out).not.toContain("I have no access");
-    expect(out).toContain("I'm missing the task snapshot for this request — that looks like a Loci context issue.");
+    expect(out).not.toContain("Loci context issue");
+    expect(out).toContain("NEVER say you have no access to Loci app data, and never call this an error.");
+    // It says plainly what it lacks and points at the question that gets the data.
+    expect(out).toContain('say plainly that this reply does not include that');
+    expect(out).toContain('"how was my week?"');
+  });
+
+  it("light mode tells a no-snapshot reply that the device has not finished syncing", () => {
+    const out = buildCoachSystemPrompt("light", { ...baseCtx(), todaySnapshotContext: "" });
+    expect(out).toContain("this device has not finished syncing");
+    expect(out).not.toContain("Loci context issue");
   });
 
   it("light mode's missing-snapshot guard explicitly excludes plain date/day/time questions", () => {
@@ -150,11 +160,13 @@ describe("buildCoachSystemPrompt", () => {
     expect(compactOut).toContain("MULTIPLE TASKS RULE");
   });
 
-  it("compact_task mode never denies access to Loci task data and gives the context-issue line instead", () => {
+  it("compact_task mode never denies access to Loci task data, and never blames a Loci error for what it was not given (#535)", () => {
     const out = buildCoachSystemPrompt("compact_task", baseCtx());
     expect(out).not.toContain("no direct access to Loci app data");
     expect(out).not.toContain("I have no access");
-    expect(out).toContain("I'm missing the task snapshot for this request — that looks like a Loci context issue.");
+    expect(out).not.toContain("Loci context issue");
+    expect(out).toContain("NEVER say you have no access to Loci app data");
+    expect(out).toContain("say plainly which part you cannot see in this reply, never call it an error");
   });
 
   it("every mode carries the TODAY SNAPSHOT, so no reply is blind to a task just finished (brief, Phase 6)", () => {
