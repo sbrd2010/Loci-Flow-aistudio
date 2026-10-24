@@ -6,8 +6,8 @@ import { buildPersonaInstruction } from "./coachPersona";
 import { buildProfileContext } from "./coachProfile";
 import { buildLociMemoryContext } from "./coachMemory";
 import { buildCoachSystemPrompt } from "./coachSystemPrompt";
-import { trimHistoryForLLM, historyLimitForMode } from "./coachContextMode";
-import { buildSessionSummaryContext, buildPendingSummaryContext, pendingSummaryMessages, SUMMARY_UPDATE_MIN_PENDING } from "./coachSessionSummary";
+import { historyLimitForMode } from "./coachContextMode";
+import { buildSessionSummaryContext, buildPendingSummaryContext, pendingSummaryMessages, shouldIncludeSessionSummaryContext, llmHistoryStart, SUMMARY_UPDATE_MIN_PENDING } from "./coachSessionSummary";
 import { profileToCoachContext } from "./userProfile";
 import { buildLociPeriodContext } from "./coachPeriodDigest";
 
@@ -18,6 +18,7 @@ import { buildLociPeriodContext } from "./coachPeriodDigest";
 const CHARS_PER_TOKEN = 4.2;
 const GROQ_TPM = 8000;
 const SUMMARY_TURN_EXTRA_TOKENS = 300; // CoachTab adds this when a summary rewrite is due
+// Copied from CoachTab.jsx's send path; keep in step with it.
 const MAX_TOKENS = { full_task: 450, compact_task: 280, emotional: 300, profile_reflection: 300, light: 150 };
 const ZAI_MAX_PAYLOAD_CHARS = 12000; // aiCall.js
 
@@ -68,11 +69,16 @@ const focusLog = () => Object.fromEntries(Array.from({ length: 6 }, (_, i) => {
 function buildRequest(mode, { large = false, summaryTurn = false, carried = 0, period = false } = {}) {
   const { tasks, config, brainDump, contributions, summary } = fixture(large);
   const userText = "What should I work on next today?";
-  const history = Array.from({ length: 10 + carried }, (_, i) => ({ isUser: i % 2 === 0, text: filler(`Message ${i + 1}.`, 250) }));
+  // Enough earlier messages that a summary turn really has SUMMARY_UPDATE_MIN_PENDING
+  // waiting past a 10-message window, and a carried turn has its extra ones.
+  const earlier = 10 + carried + (summaryTurn ? SUMMARY_UPDATE_MIN_PENDING - 1 : 0);
+  const history = Array.from({ length: earlier }, (_, i) => ({ isUser: i % 2 === 0, text: filler(`Message ${i + 1}.`, 250) }));
   history.push({ isUser: true, text: userText });
   const rawWindowStart = Math.max(0, history.length - historyLimitForMode(mode, false));
-  // A summary turn has SUMMARY_UPDATE_MIN_PENDING messages waiting.
-  const pending = summaryTurn ? pendingSummaryMessages(history, rawWindowStart, rawWindowStart - SUMMARY_UPDATE_MIN_PENDING) : [];
+  // The summary cursor CoachTab would hold: SUMMARY_UPDATE_MIN_PENDING messages
+  // waiting on a summary turn, `carried` ones on a turn whose rewrite waits.
+  const cursor = rawWindowStart - (summaryTurn ? SUMMARY_UPDATE_MIN_PENDING : carried);
+  const pending = summaryTurn ? pendingSummaryMessages(history, rawWindowStart, cursor) : [];
   const base = buildCoachSystemPrompt(mode, {
     lociCoreInstruction: L.buildLociCoreInstruction({ firstName: FIRST }),
     mentorName: "Loci AI Coach", firstName: FIRST, userName: FIRST,
@@ -103,7 +109,7 @@ function buildRequest(mode, { large = false, summaryTurn = false, carried = 0, p
     profileBlock: profileToCoachContext({ totalTasks: 120, totalCompleted: 70, completionRate: 0.58, dominantHorizon: "week", avgEstimateMinutes: 40, avgCompletionsPerActiveDay: 3, bestCompletionDay: "Tuesday", brainDumpPending: brainDump.length, priorityMix: { P1: 0.3 } }),
     lastCoachPlan: mode === "compact_task" ? { recommendedTaskTitle: TITLES[0], horizon: "today", nextStep: "List the sections", reason: "It unblocks the slides" } : null,
     currentFocusTitle: TITLES[0],
-    sessionSummaryContext: mode === "light" ? "" : buildSessionSummaryContext(summary),
+    sessionSummaryContext: shouldIncludeSessionSummaryContext(mode, false, summaryTurn) ? buildSessionSummaryContext(summary) : "",
     pendingSummaryContext: buildPendingSummaryContext(pending),
   });
   // CoachTab appends this for a "how was my week?" question (and only then).
@@ -111,11 +117,10 @@ function buildRequest(mode, { large = false, summaryTurn = false, carried = 0, p
     ? `\n\n${buildLociPeriodContext({ tasks, contributions, config, now: NOW, days: 7, focusRaw: focusLog() })}\nAnswer how the period went from the PERIOD DIGEST: quote its numbers, say what it does not cover, and never invent days, tasks, minutes or deadlines.`
     : "";
   const system = base + periodBlock;
-  // carried: unsummarized messages kept in the history while the rewrite waits.
-  const messages = carried ? history.slice(rawWindowStart - carried) : trimHistoryForLLM(history, mode, false);
+  const messages = history.slice(llmHistoryStart(rawWindowStart, cursor, summaryTurn));
   const chars = system.length + messages.reduce((n, m) => n + m.text.length, 0);
   const maxTokens = MAX_TOKENS[mode] + (summaryTurn ? SUMMARY_TURN_EXTRA_TOKENS : 0);
-  return { system, chars, groqTokens: Math.ceil(chars / CHARS_PER_TOKEN) + maxTokens };
+  return { system, chars, pendingCount: pending.length, groqTokens: Math.ceil(chars / CHARS_PER_TOKEN) + maxTokens };
 }
 
 describe("Coach prompt budgets (#545 C8)", () => {
@@ -137,6 +142,7 @@ describe("Coach prompt budgets (#545 C8)", () => {
   });
 
   it("a typical full_task summary-rewrite turn still fits Groq's free tier", () => {
+    expect(buildRequest("full_task", { summaryTurn: true }).pendingCount).toBe(SUMMARY_UPDATE_MIN_PENDING);
     expect(buildRequest("full_task", { summaryTurn: true }).groqTokens).toBeLessThanOrEqual(GROQ_TPM);
   });
 

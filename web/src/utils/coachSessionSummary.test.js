@@ -403,9 +403,16 @@ describe("full-conversation simulation across the 40-message boundary (loopcheck
       const summarizedThroughIndex = coachSessionSummary?.summarizedThroughIndex || 0;
       const updateNeeded = needsSummaryUpdate(rawWindowStart, summarizedThroughIndex);
       // Every message not yet summarized reaches the model this turn: in the
-      // chat history, or in the pending block on a rewrite turn.
+      // chat history, or in the part of the pending block that fits its
+      // budget on a rewrite turn. (Not simulated: before cloud sync is
+      // confirmed CoachTab sends no pending block at all.)
       const historyStart = llmHistoryStart(rawWindowStart, summarizedThroughIndex, updateNeeded);
-      expect(updateNeeded ? historyStart === rawWindowStart : historyStart <= summarizedThroughIndex).toBe(true);
+      const pendingShown = updateNeeded
+        ? pendingSummaryIncludedCount(pendingSummaryMessages(savedHistory, rawWindowStart, summarizedThroughIndex))
+        : 0;
+      for (let i = summarizedThroughIndex; i < savedHistory.length; i++) {
+        expect(i >= historyStart || i < summarizedThroughIndex + pendingShown).toBe(true);
+      }
       if (updateNeeded) {
         // 2 messages age out of the 10-message window per turn, so this
         // fires every second turn once 4 are pending (#545 C12). What must
