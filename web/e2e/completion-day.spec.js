@@ -28,7 +28,17 @@ test("a task finished at 01:00 ticks the Loci day it belongs to, in Review", asy
   const before = await lastBarTicks();
 
   await nav.getByRole("button", { name: "Today", exact: true }).click();
-  await page.getByRole("button", { name: /^Mark done: / }).first().click();
+  const markDone = page.getByRole("button", { name: /^Mark done: / }).first();
+  const title = (await markDone.getAttribute("aria-label")).replace(/^Mark done: /, "");
+  await markDone.click();
 
   expect(await lastBarTicks()).toBe(before + 1);
+
+  // Reopening takes the tick back from the day the task was finished on.
+  await nav.getByRole("button", { name: "Today", exact: true }).click();
+  const fold = page.locator(".today-done-fold .today-parked-line");
+  if (await fold.count()) await fold.click();
+  await page.getByRole("button", { name: `Mark not done: ${title}` }).click();
+
+  expect(await lastBarTicks()).toBe(before);
 });

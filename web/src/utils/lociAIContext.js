@@ -1,7 +1,7 @@
 import { getValidCommittedTaskIds, REFLECTION_MOODS } from "./dailyCoachCheckins";
 import { horizonsFromConfig } from "./horizons";
 import { buildDeadlineProgressMirror } from "./deadlineProgressMirror";
-import { formatMinutesToTime, getFocusWindows, getLociDayStr } from "./focusWindows";
+import { formatMinutesToTime, getFocusWindows, getLociDayStr, lociDaysBack } from "./focusWindows";
 import { isDeferred } from "./deferral";
 import { isEventTask } from "./dayMapRoute";
 import { newestThoughtsFirst, thoughtText } from "./thoughts";
@@ -321,15 +321,7 @@ export function buildLociVelocityContext(contributions = [], today = new Date(),
   if (!contributions || contributions.length === 0) return "";
 
   const byDate = new Map(contributions.map(c => [c.dateString, Number(c.count) || 0]));
-  const sumLastNDays = (n) => {
-    let total = 0;
-    for (let i = 0; i < n; i++) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      total += byDate.get(getLociDayStr(d, windows)) || 0;
-    }
-    return total;
-  };
+  const sumLastNDays = (n) => lociDaysBack(today, windows, n).reduce((total, day) => total + (byDate.get(day) || 0), 0);
 
   const last3 = sumLastNDays(3);
   const last7 = sumLastNDays(7);

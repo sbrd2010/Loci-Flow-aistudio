@@ -4,7 +4,7 @@ import { celebrate } from "../utils/celebrations";
 import { uiSoundsOn } from "../utils/uiSounds";
 import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
 import { removeScheduleFields } from "./useDayRoute";
-import { addCompletionTick, removeCompletionTick } from "../utils/completionTicks";
+import { addCompletionTick, takeBackTick } from "../utils/completionTicks";
 import { buildTaskMutationEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 
 // What a task's sheet does to the task, with the one Undo toast: done, park,
@@ -194,7 +194,8 @@ export default function useTaskActions({ payload, savePayload, savePayloadAsync,
       }
     }
     else if (kind === "done" && current.isCompleted) {
-      const contributions = removeCompletionTick(latest.contributions, undo.dateStr);
+      // From the day the task is stamped with now; the toast's day only if it has none.
+      const contributions = takeBackTick(latest.contributions, current, undo.dateStr);
       put({ isCompleted: false, dateCompletedString: null, ...refocus }, "task_reopened", { contributions });
     }
   };

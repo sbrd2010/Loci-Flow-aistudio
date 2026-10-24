@@ -107,14 +107,11 @@ export function computeCompletionsByDayOfWeek(daily) {
 // Category counts from retained completed tasks whose dateCompletedString
 // falls in-range. Deliberately does NOT compute an exact "coverage" ratio
 // against contributions[] — dateCompletedString and contributions[].dateString
-// are stamped by two different clocks at every current completion call site
-// (TodayTab/RoadmapTab/coachActions.js/focusSession.js all pass the "Loci
-// day" value for dateCompletedString but a plain calendar date for the
-// contributions[] increment), so the two counts aren't guaranteed to
-// describe the same population even before accounting for a task being
-// deleted after completion — retainedCount/contributions-total is not a
-// reliable coverage percentage, and presenting one implies more precision
-// than the underlying data can support. See issue #361. The UI shows these
+// are now both stamped with the Loci day (completionTicks.js), but ticks
+// recorded before that change used a plain calendar date, and a task can be
+// deleted after completion — so retainedCount/contributions-total is still
+// not a reliable coverage percentage, and presenting one implies more
+// precision than the underlying data can support. See issue #361. The UI shows these
 // category counts as available examples from retained records, with a
 // flat, unconditional disclosure rather than a computed ratio.
 export function computeCompletedByCategory(tasks, rangeDays) {

@@ -23,9 +23,18 @@ export function addCompletionTick(contributions, dayStr, payload, now = Date.now
 }
 
 // contributions with one tick taken back from `dayStr`, never below zero.
+// No day, no change (a row with no dateString must not match "no day").
 export function removeCompletionTick(contributions, dayStr, now = Date.now()) {
   const next = [...(contributions || [])];
+  if (!dayStr) return next;
   const idx = next.findIndex((c) => c && c.dateString === dayStr);
   if (idx !== -1 && next[idx].count > 0) next[idx] = { ...next[idx], count: next[idx].count - 1, lastUpdated: now };
   return next;
+}
+
+// Reopening a task takes its tick back from the day the task was finished on,
+// the day it is stamped with, which is not always today. `fallbackDay` is for a
+// task with no stamp. Undo of a completion does the same.
+export function takeBackTick(contributions, task, fallbackDay, now = Date.now()) {
+  return removeCompletionTick(contributions, task?.dateCompletedString || fallbackDay, now);
 }

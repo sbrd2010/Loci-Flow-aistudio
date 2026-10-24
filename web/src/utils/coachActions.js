@@ -21,7 +21,7 @@
 // clearly requesting that kind of action before any tag is allowed to mutate.
 
 import { buildToggleCompletedTasks } from "./taskOps";
-import { addCompletionTick, removeCompletionTick } from "./completionTicks";
+import { addCompletionTick, takeBackTick } from "./completionTicks";
 import { isEveningGuardBlocked } from "./eveningGuard";
 import { isActiveLociTask } from "./lociAIContext";
 import { safeUUID } from "./uuid";
@@ -711,7 +711,7 @@ export function undoCoachAction(payload, record, now = Date.now()) {
     if (!current.isCompleted) return null;
     // The tick came off the day the task is stamped with (the check above
     // means it is still the tap's own completion).
-    const contributions = removeCompletionTick(payload.contributions, current.dateCompletedString, now);
+    const contributions = takeBackTick(payload.contributions, current, null, now);
     return { ...payload, contributions, tasks: put({ isCompleted: false, dateCompletedString: null, ...repinSelf }) };
   }
   if (type === "SET_NOW_FOCUS" || type === "START_FOCUS") {

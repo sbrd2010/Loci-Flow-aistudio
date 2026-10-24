@@ -17,7 +17,7 @@ import { safeUUID } from "../utils/uuid";
 import { endSessionTasks, switchToNextTasks, withNextStep } from "../utils/focusEnd";
 import { taskSteps, stepsPatch, applyStepsPatch } from "../utils/taskSteps";
 import { buildToggleCompletedTasks } from "../utils/taskOps";
-import { addCompletionTick, removeCompletionTick } from "../utils/completionTicks";
+import { addCompletionTick, takeBackTick } from "../utils/completionTicks";
 import { buildParkTaskTasks } from "../utils/coachActions";
 import { shouldStopFocusOnComplete, focusBlockSeconds, chosenStartOption } from "../utils/focusSession";
 import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
@@ -423,7 +423,7 @@ export default function TodayTab({
     // which is not always today.
     const nextContributions = isCompleted
       ? addCompletionTick(contributions, todayStr, payload)
-      : removeCompletionTick(contributions, task.dateCompletedString || todayStr);
+      : takeBackTick(contributions, task, todayStr);
     savePayloadAsync({ ...payload, tasks: updatedTasks, contributions: nextContributions })
       .then(() => {
         const events = [buildTaskMutationEvent(isCompleted ? "task_completed" : "task_reopened", task, { windows, now: actionAt })];

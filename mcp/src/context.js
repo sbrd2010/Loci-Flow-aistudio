@@ -22,9 +22,9 @@ export function prepare(raw, nowMs, timeZone) {
   return {
     tasks, live, active: live.filter(isActiveLociTask), config, contributions, brainDump, timeZone, nowMs, wall, windows,
     // Two different "todays", as in the app. The Loci day runs until the user's
-    // window ends (past midnight for some), and rules the Today list, deferral and
-    // dateCompletedString. The calendar date rules deadlines (frontDaysLeft) and
-    // contributions[].dateString.
+    // window ends (past midnight for some), and rules the Today list, deferral,
+    // dateCompletedString and the daily completion counts (contributions[].dateString).
+    // The calendar date rules deadlines (frontDaysLeft).
     calendarToday: dateString(wall),
     lociDay: getLociDayStr(wall, windows),
   };

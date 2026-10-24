@@ -10,6 +10,7 @@ import {
   getCurrentFocusSlot,
   getFocusProgress,
   getLociDayStr,
+  lociDaysBack,
   lociDayEndsAt,
   hasConfiguredFocusWindow,
   getTotalFocusMinutes,
@@ -496,5 +497,35 @@ describe("a window after midnight", () => {
     const w = getFocusWindows({ focusWindows: [{ start: "09:00", end: "12:00" }, { start: "22:00", end: "02:15" }] });
     expect(w.map(x => x.afterMidnight)).toEqual([undefined, undefined]);
     expect(mergeWindowSpans(w)).toEqual([[540, 720], [1320, 1575]]);
+  });
+});
+
+describe("lociDaysBack", () => {
+  it("lists the Loci days ending today, newest first, stepping by calendar date", () => {
+    const days = lociDaysBack(new Date(2026, 5, 12, 9), getFocusWindows({}), 4);
+    expect(days).toEqual(["2026-06-12", "2026-06-11", "2026-06-10", "2026-06-09"]);
+  });
+
+  it("starts from the Loci day in the small hours of a window that runs past midnight", () => {
+    const windows = getFocusWindows({ focusWindows: [{ start: "07:00", end: "02:00" }] });
+    expect(lociDaysBack(new Date(2026, 5, 13, 0, 30), windows, 2)).toEqual(["2026-06-12", "2026-06-11"]);
+  });
+
+  it("crosses month and year ends", () => {
+    expect(lociDaysBack(new Date(2026, 0, 2, 9), getFocusWindows({}), 4)).toEqual(["2026-01-02", "2026-01-01", "2025-12-31", "2025-12-30"]);
+  });
+
+  it("does not repeat or skip a day across a daylight-saving change", () => {
+    const previous = process.env.TZ;
+    process.env.TZ = "America/New_York";
+    try {
+      const windows = getFocusWindows({ focusWindows: [{ start: "09:00", end: "03:00" }] });
+      // 02:30 on 9 Mar 2026, the morning after the clocks went forward: still the 8th's day.
+      const days = lociDaysBack(new Date(2026, 2, 9, 2, 30), windows, 4);
+      expect(new Set(days).size).toBe(4);
+      expect(days).toEqual(["2026-03-08", "2026-03-07", "2026-03-06", "2026-03-05"]);
+    } finally {
+      if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous;
+    }
   });
 });

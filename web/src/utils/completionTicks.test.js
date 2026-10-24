@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addCompletionTick, removeCompletionTick } from "./completionTicks";
-import { getLociDayStr } from "./dailyAnchors";
-import { getFocusWindows } from "./focusWindows";
+import { addCompletionTick, removeCompletionTick, takeBackTick } from "./completionTicks";
 
 describe("completion ticks", () => {
   it("starts a day's tick at 1, keyed by user and day", () => {
@@ -38,12 +36,37 @@ describe("completion ticks", () => {
     expect(removeCompletionTick(undefined, "b")).toEqual([]);
   });
 
-  it("counts a 00:30 finish toward the Loci day it belongs to, the day dateCompletedString names", () => {
-    // A day that starts at 07:00 and runs to 02:00 (the default day ends at midnight).
-    const lateNight = new Date(2024, 5, 15, 0, 30);
-    const lociDay = getLociDayStr(lateNight, getFocusWindows({ focusWindows: [{ start: "07:00", end: "02:00" }] }));
-    expect(lociDay).toBe("2024-06-14");
-    const out = addCompletionTick([], lociDay, { userId: "u" });
-    expect(out[0].dateString).toBe("2024-06-14");
+  it("ignores a missing day instead of matching a row that has none", () => {
+    const input = [{ count: 3 }, { dateString: "d", count: 1 }];
+    expect(removeCompletionTick(input, undefined)).toEqual(input);
+    expect(removeCompletionTick(input, null)).toEqual(input);
+  });
+});
+
+describe("takeBackTick (reopen and Undo)", () => {
+  const rows = () => [
+    { compositeKey: "u_2024-06-14", userId: "u", dateString: "2024-06-14", count: 3, lastUpdated: 1 },
+    { compositeKey: "u_2024-06-15", userId: "u", dateString: "2024-06-15", count: 1, lastUpdated: 1 },
+  ];
+
+  it("takes the tick from the day the task was finished on, not from the fallback day", () => {
+    const out = takeBackTick(rows(), { dateCompletedString: "2024-06-14" }, "2024-06-15");
+    expect(out.map(c => [c.dateString, c.count])).toEqual([["2024-06-14", 2], ["2024-06-15", 1]]);
+  });
+
+  it("uses the fallback day for a task with no stamp", () => {
+    const out = takeBackTick(rows(), { dateCompletedString: null }, "2024-06-15");
+    expect(out.map(c => [c.dateString, c.count])).toEqual([["2024-06-14", 3], ["2024-06-15", 0]]);
+  });
+
+  it("changes nothing when there is neither a stamp nor a fallback", () => {
+    expect(takeBackTick(rows(), {}, undefined)).toEqual(rows());
+    expect(takeBackTick(rows(), undefined, null)).toEqual(rows());
+  });
+
+  it("never goes below zero, so a second reopen cannot take a tick that was never there", () => {
+    const once = takeBackTick(rows(), { dateCompletedString: "2024-06-15" });
+    const twice = takeBackTick(once, { dateCompletedString: "2024-06-15" });
+    expect(twice.find(c => c.dateString === "2024-06-15").count).toBe(0);
   });
 });
