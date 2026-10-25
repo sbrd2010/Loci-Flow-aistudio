@@ -59,7 +59,7 @@ function cooldownKey(provider) {
 
 // Logs counts/metadata only — never the API key, key fingerprint, system
 // prompt content, message content, or raw request body.
-function logAICallDiagnostics({ provider, outcome, retryAfterMs, contextMode, systemPrompt, messages, usage }) {
+function logAICallDiagnostics({ provider, outcome, detail, retryAfterMs, contextMode, systemPrompt, messages, usage }) {
   const messagesChars = (messages || []).reduce((sum, m) => sum + String(m.content || "").length, 0);
   const systemPromptChars = String(systemPrompt || "").length;
 
@@ -74,6 +74,7 @@ function logAICallDiagnostics({ provider, outcome, retryAfterMs, contextMode, sy
   console.debug("[aiCall]", {
     provider,
     outcome,
+    ...(detail ? { detail } : {}),
     retryAfterMs: retryAfterMs ?? null,
     contextMode: contextMode ?? null,
     systemPromptChars,
@@ -183,6 +184,19 @@ function statusError(provider, status, res) {
   return new Error(`${provider}_${status}`);
 }
 
+// statusError plus the provider's own one-line reason, so a refusal such as "No
+// endpoints found for this model" reaches the console log and, when one provider was
+// tried, the error shown to the user. Read from a copy of the body, never the key.
+async function failedResponse(provider, res) {
+  const err = statusError(provider, res.status, res);
+  try {
+    const body = await res.clone().json();
+    const text = String(body?.error?.message ?? body?.message ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
+    if (text) err.detail = `${provider}: ${text}`;
+  } catch { /* no readable body */ }
+  return err;
+}
+
 // Classifies a thrown provider error into a stable, caller-agnostic bucket.
 // Used to pick the final error across all attempted providers (see callAI)
 // and to drive describeAIError's user-facing copy.
@@ -223,7 +237,10 @@ export function describeAIError(err) {
   // The limit message carries the live counts ("used 120/120"), so it is read
   // off the error rather than from this table.
   if (message === "usage_limit" && err instanceof Error && err.limitMessage) return err.limitMessage;
-  return (Object.prototype.hasOwnProperty.call(AI_ERROR_COPY, message) && AI_ERROR_COPY[message]) || AI_ERROR_COPY.other;
+  const copy = (Object.prototype.hasOwnProperty.call(AI_ERROR_COPY, message) && AI_ERROR_COPY[message]) || AI_ERROR_COPY.other;
+  // When no provider could answer for a reason the table has no wording for, say what the provider said.
+  const showDetail = err instanceof Error && err.detail && (message === "only_provider_failed" || message === "all_providers_failed");
+  return showDetail ? `${copy} (${err.detail})` : copy;
 }
 
 // Earlier builds saved the wording below as Coach messages.
@@ -237,7 +254,8 @@ const AI_ERROR_TEXTS = new Set([...Object.values(AI_ERROR_COPY), ...LEGACY_AI_ER
 // something the assistant said.
 export function isAISystemReply(text) {
   const t = String(text || "").trim();
-  return AI_ERROR_TEXTS.has(t) || /^AI (daily|hourly) limit reached:/.test(t);
+  // A provider reason may follow the standard wording: "… in a moment. (openrouter: …)".
+  return AI_ERROR_TEXTS.has(t) || [...AI_ERROR_TEXTS].some(copy => t.startsWith(`${copy} (`)) || /^AI (daily|hourly) limit reached:/.test(t);
 }
 
 function getAIUsageUserId() {
@@ -267,7 +285,7 @@ async function requestGroq(groqKey, systemPrompt, messages, tokenBudget, reasoni
       ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {})
     })
   }, limits);
-  if (!res.ok) throw statusError("groq", res.status, res);
+  if (!res.ok) throw await failedResponse("groq", res);
   const data = await res.json();
   const message = data.choices?.[0]?.message;
   return { reply: extractMessageContent(message), usage: data.usage, finishReason: data.choices?.[0]?.finish_reason, data, message };
@@ -330,7 +348,7 @@ async function requestCerebras(cerebrasKey, systemPrompt, messages, tokenBudget,
       ...(reasoningEffort && CEREBRAS_SUPPORTS_REASONING_EFFORT ? { reasoning_effort: reasoningEffort } : {})
     })
   }, limits);
-  if (!res.ok) throw statusError("cerebras", res.status, res);
+  if (!res.ok) throw await failedResponse("cerebras", res);
   const data = await res.json();
   const message = data.choices?.[0]?.message;
   return { reply: extractMessageContent(message), usage: data.usage, finishReason: data.choices?.[0]?.finish_reason, data, message };
@@ -386,7 +404,7 @@ async function requestOpenRouter(openrouterKey, systemPrompt, messages, tokenBud
       ...(reasoningEffort && OPENROUTER_SUPPORTS_REASONING ? { reasoning: { effort: reasoningEffort } } : {})
     })
   }, limits);
-  if (!res.ok) throw statusError("openrouter", res.status, res);
+  if (!res.ok) throw await failedResponse("openrouter", res);
   const data = await res.json();
   const message = data.choices?.[0]?.message;
   return { reply: extractMessageContent(message), usage: data.usage, finishReason: data.choices?.[0]?.finish_reason, data, message };
@@ -432,7 +450,7 @@ async function callGemini(geminiKey, systemPrompt, messages, maxTokens, limits) 
     headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey },
     body: JSON.stringify(requestBody)
   }, limits);
-  if (!res.ok) throw statusError("gemini", res.status, res);
+  if (!res.ok) throw await failedResponse("gemini", res);
   const data = await res.json();
   const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
   if (!reply) throw new Error("gemini_empty");
@@ -685,7 +703,7 @@ async function callZai(zaiKey, systemPrompt, messages, maxTokens, limits) {
         temperature: 0.4
       })
     }, limits);
-    if (!res.ok) throw statusError("zai", res.status, res);
+    if (!res.ok) throw await failedResponse("zai", res);
     const data = await res.json();
     const message = data.choices?.[0]?.message;
     const reply = extractMessageContent(message);
@@ -825,7 +843,7 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, openrout
         const known = providerTooLarge.get(ckey);
         providerTooLarge.set(ckey, { chars: Math.min(known?.chars ?? Infinity, payloadChars), until: Date.now() + TOO_LARGE_COOLDOWN_MS });
       }
-      logAICallDiagnostics({ provider: provider.name, outcome: err.message, retryAfterMs: err.retryAfterMs, contextMode, systemPrompt, messages });
+      logAICallDiagnostics({ provider: provider.name, outcome: err.message, detail: err.detail, retryAfterMs: err.retryAfterMs, contextMode, systemPrompt, messages });
       if (provider !== order[order.length - 1]) {
         console.warn(`${provider.name} failed, trying next provider:`, err.message);
       }
@@ -856,7 +874,11 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, openrout
     const coolingDown = attempts.find(a => !a.live && (a.classification === "rate_limit" || a.classification === "service_unavailable"));
     throw coolingDown ? coolingDown.err : new Error("payload_too_large");
   }
-  throw new Error(order.length === 1 && isProviderOnly() && pref !== "auto" ? "only_provider_failed" : "all_providers_failed");
+  const lastDetail = [...liveAttempts].reverse().find(a => a.err?.detail)?.err.detail;
+  throw Object.assign(
+    new Error(order.length === 1 && isProviderOnly() && pref !== "auto" ? "only_provider_failed" : "all_providers_failed"),
+    lastDetail ? { detail: lastDetail } : {}
+  );
 }
 
 // Private-alpha build-key pattern: localStorage (user-entered BYOK) wins,
