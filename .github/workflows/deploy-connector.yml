@@ -105,4 +105,10 @@ jobs:
             > "$RUNNER_TEMP/connector-settings.json"
           npx wrangler secret bulk "$RUNNER_TEMP/connector-settings.json"
           rm -f "$RUNNER_TEMP/connector-settings.json"
+          # An empty MCP_EXTRA_REDIRECT_URIS means "no extra addresses": remove any earlier
+          # one from the Worker too, or a removed secret would keep granting access. It may
+          # not exist yet (first run), which is fine.
+          if [ -z "$MCP_EXTRA_REDIRECT_URIS" ]; then
+            npx wrangler secret delete EXTRA_REDIRECT_URIS < /dev/null || echo "No earlier EXTRA_REDIRECT_URIS to remove."
+          fi
           echo "Settings stored. The connector is ready at \`${CONNECTOR_URL:-$MCP_PUBLIC_URL}/mcp\`." >> "$GITHUB_STEP_SUMMARY"
