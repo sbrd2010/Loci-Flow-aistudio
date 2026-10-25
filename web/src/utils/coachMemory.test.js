@@ -19,6 +19,8 @@ import {
   buildMemoryWritingRules,
   isResurrectedMemoryEntry,
   parseRememberRequest,
+  parseForgetRequest,
+  findForgetTargets,
   isPlainQuestion,
   isStorableMemoryText,
 } from "./coachMemory";
@@ -642,5 +644,52 @@ describe("what may be kept as memory", () => {
     expect(note).toBe("*Not saved to Coach memory: Coach memory is switched off in Settings.*");
     expect(stripSavedNote(`Got it.\n\n${note}`)).toBe("Got it.");
     expect(splitSavedNote(`Got it.\n\n${note}`).note).toContain("Not saved to Coach memory");
+  });
+});
+
+describe("parseForgetRequest / findForgetTargets (the app removes what the user asks it to forget)", () => {
+  it.each([
+    ["Forget that I prefer mornings", "I prefer mornings"],
+    ["please forget about my meetings after 3pm", "my meetings after 3pm"],
+    ["Stop remembering that I like early calls", "I like early calls"],
+    ["Can you forget that I prefer mornings?", null],
+    ["forget it", null],
+    ["forget about it", null],
+    ["forget everything", null],
+    ["forget mornings", null], // one content word is too little to pick an entry
+    ["forget the report deadline", "the report deadline"], // parsed; findForgetTargets decides if any entry matches
+    ["I forgot that I prefer mornings", null],
+  ])("%s", (text, what) => {
+    expect(parseForgetRequest(text)).toBe(what);
+  });
+
+  const memory = {
+    pinnedFacts: [{ text: "Prefers mornings for deep work." }, { text: "Main goal this quarter: run the workshop and finish the slides by Nov 2." }],
+    recentObservations: [{ text: "Doesn't like meetings after 3pm" }],
+  };
+
+  it("finds the entry whose words cover the request, and only that one", () => {
+    expect(findForgetTargets(memory, "I prefer mornings")).toEqual(["Prefers mornings for deep work."]);
+    expect(findForgetTargets(memory, "I don't like meetings after 3pm")).toEqual(["Doesn't like meetings after 3pm"]);
+    expect(findForgetTargets(memory, "my goal to run the workshop")).toEqual(["Main goal this quarter: run the workshop and finish the slides by Nov 2."]);
+  });
+
+  it("matches first-person requests against third-person entries whatever the verb ending (Codex #567)", () => {
+    const m = { pinnedFacts: [{ text: "Likes early calls." }, { text: "Watches the news at night." }] };
+    expect(findForgetTargets(m, "I like early calls")).toEqual(["Likes early calls."]);
+    expect(findForgetTargets(m, "I watch the news at night")).toEqual(["Watches the news at night."]);
+    expect(findForgetTargets({ pinnedFacts: [{ text: "Prefers mornings for deep work." }] }, "I prefer morning deep work")).toHaveLength(1);
+  });
+
+  it("finds nothing for something that is not saved, and for a request too thin to pick an entry", () => {
+    expect(findForgetTargets(memory, "I prefer evenings")).toEqual([]);
+    expect(findForgetTargets(memory, "mornings")).toEqual([]);
+    expect(findForgetTargets({}, "I prefer mornings")).toEqual([]);
+  });
+
+  it("the removal note and the 'not removed' note are stripped again before the model sees the reply", () => {
+    const note = savedNote({ notRemoved: "no saved entry matched that." });
+    expect(note).toBe("*Not removed from Coach memory: no saved entry matched that.*");
+    expect(stripSavedNote(`Done.\n\n${note}`)).toBe("Done.");
   });
 });

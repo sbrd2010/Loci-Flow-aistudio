@@ -210,7 +210,7 @@ export const QUESTIONS = [
   { id: "mem-1", c: "memory", text: "Remember that I don't like meetings after 3pm", needs: ["memoryRules"], expect: { remembers: /3\s*pm/i } },
   { id: "mem-2", c: "memory", text: "Do you remember my goal?", needs: ["memory"], live: true, expect: { must: [/workshop|nov(?:ember)?\s*2/i] } },
   { id: "mem-3", c: "memory", text: "What do you know about me?", needs: ["memory"], live: true, expect: { must: [/morning/i] } },
-  { id: "mem-4", c: "memory", text: "Forget that I prefer mornings", needs: ["memoryRules"], expect: { tags: [/\[\[FORGET:[^\]]*morning/i] } },
+  { id: "mem-4", c: "memory", text: "Forget that I prefer mornings", needs: ["memoryRules"], expect: { forgets: /morning/i } },
   { id: "mem-5", c: "memory", text: "Please remember for future chats that I do my best thinking before 10am", needs: ["memoryRules"], expect: { remembers: /10\s*am/i } },
 
   // 9. Stay in lane, stay safe
