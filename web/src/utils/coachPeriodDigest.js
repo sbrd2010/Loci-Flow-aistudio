@@ -63,7 +63,7 @@ export function buildLociDeadlinesContext({ tasks = [], config = {}, now = new D
 // track" is never a guess (#555 F6, F7).
 export const DEADLINES_ANSWER_NOTE = "Start your reply with these front deadlines: name each front, its date and its days left, overdue or soonest first. Tasks have no due dates of their own, so do not list tasks as due. Say ahead or behind only when a number above shows it.";
 export const NO_DEADLINES_NOTE = "FRONT DEADLINES: none set. Tasks have no due dates of their own; say so plainly and do not make any up.";
-export const PERIOD_ANSWER_NOTE = "Answer from the PERIOD DIGEST: quote its numbers and titles, say what it does not cover, and never invent days, tasks, minutes or deadlines. For \"stuck\" or \"putting off\" questions use its untouched-tasks line (no such line means none). Say ahead or behind only when a number above shows it.";
+export const PERIOD_ANSWER_NOTE = "Answer from the PERIOD DIGEST: quote its numbers and titles, say what it does not cover, and never invent days, tasks, minutes or deadlines. For \"stuck\" or \"putting off\" questions use its untouched-tasks line. With no such line, say only that no open task has gone 14 days untouched, not that nothing is stuck. Say ahead or behind only when a number above shows it.";
 
 // The block for a deadline question that is not a period question. With no dated
 // fronts, "what's due?" still gets an honest answer, but only when the message

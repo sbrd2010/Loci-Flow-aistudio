@@ -210,6 +210,9 @@ describe("PERIOD_ANSWER_NOTE (#555 F5, F7)", () => {
   it("covers stuck questions with the untouched-tasks line, and no pace without a number", () => {
     expect(PERIOD_ANSWER_NOTE).toContain("PERIOD DIGEST");
     expect(PERIOD_ANSWER_NOTE).toContain("untouched-tasks line");
+    // Codex round 1: a missing line only means no task crossed the default 14-day cutoff.
+    expect(PERIOD_ANSWER_NOTE).toContain("no open task has gone 14 days untouched, not that nothing is stuck");
+    expect(PERIOD_ANSWER_NOTE).not.toContain("means none");
     expect(PERIOD_ANSWER_NOTE).toContain("never invent days, tasks, minutes or deadlines");
     expect(PERIOD_ANSWER_NOTE).toContain("Say ahead or behind only when a number above shows it");
   });
