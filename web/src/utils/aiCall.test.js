@@ -1690,8 +1690,10 @@ describe("hasOwnAIKey", () => {
     expect(hasOwnAIKey()).toBe(false);
     withStorage({ loci_cerebras_key: "csk-123" });
     expect(hasOwnAIKey()).toBe(true);
-    // Default order: Cerebras first, so a lone Groq key of their own is the first one tried.
+    // Default order: Groq first, so a Groq key of their own is the first one tried.
     withStorage({ loci_groq_key: "gsk-123" });
+    expect(hasOwnAIKey()).toBe(true);
+    withStorage({ loci_openrouter_key: "sk-or-123" });
     expect(hasOwnAIKey()).toBe(true);
     withStorage({ loci_provider_pref: "gemini", loci_gemini_key: "AIza-123" });
     expect(hasOwnAIKey()).toBe(true);
@@ -1703,12 +1705,12 @@ describe("hasOwnAIKey", () => {
   });
 
   it("is false when a shared build-time key would be tried first", () => {
-    vi.stubEnv("VITE_CEREBRAS_KEY", "shared-cerebras");
-    withStorage({ loci_groq_key: "gsk-123" }); // auto order: the shared Cerebras key leads
+    vi.stubEnv("VITE_GROQ_KEY", "shared-groq");
+    withStorage({ loci_gemini_key: "AIza-123" }); // auto order: the shared Groq key leads
     expect(hasOwnAIKey()).toBe(false);
-    withStorage({ loci_groq_key: "gsk-123", loci_provider_pref: "groq" }); // they chose Groq
+    withStorage({ loci_gemini_key: "AIza-123", loci_provider_pref: "gemini" }); // they chose Gemini
     expect(hasOwnAIKey()).toBe(true);
-    withStorage({ loci_groq_key: "gsk-123", loci_provider_pref: "cerebras", loci_provider_only: "1" }); // only the shared one
+    withStorage({ loci_gemini_key: "AIza-123", loci_provider_pref: "groq", loci_provider_only: "1" }); // only the shared one
     expect(hasOwnAIKey()).toBe(false);
     vi.unstubAllEnvs();
   });
