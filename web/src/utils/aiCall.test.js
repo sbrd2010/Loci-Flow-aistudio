@@ -1680,7 +1680,12 @@ describe("buildProviderOrder without NVIDIA", () => {
 });
 
 describe("hasOwnAIKey", () => {
-  afterEach(() => { vi.unstubAllGlobals(); });
+  // The deploy build runs these tests with the shared VITE_*_KEY variables set; each test
+  // states which shared keys exist, so they start with none.
+  beforeEach(() => {
+    for (const k of ["GROQ", "GEMINI", "CEREBRAS", "ZAI", "OPENROUTER"]) vi.stubEnv(`VITE_${k}_KEY`, "");
+  });
+  afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
   const withStorage = (entries) => vi.stubGlobal("localStorage", { getItem: (k) => (k in entries ? entries[k] : null) });
 
   it("is true only when the provider that leads the chain has a key the user entered", () => {
