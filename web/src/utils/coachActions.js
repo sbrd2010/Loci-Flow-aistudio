@@ -628,7 +628,28 @@ const CLARIFICATION_NOTES = {
 // proposed (Q50): a matched action isn't applied yet — it shows as a button
 // under the reply — so the reply keeps the model's own offer and adds only
 // the notes, never a "Marked … complete." line.
+// A proposed action changes nothing until the user taps it (NARRATION RULE), so a
+// model sentence that says it is already done ("Got it, marking it done", "I've
+// added it", "I'll move it") is untrue. Those sentences are dropped, and a reply
+// left with no offer at all gets a plain one per button.
+const DONE_CLAIM_RE = /\b(?:marking|adding|parking|starting|switching|setting)\s+(?:it|that|this|them|the task|["“'‘])|\bi(?:['’]ve| have)?\s+(?:just\s+)?(?:marked|added|parked|started|switched|set)\b|\bi['’]ll\s+(?:mark|add|park|start|switch|set|move|update|change)\b|\b(?:marked|added|parked)\s+(?:it|that|this)\b/i;
+const OFFER_LINES = {
+  COMPLETE_TASK: (t) => `Want me to mark "${t}" complete?`,
+  ADD_TASK: (t) => `Want me to add "${t}" to your Today list?`,
+  PARK_TASK: (t) => `Want me to park "${t}" for later?`,
+  SET_NOW_FOCUS: (t) => `Want me to make "${t}" your focus?`,
+  START_FOCUS: (t) => `Want me to start a focus session on "${t}"?`,
+};
+function honestOffer(cleanText, matched) {
+  const sentences = String(cleanText || "").split(/(?<=[.!?])\s+/).filter(Boolean);
+  const kept = sentences.filter(sentence => !DONE_CLAIM_RE.test(sentence));
+  if (kept.length > 0 && kept.length === sentences.length) return cleanText; // nothing untrue, and an offer is there
+  const offers = matched.map(r => OFFER_LINES[r.type]?.(r.task ? r.task.title : r.title)).filter(Boolean);
+  return [...kept, ...offers].join(" ");
+}
+
 export function buildActionReplyText(cleanText, results = [], lastUserMessage = "", { proposed = false } = {}) {
+  if (proposed && results.some(r => r.matched)) cleanText = honestOffer(cleanText, results.filter(r => r.matched));
   const userWantedAction = Object.keys(INTENT_PATTERNS).some(type => messageSeemsActionLike(type, lastUserMessage));
   const successLines = proposed ? [] : results.filter(r => r.matched).map(r => {
     const title = r.task ? r.task.title : r.title;

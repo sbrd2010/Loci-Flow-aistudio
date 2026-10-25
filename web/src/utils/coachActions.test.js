@@ -1399,6 +1399,28 @@ describe("Q50: actions are buttons the user taps", () => {
     expect(text).not.toMatch(/Marked/);
   });
 
+  it("a proposed reply drops a sentence that says it already happened, and offers the change (#555 F18)", () => {
+    const results = [{ type: "COMPLETE_TASK", title: "Order medicine", matched: true, task: { title: "Order medicine" } }];
+    for (const said of ["Got it, marking it done.", "I've marked it complete.", "I'll mark that off for you.", "Done, marked it."]) {
+      const text = buildActionReplyText(said, results, "I finished ordering the medicine", { proposed: true });
+      expect(text, said).toBe('Want me to mark "Order medicine" complete?');
+    }
+    const mixed = buildActionReplyText("Nice work. Got it, marking it done.", results, "I finished ordering the medicine", { proposed: true });
+    expect(mixed).toBe('Nice work. Want me to mark "Order medicine" complete?');
+  });
+
+  it("a proposed reply with no words at all still says what the button does (#555 F18)", () => {
+    const results = [{ type: "ADD_TASK", title: "Book flights", matched: true }, { type: "START_FOCUS", title: "Write report", matched: true, task: { title: "Write report" } }];
+    expect(buildActionReplyText("", results, "add book flights and start the report", { proposed: true }))
+      .toBe('Want me to add "Book flights" to your Today list? Want me to start a focus session on "Write report"?');
+  });
+
+  it("a plan that merely mentions starting is left alone", () => {
+    const results = [{ type: "SET_NOW_FOCUS", title: "Write report", matched: true, task: { title: "Write report" } }];
+    const text = buildActionReplyText("Starting with the report is the right call. Want me to make it your focus?", results, "what first", { proposed: true });
+    expect(text).toBe("Starting with the report is the right call. Want me to make it your focus?");
+  });
+
   it("a proposed reply still adds the notes for what it couldn't find", () => {
     const results = [
       { type: "COMPLETE_TASK", title: "Order medicine", matched: true, task: { title: "Order medicine" } },
