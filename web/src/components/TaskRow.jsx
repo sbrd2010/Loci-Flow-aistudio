@@ -61,7 +61,7 @@ export const ROADMAP_HORIZONS = [
 // list moves keyboard focus between rows (one tab stop, ↑/↓). On a laptop the
 // grip shows on hover (70f), and a pin at the right: "Make the one thing · P"
 // (50d); a row past the day's end offers Tomorrow · Park there (69e).
-export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMakeOneThing, tabStop = false, isTinted = false, onBreakdown, isBreakingDown, breakdownError, breakdownNoKey, dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic", isGoal = false, isMin = false, fixedAt = null, minutes = null, overActions = null, fromYesterday = false, reminderDot = false, onSwipeDone, onSwipeTomorrow, onPutOnFront }) {
+export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMakeOneThing, tabStop = false, isTinted = false, onBreakdown, isBreakingDown, breakdownError, breakdownNoKey, breakdownSafety = "", dragHandleListeners, dragHandleAttributes, dragActivatorRef, interactionStyle = "classic", isGoal = false, isMin = false, fixedAt = null, minutes = null, overActions = null, fromYesterday = false, reminderDot = false, onSwipeDone, onSwipeTomorrow, onPutOnFront }) {
   const { title, isCompleted, isNowFocus, subSteps, reminderAt, isMVD } = task;
 
   const hasActions = !isCompleted && !!onOpen;
@@ -238,6 +238,10 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
 
         {isBreakingDown && (
           <span className="task-row-meta">Breaking it down…</span>
+        )}
+
+        {breakdownSafety && !isBreakingDown && (
+          <span className="task-row-meta" role="status">{breakdownSafety}</span>
         )}
 
         {breakdownNoKey && !isBreakingDown && (

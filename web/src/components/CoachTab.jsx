@@ -2019,7 +2019,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
         )} />
       </div>
       )}
-      {splitFor && <SplitTaskSheet task={splitFor.task} onClose={() => setSplitFor(null)} onSplit={handleSplitDone} />}
+      {splitFor && <SplitTaskSheet task={splitFor.task} firstName={firstName} onClose={() => setSplitFor(null)} onSplit={handleSplitDone} />}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, us
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { callAI, getAIKeys, hasAIKey } from "../utils/aiCall";
+import { buildLocalSafetyReply } from "../utils/crisisSafety";
 import { MAX_STEP_MINUTES, STEP_MINUTE_OPTIONS, evenMinutes, stepsFromSubSteps } from "../utils/splitTask";
 import { safeUUID } from "../utils/uuid";
 import { unzoomTransform } from "../utils/cssZoom";
@@ -50,11 +51,13 @@ function StepRow({ step, index, onText, onMinutes, onRemove, canRemove }) {
   );
 }
 
-export default function SplitTaskSheet({ task, onClose, onSplit }) {
+export default function SplitTaskSheet({ task, onClose, onSplit, firstName = "" }) {
   const original = Number(task.timeEstimateMinutes) || 0;
   const withIds = (steps) => steps.map(s => ({ id: safeUUID(), ...s }));
   const fromSubSteps = stepsFromSubSteps(task);
-  const [source, setSource] = useState(fromSubSteps.length ? "substeps" : hasAIKey() ? "ai" : "manual");
+  // A title that reads as a crisis is answered here and not sent to the provider: the steps are written by hand.
+  const safetyReply = fromSubSteps.length ? "" : buildLocalSafetyReply(task.title, (firstName || "").split(" ")[0] || "friend") || "";
+  const [source, setSource] = useState(fromSubSteps.length ? "substeps" : hasAIKey() && !safetyReply ? "ai" : "manual");
   const [steps, setSteps] = useState(() => fromSubSteps.length
     ? withIds(fromSubSteps)
     : withIds(evenMinutes(original || 50, 2).map(minutes => ({ text: "", minutes }))));
@@ -127,7 +130,9 @@ export default function SplitTaskSheet({ task, onClose, onSplit }) {
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   };
 
-  const lede = loading
+  const lede = safetyReply
+    ? safetyReply
+    : loading
     ? "Finding steps of 45 minutes or less…"
     : source === "manual"
       ? "Break it into steps of 45 minutes or less. Reorder or remove any."

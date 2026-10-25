@@ -10,7 +10,8 @@
 //
 // Answering here means the text never leaves the device and the reply is
 // certain. Mind Box capture is local and never reaches a provider, so it needs
-// no check.
+// no check; its "Organize with AI" step, Add task's "Ask AI", Split a task and
+// Today's break-down do send typed text, so each calls this first.
 //
 // The patterns are deliberately unchanged from the ones Rescue has always used.
 // Widening what counts as a crisis is a design decision, not a refactor:
