@@ -203,6 +203,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
   const chatInputRef = useRef(null);
   const chatFormRef = useRef(null);
   const chipTextRef = useRef(null);
+  const factReadRef = useRef(false); // a fact card is waiting on the focus-log read
   const prevHistoryLenRef = useRef(chatHistory.length);
   const prevChatLoadingRef = useRef(chatLoading);
 
@@ -570,6 +571,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
 
   const handleSendChat = async (e) => {
     e.preventDefault();
+    if (factReadRef.current) return;
     const pendingChip = chipTextRef.current;
     chipTextRef.current = null;
     const userText = (pendingChip || chatInput).trim();
@@ -607,9 +609,13 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
         // The input is cleared before the (short, bounded) focus-log read, so a
         // second press of Enter cannot send the same question again.
         if (!pendingChip) setChatInput("");
-        const focusRaw = factIntent.needsFocus && !cloudSyncUnconfirmed
-          ? await readFocusOnce(uid, factIntent.focusDays, getFocusWindows(configRef.current))
-          : null;
+        let focusRaw = null;
+        if (factIntent.needsFocus && !cloudSyncUnconfirmed) {
+          factReadRef.current = true; // no second send while the log is read
+          try { focusRaw = await readFocusOnce(uid, factIntent.focusDays, getFocusWindows(configRef.current)); }
+          catch { focusRaw = null; } // the card then says it could not read the log
+          finally { factReadRef.current = false; }
+        }
         factCardText = buildFactCard(factIntent, {
           tasks: tasksRef.current, config: configRef.current, brainDump,
           contributions: contributionsRef.current, focusRaw, now: new Date(), unconfirmed: cloudSyncUnconfirmed,

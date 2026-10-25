@@ -40,7 +40,9 @@ const QUESTION_START = /^(?:(?:please|pls|ok|okay|so|and|hey|can you|could you)\
 const isQuestion = (t) => /\?\s*$/.test(t) || QUESTION_START.test(t);
 const IMPERATIVE = /^(?:(?:please|pls|ok|okay|and)\s+)*(?:add|put|move|park|defer|mark|start|set|schedule|remind|delete|remove|clear|create|rename|change|make|pin|switch|finish|complete|plan|help|capture|dump|note|remember|forget)\b/;
 // Asking what to do, or venting, is for the Coach, not for a list of facts.
-const ADVICE = /\b(?:should i|could i|would i|can i|will i|why|how come|how do i|how can i|what do i do|what can i do|help me|stressed|stressing|overwhelm\w*|anxious|worried|scared|panick\w*|freaking|i can't|i cannot)\b/;
+const ADVICE = /\b(?:should i|could i|would i|can i|will i|why|how come|how do i|how can i|what do i do|what can i do|help me|stressed|stressing|overwhelm\w*|anxious|worried|scared|panick\w*|freaking|i can't|i cannot|feel|feeling|hopeless|failure|fail\w*|give up|point|worth\w*|wasting|tired|exhausted|sad|depress\w*|i'm|i am|going to)\b/;
+// The question has to be about the user's own data, not about the feature or in general.
+const FIRST_PERSON = /\b(?:my|me|i|i've|mine)\b|^(?:any|total|list|show)\b/;
 
 const KNOWN_RE = /\bwhat\b[^?.!]{0,25}\byou\b[^?.!]{0,20}\b(?:know|remember(?:ed)?|learn(?:ed|t)?|saved?|stored?|noted?|have)\b[^?.!]{0,15}\b(?:about|on) me\b/;
 const PARKED_TOPIC = /\b(?:parked|parking lot|set aside|on hold|shelved|put aside)\b/;
@@ -49,8 +51,9 @@ const FOCUS_TOPIC = /\b(?:focus(?:ed|ing)?|deep work|pomodoros?)\b/;
 const FOCUS_QUANTITY = /\b(?:how (?:long|many|much|often)|total|hours?|minutes?|sessions?|times|which day|what day|busiest|most|highest|longest|best day|enough|lately|recently)\b/;
 const FOCUS_NOT_STATS = /\bhow long (?:is|are|does|do|will|would|can)\b|\bfocus (?:task|on|mode)\b|\bmy (?:current )?focus\b|\bnow focus\b/;
 const COMPARE_CUE = /\b(?:than|vs\.?|versus|compared (?:to|with)|better|worse|improv\w*)\b/;
+const COMPARE_TOPIC = /\b(?:tasks?|done|finish\w*|complet\w*|productiv\w*|focus\w*|accomplish\w*|doing)\b/;
 const COMPARE_REF = /\b(?:last|previous|prior|past) (?:week|month)\b|\b(?:week|month) before\b/;
-const DEADLINE_WORD = /\b(?:due(?! to)|deadlines?|overdue)\b/;
+const DEADLINE_WORD = /\b(?:due(?! to\b)|deadlines?|overdue)\b/;
 const DEADLINE_TIME = /\bdays? (?:left|remaining|to go|until|till|before)\b|\bhow (?:long|many days) (?:until|till|before|to go|left)\b|\bhow soon\b/;
 const LATE = /\b(?:anything|what's|what is|which|something|are any|is any)\s+(?:\w+\s+){0,2}late\b/;
 const URGENT_FRONT = /\bmost urgent\b|\burgent (?:front|deadline)s?\b|\bwhich front\b/;
@@ -60,9 +63,10 @@ function namedFront(text, fronts) {
   for (const front of fronts) {
     const name = norm(front.name);
     if (!name) continue;
-    if (text.includes(name)) return front;
+    const has = (w) => new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(text);
+    if (has(name)) return front;
     const words = name.split(/[^a-z0-9]+/).filter((w) => w.length >= 4);
-    if (words.length > 0 && words.every((w) => text.includes(w))) return front;
+    if (words.length > 0 && words.every(has)) return front;
   }
   return null;
 }
@@ -78,18 +82,20 @@ function periodOf(t) {
 export function detectFactIntent(message, { config = {} } = {}) {
   const t = norm(message);
   if (!t || t.length > 200) return null;
+  // One sentence only: a second clause ("what's due? also add milk", "…I feel like a failure") is for the Coach.
+  if (/[.?!]\s*\S/.test(t)) return null;
   if (IMPERATIVE.test(t) || ADVICE.test(t) || !isQuestion(t)) return null;
 
   if (KNOWN_RE.test(t)) return { kind: "known" };
-  if (PARKED_TOPIC.test(t)) return { kind: "parked" };
-  if (MINDBOX_TOPIC.test(t)) return { kind: "mindbox" };
+  if (PARKED_TOPIC.test(t) && FIRST_PERSON.test(t)) return { kind: "parked" };
+  if (MINDBOX_TOPIC.test(t) && FIRST_PERSON.test(t)) return { kind: "mindbox" };
 
-  if (COMPARE_CUE.test(t) && COMPARE_REF.test(t)) {
+  if (COMPARE_CUE.test(t) && COMPARE_REF.test(t) && COMPARE_TOPIC.test(t)) {
     const span = /\bmonth\b/.test(t) ? 30 : 7;
     return { kind: "compare", days: span, needsFocus: true, focusDays: span * 2 };
   }
 
-  if (FOCUS_TOPIC.test(t) && FOCUS_QUANTITY.test(t) && !FOCUS_NOT_STATS.test(t)) {
+  if (FOCUS_TOPIC.test(t) && FOCUS_QUANTITY.test(t) && FIRST_PERSON.test(t) && !FOCUS_NOT_STATS.test(t)) {
     const period = periodOf(t);
     const focusDays = period.scope === "period" ? period.days * (period.offset + 1) : 7;
     return { kind: "focus", period, needsFocus: true, focusDays };
@@ -111,6 +117,7 @@ const SYNC_TEXT = "This device hasn't finished syncing yet, so I won't guess at 
 
 function deadlinesCard(intent, { tasks, config, now }) {
   const dated = frontsFromConfig(config)
+    .filter((front) => !front.parked)
     .map((front) => ({ front, left: frontDaysLeft(front, now) }))
     .filter((x) => x.left !== null)
     .sort((a, b) => a.left - b.left);
@@ -129,6 +136,8 @@ function deadlinesCard(intent, { tasks, config, now }) {
   if (intent.frontId) {
     const hit = dated.find((x) => x.front.id === intent.frontId);
     if (hit) return line(hit).replace(/^- /, "");
+    const named = frontsFromConfig(config).find((f) => f.id === intent.frontId);
+    if (named) return `**${clip(named.name)}** has no deadline set.`;
   }
   if (intent.mostUrgent) return `Most urgent:\n${line(dated[0])}`;
   if (intent.overdueOnly) {

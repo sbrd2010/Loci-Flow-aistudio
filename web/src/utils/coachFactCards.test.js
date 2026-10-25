@@ -19,6 +19,8 @@ describe("which questions a card answers", () => {
     ["How many days until my workshop?", "deadlines"],
     ["Which of my fronts is the most urgent?", "deadlines"],
     ["what's late?", "deadlines"],
+    ["What is due today?", "deadlines"],
+    ["what's due tomorrow", "deadlines"],
     ["What have I parked?", "parked"],
     ["any tasks on hold?", "parked"],
     ["What's in my mind box?", "mindbox"],
@@ -59,6 +61,20 @@ describe("which questions a card answers", () => {
     "how many focus sessions can I do today?",
     "why am I so tired due to the deadline?",
     "why is my focus so low?",
+    "I feel hopeless. Is anything overdue?",
+    "any overdue? I want to give up",
+    "is anything overdue? i feel like a failure",
+    "Am I going to fail my deadline?",
+    "What's the point of all these deadlines",
+    "What's due? Also add buy milk",
+    "What do you know about me? I'm so tired of this",
+    "What is the mind box for?",
+    "Is the mind box private?",
+    "What does parked mean?",
+    "Is 25 minutes of focus enough?",
+    "Which day is best to focus?",
+    "Is my mood better than last week?",
+    "Has my sleep improved since last week?",
   ])("leaves %s to the Coach", (text) => {
     expect(detectFactIntent(text, { config: fixture.config }), text).toBeNull();
   });
@@ -95,6 +111,24 @@ describe("deadlines card", () => {
     const none = ask("Anything overdue?", { config: { ...fixture.config, fronts: fixture.config.fronts.filter((f) => f.id !== "front-tax") } }).text;
     expect(none).toContain("Nothing is overdue.");
     expect(none).toContain("Next up:");
+  });
+
+  it("does not match a front's name inside another word", () => {
+    const config = { ...fixture.config, fronts: [...fixture.config.fronts, { id: "front-art", name: "Art", dueAt: "2026-11-30" }] };
+    expect(detectFactIntent("how many days left until I start", { config })).toBeNull();
+    expect(detectFactIntent("how many days until art", { config })?.frontId).toBe("front-art");
+  });
+
+  it("says a named front has no deadline instead of listing the others", () => {
+    const config = { ...fixture.config, fronts: [...fixture.config.fronts, { id: "front-gym", name: "Gym" }] };
+    expect(ask("when is the gym due?", { config }).text).toBe("**Gym** has no deadline set.");
+  });
+
+  it("leaves parked fronts out", () => {
+    const config = { ...fixture.config, fronts: fixture.config.fronts.map((f) => (f.id === "front-tax" ? { ...f, parked: true } : f)) };
+    const { text } = ask("What's due this week?", { config });
+    expect(text).not.toContain("Tax paperwork");
+    expect(text).toContain("Workshop");
   });
 
   it("names the most urgent front", () => {

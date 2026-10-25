@@ -569,7 +569,7 @@ test("Coach chat: a focus question the app cannot read the log for says so, and 
   await page.locator(".coach-composer-input").fill("How many focus sessions did I do this week?");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page.locator(".coach-msg.is-coach")).toHaveCount(1, { timeout: 10_000 });
-  await expect(page.locator(".coach-msg.is-coach").last()).toContainText(/couldn't read your focus log|No focus sessions are logged|session/i);
+  await expect(page.locator(".coach-msg.is-coach").last()).toContainText(/couldn't read your focus log|No focus sessions are logged|\d+ sessions?/i);
   expect(bodies.length).toBe(0);
 });
 
