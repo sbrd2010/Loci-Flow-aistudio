@@ -192,8 +192,9 @@ const PERIOD_RE = new RegExp([
 // "over the last 10 days", "so far this month"). Used only for a message no other
 // rule claimed, with the user's own key, so a differently worded question about a
 // stretch of time still gets its numbers.
-const LOOSE_PERIOD_RE = /\b(?:(?:this|last|past|previous|prior|the)\s+(?:\d+\s+)?(?:days?|weeks?|months?)|(?:\d+|a|one|two|three|four|five|six)\s+(?:days?|weeks?|months?)\s+ago|lately|recently|so far|these days|yesterday|this quarter|this year)\b/i;
-const FAR_BACK_RE = /\b(?:months?|monthly|30 days)\b|\b(?:[2-9]|two|three|four|five|six)\s+weeks?\s+ago\b/i;
+const LOOSE_PERIOD_RE = /\b(?:(?:this|last|past|previous|prior)\s+(?:\d+\s+)?(?:days?|weeks?|months?)|(?:\d+|a|one|two|three|four|five|six)\s+(?:days?|weeks?|months?)\s+ago|lately|recently|yesterday|this quarter|this year)\b/i;
+// Anything beyond the last week gets the 30-day digest, which says what it does not cover.
+const FAR_BACK_RE = /\b(?:months?|monthly|30 days|this quarter|this year)\b|\b(?:[2-9]|\d{2,}|two|three|four|five|six)\s+weeks?\s+ago\b|\b(?:last|past)\s+(?:[2-9]|\d{2,})\s+weeks?\b|\b(?:last|past)\s+(?:[8-9]|\d{2,})\s+days?\b/i;
 
 export function detectPeriodIntent(message, { loose = false } = {}) {
   const text = normalizeForClassification(String(message || ""));
@@ -791,7 +792,10 @@ export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan
   // recognises stays light. With the user's own key the full prompt goes unless
   // the message is plainly small talk, so rewording a question cannot lose the
   // data it needs.
-  if (ownKey && !(text.trim().length <= 40 && SMALL_TALK_RE.test(text.trim()))) return "full_task";
+  // A message with no letters in it (an emoji, "...", "👍") is small talk too.
+  const words = text.replace(/[^\p{L}\p{N}\s'’,.!?-]/gu, "").trim(); // emoji and symbols dropped
+  const smallTalk = !/\p{L}/u.test(text) || (words.length <= 40 && SMALL_TALK_RE.test(words));
+  if (ownKey && !smallTalk) return "full_task";
 
   return "light";
 }

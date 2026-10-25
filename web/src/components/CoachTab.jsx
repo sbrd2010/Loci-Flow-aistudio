@@ -1164,8 +1164,10 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
         replyText = buildActionReplyText(cleanText, results, userText, { proposed: true });
       }
 
-      // Extract and save lastCoachPlan
-      if (contextMode === "full_task" || contextMode === "compact_task") {
+      // Extract and save lastCoachPlan. Not for an unclaimed message that only got
+      // the full prompt (a chat question, not a planning turn): its reply names no
+      // task, and clearing the plan would break the next "make it smaller".
+      if ((contextMode === "full_task" && !unclaimed) || contextMode === "compact_task") {
         let recommendedTask = null;
         let matchedFromActionTag = false;
         const actionTagTasks = [];

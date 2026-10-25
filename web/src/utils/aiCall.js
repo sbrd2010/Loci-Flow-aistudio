@@ -829,7 +829,8 @@ export function hasOwnAIKey() {
   const { groqKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
   const pref = localStorage.getItem("loci_provider_pref") || "auto";
   const first = buildProviderOrder(pref, groqKey, geminiKey, cerebrasKey, zaiKey, isProviderOnly())[0];
-  return !!first && !!(localStorage.getItem(`loci_${first.name}_key`) || "").trim();
+  // Z.ai refuses anything over 12,000 characters, which the full prompt always is.
+  return !!first && first.name !== "zai" && !!(localStorage.getItem(`loci_${first.name}_key`) || "").trim();
 }
 
 // True only if the user's selected provider order actually has a usable

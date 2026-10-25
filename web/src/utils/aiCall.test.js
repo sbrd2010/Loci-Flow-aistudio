@@ -1648,6 +1648,11 @@ describe("hasOwnAIKey", () => {
     expect(hasOwnAIKey()).toBe(true);
   });
 
+  it("is false when Z.ai leads the chain, which cannot take the full prompt", () => {
+    withStorage({ loci_provider_pref: "zai", loci_zai_key: "z-123" });
+    expect(hasOwnAIKey()).toBe(false);
+  });
+
   it("is false when a shared build-time key would be tried first", () => {
     vi.stubEnv("VITE_CEREBRAS_KEY", "shared-cerebras");
     withStorage({ loci_groq_key: "gsk-123" }); // auto order: the shared Cerebras key leads

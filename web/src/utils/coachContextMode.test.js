@@ -1441,6 +1441,7 @@ describe("period questions and the other phrasings that fell through to light (#
       expect(classifyContextMode(q), q).toBe("light");
       expect(classifyContextMode(q, { ownKey: true }), q).toBe("full_task");
     }
+    for (const q of ["👍", "...", "thanks 👍", "?"]) expect(classifyContextMode(q, { ownKey: true }), q).toBe("light");
     for (const q of ["ok", "Thanks!", "thank you so much", "got it, thanks", "hi", "Good morning", "lol"]) {
       expect(classifyContextMode(q, { ownKey: true }), q).toBe("light");
     }
@@ -1457,6 +1458,11 @@ describe("period questions and the other phrasings that fell through to light (#
     expect(detectPeriodIntent("How did I do lately?", { loose: true })).toEqual({ days: 7, offset: 0 });
     expect(detectPeriodIntent("What did I focus on three weeks ago?", { loose: true })).toEqual({ days: 30, offset: 0 });
     expect(detectPeriodIntent("anything notable over the past month?", { loose: true })).toEqual({ days: 30, offset: 0 });
+    expect(detectPeriodIntent("how did I do in the last 3 weeks?", { loose: true })).toEqual({ days: 30, offset: 0 });
+    expect(detectPeriodIntent("anything from 10 weeks ago?", { loose: true })).toEqual({ days: 30, offset: 0 });
+    expect(detectPeriodIntent("how is this year going", { loose: true })).toEqual({ days: 30, offset: 0 });
+    // A passing "so far" or "the day" is not a question about a stretch of time.
+    expect(detectPeriodIntent("so far so good, thanks for the day", { loose: true })).toBeNull();
     expect(detectPeriodIntent("Am I a morning person?", { loose: true })).toBeNull();
     // A phrase the period rules already know keeps its own answer.
     expect(detectPeriodIntent("how was last week", { loose: true })).toEqual({ days: 7, offset: 1 });
