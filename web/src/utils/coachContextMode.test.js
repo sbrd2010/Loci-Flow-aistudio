@@ -1436,6 +1436,12 @@ describe("period questions and the other phrasings that fell through to light (#
     expect(classifyContextMode("forget that, I changed my mind")).toBe("profile_reflection");
   });
 
+  it("'remember that …' plus a task question keeps the plan mode; the app keeps the fact (#555 F2)", () => {
+    expect(classifyContextMode("Remember that I don't like meetings after 3pm. What should I work on next today?")).toBe("full_task");
+    expect(classifyContextMode("Remember that I prefer mornings. How was my week?")).toBe("full_task");
+    expect(classifyContextMode("Remember that I prefer mornings. Do you remember my goal?")).toBe("profile_reflection");
+  });
+
   it("a short reply to something Coach just asked keeps an action-capable mode", () => {
     expect(classifyContextMode("the report one", { lastReplyAsked: true })).toBe("compact_task");
     expect(classifyContextMode("yes", { lastReplyAsked: true })).toBe("compact_task");

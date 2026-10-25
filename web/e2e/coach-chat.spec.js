@@ -172,6 +172,38 @@ test("Coach chat: a memory note is shown under the reply and not sent back to th
   expect(second.messages.map(m => m.content).join("\n")).not.toContain("Saved to Coach memory");
 });
 
+async function openCoachWithReply(page, content) {
+  await page.addInitScript(() => { window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key"); });
+  await page.route("https://api.groq.com/**", (route) => route.fulfill({
+    status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content } }] }),
+  }));
+  await enterDemo(page);
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
+}
+
+test("Coach memory: 'remember that…' is kept by the app even when the model writes no tag", async ({ page }) => {
+  await openCoachWithReply(page, "Got it.");
+  await page.locator(".coach-composer-input").fill("Remember that I don't like meetings after 3pm");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText("Saved to Coach memory: “I don't like meetings after 3pm”")).toBeVisible({ timeout: 8_000 });
+});
+
+test("Coach memory: a plain question writes no note, even when the model tries to", async ({ page }) => {
+  await openCoachWithReply(page, "Start with the report.\n[[NOTE: User asked what to start with.]]");
+  await page.locator(".coach-composer-input").fill("Which task should I start with?");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText("Start with the report.")).toBeVisible({ timeout: 8_000 });
+  await expect(page.getByText(/Saved to Coach memory/)).toHaveCount(0);
+});
+
+test("Coach memory: a request to remember something it must not keep says so", async ({ page }) => {
+  await openCoachWithReply(page, "Got it.");
+  await page.locator(".coach-composer-input").fill("Remember that my password is hunter2");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText(/Not saved to Coach memory/)).toBeVisible({ timeout: 8_000 });
+  await expect(page.getByText(/Saved to Coach memory: /)).toHaveCount(0);
+});
+
 test("mobile reliability: Coach still reaches the provider for an ordinary message", async ({ page }) => {
   // The guard above must not have turned the composer into a dead end.
   await page.addInitScript(() => {

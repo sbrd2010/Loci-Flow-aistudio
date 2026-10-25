@@ -60,6 +60,13 @@ const FINANCIAL_SHORTHAND_PATTERN = /\bowe[sd]?\b\s*(?:\w+\s+){0,3}?\d[\d,.]*\s?
 // social, generalized, major, etc.) between the verb phrase and the label.
 const MEDICAL_LABEL_PATTERN = /\b(adhd|autis(?:m|tic)|asperger'?s?|bipolar|ocd|ptsd|schizophreni[ac])\b|\b(?:has|have|suffers?\s+from|diagnosed\s+with)\s+(?:\w+\s+){0,2}(?:depression|anxiety)\b/i;
 
+// Defense-in-depth: the system prompt says never to store shame-based labels
+// ("lazy", "hopeless"…). The app also keeps what the user asked it to remember
+// in their own words (parseRememberRequest), so the same refusal has to hold
+// here. Deliberately only the unambiguous ones ("broken" and "failing" only as a
+// claim about the user, so "my laptop is broken" still passes).
+const SHAME_LABEL_PATTERN = /\b(?:lazy|useless|hopeless|worthless|stupid|idiot|loser|no (?:discipline|willpower)|bad at planning|low completion rate)\b|\bi(?:['’]m| am)\s+(?:\w+\s+){0,2}?(?:broken|a failure|failing)\b/i;
+
 // The text a memory entry may hold, or null when it must not be stored.
 function cleanMemoryText(text) {
   // Collapse newlines/control chars so a memory entry can't break out of its
@@ -71,8 +78,14 @@ function cleanMemoryText(text) {
   // MEMORY_TAG_RE's non-greedy match stops at the first "]]" (see
   // parseMemoryTags below) — don't let that fragment get persisted and
   // re-injected into every future prompt.
-  if (!trimmed || trimmed.includes("[[") || SECRET_PATTERN.test(trimmed) || FINANCIAL_AMOUNT_PATTERN.test(trimmed) || FINANCIAL_SHORTHAND_PATTERN.test(trimmed) || MEDICAL_LABEL_PATTERN.test(trimmed)) return null;
+  if (!trimmed || trimmed.includes("[[") || SECRET_PATTERN.test(trimmed) || FINANCIAL_AMOUNT_PATTERN.test(trimmed) || FINANCIAL_SHORTHAND_PATTERN.test(trimmed) || MEDICAL_LABEL_PATTERN.test(trimmed) || SHAME_LABEL_PATTERN.test(trimmed)) return null;
   return trimmed;
+}
+
+// True when `text` may be kept as a memory entry (not a secret, an amount, a
+// diagnosis, or a tag fragment).
+export function isStorableMemoryText(text) {
+  return cleanMemoryText(text) !== null;
 }
 
 function appendCapped(list = [], text, max, extra = {}) {
@@ -213,7 +226,7 @@ export function describeMemoryChange(before = {}, { pinnedFacts = [], observatio
 // before the history goes back to the model.
 // The closing "*" is optional: the 5,000-character chat limit cuts text from the
 // end, and a cut note must still be stripped before the history is replayed.
-const SAVED_NOTE_RE = /\n\n\*(?:(?:Saved to|Removed from) Coach memory|Check-in set)[^\n]*$/;
+const SAVED_NOTE_RE = /\n\n\*(?:(?:Saved to|Removed from|Not saved to) Coach memory|Check-in set)[^\n]*$/;
 // A note stays short whatever the reply changed: a few entries, each cut.
 const NOTE_MAX_ENTRIES = 3;
 const NOTE_ENTRY_MAX_CHARS = 80;
@@ -221,10 +234,11 @@ const noteEntries = (texts) => {
   const shown = texts.slice(0, NOTE_MAX_ENTRIES).map(t => `“${t.length > NOTE_ENTRY_MAX_CHARS ? `${t.slice(0, NOTE_ENTRY_MAX_CHARS)}…` : t}”`);
   return texts.length > NOTE_MAX_ENTRIES ? `${shown.join(", ")} and ${texts.length - NOTE_MAX_ENTRIES} more` : shown.join(", ");
 };
-export function savedNote({ saved = [], removed = [], checkinMinutes = null } = {}) {
+export function savedNote({ saved = [], removed = [], notSaved = "", checkinMinutes = null } = {}) {
   const parts = [];
   if (saved.length) parts.push(`Saved to Coach memory: ${noteEntries(saved)}`);
   if (removed.length) parts.push(`Removed from Coach memory: ${noteEntries(removed)}`);
+  if (notSaved) parts.push(`Not saved to Coach memory: ${notSaved}`);
   if (checkinMinutes != null) parts.push(`Check-in set for ${checkinMinutes} min`);
   return parts.length ? `*${parts.join(". ")}*` : "";
 }
@@ -256,6 +270,42 @@ export function parseMemoryTags(text = "") {
     return "";
   }).trim();
   return { cleanText, pinnedFacts, observations, forgets };
+}
+
+// "Remember that I don't like meetings after 3pm" asked outright: the app keeps
+// the user's own sentence itself, because the model often answers "Got it" and
+// writes no tag (#555 F1). Returns the sentence to keep, or null when the message
+// is not such a request ("remember to call Sam" is a to-do, "do you remember my
+// goal?" a question, "remembered" and "note taking" are other words).
+const REMEMBER_REQUEST_RE = /^(?:(?:ok|okay|hey|so|also|and|please|pls)[\s,]+)*(?:(?:can|could|would|will) you (?:please )?|i want you to |i'd like you to )?(?:please )?(?:remember|keep in mind|don'?t forget|do not forget|make a note|take note|note(?=\s*(?:that\b|for later|for future|:)))\b(?:\s+(?:of|this))?\s*(?:for (?:later|future(?:\s+(?:chats?|conversations?|sessions?|reference))?))?\s*[:,-]?\s*(?:that\s+)?(.+)$/i;
+const NOT_A_FACT_RE = /^(?:to|when|how|if|whether|what|why|who|where|me)\b/i;
+// Sentences of a message. A full stop inside "9 a.m.", "e.g." or "Dr." does not end one.
+const ABBREVIATION_RE = /\b(?:a\.m|p\.m|e\.g|i\.e|etc|vs|mr|mrs|ms|dr)\./gi;
+export function splitSentences(message = "") {
+  return String(message).trim()
+    .replace(ABBREVIATION_RE, (m) => m.replace(/\./g, "\uE000"))
+    .split(/(?<=[.!?])\s+/)
+    .map(sentence => sentence.replace(/\uE000/g, "."));
+}
+export function parseRememberRequest(message = "") {
+  const sentences = splitSentences(String(message).replace(/[’‘]/g, "'"));
+  for (const sentence of sentences) {
+    if (/\?\s*$/.test(sentence)) continue;
+    const m = REMEMBER_REQUEST_RE.exec(sentence.trim());
+    if (!m) continue;
+    const fact = m[1].trim().replace(/(?<![ap]\.m)[.!]+$/, "").trim();
+    if (NOT_A_FACT_RE.test(fact) || fact.split(/\s+/).length < 3 || fact.length > MEMORY_ENTRY_MAX_LENGTH) continue;
+    return fact;
+  }
+  return null;
+}
+
+// A single plain question ("Which of my tasks have I been putting off?"): it asks
+// for something and states nothing, so a note or fact written from it is noise
+// (#555 F3, F16: junk notes, and a recall question re-saving what was stored).
+export function isPlainQuestion(message = "") {
+  const t = String(message).trim();
+  return t.length <= 160 && /^[^.?!]+\?+$/.test(t) && /^(?:(?:and|so|ok|okay|also|please)[\s,]+)*(?:what|which|who|when|where|why|how|do|does|did|is|are|am|was|were|can|could|should|would|will|have|has|any|anything)\b/i.test(t);
 }
 
 // Prepended to the memory block in the system prompt — memory is persistent,

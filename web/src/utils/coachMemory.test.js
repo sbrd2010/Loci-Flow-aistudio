@@ -18,6 +18,9 @@ import {
   buildLociMemoryContext,
   buildMemoryWritingRules,
   isResurrectedMemoryEntry,
+  parseRememberRequest,
+  isPlainQuestion,
+  isStorableMemoryText,
 } from "./coachMemory";
 
 describe("addPinnedFact / removePinnedFact", () => {
@@ -579,5 +582,65 @@ describe("describeMemoryChange / savedNote", () => {
     const reply = `Noted.\n\n${note}`;
     expect(stripSavedNote(reply)).toBe("Noted.");
     expect(stripSavedNote("Noted, I'll check in.")).toBe("Noted, I'll check in.");
+  });
+});
+
+describe("parseRememberRequest (the app keeps an outright 'remember that …', #555 F1)", () => {
+  it.each([
+    ["Remember that I don't like meetings after 3pm", "I don't like meetings after 3pm"],
+    ["Please remember for future chats that I do my best thinking before 10am", "I do my best thinking before 10am"],
+    ["note for later: I work best with my phone in another room", "I work best with my phone in another room"],
+    ["Remember I hate meetings after 4", "I hate meetings after 4"],
+    ["Don't forget that I have a viva in August", "I have a viva in August"],
+    ["Keep in mind I get tired after lunch", "I get tired after lunch"],
+    ["make a note that I study best at night", "I study best at night"],
+    ["Remember: no calls before 9am", "no calls before 9am"],
+    ["Remember that I prefer mornings. What should I work on next?", "I prefer mornings"],
+    ["Remember that I don’t like meetings after 3pm", "I don't like meetings after 3pm"],
+    ["Remember that I work from 9 a.m. to 5 p.m.", "I work from 9 a.m. to 5 p.m."],
+    ["Remember that I like e.g. tea in the morning. Which task first?", "I like e.g. tea in the morning"],
+  ])("%s", (text, fact) => {
+    expect(parseRememberRequest(text)).toBe(fact);
+  });
+
+  it.each([
+    "remember to call the plumber",
+    "Do you remember my goal?",
+    "can you remember that I teach on Fridays?",
+    "I remembered that I like tea",
+    "note taking is hard for me",
+    "remember that",
+    "remember when we planned the launch",
+    "What should I work on next?",
+  ])("leaves %s alone", (text) => {
+    expect(parseRememberRequest(text)).toBeNull();
+  });
+});
+
+describe("isPlainQuestion", () => {
+  it("is one question and nothing else", () => {
+    expect(isPlainQuestion("Which of my tasks have I been putting off the longest?")).toBe(true);
+    expect(isPlainQuestion("Do you remember my goal?")).toBe(true);
+    expect(isPlainQuestion("I work best early. Which task first?")).toBe(false);
+    expect(isPlainQuestion("Remember that I prefer mornings")).toBe(false);
+    expect(isPlainQuestion("I prefer mornings, should I start with writing?")).toBe(false); // a statement comes first
+    expect(isPlainQuestion("x".repeat(170) + "?")).toBe(false);
+  });
+});
+
+describe("what may be kept as memory", () => {
+  it("refuses secrets, amounts, diagnoses and harsh labels, which the app now also writes from the user's own words", () => {
+    expect(isStorableMemoryText("I prefer mornings for writing")).toBe(true);
+    expect(isStorableMemoryText("my laptop is broken, I need it fixed by Friday")).toBe(true);
+    for (const bad of ["my password is hunter2", "I owe $5000 on the card", "I have ADHD", "I'm lazy and useless", "I have no discipline", "I am broken and bad at planning", "I’m so broken", "I keep failing, I am failing at everything", "my low completion rate"]) {
+      expect(isStorableMemoryText(bad), bad).toBe(false);
+    }
+  });
+
+  it("says why a request was not kept, and the note is stripped again before the model sees the reply", () => {
+    const note = savedNote({ notSaved: "Coach memory is switched off in Settings." });
+    expect(note).toBe("*Not saved to Coach memory: Coach memory is switched off in Settings.*");
+    expect(stripSavedNote(`Got it.\n\n${note}`)).toBe("Got it.");
+    expect(splitSavedNote(`Got it.\n\n${note}`).note).toContain("Not saved to Coach memory");
   });
 });

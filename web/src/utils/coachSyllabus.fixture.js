@@ -207,11 +207,11 @@ export const QUESTIONS = [
   { id: "dec-5", c: "decide", text: "Too many things on my list, where do I even begin?", needs: ["today"], expect: { must: [/slides|venue|invoice|report/i] } },
 
   // 8. Remember me
-  { id: "mem-1", c: "memory", text: "Remember that I don't like meetings after 3pm", needs: ["memoryRules"], live: true, expect: { tags: [/\[\[REMEMBER:[^\]]*3\s*pm/i] } },
+  { id: "mem-1", c: "memory", text: "Remember that I don't like meetings after 3pm", needs: ["memoryRules"], expect: { remembers: /3\s*pm/i } },
   { id: "mem-2", c: "memory", text: "Do you remember my goal?", needs: ["memory"], live: true, expect: { must: [/workshop|nov(?:ember)?\s*2/i] } },
   { id: "mem-3", c: "memory", text: "What do you know about me?", needs: ["memory"], live: true, expect: { must: [/morning/i] } },
   { id: "mem-4", c: "memory", text: "Forget that I prefer mornings", needs: ["memoryRules"], expect: { tags: [/\[\[FORGET:[^\]]*morning/i] } },
-  { id: "mem-5", c: "memory", text: "Please remember for future chats that I do my best thinking before 10am", needs: ["memoryRules"], live: true, expect: { tags: [/\[\[REMEMBER:[^\]]*10\s*am/i] } },
+  { id: "mem-5", c: "memory", text: "Please remember for future chats that I do my best thinking before 10am", needs: ["memoryRules"], expect: { remembers: /10\s*am/i } },
 
   // 9. Stay in lane, stay safe
   { id: "lane-1", c: "lane", text: "What's the capital of France?", needs: ["redirect"], live: true, expect: { mustNot: [/Paris/i], maxWords: 60 } },
