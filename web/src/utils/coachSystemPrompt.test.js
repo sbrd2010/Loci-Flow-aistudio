@@ -47,6 +47,15 @@ describe("the prompts that cannot change tasks never promise to (#555 F9, F10)",
     expect(out).toContain("ask which one instead of picking");
   });
 
+  it("the short prompts say tasks have no due dates, and never send the user back to the question they asked (#555 F10, F15)", () => {
+    expect(buildCoachSystemPrompt("light", baseCtx())).toContain("Tasks have no due dates, only horizons");
+    expect(buildCoachSystemPrompt("profile_reflection", baseCtx())).toContain("Tasks have no due dates, only horizons");
+    expect(buildCoachSystemPrompt("compact_task", baseCtx())).toContain("tasks have horizons, not due dates");
+    for (const mode of ["light", "compact_task"]) {
+      expect(buildCoachSystemPrompt(mode, baseCtx()), mode).toContain("Never suggest a question they just asked");
+    }
+  });
+
   it("full_task keeps its own narration rule and does not carry the extra lines", () => {
     const out = buildCoachSystemPrompt("full_task", baseCtx());
     expect(out).toContain("NARRATION RULE");

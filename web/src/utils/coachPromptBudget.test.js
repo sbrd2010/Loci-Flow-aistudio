@@ -126,7 +126,7 @@ function buildRequest(mode, { large = false, summaryTurn = false, carried = 0, p
 describe("Coach prompt budgets (#545 C8)", () => {
   // System-prompt chars on the typical fixture. A change that grows a prompt
   // past its line has to make room elsewhere or update the budget on purpose.
-  const SYSTEM_CHARS = { full_task: 26000, compact_task: 17500, emotional: 19500, profile_reflection: 14500, light: 8000 };
+  const SYSTEM_CHARS = { full_task: 26000, compact_task: 17700, emotional: 19500, profile_reflection: 14700, light: 8200 }; // #555 PR 4: +200 chars on purpose (no circular 'ask me', no due dates)
   for (const [mode, max] of Object.entries(SYSTEM_CHARS)) {
     it(`${mode} system prompt stays within ${max} chars (typical plan)`, () => {
       expect(buildRequest(mode).system.length).toBeLessThanOrEqual(max);
