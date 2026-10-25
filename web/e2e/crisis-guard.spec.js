@@ -33,6 +33,10 @@ function recordGroq(page, reply = "[]") {
 
 test("Mind Box: Organise answers a crisis thought here, keeps it, and organises the rest", async ({ page }) => {
   const bodies = await recordGroq(page);
+  // Hold the provider's answer: the safety message must not wait for it.
+  let release;
+  const held = new Promise(r => { release = r; });
+  await page.route("https://api.groq.com/**", async (route) => { await held; await route.fallback(); });
   await enterDemo(page, { width: 1280, height: 900 });
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Mind Box", exact: true }).click();
 
@@ -44,9 +48,11 @@ test("Mind Box: Organise answers a crisis thought here, keeps it, and organises 
   await page.locator(".mbx-ai:visible").first().click();
   await expect(page.getByRole("status").filter({ hasText: /emergency services/i })).toBeVisible({ timeout: 8_000 });
   await expect(page.getByText(/kept out of the AI step/i)).toBeVisible();
+  await expect(page.getByText(/Organizing your thoughts/)).toBeVisible();
+  release();
 
   // The other thoughts still went; the crisis one did not.
-  expect(bodies.length).toBeGreaterThan(0);
+  await expect.poll(() => bodies.length, { timeout: 8_000 }).toBeGreaterThan(0);
   const sent = JSON.stringify(bodies.map(b => b.messages));
   expect(sent).not.toMatch(/want to die/i);
 

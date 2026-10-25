@@ -434,17 +434,17 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
             <button className="mindbox-back-btn" onClick={() => { setToolPanel(null); setOrganizeResults([]); setOrganizeDroppedSourceIds(new Set()); setOrganizeError(""); setOrganizeSafety(""); setOrganizeInvalidCount(0); }}>← Back</button>
             <h2 className="mindbox-subview-title">Organize Dump</h2>
           </div>
+          {organizeSafety && (
+            <p role="status" className="mbx-safety" style={{ fontSize: "14px", fontWeight: "600", lineHeight: 1.5, padding: "12px 14px", margin: "12px 0", border: "1px solid var(--accent)", borderRadius: "12px" }}>
+              {organizeSafety}
+              {" "}A thought like that was kept out of the AI step and is still in your Mind Box.
+            </p>
+          )}
           {organizeLoading && (
             <div style={{ textAlign: "center", padding: "48px 0" }}>
               <p style={{ fontSize: "15px", fontWeight: "700", color: "var(--accent)" }}>✨ Organizing your thoughts…</p>
               <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "8px" }}>This takes a few seconds</p>
             </div>
-          )}
-          {!organizeLoading && organizeSafety && (
-            <p role="status" className="mbx-safety" style={{ fontSize: "14px", fontWeight: "600", lineHeight: 1.5, padding: "12px 14px", margin: "12px 0", border: "1px solid var(--accent)", borderRadius: "12px" }}>
-              {organizeSafety}
-              {" "}A thought like that was kept out of the AI step and is still in your Mind Box.
-            </p>
           )}
           {!organizeLoading && organizeError && (
             <div style={{ textAlign: "center", padding: "32px 0" }}>
