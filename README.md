@@ -63,5 +63,6 @@ Copy `web/.env.example` to `web/.env`. All variables are optional for local deve
 | `VITE_GEMINI_KEY` | Gemini API key for AI features (optional) |
 | `VITE_CEREBRAS_KEY` | Cerebras API key for AI features (optional) |
 | `VITE_CEREBRAS_MODEL` | Cerebras model override (optional, defaults to `gpt-oss-120b`) |
+| `VITE_OPENROUTER_MODEL` | OpenRouter model override (optional, defaults to `openai/gpt-oss-120b:free`). OpenRouter keys are added per person in Settings; do not put a key with credit in a build variable |
 
 Firebase config beyond the app ID (API key, project ID, etc.) is baked into the app for the hosted version. For your own Firebase project, update `web/src/firebase.js`.
