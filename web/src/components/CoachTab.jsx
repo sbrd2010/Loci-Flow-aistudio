@@ -23,7 +23,7 @@ import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, parseCheckinReques
 import { parseCoachActionTags, applyCoachActions, buildActionReplyText, buildSetNowFocusTasks, buildParkTaskTasks, findTaskByTitle, undoCoachAction } from "../utils/coachActions";
 import { buildPersonaInstruction } from "../utils/coachPersona";
 import { buildProfileContext } from "../utils/coachProfile";
-import { addPinnedFact, addRecentObservation, buildLociMemoryContext, describeMemoryChange, forgetFromMemory, isMemoryEnabled, isPlainQuestion, isStorableMemoryText, parseMemoryTags, parseRememberRequest, isResurrectedMemoryEntry, savedNote, splitSavedNote, stripSavedNote } from "../utils/coachMemory";
+import { addPinnedFact, addRecentObservation, buildLociMemoryContext, describeMemoryChange, findForgetTargets, forgetFromMemory, isMemoryEnabled, isPlainQuestion, isStorableMemoryText, parseForgetRequest, parseMemoryTags, parseRememberRequest, isResurrectedMemoryEntry, savedNote, splitSavedNote, stripSavedNote } from "../utils/coachMemory";
 import { stripReasoningTag } from "../utils/coachReasoning";
 import { classifyContextMode, needsConversationContext, historyLimitForMode, detectRequestedCategories, detectPeriodIntent } from "../utils/coachContextMode";
 import { buildLociPeriodContext, buildLociDeadlinesBlock, detectDeadlineIntent, PERIOD_ANSWER_NOTE } from "../utils/coachPeriodDigest";
@@ -1009,7 +1009,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
       // tag-like sequence (e.g. "[[REMEMBER: ...describing [[ADD_TASK:X]]...]]"),
       // the whole memory tag — including the nested text — is stripped before
       // the checkin/action parsers can see it as a tag of their own.
-      const { cleanText: afterMemory, pinnedFacts: modelFacts, observations: modelNotes, forgets } = parseMemoryTags(afterSummaryTag);
+      const { cleanText: afterMemory, pinnedFacts: modelFacts, observations: modelNotes, forgets: modelForgets } = parseMemoryTags(afterSummaryTag);
       // The model often says "Got it" and writes no tag, so an outright "remember
       // that …" the model did not write down is kept by the app from the user's
       // own words (#555 F1). A plain question states nothing, so a fact or note
@@ -1017,8 +1017,13 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
       const rememberAsked = parseRememberRequest(userText);
       const plainQuestion = isPlainQuestion(userText);
       const appKeeps = !plainQuestion && rememberAsked && modelFacts.length === 0;
-      const pinnedFacts = plainQuestion ? [] : appKeeps ? [rememberAsked] : modelFacts;
-      const observations = plainQuestion ? [] : modelNotes;
+      // "Forget that …": the app removes the matching entry itself (the model often
+      // says "Got it" and removes nothing), and writes nothing new from that message.
+      const forgetAsked = parseForgetRequest(userText);
+      const forgetTargets = forgetAsked ? findForgetTargets(configRef.current.coachMemory || {}, forgetAsked) : [];
+      const forgets = forgetAsked ? [...new Set([...modelForgets, ...forgetTargets])] : modelForgets;
+      const pinnedFacts = plainQuestion || forgetAsked ? [] : appKeeps ? [rememberAsked] : modelFacts;
+      const observations = plainQuestion || forgetAsked ? [] : modelNotes;
       const { cleanText: afterCheckin, minutes } = parseCheckinTag(afterMemory);
       const { cleanText, actions } = parseCoachActionTags(afterCheckin);
       if (summaryUpdateNeeded && sessionSummarySectionEnabled && !newSessionSummary) {
@@ -1291,6 +1296,9 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
         ) : {}),
         // A request to remember that could not be kept says so, instead of the
         // model's "Got it" standing alone (F4).
+        notRemoved: !forgetAsked || forgets.length > 0 && willForget ? ""
+          : !memoryWriteAllowed ? (!isMemoryEnabled(configRef.current) ? "Coach memory is switched off in Settings." : "this device is still syncing, so ask me again in a moment.")
+          : "no saved entry matched that.",
         notSaved: !appKeeps ? ""
           : !willAddMemory ? (!isMemoryEnabled(configRef.current) ? "Coach memory is switched off in Settings." : "this device is still syncing, so ask me again in a moment.")
           : !isStorableMemoryText(rememberAsked) ? "I only keep neutral notes, not passwords, exact amounts, diagnoses or harsh labels." : "",

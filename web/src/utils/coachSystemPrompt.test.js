@@ -56,6 +56,12 @@ describe("the prompts that cannot change tasks never promise to (#555 F9, F10)",
     }
   });
 
+  it("the light and full prompts name poems, stories and trivia as off-topic (the proof run wrote a poem)", () => {
+    for (const mode of ["light", "full_task"]) {
+      expect(buildCoachSystemPrompt(mode, baseCtx()), mode).toContain("e.g. poems, stories, trivia");
+    }
+  });
+
   it("full_task keeps its own narration rule and does not carry the extra lines", () => {
     const out = buildCoachSystemPrompt("full_task", baseCtx());
     expect(out).toContain("NARRATION RULE");

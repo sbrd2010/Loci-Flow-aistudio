@@ -226,7 +226,7 @@ export function describeMemoryChange(before = {}, { pinnedFacts = [], observatio
 // before the history goes back to the model.
 // The closing "*" is optional: the 5,000-character chat limit cuts text from the
 // end, and a cut note must still be stripped before the history is replayed.
-const SAVED_NOTE_RE = /\n\n\*(?:(?:Saved to|Removed from|Not saved to) Coach memory|Check-in set)[^\n]*$/;
+const SAVED_NOTE_RE = /\n\n\*(?:(?:Saved to|Removed from|Not saved to|Not removed from) Coach memory|Check-in set)[^\n]*$/;
 // A note stays short whatever the reply changed: a few entries, each cut.
 const NOTE_MAX_ENTRIES = 3;
 const NOTE_ENTRY_MAX_CHARS = 80;
@@ -234,11 +234,12 @@ const noteEntries = (texts) => {
   const shown = texts.slice(0, NOTE_MAX_ENTRIES).map(t => `“${t.length > NOTE_ENTRY_MAX_CHARS ? `${t.slice(0, NOTE_ENTRY_MAX_CHARS)}…` : t}”`);
   return texts.length > NOTE_MAX_ENTRIES ? `${shown.join(", ")} and ${texts.length - NOTE_MAX_ENTRIES} more` : shown.join(", ");
 };
-export function savedNote({ saved = [], removed = [], notSaved = "", checkinMinutes = null } = {}) {
+export function savedNote({ saved = [], removed = [], notSaved = "", notRemoved = "", checkinMinutes = null } = {}) {
   const parts = [];
   if (saved.length) parts.push(`Saved to Coach memory: ${noteEntries(saved)}`);
   if (removed.length) parts.push(`Removed from Coach memory: ${noteEntries(removed)}`);
   if (notSaved) parts.push(`Not saved to Coach memory: ${notSaved}`);
+  if (notRemoved) parts.push(`Not removed from Coach memory: ${notRemoved}`);
   if (checkinMinutes != null) parts.push(`Check-in set for ${checkinMinutes} min`);
   return parts.length ? `*${parts.join(". ")}*` : "";
 }
@@ -298,6 +299,44 @@ export function parseRememberRequest(message = "") {
     return fact;
   }
   return null;
+}
+
+// "Forget that I prefer mornings": asked outright, the app removes the matching
+// entry itself, because the model answers "Got it, I'll stop noting that" and
+// often writes no [[FORGET]] (or a new REMEMBER instead), leaving the old entry
+// in place (#555 proof run, mem-4). Returns what to forget, or null. "Forget it",
+// "forget everything", "forget about the deadline" (not about memory) and
+// questions are left to the model.
+const FORGET_REQUEST_RE = /^(?:(?:ok|okay|hey|so|also|and|please|pls)[\s,]+)*(?:(?:can|could|would|will) you (?:please )?)?(?:please )?(?:forget(?:\s+(?:that|about))?|stop remembering(?:\s+(?:that|about))?)\s+(.+)$/i;
+export function parseForgetRequest(message = "") {
+  for (const sentence of splitSentences(String(message).replace(/[’‘]/g, "'"))) {
+    if (/\?\s*$/.test(sentence)) continue;
+    const m = FORGET_REQUEST_RE.exec(sentence.trim());
+    if (!m) continue;
+    const what = m[1].trim().replace(/[.!\s]+$/, "");
+    if (/^(?:it|that|this|everything|all|what)\b/i.test(what) || forgetTokens(what).length < 2) continue;
+    return what;
+  }
+  return null;
+}
+
+const FORGET_STOPWORDS = new Set("i me my mine you your the a an to of for and or in on at is am are was be been do does did it its with about so very really that this user they their he she we our not no".split(" "));
+const forgetTokens = (text) => String(text || "").toLowerCase().replace(/['’]/g, "").split(/[^a-z0-9]+/)
+  .filter(w => w && !FORGET_STOPWORDS.has(w))
+  .map(w => (w.length > 4 ? w.replace(/(?:ing|es|ed|s)$/, "") : w.replace(/s$/, "")));
+
+// The saved entries that say what the user asked to forget: nearly all of its
+// content words must be in the entry ("I prefer mornings" matches "Prefers
+// mornings for deep work."). Empty when nothing matches; the caller says so.
+export function findForgetTargets(coachMemory = {}, what) {
+  const wanted = new Set(forgetTokens(what));
+  if (wanted.size < 2) return [];
+  return [...(coachMemory.pinnedFacts || []), ...(coachMemory.recentObservations || [])]
+    .filter(entry => {
+      const have = new Set(forgetTokens(entry.text));
+      return [...wanted].filter(w => have.has(w)).length / wanted.size >= 0.75;
+    })
+    .map(entry => entry.text);
 }
 
 // A single plain question ("Which of my tasks have I been putting off?"): it asks

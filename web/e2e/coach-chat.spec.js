@@ -212,6 +212,20 @@ test("Coach memory: 'remember that…' is kept by the app even when the model wr
   await expect(page.getByText("Saved to Coach memory: “I don't like meetings after 3pm”")).toBeVisible({ timeout: 8_000 });
 });
 
+test("Coach memory: 'forget that…' removes the saved entry even when the model writes no tag", async ({ page }) => {
+  await openCoachWithReply(page, "Got it.");
+  const input = page.locator(".coach-composer-input");
+  await input.fill("Remember that I prefer mornings for writing");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText("Saved to Coach memory: “I prefer mornings for writing”")).toBeVisible({ timeout: 8_000 });
+  await input.fill("Forget that I prefer mornings");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText("Removed from Coach memory: “I prefer mornings for writing”")).toBeVisible({ timeout: 8_000 });
+  await input.fill("Forget that I like cold showers");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText(/Not removed from Coach memory: no saved entry matched that/)).toBeVisible({ timeout: 8_000 });
+});
+
 test("Coach memory: a plain question writes no note, even when the model tries to", async ({ page }) => {
   await openCoachWithReply(page, "Start with the report.\n[[NOTE: User asked what to start with.]]");
   await page.locator(".coach-composer-input").fill("Which task should I start with?");
