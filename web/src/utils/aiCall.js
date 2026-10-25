@@ -5,6 +5,11 @@ const GROQ_URL     = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL   = "openai/gpt-oss-120b";
 const CEREBRAS_URL   = "https://api.cerebras.ai/v1/chat/completions";
 const CEREBRAS_MODEL = import.meta.env.VITE_CEREBRAS_MODEL || "gpt-oss-120b";
+const OPENROUTER_URL   = "https://openrouter.ai/api/v1/chat/completions";
+// A free model of the same family the other providers run, so the Coach's prompts and
+// tag format behave alike. OpenRouter rotates its free models: a deployment can swap
+// this one without a release.
+const OPENROUTER_MODEL = import.meta.env.VITE_OPENROUTER_MODEL || "openai/gpt-oss-120b:free";
 const GEMINI_URL   = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
 const ZAI_URL   = "https://api.z.ai/api/paas/v4/chat/completions";
 const ZAI_MODEL = import.meta.env.VITE_ZAI_MODEL || "glm-4.7-flash";
@@ -359,6 +364,50 @@ async function callCerebras(cerebrasKey, systemPrompt, messages, maxTokens, reas
   return { reply, usage };
 }
 
+// OpenRouter: OpenAI-style, like Groq. Reasoning models take a `reasoning` object rather
+// than `reasoning_effort`, and hidden reasoning can use the whole budget, so a "length"
+// finish gets one retry at a larger budget, as for Groq and Cerebras.
+const OPENROUTER_RETRY_TOKEN_CAP = 4000;
+const OPENROUTER_SUPPORTS_REASONING = /(^|\/)gpt-oss/i.test(OPENROUTER_MODEL);
+
+async function requestOpenRouter(openrouterKey, systemPrompt, messages, tokenBudget, reasoningEffort, limits) {
+  const res = await fetchWithTimeout(OPENROUTER_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${openrouterKey}`
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_MODEL,
+      messages: [{ role: "system", content: systemPrompt }, ...messages],
+      max_tokens: tokenBudget,
+      temperature: 0.4,
+      top_p: 0.9,
+      ...(reasoningEffort && OPENROUTER_SUPPORTS_REASONING ? { reasoning: { effort: reasoningEffort } } : {})
+    })
+  }, limits);
+  if (!res.ok) throw statusError("openrouter", res.status, res);
+  const data = await res.json();
+  const message = data.choices?.[0]?.message;
+  return { reply: extractMessageContent(message), usage: data.usage, finishReason: data.choices?.[0]?.finish_reason, data, message };
+}
+
+async function callOpenRouter(openrouterKey, systemPrompt, messages, maxTokens, reasoningEffort, limits) {
+  const initialBudget = maxTokens ?? 300;
+  let { reply, usage, finishReason, data, message } = await requestOpenRouter(openrouterKey, systemPrompt, messages, initialBudget, reasoningEffort, limits);
+  if (finishReason === "length") {
+    const retryBudget = Math.min(Math.max(initialBudget * 2, 1000), OPENROUTER_RETRY_TOKEN_CAP);
+    if (retryBudget > initialBudget) {
+      ({ reply, usage, finishReason, data, message } = await requestOpenRouter(openrouterKey, systemPrompt, messages, retryBudget, reasoningEffort, limits));
+    }
+  }
+  if (!reply) {
+    logEmptyReplyDiagnostics("openrouter", data, message);
+    throw new Error("openrouter_empty");
+  }
+  return { reply, usage };
+}
+
 async function callGemini(geminiKey, systemPrompt, messages, maxTokens, limits) {
   // Gemini requires contents to start with "user" role - strip leading AI messages
   let contents = messages.map(m => ({
@@ -663,45 +712,47 @@ export function isProviderOnly() {
 export function isOnlyProviderKeyMissing() {
   const pref = localStorage.getItem("loci_provider_pref") || "auto";
   if (!isProviderOnly() || pref === "auto") return false;
-  const { groqKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
-  const keys = { groq: groqKey, gemini: geminiKey, cerebras: cerebrasKey, zai: zaiKey };
+  const { groqKey, geminiKey, cerebrasKey, zaiKey, openrouterKey } = getAIKeys();
+  const keys = { groq: groqKey, gemini: geminiKey, cerebras: cerebrasKey, zai: zaiKey, openrouter: openrouterKey };
   return !keys[pref] && Object.values(keys).some(Boolean);
 }
 
-export function buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey, only = false) {
+export function buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey, only = false, cleanOpenrouterKey = "") {
   const available = {
-    groq:     cleanGroqKey     ? { name: "groq",     key: cleanGroqKey }     : null,
-    gemini:   cleanGeminiKey   ? { name: "gemini",    key: cleanGeminiKey }   : null,
-    cerebras: cleanCerebrasKey ? { name: "cerebras",  key: cleanCerebrasKey } : null,
-    zai:      cleanZaiKey      ? { name: "zai",       key: cleanZaiKey }      : null,
+    groq:       cleanGroqKey       ? { name: "groq",       key: cleanGroqKey }       : null,
+    gemini:     cleanGeminiKey     ? { name: "gemini",      key: cleanGeminiKey }     : null,
+    openrouter: cleanOpenrouterKey ? { name: "openrouter",  key: cleanOpenrouterKey } : null,
+    cerebras:   cleanCerebrasKey   ? { name: "cerebras",    key: cleanCerebrasKey }   : null,
+    zai:        cleanZaiKey        ? { name: "zai",         key: cleanZaiKey }        : null,
   };
   // An unknown preference (e.g. "nvidia", which Loci no longer offers) falls
-  // back to "auto". Z.ai is an emergency-only
-  // fallback (free tier, concurrency limit 1) — placed after Cerebras and
-  // before Gemini in every chain except the explicit Gemini/Z.ai preferences.
-  // "auto" leads with Cerebras (matches the "cerebras" preset) rather than
-  // Groq, since Cerebras has proven the stronger default for this app.
+  // back to "auto". Cerebras ended its no-card free tier, so Auto no longer
+  // leads with it; it stays an explicit choice and a last resort for those who
+  // have a key. Z.ai only fits the short prompt (12k-char guard, one request at a
+  // time), so it comes after the providers that can take any prompt.
   const orders = {
-    auto:     ["cerebras", "groq", "zai", "gemini"],
-    groq:     ["groq", "cerebras", "zai", "gemini"],
-    cerebras: ["cerebras", "groq", "zai", "gemini"],
-    zai:      ["zai", "groq", "cerebras", "gemini"],
-    gemini:   ["gemini", "groq", "cerebras", "zai"],
+    auto:       ["groq", "gemini", "openrouter", "zai", "cerebras"],
+    groq:       ["groq", "gemini", "openrouter", "zai", "cerebras"],
+    gemini:     ["gemini", "groq", "openrouter", "zai", "cerebras"],
+    openrouter: ["openrouter", "groq", "gemini", "zai", "cerebras"],
+    cerebras:   ["cerebras", "groq", "gemini", "openrouter", "zai"],
+    zai:        ["zai", "groq", "gemini", "openrouter", "cerebras"],
   };
   const chain = orders[pref] || orders.auto;
   return (only && orders[pref] && pref !== "auto" ? chain.slice(0, 1) : chain).map(n => available[n]).filter(Boolean);
 }
 
-export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPrompt, messages, maxTokens, contextMode, reasoningEffort, signal }) {
+export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, openrouterKey = getAIKeys().openrouterKey, systemPrompt, messages, maxTokens, contextMode, reasoningEffort, signal }) {
   const cleanGroqKey     = (groqKey     || "").trim();
   const cleanGeminiKey   = (geminiKey   || "").trim();
   const cleanCerebrasKey = (cerebrasKey || "").trim();
   const cleanZaiKey      = (zaiKey      || "").trim();
+  const cleanOpenrouterKey = (openrouterKey || "").trim();
 
   const pref  = localStorage.getItem("loci_provider_pref") || "auto";
-  const order = buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey, isProviderOnly());
+  const order = buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey, isProviderOnly(), cleanOpenrouterKey);
   if (order.length === 0) {
-    const others = [cleanGroqKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey].some(Boolean);
+    const others = [cleanGroqKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey, cleanOpenrouterKey].some(Boolean);
     throw new Error(isProviderOnly() && pref !== "auto" && others ? "no_key_only" : "no_key");
   }
 
@@ -745,6 +796,8 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, systemPr
       let result;
       if (provider.name === "groq") {
         result = await callGroq(provider.key, systemPrompt, messages, maxTokens, reasoningEffort, limits);
+      } else if (provider.name === "openrouter") {
+        result = await callOpenRouter(provider.key, systemPrompt, messages, maxTokens, reasoningEffort, limits);
       } else if (provider.name === "cerebras") {
         result = await callCerebras(provider.key, systemPrompt, messages, maxTokens, reasoningEffort, limits);
       } else if (provider.name === "zai") {
@@ -817,15 +870,16 @@ export function getAIKeys() {
     geminiKey:   (localStorage.getItem("loci_gemini_key")   || import.meta.env.VITE_GEMINI_KEY    || "").trim(),
     cerebrasKey: (localStorage.getItem("loci_cerebras_key") || import.meta.env.VITE_CEREBRAS_KEY  || "").trim(),
     zaiKey:      (localStorage.getItem("loci_zai_key")      || import.meta.env.VITE_ZAI_KEY       || "").trim(),
+    openrouterKey: (localStorage.getItem("loci_openrouter_key") || import.meta.env.VITE_OPENROUTER_KEY || "").trim(),
   };
 }
 
 // True only if the user's selected provider order actually has a usable
 // provider in its chain (callAI would throw "no_key" otherwise).
 export function hasAIKey() {
-  const { groqKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
+  const { groqKey, geminiKey, cerebrasKey, zaiKey, openrouterKey } = getAIKeys();
   const pref = localStorage.getItem("loci_provider_pref") || "auto";
-  return buildProviderOrder(pref, groqKey, geminiKey, cerebrasKey, zaiKey, isProviderOnly()).length > 0;
+  return buildProviderOrder(pref, groqKey, geminiKey, cerebrasKey, zaiKey, isProviderOnly(), openrouterKey).length > 0;
 }
 
 // Parses a JSON array out of an AI reply, tolerating markdown code fences,

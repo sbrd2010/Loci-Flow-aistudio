@@ -227,10 +227,10 @@ export default function RescueMode({
     return () => document.removeEventListener("keydown", onKey);
   });
 
-  const { groqKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
+  const { groqKey, geminiKey, cerebrasKey, zaiKey, openrouterKey } = getAIKeys();
   const effectiveGeminiKey = geminiKey || (apiKey || "").trim();
   const pref = localStorage.getItem("loci_provider_pref") || "auto";
-  const hasKey = buildProviderOrder(pref, groqKey, effectiveGeminiKey, cerebrasKey, zaiKey, isProviderOnly()).length > 0;
+  const hasKey = buildProviderOrder(pref, groqKey, effectiveGeminiKey, cerebrasKey, zaiKey, isProviderOnly(), openrouterKey).length > 0;
 
   // Applies whichever actions filterApplicableRescueActions (rescueCoachPrompt.js)
   // let through, and reports whether a mutation was withheld specifically

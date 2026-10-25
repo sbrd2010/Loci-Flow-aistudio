@@ -160,12 +160,12 @@ test("the coach page: name, tone and notes save as they change", async ({ page }
   await expect(page.getByRole("button", { name: "Direct" })).toHaveAttribute("aria-pressed", "true");
 });
 
-test("AI provider: Auto, Groq, Cerebras, Gemini, Z.ai — no NVIDIA; a key is added, shown masked and removed", async ({ page }) => {
+test("AI provider: Auto, Groq, Gemini, OpenRouter, Z.ai, Cerebras — no NVIDIA; a key is added, shown masked and removed", async ({ page }) => {
   await enterDemo(page);
   await openTab(page, "Settings");
   await page.getByRole("button", { name: /^AI provider/ }).click();
   const radios = page.getByRole("radiogroup", { name: "AI provider" }).getByRole("radio");
-  await expect(radios).toHaveText([/Auto \(recommended\)/, /Groq/, /Cerebras/, /Gemini/, /Z\.ai/]);
+  await expect(radios).toHaveText([/Auto \(recommended\)/, /Groq/, /Gemini/, /OpenRouter/, /Z\.ai/, /Cerebras/]);
   await expect(page.getByText(/NVIDIA/i)).toHaveCount(0);
   await page.getByRole("radio", { name: /^Gemini/ }).click();
   await expect(page.getByRole("radio", { name: /^Gemini/ })).toHaveAttribute("aria-checked", "true");
@@ -178,6 +178,16 @@ test("AI provider: Auto, Groq, Cerebras, Gemini, Z.ai — no NVIDIA; a key is ad
   await page.getByRole("radio", { name: /^Auto/ }).click();
   await expect(only).toHaveCount(0);
   await page.getByRole("radio", { name: /^Gemini/ }).click();
+
+  // OpenRouter is a provider like the others: a row, and its own key sheet.
+  await expect(page.getByRole("button", { name: /^OpenRouter/ })).toContainText("Add key");
+  await page.getByRole("button", { name: /^OpenRouter/ }).click();
+  const orSheet = page.getByRole("dialog", { name: "OpenRouter key" });
+  await orSheet.getByLabel("Key").fill("sk-or-example_not_real_9c1d");
+  await orSheet.getByRole("button", { name: "Save key" }).click();
+  await expect(page.getByRole("button", { name: /^OpenRouter/ })).toContainText("Saved · ••••9c1d");
+  await page.getByRole("button", { name: /^OpenRouter/ }).click();
+  await page.getByRole("dialog", { name: "OpenRouter key" }).getByRole("button", { name: "Remove key" }).click();
 
   await page.getByRole("button", { name: /^Groq/ }).click();
   const sheet = page.getByRole("dialog", { name: "Groq key" });

@@ -196,6 +196,50 @@ describe("AI call resilience", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("calls OpenRouter with the key as a bearer token, the free gpt-oss model and a reasoning object", async () => {
+    storage.setItem("loci_provider_pref", "openrouter");
+    fetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ choices: [{ message: { content: "Start with one step." }, finish_reason: "stop" }], usage: {} }) });
+
+    const reply = await callAI(baseRequest({ groqKey: "", openrouterKey: "or-test-key", reasoningEffort: "low" }));
+
+    expect(reply).toBe("Start with one step.");
+    expect(fetch.mock.calls[0][0]).toBe("https://openrouter.ai/api/v1/chat/completions");
+    expect(fetch.mock.calls[0][1].headers.Authorization).toBe("Bearer or-test-key");
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.model).toBe("openai/gpt-oss-120b:free");
+    expect(body.reasoning).toEqual({ effort: "low" });
+    expect(body).not.toHaveProperty("reasoning_effort");
+  });
+
+  it("falls through to OpenRouter when Groq and Gemini are rate-limited", async () => {
+    fetch
+      .mockResolvedValueOnce(providerError(429))
+      .mockResolvedValueOnce(providerError(429))
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ choices: [{ message: { content: "From OpenRouter." }, finish_reason: "stop" }] }) });
+
+    const reply = await callAI(baseRequest({ geminiKey: "test-gemini-key", openrouterKey: "or-test-key" }));
+
+    expect(reply).toBe("From OpenRouter.");
+    expect(String(fetch.mock.calls[2][0])).toContain("openrouter.ai");
+  });
+
+  it("reads the OpenRouter key saved in Settings when the caller does not pass one", async () => {
+    storage.setItem("loci_openrouter_key", "or-saved-key");
+    fetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ choices: [{ message: { content: "Saved key works." }, finish_reason: "stop" }] }) });
+
+    await expect(callAI(baseRequest({ groqKey: "" }))).resolves.toBe("Saved key works.");
+    expect(fetch.mock.calls[0][1].headers.Authorization).toBe("Bearer or-saved-key");
+  });
+
+  it("retries an OpenRouter reply cut off by the token limit at a larger budget", async () => {
+    fetch
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ choices: [{ message: { content: "Half a sen" }, finish_reason: "length" }] }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ choices: [{ message: { content: "A whole sentence." }, finish_reason: "stop" }] }) });
+
+    await expect(callAI(baseRequest({ groqKey: "", openrouterKey: "or-test-key", maxTokens: 150 }))).resolves.toBe("A whole sentence.");
+    expect(JSON.parse(fetch.mock.calls[1][1].body).max_tokens).toBeGreaterThanOrEqual(1000);
+  });
+
   it("with Only my provider on and no key anywhere, it is the plain no-key error", async () => {
     storage.setItem("loci_provider_pref", "gemini");
     storage.setItem("loci_provider_only", "1");
@@ -339,29 +383,28 @@ describe("AI call resilience", () => {
     expect(loggedText).not.toContain("test-groq-key");
   });
 
-  it("groq pref falls back through Cerebras then Gemini when Groq fails", async () => {
+  it("groq pref falls back through Gemini then Cerebras when Groq fails", async () => {
     storage.setItem("loci_provider_pref", "groq");
     fetch
       .mockResolvedValueOnce(providerError(429))   // Groq fails
-      .mockResolvedValueOnce(providerError(503))   // Cerebras fails
-      .mockResolvedValueOnce(geminiOk("Gemini emergency."));
+      .mockResolvedValueOnce(providerError(503))   // Gemini fails
+      .mockResolvedValueOnce(cerebrasOk("Cerebras emergency."));
 
     const reply = await callAI(baseRequest({
       cerebrasKey: "test-cerebras-key",
       geminiKey: "test-gemini-key",
     }));
 
-    expect(reply).toBe("Gemini emergency.");
+    expect(reply).toBe("Cerebras emergency.");
     expect(fetch).toHaveBeenCalledTimes(3);
     expect(fetch.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
-    expect(fetch.mock.calls[1][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
-    expect(String(fetch.mock.calls[2][0])).toContain("generativelanguage.googleapis.com");
+    expect(String(fetch.mock.calls[1][0])).toContain("generativelanguage.googleapis.com");
+    expect(fetch.mock.calls[2][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
   });
 
-  it("falls back through Groq to Gemini when Cerebras fails in auto mode", async () => {
+  it("falls back from Groq to Gemini in auto mode, and never tries Cerebras first", async () => {
     fetch
-      .mockResolvedValueOnce(providerError(429))   // Cerebras fails
-      .mockResolvedValueOnce(providerError(503))   // Groq fails
+      .mockResolvedValueOnce(providerError(429))   // Groq fails
       .mockResolvedValueOnce(geminiOk("Gemini here."));
 
     const reply = await callAI(baseRequest({
@@ -370,10 +413,9 @@ describe("AI call resilience", () => {
     }));
 
     expect(reply).toBe("Gemini here.");
-    expect(fetch).toHaveBeenCalledTimes(3);
-    expect(fetch.mock.calls[0][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
-    expect(fetch.mock.calls[1][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
-    expect(String(fetch.mock.calls[2][0])).toContain("generativelanguage.googleapis.com");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+    expect(String(fetch.mock.calls[1][0])).toContain("generativelanguage.googleapis.com");
   });
 
   it("calls Cerebras endpoint with the gpt-oss-120b model when pref is cerebras", async () => {
@@ -724,10 +766,10 @@ describe("Z.ai emergency fallback", () => {
     expect(fetch.mock.calls[0][0]).toBe("https://api.z.ai/api/paas/v4/chat/completions");
   });
 
-  it("auto order is Cerebras -> Groq -> Z.ai -> Gemini", async () => {
+  it("auto order is Groq -> Gemini -> Z.ai -> Cerebras", async () => {
     fetch
-      .mockResolvedValueOnce(providerError(503))   // Cerebras fails
       .mockResolvedValueOnce(providerError(503))   // Groq fails
+      .mockResolvedValueOnce(providerError(503))   // Gemini fails
       .mockResolvedValueOnce(zaiOk("Z.ai picked up the slack."));
 
     const reply = await callAI(baseRequest({
@@ -738,8 +780,8 @@ describe("Z.ai emergency fallback", () => {
 
     expect(reply).toBe("Z.ai picked up the slack.");
     expect(fetch).toHaveBeenCalledTimes(3);
-    expect(fetch.mock.calls[0][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
-    expect(fetch.mock.calls[1][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+    expect(fetch.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+    expect(String(fetch.mock.calls[1][0])).toContain("generativelanguage.googleapis.com");
     expect(fetch.mock.calls[2][0]).toBe("https://api.z.ai/api/paas/v4/chat/completions");
   });
 
@@ -1617,15 +1659,22 @@ describe("extractJsonArray", () => {
 
 describe("buildProviderOrder without NVIDIA", () => {
   it("a saved 'nvidia' preference (no longer offered) falls back to Auto", () => {
-    expect(buildProviderOrder("nvidia", "g", "", "c", "").map(p => p.name)).toEqual(["cerebras", "groq"]);
+    expect(buildProviderOrder("nvidia", "g", "", "c", "").map(p => p.name)).toEqual(["groq", "cerebras"]);
   });
   it("Only my provider keeps just the chosen provider, and ignores Auto", () => {
     expect(buildProviderOrder("gemini", "g", "m", "c", "z", true).map(p => p.name)).toEqual(["gemini"]);
     expect(buildProviderOrder("gemini", "g", "", "c", "z", true)).toEqual([]);
-    expect(buildProviderOrder("auto", "g", "m", "c", "z", true).map(p => p.name)).toEqual(["cerebras", "groq", "zai", "gemini"]);
+    expect(buildProviderOrder("auto", "g", "m", "c", "z", true).map(p => p.name)).toEqual(["groq", "gemini", "zai", "cerebras"]);
   });
   it("orders Groq, Gemini, Cerebras and Z.ai by the chosen chain", () => {
-    expect(buildProviderOrder("gemini", "g", "m", "c", "z").map(p => p.name)).toEqual(["gemini", "groq", "cerebras", "zai"]);
-    expect(buildProviderOrder("auto", "g", "m", "c", "z").map(p => p.name)).toEqual(["cerebras", "groq", "zai", "gemini"]);
+    expect(buildProviderOrder("gemini", "g", "m", "c", "z").map(p => p.name)).toEqual(["gemini", "groq", "zai", "cerebras"]);
+    expect(buildProviderOrder("auto", "g", "m", "c", "z").map(p => p.name)).toEqual(["groq", "gemini", "zai", "cerebras"]);
+  });
+  it("puts OpenRouter after Groq and Gemini in Auto, and first when chosen; Cerebras no longer leads Auto", () => {
+    expect(buildProviderOrder("auto", "g", "m", "c", "z", false, "o").map(p => p.name)).toEqual(["groq", "gemini", "openrouter", "zai", "cerebras"]);
+    expect(buildProviderOrder("openrouter", "g", "m", "c", "z", false, "o").map(p => p.name)).toEqual(["openrouter", "groq", "gemini", "zai", "cerebras"]);
+    expect(buildProviderOrder("cerebras", "g", "m", "c", "z", false, "o").map(p => p.name)).toEqual(["cerebras", "groq", "gemini", "openrouter", "zai"]);
+    expect(buildProviderOrder("openrouter", "g", "m", "c", "z", true, "o").map(p => p.name)).toEqual(["openrouter"]);
+    expect(buildProviderOrder("auto", "", "", "", "", false, "o").map(p => p.name)).toEqual(["openrouter"]);
   });
 });

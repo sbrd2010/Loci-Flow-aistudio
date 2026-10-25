@@ -492,18 +492,20 @@ export function CoachMemoryPage({ config, saveConfigPatch, onBack, backLabel, on
 
 // ── AI provider (44g) ──────────────────────────────────────────────────────
 export const PROVIDERS = [
-  { key: "cerebras", name: "Cerebras", storage: "loci_cerebras_key", builtin: import.meta.env.VITE_CEREBRAS_KEY, getKey: "https://cloud.cerebras.ai", placeholder: "csk-…" },
   { key: "groq", name: "Groq", storage: "loci_groq_key", builtin: import.meta.env.VITE_GROQ_KEY, getKey: "https://console.groq.com", placeholder: "gsk_…" },
   { key: "gemini", name: "Gemini", storage: "loci_gemini_key", builtin: import.meta.env.VITE_GEMINI_KEY, getKey: "https://aistudio.google.com", placeholder: "AIza…" },
+  { key: "openrouter", name: "OpenRouter", storage: "loci_openrouter_key", builtin: import.meta.env.VITE_OPENROUTER_KEY, getKey: "https://openrouter.ai/keys", placeholder: "sk-or-…" },
   { key: "zai", name: "Z.ai", storage: "loci_zai_key", builtin: import.meta.env.VITE_ZAI_KEY, getKey: "https://z.ai", placeholder: "API key" },
+  { key: "cerebras", name: "Cerebras", storage: "loci_cerebras_key", builtin: import.meta.env.VITE_CEREBRAS_KEY, getKey: "https://cloud.cerebras.ai", placeholder: "csk-…" },
 ];
 
 export const PREF_CHAINS = {
-  auto: ["cerebras", "groq", "zai", "gemini"],
-  groq: ["groq", "cerebras", "zai", "gemini"],
-  cerebras: ["cerebras", "groq", "zai", "gemini"],
-  gemini: ["gemini", "groq", "cerebras", "zai"],
-  zai: ["zai", "groq", "cerebras", "gemini"],
+  auto: ["groq", "gemini", "openrouter", "zai", "cerebras"],
+  groq: ["groq", "gemini", "openrouter", "zai", "cerebras"],
+  gemini: ["gemini", "groq", "openrouter", "zai", "cerebras"],
+  openrouter: ["openrouter", "groq", "gemini", "zai", "cerebras"],
+  cerebras: ["cerebras", "groq", "gemini", "openrouter", "zai"],
+  zai: ["zai", "groq", "gemini", "openrouter", "cerebras"],
 };
 
 function readStore(key) {
@@ -554,11 +556,12 @@ export function AiProviderPage({ onBack, backLabel }) {
     try { v ? localStorage.setItem("loci_provider_only", "1") : localStorage.removeItem("loci_provider_only"); } catch { /* storage blocked */ }
   };
   const uses = [
-    { value: "auto", label: "Auto (recommended)", sub: "Cerebras → Groq → Z.ai → Gemini" },
+    { value: "auto", label: "Auto (recommended)", sub: "Groq → Gemini → OpenRouter → Z.ai → Cerebras" },
     { value: "groq", label: "Groq" },
-    { value: "cerebras", label: "Cerebras" },
     { value: "gemini", label: "Gemini" },
+    { value: "openrouter", label: "OpenRouter", sub: "Free models, small daily limit" },
     { value: "zai", label: "Z.ai", sub: "Free fallback, slow when busy" },
+    { value: "cerebras", label: "Cerebras" },
   ];
 
   return (

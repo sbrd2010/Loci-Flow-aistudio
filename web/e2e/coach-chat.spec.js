@@ -71,6 +71,7 @@ const AI_PROVIDER_GLOBS = [
   "https://api.cerebras.ai/**",
   "https://generativelanguage.googleapis.com/**",
   "https://api.z.ai/**",
+  "https://openrouter.ai/**",
 ];
 
 test("mobile reliability: Coach chat never reaches the AI provider on crisis language", async ({ page }) => {
