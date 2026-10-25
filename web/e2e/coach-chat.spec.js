@@ -182,6 +182,29 @@ async function openCoachWithReply(page, content) {
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
 }
 
+test("Coach chat: with the user's own key a reworded question gets the full prompt; small talk stays small", async ({ page }) => {
+  await page.addInitScript(() => { window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key"); });
+  const bodies = [];
+  await page.route("https://api.groq.com/**", async (route) => {
+    bodies.push(JSON.parse(route.request().postData()));
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content: "Noted." } }] }) });
+  });
+  await enterDemo(page);
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
+  const input = page.locator(".coach-composer-input");
+
+  await input.fill("Which day of the week am I most productive?");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect.poll(() => bodies.length, { timeout: 10_000 }).toBe(1);
+  expect(bodies[0].max_tokens).toBe(450); // full_task
+
+  await expect(page.locator(".coach-msg.is-coach")).toHaveCount(1, { timeout: 10_000 });
+  await input.fill("ok cool");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect.poll(() => bodies.length, { timeout: 10_000 }).toBe(2);
+  expect(bodies[1].max_tokens).toBe(150); // light
+});
+
 test("Coach memory: 'remember that…' is kept by the app even when the model writes no tag", async ({ page }) => {
   await openCoachWithReply(page, "Got it.");
   await page.locator(".coach-composer-input").fill("Remember that I don't like meetings after 3pm");

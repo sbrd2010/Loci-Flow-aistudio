@@ -874,6 +874,19 @@ export function getAIKeys() {
   };
 }
 
+// True when the provider that will get the request first is one the user entered
+// a key for (not a build-time key shared by everyone who opens the app): their
+// own quota, so the Coach can send the larger prompt. If a build-time key leads
+// the chain (the default order starts with Cerebras), the request goes to shared
+// quota first and stays lean.
+export function hasOwnAIKey() {
+  const { groqKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
+  const pref = localStorage.getItem("loci_provider_pref") || "auto";
+  const first = buildProviderOrder(pref, groqKey, geminiKey, cerebrasKey, zaiKey, isProviderOnly())[0];
+  // Z.ai refuses anything over 12,000 characters, which the full prompt always is.
+  return !!first && first.name !== "zai" && !!(localStorage.getItem(`loci_${first.name}_key`) || "").trim();
+}
+
 // True only if the user's selected provider order actually has a usable
 // provider in its chain (callAI would throw "no_key" otherwise).
 export function hasAIKey() {

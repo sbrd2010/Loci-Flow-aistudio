@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import FocusPill from "./FocusPill";
 import { auth } from "../firebase";
-import { callAI, describeAIError, getAIKeys, hasAIKey, isAISystemReply, isOnlyProviderKeyMissing } from "../utils/aiCall";
+import { callAI, describeAIError, getAIKeys, hasAIKey, hasOwnAIKey, isAISystemReply, isOnlyProviderKeyMissing } from "../utils/aiCall";
 import { stripAIUsageNote } from "../utils/aiUsageLimits";
 import { buildLocalSafetyReply, localSafetyTurns, PRIVATE_REPLY_TURN, PRIVATE_USER_TURN } from "../utils/crisisSafety";
 import { isEventTask } from "../utils/dayMapRoute";
@@ -759,9 +759,15 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     const lastShown = chatHistory[chatHistory.length - 1];
     const lastReplyAsked = !!lastShown && !lastShown.isUser && !isAISystemReply(lastShown.text) &&
       (stripSavedNote(String(lastShown.text || "")).trim().endsWith("?") || (lastShown.actions || []).some(a => a.state === "proposed"));
-    const contextMode = classifyContextMode(userText, { lastFullTaskTime, hasLastPlan: !!lastPlan, lastReplyAsked });
+    // With the user's own key a message no rule recognises gets the full prompt
+    // (see classifyContextMode); `unclaimed` is such a message, which also gets
+    // the period digest when it names a span of time.
+    const ownKey = hasOwnAIKey();
+    const modeOptions = { lastFullTaskTime, hasLastPlan: !!lastPlan, lastReplyAsked };
+    const contextMode = classifyContextMode(userText, { ...modeOptions, ownKey });
+    const unclaimed = ownKey && contextMode === "full_task" && classifyContextMode(userText, modeOptions) === "light";
     // "How was my week?": the numbers behind it ride with this one message.
-    const periodIntent = detectPeriodIntent(userText);
+    const periodIntent = detectPeriodIntent(userText, { loose: unclaimed });
     const deadlineIntent = !periodIntent && detectDeadlineIntent(userText);
     const isReference = needsConversationContext(userText);
     const epoch = conversationEpoch;
@@ -1158,8 +1164,10 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
         replyText = buildActionReplyText(cleanText, results, userText, { proposed: true });
       }
 
-      // Extract and save lastCoachPlan
-      if (contextMode === "full_task" || contextMode === "compact_task") {
+      // Extract and save lastCoachPlan. Not for an unclaimed message that only got
+      // the full prompt (a chat question, not a planning turn): its reply names no
+      // task, and clearing the plan would break the next "make it smaller".
+      if ((contextMode === "full_task" && !unclaimed) || contextMode === "compact_task") {
         let recommendedTask = null;
         let matchedFromActionTag = false;
         const actionTagTasks = [];
