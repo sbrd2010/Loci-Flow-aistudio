@@ -22,6 +22,7 @@ import { classifyContextMode, needsConversationContext, historyLimitForMode, det
 import { buildSessionSummaryContext, shouldIncludeSessionSummaryContext, llmHistoryStart } from "./coachSessionSummary";
 import { buildLociPeriodContext, buildLociDeadlinesBlock, detectDeadlineIntent, PERIOD_ANSWER_NOTE } from "./coachPeriodDigest";
 import { buildLocalSafetyReply } from "./crisisSafety";
+import { detectFactIntent, buildFactCard } from "./coachFactCards";
 import { lociDayWindow } from "./focusLedger";
 import { profileToCoachContext } from "./userProfile";
 
@@ -165,30 +166,30 @@ export const QUESTIONS = [
   { id: "perf-1", c: "performance", text: "How was my week?", needs: ["digest"], live: true, expect: { must: [/\b13\b/] } },
   { id: "perf-2", c: "performance", text: "How many tasks did I finish this week?", needs: ["digest"], live: true, expect: { must: [/\b13\b/] } },
   { id: "perf-3", c: "performance", text: "What did I get done yesterday?", needs: ["digest"], live: true, expect: { must: [/water bill/i] } },
-  { id: "perf-4", c: "performance", text: "Am I doing better than last week?", needs: ["digest"], live: true, expect: { must: [/\b13\b|\b5\b/] }, gaps: { offline: "A comparison with the last week ('doing better than') has no period matcher; it goes to the short mode." } },
+  { id: "perf-4", c: "performance", text: "Am I doing better than last week?", needs: ["digest"], live: true, expect: { must: [/\b13\b|\b5\b/] } },
   { id: "perf-5", c: "performance", text: "Show me my progress this month", needs: ["digest"], expect: { must: [/\b26\b/] } },
   { id: "perf-6", c: "performance", text: "Which day of the week am I most productive?", needs: ["profile"], live: true, expect: { must: [/tuesday/i] }, gaps: { offline: "'Most productive day' goes to the short mode, which does not carry the behavioural profile." } },
 
   // 3. Know my focus
   { id: "focus-1", c: "focus", text: "How long did I focus this week?", needs: ["focusMinutes"], live: true, expect: { must: [/4\s*h(?:ours?|rs?)?\s*(?:and\s*)?10|250\s*min/i] } },
-  { id: "focus-2", c: "focus", text: "How many focus sessions did I do this week?", needs: ["focusSessions"], live: true, expect: { must: [/\b6\b|six/i] }, gaps: { offline: "The digest prints focus minutes and days, not the number of sessions." } },
-  { id: "focus-3", c: "focus", text: "Which day did I focus the most?", needs: ["focusMinutes"], live: true, expect: { must: [/sun|1\s*h\s*30|90\s*min/i] }, gaps: { offline: "'Which day did I focus the most' is not a matched focus phrase; it goes to the short mode." } },
+  { id: "focus-2", c: "focus", text: "How many focus sessions did I do this week?", needs: ["focusSessions"], live: true, expect: { must: [/\b6\b|six/i] } },
+  { id: "focus-3", c: "focus", text: "Which day did I focus the most?", needs: ["focusMinutes"], live: true, expect: { must: [/sun|1\s*h\s*30|90\s*min/i] } },
   { id: "focus-4", c: "focus", text: "Total focus time last week?", needs: ["focusMinutes"] },
-  { id: "focus-5", c: "focus", text: "have I been focusing enough lately", needs: ["focusMinutes"], gaps: { offline: "No phrase for a vague 'lately/enough' focus question; it goes to the short mode." } },
+  { id: "focus-5", c: "focus", text: "have I been focusing enough lately", needs: ["focusMinutes"] },
 
   // 4. Know my deadlines
-  { id: "dead-1", c: "deadlines", text: "What's due this week?", needs: ["deadlines"], live: true, expect: { must: [/tax paperwork/i], mustNot: [/groceries|library books/i] }, gaps: { live: "The deadline block is in the prompt and the model lists ordinary tasks anyway (#555 F6)." } },
+  { id: "dead-1", c: "deadlines", text: "What's due this week?", needs: ["deadlines"], live: true, expect: { must: [/tax paperwork/i], mustNot: [/groceries|library books/i] } },
   { id: "dead-2", c: "deadlines", text: "Anything overdue?", needs: ["deadlines"], live: true, expect: { must: [/tax paperwork/i] } },
-  { id: "dead-3", c: "deadlines", text: "How many days until my workshop?", needs: ["deadlines"], live: true, expect: { must: [/\b12\b/] }, gaps: { offline: "'Days until <front>' has no deadline matcher (due, deadline, overdue, on track, behind); it goes to the short mode." } },
+  { id: "dead-3", c: "deadlines", text: "How many days until my workshop?", needs: ["deadlines"], live: true, expect: { must: [/\b12\b/] } },
   { id: "dead-4", c: "deadlines", text: "When is my key deadline?", needs: ["keyDeadline"], live: true, expect: { must: [/conference talk/i, /\b20\b|nov(?:ember)? 10/i] } },
-  { id: "dead-5", c: "deadlines", text: "Which of my fronts is the most urgent?", needs: ["deadlines"], expect: { must: [/tax paperwork/i] }, gaps: { offline: "'fronts' wording is not matched, so the question goes to the short mode." } },
+  { id: "dead-5", c: "deadlines", text: "Which of my fronts is the most urgent?", needs: ["deadlines"], expect: { must: [/tax paperwork/i] } },
 
   // 5. Know my backlog
   { id: "back-1", c: "backlog", text: "What's in my mind box?", needs: ["mindBox"], live: true, expect: { must: [/notes app|priya|standing desks/i] } },
   { id: "back-2", c: "backlog", text: "What's on my week horizon?", needs: ["weekList"], live: true, expect: { must: [/budget|library|groceries/i] } },
   { id: "back-3", c: "backlog", text: "Which of my tasks have I been putting off the longest?", needs: ["stale"], live: true, expect: { must: [/bank/i] } },
   { id: "back-4", c: "backlog", text: "what's my oldest open task?", needs: ["stale"], expect: { must: [/bank/i] } },
-  { id: "back-5", c: "backlog", text: "What have I parked?", needs: ["parkedList"], live: true, expect: { must: [/design tool/i] }, gaps: { offline: "Only tasks parked in the last 24 hours reach the prompt; this one was parked 2 days ago." } },
+  { id: "back-5", c: "backlog", text: "What have I parked?", needs: ["parkedList"], live: true, expect: { must: [/design tool/i] } },
   { id: "back-6", c: "backlog", text: "Show my plan for this month", needs: ["monthList"], expect: { must: [/blog post/i] } },
 
   // 6. Act on tasks
@@ -234,6 +235,9 @@ export function buildTurn(q) {
   if (local) return { local };
 
   const { tasks, config, brainDump, contributions, focusRaw, userProfile } = makeFixture();
+  // A plain factual question is answered by the app, with no provider call.
+  const intent = detectFactIntent(q.text, { config });
+  if (intent) return { card: buildFactCard(intent, { tasks, config, brainDump, contributions, focusRaw, now: NOW, unconfirmed: false }), cardKind: intent.kind };
   const todayStr = getLociDayStr(NOW, WINDOWS);
   const savedHistory = [...(q.history === "followup" ? FOLLOWUP_HISTORY : BASE_HISTORY), { isUser: true, text: q.text }];
   const prev = lastShown(savedHistory.slice(0, -1));

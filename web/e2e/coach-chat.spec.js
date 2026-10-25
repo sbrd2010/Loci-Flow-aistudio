@@ -527,6 +527,52 @@ test("Coach chat: a question that is not about a period does not pay for the dig
   expect(bodies[0].messages.find(m => m.role === "system").content).not.toContain("PERIOD DIGEST");
 });
 
+test("Coach chat: a factual question is answered by the app, with no request to the provider", async ({ page }) => {
+  await page.addInitScript(() => { window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key"); });
+  const bodies = [];
+  await page.route("https://api.groq.com/**", async (route) => {
+    bodies.push(JSON.parse(route.request().postData()));
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content: "Let's pick one tiny next step." } }] }) });
+  });
+  await enterDemo(page, { width: 1600, height: 900 });
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
+  const input = page.locator(".coach-composer-input");
+
+  await input.fill("What's due this week?");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.locator(".coach-msg.is-coach")).toHaveCount(1, { timeout: 10_000 });
+  await expect(page.locator(".coach-msg.is-coach").last()).toContainText(/deadline|due dates of their own/i);
+
+  await input.fill("What have I parked?");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.locator(".coach-msg.is-coach")).toHaveCount(2, { timeout: 10_000 });
+  await expect(page.locator(".coach-msg.is-coach").last()).toContainText(/parked task|no parked tasks/i);
+
+  expect(bodies.length).toBe(0); // both answered from the app's own data
+
+  // Anything else still goes to the Coach.
+  await input.fill("I feel a bit scattered right now");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.locator(".coach-msg.is-coach")).toHaveCount(3, { timeout: 10_000 });
+  expect(bodies.length).toBe(1);
+});
+
+test("Coach chat: a focus question the app cannot read the log for says so, and does not guess", async ({ page }) => {
+  await page.addInitScript(() => { window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key"); });
+  const bodies = [];
+  await page.route("https://api.groq.com/**", async (route) => {
+    bodies.push(JSON.parse(route.request().postData()));
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content: "ok" } }] }) });
+  });
+  await enterDemo(page, { width: 1600, height: 900 });
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
+  await page.locator(".coach-composer-input").fill("How many focus sessions did I do this week?");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.locator(".coach-msg.is-coach")).toHaveCount(1, { timeout: 10_000 });
+  await expect(page.locator(".coach-msg.is-coach").last()).toContainText(/couldn't read your focus log|No focus sessions are logged|\d+ sessions?/i);
+  expect(bodies.length).toBe(0);
+});
+
 test("Coach actions: the tap really marks the task done on Today", async ({ page }) => {
   const task = "10-minute walk between tasks to reset your focus";
   await page.route("https://api.groq.com/**", (route) => route.fulfill({

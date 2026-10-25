@@ -28,6 +28,7 @@ import { stripReasoningTag } from "../utils/coachReasoning";
 import { classifyContextMode, needsConversationContext, historyLimitForMode, detectRequestedCategories, detectPeriodIntent } from "../utils/coachContextMode";
 import { buildLociPeriodContext, buildLociDeadlinesBlock, detectDeadlineIntent, PERIOD_ANSWER_NOTE } from "../utils/coachPeriodDigest";
 import { readFocusOnce } from "../utils/readFocusOnce";
+import { detectFactIntent, buildFactCard } from "../utils/coachFactCards";
 import { buildCoachSystemPrompt } from "../utils/coachSystemPrompt";
 import {
   needsSummaryUpdate, llmHistoryStart, pendingSummaryMessages, buildPendingSummaryContext,
@@ -202,6 +203,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
   const chatInputRef = useRef(null);
   const chatFormRef = useRef(null);
   const chipTextRef = useRef(null);
+  const factReadRef = useRef(false); // a fact card is waiting on the focus-log read
   const prevHistoryLenRef = useRef(chatHistory.length);
   const prevChatLoadingRef = useRef(chatLoading);
 
@@ -569,6 +571,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
 
   const handleSendChat = async (e) => {
     e.preventDefault();
+    if (factReadRef.current) return;
     const pendingChip = chipTextRef.current;
     chipTextRef.current = null;
     const userText = (pendingChip || chatInput).trim();
@@ -593,7 +596,34 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     const isClear = /^(clear chat|clear history|clear conversation)$/i.test(lowerText);
     const isFocus = /^(what is my current focus|what's my current focus|what is my focus|what's my focus|what focus task)$/i.test(lowerText);
 
-    if (crisisReply || isHi || isThanks || isDay || isWho || isClear || isFocus) {
+    // -- Fact cards --
+    // A plain factual question about the user's own data (deadlines, parked
+    // tasks, Mind Box, focus time, this week against last, what is saved) is
+    // answered here from the data, with no provider call: the numbers cannot be
+    // misquoted, and it costs no tokens. Not while a stuck or Brief chip is
+    // attached to the message, which the Coach has to read.
+    let factCardText = null;
+    if (!crisisReply && !(isHi || isThanks || isDay || isWho || isClear || isFocus) && !stuck && !briefChip) {
+      const factIntent = detectFactIntent(userText, { config: configRef.current });
+      if (factIntent) {
+        // The input is cleared before the (short, bounded) focus-log read, so a
+        // second press of Enter cannot send the same question again.
+        if (!pendingChip) setChatInput("");
+        let focusRaw = null;
+        if (factIntent.needsFocus && !cloudSyncUnconfirmed) {
+          factReadRef.current = true; // no second send while the log is read
+          try { focusRaw = await readFocusOnce(uid, factIntent.focusDays, getFocusWindows(configRef.current)); }
+          catch { focusRaw = null; } // the card then says it could not read the log
+          finally { factReadRef.current = false; }
+        }
+        factCardText = buildFactCard(factIntent, {
+          tasks: tasksRef.current, config: configRef.current, brainDump,
+          contributions: contributionsRef.current, focusRaw, now: new Date(), unconfirmed: cloudSyncUnconfirmed,
+        });
+      }
+    }
+
+    if (crisisReply || isHi || isThanks || isDay || isWho || isClear || isFocus || factCardText) {
       if (!pendingChip) setChatInput("");
       if (isClear) {
         endConversation();
@@ -646,6 +676,8 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
         } else {
           localReplyText = `You don't have a Now Focus set right now. Want to set one, or should we look at your Today list?`;
         }
+      } else if (factCardText) {
+        localReplyText = factCardText;
       }
       const replyMsg = { text: localReplyText, isUser: false, at: Date.now() };
       const withReply = [...savedHistory, replyMsg];
