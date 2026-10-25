@@ -240,6 +240,33 @@ describe("AI call resilience", () => {
     expect(JSON.parse(fetch.mock.calls[1][1].body).max_tokens).toBeGreaterThanOrEqual(1000);
   });
 
+  it("shows the provider's own reason when the only provider refuses (OpenRouter 404)", async () => {
+    storage.setItem("loci_provider_pref", "openrouter");
+    storage.setItem("loci_provider_only", "1");
+    const body = { error: { message: "No endpoints found matching your data policy" } };
+    fetch.mockResolvedValue({ ok: false, status: 404, headers: { get: () => null }, json: async () => body, clone() { return this; } });
+
+    const err = await callAI(baseRequest({ groqKey: "", openrouterKey: "or-test-key" })).catch(e => e);
+
+    expect(err.message).toBe("only_provider_failed");
+    expect(err.detail).toBe("openrouter: No endpoints found matching your data policy");
+    const shown = describeAIError(err);
+    expect(shown).toContain("(openrouter: No endpoints found matching your data policy)");
+    expect(isAISystemReply(shown)).toBe(true); // still never replayed to the model
+  });
+
+  it("works when the refusal has no readable body", async () => {
+    storage.setItem("loci_provider_pref", "openrouter");
+    storage.setItem("loci_provider_only", "1");
+    fetch.mockResolvedValue({ ok: false, status: 404, headers: { get: () => null }, json: async () => { throw new Error("no body"); } });
+
+    const err = await callAI(baseRequest({ groqKey: "", openrouterKey: "or-test-key" })).catch(e => e);
+
+    expect(err.message).toBe("only_provider_failed");
+    expect(err.detail).toBeUndefined();
+    expect(describeAIError(err)).not.toContain("(");
+  });
+
   it("with Only my provider on and no key anywhere, it is the plain no-key error", async () => {
     storage.setItem("loci_provider_pref", "gemini");
     storage.setItem("loci_provider_only", "1");
