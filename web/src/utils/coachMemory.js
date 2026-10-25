@@ -63,8 +63,9 @@ const MEDICAL_LABEL_PATTERN = /\b(adhd|autis(?:m|tic)|asperger'?s?|bipolar|ocd|p
 // Defense-in-depth: the system prompt says never to store shame-based labels
 // ("lazy", "hopeless"…). The app also keeps what the user asked it to remember
 // in their own words (parseRememberRequest), so the same refusal has to hold
-// here. Deliberately only the unambiguous ones.
-const SHAME_LABEL_PATTERN = /\b(?:lazy|useless|hopeless|worthless|stupid|idiot|loser|no (?:discipline|willpower))\b/i;
+// here. Deliberately only the unambiguous ones ("broken" and "failing" only as a
+// claim about the user, so "my laptop is broken" still passes).
+const SHAME_LABEL_PATTERN = /\b(?:lazy|useless|hopeless|worthless|stupid|idiot|loser|no (?:discipline|willpower)|bad at planning|low completion rate)\b|\bi(?:['’]m| am)\s+(?:\w+\s+){0,2}?(?:broken|a failure|failing)\b/i;
 
 // The text a memory entry may hold, or null when it must not be stored.
 function cleanMemoryText(text) {
@@ -278,13 +279,21 @@ export function parseMemoryTags(text = "") {
 // goal?" a question, "remembered" and "note taking" are other words).
 const REMEMBER_REQUEST_RE = /^(?:(?:ok|okay|hey|so|also|and|please|pls)[\s,]+)*(?:(?:can|could|would|will) you (?:please )?|i want you to |i'd like you to )?(?:please )?(?:remember|keep in mind|don'?t forget|do not forget|make a note|take note|note(?=\s*(?:that\b|for later|for future|:)))\b(?:\s+(?:of|this))?\s*(?:for (?:later|future(?:\s+(?:chats?|conversations?|sessions?|reference))?))?\s*[:,-]?\s*(?:that\s+)?(.+)$/i;
 const NOT_A_FACT_RE = /^(?:to|when|how|if|whether|what|why|who|where|me)\b/i;
+// Sentences of a message. A full stop inside "9 a.m.", "e.g." or "Dr." does not end one.
+const ABBREVIATION_RE = /\b(?:a\.m|p\.m|e\.g|i\.e|etc|vs|mr|mrs|ms|dr)\./gi;
+export function splitSentences(message = "") {
+  return String(message).trim()
+    .replace(ABBREVIATION_RE, (m) => m.replace(/\./g, "\uE000"))
+    .split(/(?<=[.!?])\s+/)
+    .map(sentence => sentence.replace(/\uE000/g, "."));
+}
 export function parseRememberRequest(message = "") {
-  const sentences = String(message).replace(/[’‘]/g, "'").trim().split(/(?<=[.!?])\s+/);
+  const sentences = splitSentences(String(message).replace(/[’‘]/g, "'"));
   for (const sentence of sentences) {
     if (/\?\s*$/.test(sentence)) continue;
     const m = REMEMBER_REQUEST_RE.exec(sentence.trim());
     if (!m) continue;
-    const fact = m[1].trim().replace(/[.!\s]+$/, "");
+    const fact = m[1].trim().replace(/(?<![ap]\.m)[.!]+$/, "").trim();
     if (NOT_A_FACT_RE.test(fact) || fact.split(/\s+/).length < 3 || fact.length > MEMORY_ENTRY_MAX_LENGTH) continue;
     return fact;
   }

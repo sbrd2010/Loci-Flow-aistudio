@@ -597,6 +597,8 @@ describe("parseRememberRequest (the app keeps an outright 'remember that …', #
     ["Remember: no calls before 9am", "no calls before 9am"],
     ["Remember that I prefer mornings. What should I work on next?", "I prefer mornings"],
     ["Remember that I don’t like meetings after 3pm", "I don't like meetings after 3pm"],
+    ["Remember that I work from 9 a.m. to 5 p.m.", "I work from 9 a.m. to 5 p.m."],
+    ["Remember that I like e.g. tea in the morning. Which task first?", "I like e.g. tea in the morning"],
   ])("%s", (text, fact) => {
     expect(parseRememberRequest(text)).toBe(fact);
   });
@@ -629,7 +631,8 @@ describe("isPlainQuestion", () => {
 describe("what may be kept as memory", () => {
   it("refuses secrets, amounts, diagnoses and harsh labels, which the app now also writes from the user's own words", () => {
     expect(isStorableMemoryText("I prefer mornings for writing")).toBe(true);
-    for (const bad of ["my password is hunter2", "I owe $5000 on the card", "I have ADHD", "I'm lazy and useless", "I have no discipline"]) {
+    expect(isStorableMemoryText("my laptop is broken, I need it fixed by Friday")).toBe(true);
+    for (const bad of ["my password is hunter2", "I owe $5000 on the card", "I have ADHD", "I'm lazy and useless", "I have no discipline", "I am broken and bad at planning", "I’m so broken", "I keep failing, I am failing at everything", "my low completion rate"]) {
       expect(isStorableMemoryText(bad), bad).toBe(false);
     }
   });
