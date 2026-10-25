@@ -1283,8 +1283,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
       // Memory notes and check-ins are written without a tap, so the reply says
       // what was kept. Worked out against the memory as it is now; the save
       // below re-checks against the latest, so a rare race can differ by an entry.
-      const savedLine = savedNote({
-        ...(memoryPatch ? describeMemoryChange(
+      const memoryChange = memoryPatch ? describeMemoryChange(
           configRef.current.coachMemory || {},
           {
             // The same entries the save will skip (deleted in Settings while the reply was on its way) are left out here too.
@@ -1293,10 +1292,13 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
             forgets: willForget ? forgets : [],
           },
           todayStr
-        ) : {}),
-        // A request to remember that could not be kept says so, instead of the
-        // model's "Got it" standing alone (F4).
-        notRemoved: !forgetAsked || forgets.length > 0 && willForget ? ""
+        ) : {};
+      const savedLine = savedNote({
+        ...memoryChange,
+        // A request to remember or forget that did not change memory says so,
+        // instead of the model's "Got it" standing alone (F4). "Forget" is judged by
+        // what was actually removed, not by whether a tag was written.
+        notRemoved: !forgetAsked || (memoryChange.removed || []).length > 0 ? ""
           : !memoryWriteAllowed ? (!isMemoryEnabled(configRef.current) ? "Coach memory is switched off in Settings." : "this device is still syncing, so ask me again in a moment.")
           : "no saved entry matched that.",
         notSaved: !appKeeps ? ""

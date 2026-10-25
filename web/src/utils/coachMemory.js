@@ -323,7 +323,10 @@ export function parseForgetRequest(message = "") {
 const FORGET_STOPWORDS = new Set("i me my mine you your the a an to of for and or in on at is am are was be been do does did it its with about so very really that this user they their he she we our not no".split(" "));
 const forgetTokens = (text) => String(text || "").toLowerCase().replace(/['’]/g, "").split(/[^a-z0-9]+/)
   .filter(w => w && !FORGET_STOPWORDS.has(w))
-  .map(w => (w.length > 4 ? w.replace(/(?:ing|es|ed|s)$/, "") : w.replace(/s$/, "")));
+  .map(w => {
+    const bare = w.replace(/s$/, "");
+    return (bare.length > 4 ? bare.replace(/(?:ing|ed)$/, "") : bare).replace(/(?<=\w{3})e$/, "");
+  });
 
 // The saved entries that say what the user asked to forget: nearly all of its
 // content words must be in the entry ("I prefer mornings" matches "Prefers

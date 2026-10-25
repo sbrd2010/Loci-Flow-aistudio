@@ -674,6 +674,13 @@ describe("parseForgetRequest / findForgetTargets (the app removes what the user 
     expect(findForgetTargets(memory, "my goal to run the workshop")).toEqual(["Main goal this quarter: run the workshop and finish the slides by Nov 2."]);
   });
 
+  it("matches first-person requests against third-person entries whatever the verb ending (Codex #567)", () => {
+    const m = { pinnedFacts: [{ text: "Likes early calls." }, { text: "Watches the news at night." }] };
+    expect(findForgetTargets(m, "I like early calls")).toEqual(["Likes early calls."]);
+    expect(findForgetTargets(m, "I watch the news at night")).toEqual(["Watches the news at night."]);
+    expect(findForgetTargets({ pinnedFacts: [{ text: "Prefers mornings for deep work." }] }, "I prefer morning deep work")).toHaveLength(1);
+  });
+
   it("finds nothing for something that is not saved, and for a request too thin to pick an entry", () => {
     expect(findForgetTargets(memory, "I prefer evenings")).toEqual([]);
     expect(findForgetTargets(memory, "mornings")).toEqual([]);

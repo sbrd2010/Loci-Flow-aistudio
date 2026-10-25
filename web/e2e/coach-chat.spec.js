@@ -226,6 +226,14 @@ test("Coach memory: 'forget that…' removes the saved entry even when the model
   await expect(page.getByText(/Not removed from Coach memory: no saved entry matched that/)).toBeVisible({ timeout: 8_000 });
 });
 
+test("Coach memory: a FORGET tag that matches nothing is not reported as a removal", async ({ page }) => {
+  await openCoachWithReply(page, "Got it.\n[[FORGET: Likes cold showers.]]");
+  await page.locator(".coach-composer-input").fill("Forget that I like cold showers");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText(/Not removed from Coach memory: no saved entry matched that/)).toBeVisible({ timeout: 8_000 });
+  await expect(page.getByText(/Removed from Coach memory/)).toHaveCount(0);
+});
+
 test("Coach memory: a plain question writes no note, even when the model tries to", async ({ page }) => {
   await openCoachWithReply(page, "Start with the report.\n[[NOTE: User asked what to start with.]]");
   await page.locator(".coach-composer-input").fill("Which task should I start with?");
