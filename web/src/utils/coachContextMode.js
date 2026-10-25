@@ -685,11 +685,17 @@ export function detectRequestedCategories(message) {
  * "profile_reflection".
  */
 export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan = false, lastReplyAsked = false } = {}) {
-  const text = normalizeForClassification(String(message || ""));
+  let text = normalizeForClassification(String(message || ""));
 
   if (CRISIS_RE.test(text) || PANIC_RE.test(text)) return "emotional";
   if (PROFILE_RE.test(text)) return "profile_reflection";
-  if (REMEMBER_RE.test(text)) return "profile_reflection";
+  if (REMEMBER_RE.test(text)) {
+    // "Remember that I dislike meetings after 3pm. What should I work on next?":
+    // the app keeps the fact, so what is left is classified on its own.
+    const rest = text.split(/(?<=[.!?])\s+/).filter(s => !REMEMBER_RE.test(s)).join(" ").trim();
+    if (!rest || /\bdo you remember\b/i.test(text)) return "profile_reflection";
+    text = rest;
+  }
 
   // Check full-task pacing (10 minutes)
   const isPaced = lastFullTaskTime > 0 && (Date.now() - lastFullTaskTime < 10 * 60 * 1000);

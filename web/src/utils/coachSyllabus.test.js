@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { QUESTIONS, COMPETENCES, NEED_MARKERS, buildTurn, missingNeeds, makeFixture, NOW } from "./coachSyllabus.fixture";
 import { buildLocalSafetyReply } from "./crisisSafety";
+import { parseRememberRequest } from "./coachMemory";
 import { buildLociPeriodContext, buildLociDeadlinesContext } from "./coachPeriodDigest";
 import { buildLociBrainDumpContext } from "./lociAIContext";
 
@@ -87,6 +88,8 @@ describe("offline syllabus: the data each question needs reaches the model", () 
             for (const re of q.expect?.mustNot || []) expect(turn.card, `"${q.text}" must not match ${re}`).not.toMatch(re);
             return;
           }
+          // An outright "remember that …" is kept by the app from the user's words.
+          if (q.expect?.remembers) expect(parseRememberRequest(q.text), `"${q.text}" must be kept by the app`).toMatch(q.expect.remembers);
           expect(missingNeeds(q, turn.system), `"${q.text}" went to ${turn.mode}`).toEqual([]);
         };
         if (q.gaps?.offline) it.fails(`GAP ${q.id}: "${q.text}": ${q.gaps.offline}`, check);
