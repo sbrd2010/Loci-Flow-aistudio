@@ -26,7 +26,7 @@ import { buildProfileContext } from "../utils/coachProfile";
 import { addPinnedFact, addRecentObservation, buildLociMemoryContext, describeMemoryChange, forgetFromMemory, isMemoryEnabled, parseMemoryTags, isResurrectedMemoryEntry, savedNote, splitSavedNote, stripSavedNote } from "../utils/coachMemory";
 import { stripReasoningTag } from "../utils/coachReasoning";
 import { classifyContextMode, needsConversationContext, historyLimitForMode, detectRequestedCategories, detectPeriodIntent } from "../utils/coachContextMode";
-import { buildLociPeriodContext, buildLociDeadlinesContext, detectDeadlineIntent } from "../utils/coachPeriodDigest";
+import { buildLociPeriodContext, buildLociDeadlinesBlock, detectDeadlineIntent, PERIOD_ANSWER_NOTE } from "../utils/coachPeriodDigest";
 import { readFocusOnce } from "../utils/readFocusOnce";
 import { buildCoachSystemPrompt } from "../utils/coachSystemPrompt";
 import {
@@ -936,9 +936,9 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
           block = "PERIOD DIGEST AND DEADLINES: not available, because this device has not finished syncing. Say so plainly and do not guess any numbers.";
         } else if (periodIntent) {
           const focusRaw = await readFocusOnce(uid, periodIntent.days * (periodIntent.offset + 1), getFocusWindows(configRef.current));
-          block = `${buildLociPeriodContext({ tasks: tasksRef.current, contributions: contributionsRef.current, config: configRef.current, now, days: periodIntent.days, offset: periodIntent.offset, focusRaw })}\nAnswer how the period went from the PERIOD DIGEST: quote its numbers, say what it does not cover, and never invent days, tasks, minutes or deadlines.`;
+          block = `${buildLociPeriodContext({ tasks: tasksRef.current, contributions: contributionsRef.current, config: configRef.current, now, days: periodIntent.days, offset: periodIntent.offset, focusRaw })}\n${PERIOD_ANSWER_NOTE}`;
         } else {
-          block = buildLociDeadlinesContext({ tasks: tasksRef.current, config: configRef.current, now });
+          block = buildLociDeadlinesBlock({ tasks: tasksRef.current, config: configRef.current, now, message: userText });
         }
         if (block) systemPrompt = `${systemInstruction}\n\n${block}`;
       }

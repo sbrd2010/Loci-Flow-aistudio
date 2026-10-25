@@ -34,6 +34,27 @@ function baseCtx() {
   };
 }
 
+describe("the prompts that cannot change tasks never promise to (#555 F9, F10)", () => {
+  const GUARD = "You cannot change tasks from here. Never say you moved, renamed, rescheduled, updated or added anything";
+
+  it.each(["light", "profile_reflection"])("%s says it cannot change tasks", (mode) => {
+    expect(buildCoachSystemPrompt(mode, baseCtx())).toContain(GUARD);
+  });
+
+  it("compact_task has five buttons and nothing more, and asks which option when a short reply fits two", () => {
+    const out = buildCoachSystemPrompt("compact_task", baseCtx());
+    expect(out).toContain("Beyond these buttons you cannot change tasks: moving, renaming or rescheduling is not possible from chat");
+    expect(out).toContain("ask which one instead of picking");
+  });
+
+  it("full_task keeps its own narration rule and does not carry the extra lines", () => {
+    const out = buildCoachSystemPrompt("full_task", baseCtx());
+    expect(out).toContain("NARRATION RULE");
+    expect(out).not.toContain(GUARD);
+    expect(out).not.toContain("ask which one instead of picking");
+  });
+});
+
 describe("buildCoachSystemPrompt", () => {
   it("light mode omits the full task universe and action-tag machinery", () => {
     const out = buildCoachSystemPrompt("light", baseCtx());

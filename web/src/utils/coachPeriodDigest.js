@@ -58,6 +58,22 @@ export function buildLociDeadlinesContext({ tasks = [], config = {}, now = new D
   return lines.join("\n");
 }
 
+// What the model is told to do with the block, so a deadline question is
+// answered from the fronts and not from a list of ordinary tasks, and "on
+// track" is never a guess (#555 F6, F7).
+export const DEADLINES_ANSWER_NOTE = "Start your reply with these front deadlines: name each front, its date and its days left, overdue or soonest first. Tasks have no due dates of their own, so do not list tasks as due. Say ahead or behind only when a number above shows it.";
+export const NO_DEADLINES_NOTE = "FRONT DEADLINES: none set. Tasks have no due dates of their own; say so plainly and do not make any up.";
+export const PERIOD_ANSWER_NOTE = "Answer from the PERIOD DIGEST: quote its numbers and titles, say what it does not cover, and never invent days, tasks, minutes or deadlines. For \"stuck\" or \"putting off\" questions use its untouched-tasks line. With no such line, say only that no open task has gone 14 days untouched, not that nothing is stuck. Say ahead or behind only when a number above shows it.";
+
+// The block for a deadline question that is not a period question. With no dated
+// fronts, "what's due?" still gets an honest answer, but only when the message
+// really asks about due dates (not a passing "I'm behind").
+export function buildLociDeadlinesBlock({ tasks = [], config = {}, now = new Date(), message = "" }) {
+  const context = buildLociDeadlinesContext({ tasks, config, now });
+  if (context) return `${context}\n${DEADLINES_ANSWER_NOTE}`;
+  return /\b(?:due|deadlines?|overdue)\b/i.test(String(message || "")) ? NO_DEADLINES_NOTE : "";
+}
+
 /**
  * @param {object} p
  * @param {number} [p.days]   7 (a week) or 30 (a month)
