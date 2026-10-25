@@ -4,7 +4,7 @@ vi.mock("../firebase", () => ({
   auth: { currentUser: null },
 }));
 
-import { buildProviderOrder, callAI, classifyAIError, describeAIError, extractJsonArray, isAISystemReply, resetProviderCooldowns } from "./aiCall";
+import { buildProviderOrder, callAI, classifyAIError, describeAIError, extractJsonArray, hasOwnAIKey, isAISystemReply, resetProviderCooldowns } from "./aiCall";
 
 function makeStorage() {
   const store = new Map();
@@ -1627,5 +1627,40 @@ describe("buildProviderOrder without NVIDIA", () => {
   it("orders Groq, Gemini, Cerebras and Z.ai by the chosen chain", () => {
     expect(buildProviderOrder("gemini", "g", "m", "c", "z").map(p => p.name)).toEqual(["gemini", "groq", "cerebras", "zai"]);
     expect(buildProviderOrder("auto", "g", "m", "c", "z").map(p => p.name)).toEqual(["cerebras", "groq", "zai", "gemini"]);
+  });
+});
+
+describe("hasOwnAIKey", () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+  const withStorage = (entries) => vi.stubGlobal("localStorage", { getItem: (k) => (k in entries ? entries[k] : null) });
+
+  it("is true only when the provider that leads the chain has a key the user entered", () => {
+    withStorage({});
+    expect(hasOwnAIKey()).toBe(false);
+    withStorage({ loci_groq_key: "  " });
+    expect(hasOwnAIKey()).toBe(false);
+    withStorage({ loci_cerebras_key: "csk-123" });
+    expect(hasOwnAIKey()).toBe(true);
+    // Default order: Cerebras first, so a lone Groq key of their own is the first one tried.
+    withStorage({ loci_groq_key: "gsk-123" });
+    expect(hasOwnAIKey()).toBe(true);
+    withStorage({ loci_provider_pref: "gemini", loci_gemini_key: "AIza-123" });
+    expect(hasOwnAIKey()).toBe(true);
+  });
+
+  it("is false when Z.ai leads the chain, which cannot take the full prompt", () => {
+    withStorage({ loci_provider_pref: "zai", loci_zai_key: "z-123" });
+    expect(hasOwnAIKey()).toBe(false);
+  });
+
+  it("is false when a shared build-time key would be tried first", () => {
+    vi.stubEnv("VITE_CEREBRAS_KEY", "shared-cerebras");
+    withStorage({ loci_groq_key: "gsk-123" }); // auto order: the shared Cerebras key leads
+    expect(hasOwnAIKey()).toBe(false);
+    withStorage({ loci_groq_key: "gsk-123", loci_provider_pref: "groq" }); // they chose Groq
+    expect(hasOwnAIKey()).toBe(true);
+    withStorage({ loci_groq_key: "gsk-123", loci_provider_pref: "cerebras", loci_provider_only: "1" }); // only the shared one
+    expect(hasOwnAIKey()).toBe(false);
+    vi.unstubAllEnvs();
   });
 });

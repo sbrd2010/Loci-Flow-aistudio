@@ -99,6 +99,18 @@ describe("offline syllabus: the data each question needs reaches the model", () 
   }
 });
 
+describe("which prompt a reworded question gets", () => {
+  const reworded = QUESTIONS.filter(x => ["perf-6", "hon-4"].includes(x.id));
+
+  it("gets the full prompt with the user's own key (the alpha case)", () => {
+    for (const q of reworded) expect(buildTurn(q).mode, q.text).toBe("full_task");
+  });
+
+  it("stays on the lean prompt with only the shared built-in keys", () => {
+    for (const q of reworded) expect(buildTurn(q, { ownKey: false }).mode, q.text).toBe("light");
+  });
+});
+
 describe("safety look-alikes stay with the provider", () => {
   it.each(["I'm dying to finish this report", "this deadline is killing me", "I could end this task list today"])("%s", (text) => {
     expect(buildLocalSafetyReply(text, "Sam")).toBeNull();
