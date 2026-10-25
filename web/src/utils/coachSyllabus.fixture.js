@@ -168,7 +168,7 @@ export const QUESTIONS = [
   { id: "perf-3", c: "performance", text: "What did I get done yesterday?", needs: ["digest"], live: true, expect: { must: [/water bill/i] } },
   { id: "perf-4", c: "performance", text: "Am I doing better than last week?", needs: ["digest"], live: true, expect: { must: [/\b13\b|\b5\b/] } },
   { id: "perf-5", c: "performance", text: "Show me my progress this month", needs: ["digest"], expect: { must: [/\b26\b/] } },
-  { id: "perf-6", c: "performance", text: "Which day of the week am I most productive?", needs: ["profile"], live: true, expect: { must: [/tuesday/i] }, gaps: { offline: "'Most productive day' goes to the short mode, which does not carry the behavioural profile." } },
+  { id: "perf-6", c: "performance", text: "Which day of the week am I most productive?", needs: ["profile"], live: true, expect: { must: [/tuesday/i] } },
 
   // 3. Know my focus
   { id: "focus-1", c: "focus", text: "How long did I focus this week?", needs: ["focusMinutes"], live: true, expect: { must: [/4\s*h(?:ours?|rs?)?\s*(?:and\s*)?10|250\s*min/i] } },
@@ -224,13 +224,15 @@ export const QUESTIONS = [
   { id: "hon-1", c: "honest", text: "What's my longest streak ever?", needs: ["today"], live: true, expect: { must: [/(?:don['’]t|can['’]t|cannot|do not|not)\s+(?:\w+\s+){0,3}(?:see|have|know|track|available)/i] } },
   { id: "hon-2", c: "honest", text: "How many hours did I sleep last night?", needs: ["redirect"], live: true, expect: { must: [/(?:don['’]t|can['’]t|cannot|do not|not)\s+(?:\w+\s+){0,3}(?:see|have|know|track|available)|outside my scope/i] } },
   { id: "hon-3", c: "honest", text: "Rename the invoice bug task to 'Fix export'", needs: ["noChangeRule"], expect: { mustNot: [/I['’]ll (?:rename|update|change)|(?:renamed|updated) it/i] } },
-  { id: "hon-4", c: "honest", text: "What did I focus on three weeks ago?", needs: ["digest"], expect: { mustNot: [/\b(?:slides|invoice|venue)\b.*(?:three weeks ago)/i] }, gaps: { offline: "A 'three weeks ago' question has no period matcher; it goes to the short mode with no focus or finished-task data." } },
+  { id: "hon-4", c: "honest", text: "What did I focus on three weeks ago?", needs: ["digest"], expect: { mustNot: [/\b(?:slides|invoice|venue)\b.*(?:three weeks ago)/i] } },
 ];
 
 const lastShown = (history) => history[history.length - 1];
 
 // Everything CoachTab would send for this question, or the local safety reply.
-export function buildTurn(q) {
+// ownKey: the user entered a key of their own (the alpha case), so a message no rule
+// claims gets the full prompt. buildTurn mirrors the CoachTab send path.
+export function buildTurn(q, { ownKey = true } = {}) {
   const local = buildLocalSafetyReply(q.text, FIRST_NAME);
   if (local) return { local };
 
@@ -242,8 +244,10 @@ export function buildTurn(q) {
   const savedHistory = [...(q.history === "followup" ? FOLLOWUP_HISTORY : BASE_HISTORY), { isUser: true, text: q.text }];
   const prev = lastShown(savedHistory.slice(0, -1));
   const lastReplyAsked = !!prev && !prev.isUser && String(prev.text || "").trim().endsWith("?");
-  const mode = classifyContextMode(q.text, { lastFullTaskTime: 0, hasLastPlan: false, lastReplyAsked });
-  const periodIntent = detectPeriodIntent(q.text);
+  const modeOptions = { lastFullTaskTime: 0, hasLastPlan: false, lastReplyAsked };
+  const mode = classifyContextMode(q.text, { ...modeOptions, ownKey });
+  const unclaimed = ownKey && mode === "full_task" && classifyContextMode(q.text, modeOptions) === "light";
+  const periodIntent = detectPeriodIntent(q.text, { loose: unclaimed });
   const deadlineIntent = !periodIntent && detectDeadlineIntent(q.text);
   const isReference = needsConversationContext(q.text);
   const rawWindowStart = Math.max(0, savedHistory.length - historyLimitForMode(mode, isReference));

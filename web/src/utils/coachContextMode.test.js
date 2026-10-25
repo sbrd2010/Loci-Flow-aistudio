@@ -1436,6 +1436,32 @@ describe("period questions and the other phrasings that fell through to light (#
     expect(classifyContextMode("forget that, I changed my mind")).toBe("profile_reflection");
   });
 
+  it("with the user's own key a message no rule claims gets the full prompt; small talk stays light (#555 PR 3)", () => {
+    for (const q of ["Which day of the week am I most productive?", "What did I focus on three weeks ago?", "Am I a morning person?", "tell me a joke about cats", "how are my fronts looking"]) {
+      expect(classifyContextMode(q), q).toBe("light");
+      expect(classifyContextMode(q, { ownKey: true }), q).toBe("full_task");
+    }
+    for (const q of ["ok", "Thanks!", "thank you so much", "got it, thanks", "hi", "Good morning", "lol"]) {
+      expect(classifyContextMode(q, { ownKey: true }), q).toBe("light");
+    }
+  });
+
+  it("an answer to what Coach just asked keeps its action mode, and a rule's own mode is not widened", () => {
+    expect(classifyContextMode("the report one", { ownKey: true, lastReplyAsked: true })).toBe("compact_task");
+    expect(classifyContextMode("I'm overwhelmed", { ownKey: true })).toBe("emotional");
+    expect(classifyContextMode("what do you know about me", { ownKey: true })).toBe("profile_reflection");
+  });
+
+  it("a differently worded question about a span of time gets its numbers, only for such a message (#555 PR 3)", () => {
+    expect(detectPeriodIntent("How did I do lately?")).toBeNull();
+    expect(detectPeriodIntent("How did I do lately?", { loose: true })).toEqual({ days: 7, offset: 0 });
+    expect(detectPeriodIntent("What did I focus on three weeks ago?", { loose: true })).toEqual({ days: 30, offset: 0 });
+    expect(detectPeriodIntent("anything notable over the past month?", { loose: true })).toEqual({ days: 30, offset: 0 });
+    expect(detectPeriodIntent("Am I a morning person?", { loose: true })).toBeNull();
+    // A phrase the period rules already know keeps its own answer.
+    expect(detectPeriodIntent("how was last week", { loose: true })).toEqual({ days: 7, offset: 1 });
+  });
+
   it("'remember that …' plus a task question keeps the plan mode; the app keeps the fact (#555 F2)", () => {
     expect(classifyContextMode("Remember that I don't like meetings after 3pm. What should I work on next today?")).toBe("full_task");
     expect(classifyContextMode("Remember that I prefer mornings. How was my week?")).toBe("full_task");

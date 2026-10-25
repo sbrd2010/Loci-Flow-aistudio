@@ -4,7 +4,7 @@ vi.mock("../firebase", () => ({
   auth: { currentUser: null },
 }));
 
-import { buildProviderOrder, callAI, classifyAIError, describeAIError, extractJsonArray, isAISystemReply, resetProviderCooldowns } from "./aiCall";
+import { buildProviderOrder, callAI, classifyAIError, describeAIError, extractJsonArray, hasOwnAIKey, isAISystemReply, resetProviderCooldowns } from "./aiCall";
 
 function makeStorage() {
   const store = new Map();
@@ -1627,5 +1627,19 @@ describe("buildProviderOrder without NVIDIA", () => {
   it("orders Groq, Gemini, Cerebras and Z.ai by the chosen chain", () => {
     expect(buildProviderOrder("gemini", "g", "m", "c", "z").map(p => p.name)).toEqual(["gemini", "groq", "cerebras", "zai"]);
     expect(buildProviderOrder("auto", "g", "m", "c", "z").map(p => p.name)).toEqual(["cerebras", "groq", "zai", "gemini"]);
+  });
+});
+
+describe("hasOwnAIKey", () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+  const withStorage = (entries) => vi.stubGlobal("localStorage", { getItem: (k) => (k in entries ? entries[k] : null) });
+
+  it("is true only for a key the user entered, not a build-time one", () => {
+    withStorage({});
+    expect(hasOwnAIKey()).toBe(false);
+    withStorage({ loci_groq_key: "  " });
+    expect(hasOwnAIKey()).toBe(false);
+    withStorage({ loci_cerebras_key: "csk-123" });
+    expect(hasOwnAIKey()).toBe(true);
   });
 });

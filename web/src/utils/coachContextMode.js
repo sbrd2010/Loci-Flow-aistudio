@@ -188,9 +188,20 @@ const PERIOD_RE = new RegExp([
 // about (30 when it names the month, else 7: a week, a day, "how am I doing")
 // and how far back it ends: 1 for "last week" / "last month" / "previous week",
 // meaning the whole period before the current one, else 0.
-export function detectPeriodIntent(message) {
+// A span of time named anywhere in the message ("lately", "three weeks ago",
+// "over the last 10 days", "so far this month"). Used only for a message no other
+// rule claimed, with the user's own key, so a differently worded question about a
+// stretch of time still gets its numbers.
+const LOOSE_PERIOD_RE = /\b(?:(?:this|last|past|previous|prior|the)\s+(?:\d+\s+)?(?:days?|weeks?|months?)|(?:\d+|a|one|two|three|four|five|six)\s+(?:days?|weeks?|months?)\s+ago|lately|recently|so far|these days|yesterday|this quarter|this year)\b/i;
+const FAR_BACK_RE = /\b(?:months?|monthly|30 days)\b|\b(?:[2-9]|two|three|four|five|six)\s+weeks?\s+ago\b/i;
+
+export function detectPeriodIntent(message, { loose = false } = {}) {
   const text = normalizeForClassification(String(message || ""));
-  if (!PERIOD_RE.test(text)) return null;
+  if (!PERIOD_RE.test(text)) {
+    if (!(loose && LOOSE_PERIOD_RE.test(text))) return null;
+    const named = text.replace(/\bthe (?:last|past) (week|month)\b/gi, "$1");
+    return { days: FAR_BACK_RE.test(text) ? 30 : 7, offset: /\b(?:last|previous|prior) (?:week|month)\b/i.test(named) ? 1 : 0 };
+  }
   // "in the last week" / "the last month" is the rolling window ending today;
   // "last week", "my last month", "previous week" is the period before this one.
   const named = text.replace(/\bthe (?:last|past) (week|month)\b/gi, "$1");
@@ -686,7 +697,12 @@ export function detectRequestedCategories(message) {
  * still serves it well: "light", "emotional", "full_task", "compact_task", or
  * "profile_reflection".
  */
-export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan = false, lastReplyAsked = false } = {}) {
+// Messages that need no data at all: a greeting, thanks, "ok". With the user's own
+// key every other message that no rule above claims is treated as a question about
+// their plan (#555 PR 3), instead of the other way round.
+const SMALL_TALK_RE = /^(?:(?:ok|okay|k|hi|hello|hey|thanks?|thank|thx|ty|you|cool|nice|great|awesome|perfect|got|it|gotcha|understood|lol|haha+|hmm+|yes|yeah|yep|yup|no|nope|nah|sure|fine|alright|right|good|bye|goodbye|morning|afternoon|evening|night|sounds|makes|sense|i|see|oh|wow|so|much|a|lot|that|helps|works|for|coach|yoda)\b[\s,!.?]*)+$/i;
+
+export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan = false, lastReplyAsked = false, ownKey = false } = {}) {
   let text = normalizeForClassification(String(message || ""));
 
   if (CRISIS_RE.test(text) || PANIC_RE.test(text)) return "emotional";
@@ -770,6 +786,12 @@ export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan
   // 5. A short answer to something Coach just asked or offered ("the report
   // one", "yes do it") needs the action protocol that `light` does not carry.
   if (lastReplyAsked && text.trim().length <= 80) return "compact_task";
+
+  // The shared built-in keys are small free tiers, so there a message no rule
+  // recognises stays light. With the user's own key the full prompt goes unless
+  // the message is plainly small talk, so rewording a question cannot lose the
+  // data it needs.
+  if (ownKey && !(text.trim().length <= 40 && SMALL_TALK_RE.test(text.trim()))) return "full_task";
 
   return "light";
 }

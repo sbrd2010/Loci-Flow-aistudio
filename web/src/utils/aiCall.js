@@ -820,6 +820,12 @@ export function getAIKeys() {
   };
 }
 
+// True when the user has entered a key of their own (not only a build-time key
+// shared by everyone who opens the app): their own quota, their own prompt size.
+export function hasOwnAIKey() {
+  return ["groq", "gemini", "cerebras", "zai"].some(p => (localStorage.getItem(`loci_${p}_key`) || "").trim());
+}
+
 // True only if the user's selected provider order actually has a usable
 // provider in its chain (callAI would throw "no_key" otherwise).
 export function hasAIKey() {
