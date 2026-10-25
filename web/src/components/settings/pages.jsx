@@ -541,6 +541,11 @@ export function providerLine() {
 export function AiProviderPage({ onBack, backLabel }) {
   const [pref, setPref] = useState(readProviderPref);
   const [only, setOnly] = useState(readProviderOnly);
+  const [orModel, setOrModel] = useState(() => readStore("loci_openrouter_model"));
+  const saveOrModel = () => {
+    const v = orModel.trim();
+    try { v ? localStorage.setItem("loci_openrouter_model", v) : localStorage.removeItem("loci_openrouter_model"); } catch { /* storage blocked */ }
+  };
   const [, bump] = useState(0);
   const [sheet, setSheet] = useState(null);
   const active = activeProvider(pref, only);
@@ -587,6 +592,20 @@ export function AiProviderPage({ onBack, backLabel }) {
             <Row key={p.key} title={p.name} sub={sub} value={own ? "Edit" : p.builtin ? "Add own" : "Add key"} onClick={() => setSheet(p)} />
           );
         })}
+      </Group>
+      <Group label="OpenRouter model" note="Leave empty to let OpenRouter pick a free model each time. To pin one, paste its name from openrouter.ai/models, for example a model marked free.">
+        <label className="set-field">
+          <span className="set-label">Model name</span>
+          <input
+            className="set-input"
+            value={orModel}
+            onChange={e => setOrModel(e.target.value)}
+            onBlur={saveOrModel}
+            placeholder="openrouter/free"
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </label>
       </Group>
       {sheet && <KeySheet provider={sheet} onClose={() => { setSheet(null); bump(n => n + 1); }} />}
     </SubPage>
