@@ -21,6 +21,7 @@ import { addCompletionTick, takeBackTick } from "../utils/completionTicks";
 import { buildParkTaskTasks } from "../utils/coachActions";
 import { shouldStopFocusOnComplete, focusBlockSeconds, chosenStartOption } from "../utils/focusSession";
 import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
+import { buildLocalSafetyReply } from "../utils/crisisSafety";
 import { celebrate } from "../utils/celebrations";
 import { playListTone, uiSoundsOn } from "../utils/uiSounds";
 import { track } from "../firebase";
@@ -373,6 +374,8 @@ export default function TodayTab({
   const [breakdownLoadingUuid, setBreakdownLoadingUuid] = useState(null);
   const [breakdownErrorUuid, setBreakdownErrorUuid] = useState(null);
   const [breakdownNoKeyUuid, setBreakdownNoKeyUuid] = useState(null);
+  // { uuid, text }: a task whose title read as a crisis, answered here instead of by the provider.
+  const [breakdownSafety, setBreakdownSafety] = useState(null);
 
   // Split a task (45d): the wall's "Split it" and S open it for the one thing.
   const [splitTask, setSplitTask] = useState(null);
@@ -1141,8 +1144,14 @@ export default function TodayTab({
   const handleBreakdown = async (task) => {
     setBreakdownErrorUuid(null);
     setBreakdownNoKeyUuid(null);
+    setBreakdownSafety(null);
     if (!hasAIKey()) {
       setBreakdownNoKeyUuid(task.uuid);
+      return;
+    }
+    const safetyReply = buildLocalSafetyReply(`${task.title} ${task.concreteStep || ""}`, (config.userName || "").split(" ")[0] || "friend");
+    if (safetyReply) {
+      setBreakdownSafety({ uuid: task.uuid, text: safetyReply });
       return;
     }
     setBreakdownLoadingUuid(task.uuid);
@@ -2093,6 +2102,7 @@ export default function TodayTab({
                             isBreakingDown={breakdownLoadingUuid === task.uuid}
                             breakdownError={breakdownErrorUuid === task.uuid}
                             breakdownNoKey={breakdownNoKeyUuid === task.uuid}
+                            breakdownSafety={breakdownSafety?.uuid === task.uuid ? breakdownSafety.text : ""}
                             dragHandleListeners={dragHandleListeners}
                             dragHandleAttributes={dragHandleAttributes}
                             dragActivatorRef={dragActivatorRef}
@@ -2400,7 +2410,7 @@ export default function TodayTab({
       )}
 
       {splitTask && (
-        <SplitTaskSheet task={splitTask} onClose={closeSplitSheet} onSplit={handleSplit} />
+        <SplitTaskSheet task={splitTask} firstName={(config.userName || "").split(" ")[0]} onClose={closeSplitSheet} onSplit={handleSplit} />
       )}
       {/* Rescue Mode — triggered by the Rescue chip or Deep Focus's Stuck? button */}
       {rescueActive && (

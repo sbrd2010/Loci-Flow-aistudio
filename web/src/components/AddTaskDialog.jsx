@@ -3,6 +3,7 @@ import GrowTextarea from "./ui/GrowTextarea";
 import ReminderPicker from "./ui/ReminderPicker";
 import { isEveningGuardBlocked } from "../utils/eveningGuard";
 import { callAI, getAIKeys, hasAIKey } from "../utils/aiCall";
+import { buildLocalSafetyReply } from "../utils/crisisSafety";
 import { safeUUID } from "../utils/uuid";
 import { scheduleReminder, formatReminderLabel } from "../utils/reminders";
 import { notifPermissionState, requestNotifPermission as nativeRequestPermission } from "../utils/nativeNotifs";
@@ -85,6 +86,9 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
   const handleAiSuggest = async () => {
     if (!title.trim()) { setAiError("Type a rough task idea first, then tap Ask AI."); return; }
     if (!hasAnyKey) { setAiError("No AI key — add one in Settings."); return; }
+    // Crisis wording is answered here, not sent to the provider; the text stays in the field.
+    const safetyReply = buildLocalSafetyReply(title, ((payload.config || {}).userName || "").split(" ")[0] || "friend");
+    if (safetyReply) { setAiSuggestion(null); setAiError(safetyReply); return; }
     setAiLoading(true);
     setAiError("");
     setAiSuggestion(null);

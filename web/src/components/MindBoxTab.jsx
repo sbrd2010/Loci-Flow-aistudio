@@ -14,6 +14,7 @@ import "../styles/mindBox.css";
 import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
 import "../styles/thoughts.css";
 import { plainThought } from "../utils/thoughtFormat";
+import { buildLocalSafetyReply } from "../utils/crisisSafety";
 
 // 78 §5: the editor takes focus on a laptop; on a phone the keyboard would
 // cover the page.
@@ -57,6 +58,7 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
   const [organizeDroppedSourceIds, setOrganizeDroppedSourceIds] = useState(new Set());
   const [organizeSelected, setOrganizeSelected] = useState(new Set());
   const [organizeError, setOrganizeError] = useState("");
+  const [organizeSafety, setOrganizeSafety] = useState("");
   const [organizeExpandedIndex, setOrganizeExpandedIndex] = useState(null);
   const [organizeInvalidCount, setOrganizeInvalidCount] = useState(0);
 
@@ -128,15 +130,25 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
 
   // ── Handlers ───────────────────────────────────────────────────────────────
   const handleOrganizeDump = async () => {
-    const brainDumpItems = payload.brainDump || [];
-    if (!brainDumpItems.length) return;
+    const allItems = payload.brainDump || [];
+    if (!allItems.length) return;
+    // A thought that reads as a crisis is answered here and is not sent to the
+    // provider; it stays in the Mind Box. The rest are organised as usual.
+    const firstName = (payload.config?.userName || "").split(" ")[0] || "friend";
+    const safetyReply = allItems.map(item => buildLocalSafetyReply(plainThought(thoughtText(item)), firstName)).find(Boolean) || "";
+    const brainDumpItems = allItems.filter(item => !buildLocalSafetyReply(plainThought(thoughtText(item)), firstName));
     setOrganizeLoading(true);
     setOrganizeResults([]);
     setOrganizeDroppedSourceIds(new Set());
     setOrganizeError("");
+    setOrganizeSafety(safetyReply);
     setOrganizeInvalidCount(0);
     setOrganizeSelected(new Set());
     setToolPanel("organize");
+    if (!brainDumpItems.length) {
+      setOrganizeLoading(false);
+      return;
+    }
 
     const profile = userProfile;
     const profileNote = profile && profile.totalTasks >= 5
@@ -419,9 +431,15 @@ Return ONLY a JSON array, no markdown. Example showing a thought split into two 
       {toolPanel === "organize" && (
         <>
           <div className="mindbox-subview-header">
-            <button className="mindbox-back-btn" onClick={() => { setToolPanel(null); setOrganizeResults([]); setOrganizeDroppedSourceIds(new Set()); setOrganizeError(""); setOrganizeInvalidCount(0); }}>← Back</button>
+            <button className="mindbox-back-btn" onClick={() => { setToolPanel(null); setOrganizeResults([]); setOrganizeDroppedSourceIds(new Set()); setOrganizeError(""); setOrganizeSafety(""); setOrganizeInvalidCount(0); }}>← Back</button>
             <h2 className="mindbox-subview-title">Organize Dump</h2>
           </div>
+          {organizeSafety && (
+            <p role="status" className="mbx-safety" style={{ fontSize: "14px", fontWeight: "600", lineHeight: 1.5, padding: "12px 14px", margin: "12px 0", border: "1px solid var(--accent)", borderRadius: "12px" }}>
+              {organizeSafety}
+              {" "}A thought like that was kept out of the AI step and is still in your Mind Box.
+            </p>
+          )}
           {organizeLoading && (
             <div style={{ textAlign: "center", padding: "48px 0" }}>
               <p style={{ fontSize: "15px", fontWeight: "700", color: "var(--accent)" }}>✨ Organizing your thoughts…</p>
