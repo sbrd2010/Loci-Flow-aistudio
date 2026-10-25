@@ -6,10 +6,16 @@ const GROQ_MODEL   = "openai/gpt-oss-120b";
 const CEREBRAS_URL   = "https://api.cerebras.ai/v1/chat/completions";
 const CEREBRAS_MODEL = import.meta.env.VITE_CEREBRAS_MODEL || "gpt-oss-120b";
 const OPENROUTER_URL   = "https://openrouter.ai/api/v1/chat/completions";
-// A free model of the same family the other providers run, so the Coach's prompts and
-// tag format behave alike. OpenRouter rotates its free models: a deployment can swap
-// this one without a release.
-const OPENROUTER_MODEL = import.meta.env.VITE_OPENROUTER_MODEL || "openai/gpt-oss-120b:free";
+// OpenRouter rotates its free models: "openai/gpt-oss-120b:free" was withdrawn and its
+// error says "unavailable for free". The default is therefore OpenRouter's own free
+// router, which always picks a free model that exists. A person can pin one model in
+// Settings > AI provider (stored on the device), or a deployment can set
+// VITE_OPENROUTER_MODEL.
+const OPENROUTER_MODEL = import.meta.env.VITE_OPENROUTER_MODEL || "openrouter/free";
+export const OPENROUTER_MODEL_KEY = "loci_openrouter_model";
+function openrouterModel() {
+  try { return (localStorage.getItem(OPENROUTER_MODEL_KEY) || "").trim() || OPENROUTER_MODEL; } catch { return OPENROUTER_MODEL; }
+}
 const GEMINI_URL   = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
 const ZAI_URL   = "https://api.z.ai/api/paas/v4/chat/completions";
 const ZAI_MODEL = import.meta.env.VITE_ZAI_MODEL || "glm-4.7-flash";
@@ -386,9 +392,10 @@ async function callCerebras(cerebrasKey, systemPrompt, messages, maxTokens, reas
 // than `reasoning_effort`, and hidden reasoning can use the whole budget, so a "length"
 // finish gets one retry at a larger budget, as for Groq and Cerebras.
 const OPENROUTER_RETRY_TOKEN_CAP = 4000;
-const OPENROUTER_SUPPORTS_REASONING = /(^|\/)gpt-oss/i.test(OPENROUTER_MODEL);
+const supportsReasoning = (model) => /(^|\/)gpt-oss/i.test(model);
 
 async function requestOpenRouter(openrouterKey, systemPrompt, messages, tokenBudget, reasoningEffort, limits) {
+  const model = openrouterModel();
   const res = await fetchWithTimeout(OPENROUTER_URL, {
     method: "POST",
     headers: {
@@ -396,12 +403,12 @@ async function requestOpenRouter(openrouterKey, systemPrompt, messages, tokenBud
       "Authorization": `Bearer ${openrouterKey}`
     },
     body: JSON.stringify({
-      model: OPENROUTER_MODEL,
+      model,
       messages: [{ role: "system", content: systemPrompt }, ...messages],
       max_tokens: tokenBudget,
       temperature: 0.4,
       top_p: 0.9,
-      ...(reasoningEffort && OPENROUTER_SUPPORTS_REASONING ? { reasoning: { effort: reasoningEffort } } : {})
+      ...(reasoningEffort && supportsReasoning(model) ? { reasoning: { effort: reasoningEffort } } : {})
     })
   }, limits);
   if (!res.ok) throw await failedResponse("openrouter", res);

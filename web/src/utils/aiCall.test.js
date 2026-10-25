@@ -196,7 +196,30 @@ describe("AI call resilience", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("calls OpenRouter with the key as a bearer token, the free gpt-oss model and a reasoning object", async () => {
+  it("calls OpenRouter's free router by default, with no reasoning object it may reject", async () => {
+    storage.setItem("loci_provider_pref", "openrouter");
+    fetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ choices: [{ message: { content: "Router answer." }, finish_reason: "stop" }] }) });
+
+    await callAI(baseRequest({ groqKey: "", openrouterKey: "or-test-key", reasoningEffort: "low" }));
+
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.model).toBe("openrouter/free");
+    expect(body).not.toHaveProperty("reasoning");
+  });
+
+  it("uses the model saved in Settings, and sends the reasoning object only for gpt-oss", async () => {
+    storage.setItem("loci_provider_pref", "openrouter");
+    storage.setItem("loci_openrouter_model", "  openai/gpt-oss-120b  ");
+    fetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ choices: [{ message: { content: "Pinned." }, finish_reason: "stop" }] }) });
+
+    await callAI(baseRequest({ groqKey: "", openrouterKey: "or-test-key", reasoningEffort: "low" }));
+
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.model).toBe("openai/gpt-oss-120b");
+    expect(body.reasoning).toEqual({ effort: "low" });
+  });
+
+  it("calls OpenRouter with the key as a bearer token", async () => {
     storage.setItem("loci_provider_pref", "openrouter");
     fetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ choices: [{ message: { content: "Start with one step." }, finish_reason: "stop" }], usage: {} }) });
 
@@ -206,8 +229,6 @@ describe("AI call resilience", () => {
     expect(fetch.mock.calls[0][0]).toBe("https://openrouter.ai/api/v1/chat/completions");
     expect(fetch.mock.calls[0][1].headers.Authorization).toBe("Bearer or-test-key");
     const body = JSON.parse(fetch.mock.calls[0][1].body);
-    expect(body.model).toBe("openai/gpt-oss-120b:free");
-    expect(body.reasoning).toEqual({ effort: "low" });
     expect(body).not.toHaveProperty("reasoning_effort");
   });
 

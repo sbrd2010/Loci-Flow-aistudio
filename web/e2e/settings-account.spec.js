@@ -189,6 +189,15 @@ test("AI provider: Auto, Groq, Gemini, OpenRouter, Z.ai, Cerebras — no NVIDIA;
   await page.getByRole("button", { name: /^OpenRouter/ }).click();
   await page.getByRole("dialog", { name: "OpenRouter key" }).getByRole("button", { name: "Remove key" }).click();
 
+  // A model can be pinned for OpenRouter; emptied, the free router is used again.
+  const model = page.getByLabel("Model name");
+  await model.fill("openai/gpt-oss-120b");
+  await model.blur();
+  expect(await page.evaluate(() => localStorage.getItem("loci_openrouter_model"))).toBe("openai/gpt-oss-120b");
+  await model.fill("");
+  await model.blur();
+  expect(await page.evaluate(() => localStorage.getItem("loci_openrouter_model"))).toBeNull();
+
   await page.getByRole("button", { name: /^Groq/ }).click();
   const sheet = page.getByRole("dialog", { name: "Groq key" });
   await sheet.getByLabel("Key").fill("gsk_example_not_real_4f2a");
