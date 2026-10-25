@@ -32,7 +32,46 @@ Each tool fetches only the parts of your record it needs; three also read your f
 
 What it cannot see: a focus timer that is running right now (that lives only in the browser; the pinned task is visible), and Rescue. The review guide says you have not yet written down your own rules for a good plan (tasks per day, estimate drift, how long before something is stuck), so the AI reports numbers instead of inventing limits. When you decide them, put them in `OWNER_RULES` in `mcp/src/guide.js`.
 
-## One-time setup (about 30 minutes)
+## Easy setup (no terminal): click through websites, then press one button
+
+Everything is done in a browser. You need a free Cloudflare account and your Google (Firebase) account. Names of menus change now and then; look for the words in bold. **Never paste a secret into a chat or an issue**, only into the GitHub secret box.
+
+Repository secrets are added at: GitHub repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**. (The Firebase deploy already uses this page.)
+
+**1. Cloudflare (two secrets)**
+1. Create or open your account at dash.cloudflare.com. In the left menu open **Workers & Pages** once; if it asks you to choose a **workers.dev subdomain**, choose any name.
+2. Your **Account ID** is shown on the right side of that page. Add it as the secret `CLOUDFLARE_ACCOUNT_ID`.
+3. Top right → your profile → **API Tokens** → **Create Token** → find the template **Edit Cloudflare Workers** → **Use template** → **Continue to summary** → **Create Token**. Copy the token (shown once) and add it as the secret `CLOUDFLARE_API_TOKEN`.
+
+**2. A read-only Firebase account (one secret)**
+1. console.cloud.google.com, with the project **loci-flow** selected → **IAM & Admin** → **Service accounts** → **Create service account**. Name: `loci-mcp-reader`.
+2. In the "Grant access" step choose the role **Firebase Realtime Database Viewer** and nothing else. Then **Done**.
+3. Open the new account → **Keys** → **Add key** → **Create new key** → **JSON**. A file downloads.
+4. Open the file in any text editor, select everything, copy, and add it as the secret `MCP_FIREBASE_SERVICE_ACCOUNT`. Delete the file afterwards.
+5. Check on the **IAM** page that `loci-mcp-reader` has exactly one role, "Firebase Realtime Database Viewer". If it has more, remove them: this account must only be able to read.
+
+**3. Press the button the first time**
+GitHub repo → **Actions** → **Deploy the Loci connector (ChatGPT / Claude)** → **Run workflow**. When it finishes, open the run: the summary at the bottom shows your connector address (`https://loci-mcp.<name>.workers.dev`) and the Google redirect address. Add the address (no slash at the end) as the secret `MCP_PUBLIC_URL`.
+
+**4. Google sign-in (two secrets)**
+1. console.cloud.google.com → **APIs & Services** → **OAuth consent screen**: choose **External**, fill the name and your email, and add your own email as a **test user**.
+2. **Credentials** → **Create credentials** → **OAuth client ID** → **Web application**. Under **Authorized redirect URIs** add `<your address>/callback` (the summary printed it). **Create**.
+3. Add the client ID as the secret `MCP_GOOGLE_CLIENT_ID` and the client secret as `MCP_GOOGLE_CLIENT_SECRET`.
+
+**5. Four short secrets**
+- `MCP_ALLOWED_EMAIL`: the Google email that may connect (yours).
+- `MCP_LOCI_UID`: your Firebase user id (Firebase console → **Authentication** → **Users** → the "User UID" column).
+- `MCP_LOCI_TIMEZONE`: for example `Asia/Kolkata`.
+- `MCP_FIREBASE_DB_URL`: the address at the top of **Realtime Database** in the Firebase console.
+
+**6. Press the button again**
+It stores the settings on the Worker. The summary says "Settings stored" when it worked, or lists what is still missing.
+
+**7. Connect Claude or ChatGPT** with the address `<your address>/mcp` (Claude: **Settings** → **Connectors** → add a custom connector. ChatGPT: **Settings** → **Apps / Connectors** → turn on developer mode → create a connector; this needs a paid plan), sign in with Google, and ask: *"Using Loci, review my plan for this week and tell me what is at risk."*
+
+Not checked from a real deployment yet: the first run is where problems will show up, and the run log names them.
+
+## One-time setup from a terminal (about 30 minutes)
 
 You need: a free Cloudflare account, Node 22, and your Firebase project. Personal ChatGPT / Claude accounts: workspace admins can turn custom connectors off.
 
@@ -49,8 +88,7 @@ Google Cloud console → APIs & Services → OAuth consent screen (External, add
 cd mcp
 npm ci
 npx wrangler login
-npx wrangler kv namespace create OAUTH_KV     # paste the id into mcp/wrangler.jsonc
-npx wrangler deploy                           # prints https://loci-mcp.<you>.workers.dev
+npx wrangler deploy                           # creates the OAUTH_KV namespace on the first run; prints https://loci-mcp.<you>.workers.dev
 ```
 It answers `503` until step 4 is done. That is expected.
 

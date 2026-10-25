@@ -4,8 +4,9 @@
   "compatibility_date": "2026-10-01",
   // Needed so the OAuth library may fetch a connecting app's public client metadata.
   "compatibility_flags": ["global_fetch_strictly_public"],
-  // Create with: npx wrangler kv namespace create OAUTH_KV   (then paste the id here)
-  "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }]
+  // No id on purpose: the first deploy creates this namespace and remembers it
+  // (wrangler 4 does that for a binding without an id).
+  "kv_namespaces": [{ "binding": "OAUTH_KV" }]
   // Settings that name the owner (email, uid, zone) are secrets, not committed
   // here: see docs/mcp-connector.md.
 }

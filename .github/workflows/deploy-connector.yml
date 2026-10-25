@@ -1,0 +1,108 @@
+name: Deploy the Loci connector (ChatGPT / Claude)
+
+# A button, not an automatic deploy: Actions > this workflow > Run workflow.
+# Needs the repository secrets listed in docs/mcp-connector.md ("Easy setup").
+# The first run deploys the Worker and prints its address; once the settings are
+# added as secrets, run it again and it also stores them on the Worker.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-connector
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcp
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check the two Cloudflare secrets are there
+        run: |
+          missing=""
+          [ -n "$CLOUDFLARE_API_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -n "$CLOUDFLARE_ACCOUNT_ID" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing. See docs/mcp-connector.md, Easy setup, step 1."
+            exit 1
+          fi
+
+      - name: Install and test
+        run: |
+          npm ci
+          npm test
+
+      - name: Deploy the Worker
+        run: |
+          npx wrangler deploy 2>&1 | tee "$RUNNER_TEMP/deploy.log"
+          url=$(grep -oE 'https://[A-Za-z0-9.-]+\.workers\.dev' "$RUNNER_TEMP/deploy.log" | head -1 || true)
+          echo "CONNECTOR_URL=$url" >> "$GITHUB_ENV"
+          {
+            echo "## Loci connector"
+            if [ -n "$url" ]; then
+              echo "Worker address: \`$url\`"
+              echo ""
+              echo "- Claude / ChatGPT address: \`$url/mcp\`"
+              echo "- Google sign-in redirect address: \`$url/callback\`"
+              echo "- Repository secret \`MCP_PUBLIC_URL\` must be exactly: \`$url\`"
+            else
+              echo "The deploy finished but no address was printed; look in the log above."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Store the settings on the Worker
+        env:
+          MCP_PUBLIC_URL: ${{ secrets.MCP_PUBLIC_URL }}
+          MCP_GOOGLE_CLIENT_ID: ${{ secrets.MCP_GOOGLE_CLIENT_ID }}
+          MCP_GOOGLE_CLIENT_SECRET: ${{ secrets.MCP_GOOGLE_CLIENT_SECRET }}
+          MCP_ALLOWED_EMAIL: ${{ secrets.MCP_ALLOWED_EMAIL }}
+          MCP_LOCI_UID: ${{ secrets.MCP_LOCI_UID }}
+          MCP_LOCI_TIMEZONE: ${{ secrets.MCP_LOCI_TIMEZONE }}
+          MCP_FIREBASE_DB_URL: ${{ secrets.MCP_FIREBASE_DB_URL }}
+          MCP_FIREBASE_SERVICE_ACCOUNT: ${{ secrets.MCP_FIREBASE_SERVICE_ACCOUNT }}
+          MCP_EXTRA_REDIRECT_URIS: ${{ secrets.MCP_EXTRA_REDIRECT_URIS }}
+        run: |
+          missing=""
+          for name in MCP_PUBLIC_URL MCP_GOOGLE_CLIENT_ID MCP_GOOGLE_CLIENT_SECRET MCP_ALLOWED_EMAIL MCP_LOCI_UID MCP_LOCI_TIMEZONE MCP_FIREBASE_DB_URL MCP_FIREBASE_SERVICE_ACCOUNT; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "Settings not stored yet. Missing repository secret(s):$missing"
+            echo "Add them, then run this workflow again." >> "$GITHUB_STEP_SUMMARY"
+            echo "Missing:$missing" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # The service account must be a real key file, and must not be the deploy account.
+          printf '%s' "$MCP_FIREBASE_SERVICE_ACCOUNT" | jq -e '.type == "service_account" and (.private_key | length > 0)' > /dev/null
+          umask 077
+          jq -n \
+            --arg PUBLIC_URL "$MCP_PUBLIC_URL" \
+            --arg GOOGLE_CLIENT_ID "$MCP_GOOGLE_CLIENT_ID" \
+            --arg GOOGLE_CLIENT_SECRET "$MCP_GOOGLE_CLIENT_SECRET" \
+            --arg ALLOWED_EMAIL "$MCP_ALLOWED_EMAIL" \
+            --arg LOCI_UID "$MCP_LOCI_UID" \
+            --arg LOCI_TIMEZONE "$MCP_LOCI_TIMEZONE" \
+            --arg FIREBASE_DB_URL "$MCP_FIREBASE_DB_URL" \
+            --arg FIREBASE_SERVICE_ACCOUNT "$MCP_FIREBASE_SERVICE_ACCOUNT" \
+            --arg EXTRA_REDIRECT_URIS "$MCP_EXTRA_REDIRECT_URIS" \
+            '{PUBLIC_URL:$PUBLIC_URL, GOOGLE_CLIENT_ID:$GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET:$GOOGLE_CLIENT_SECRET,
+              ALLOWED_EMAIL:$ALLOWED_EMAIL, LOCI_UID:$LOCI_UID, LOCI_TIMEZONE:$LOCI_TIMEZONE,
+              FIREBASE_DB_URL:$FIREBASE_DB_URL, FIREBASE_SERVICE_ACCOUNT:$FIREBASE_SERVICE_ACCOUNT}
+             + (if $EXTRA_REDIRECT_URIS == "" then {} else {EXTRA_REDIRECT_URIS:$EXTRA_REDIRECT_URIS} end)' \
+            > "$RUNNER_TEMP/connector-settings.json"
+          npx wrangler secret bulk "$RUNNER_TEMP/connector-settings.json"
+          rm -f "$RUNNER_TEMP/connector-settings.json"
+          echo "Settings stored. The connector is ready at \`${CONNECTOR_URL:-$MCP_PUBLIC_URL}/mcp\`." >> "$GITHUB_STEP_SUMMARY"
