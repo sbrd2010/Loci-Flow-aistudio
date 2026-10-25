@@ -28,6 +28,7 @@ import { stripReasoningTag } from "../utils/coachReasoning";
 import { classifyContextMode, needsConversationContext, historyLimitForMode, detectRequestedCategories, detectPeriodIntent } from "../utils/coachContextMode";
 import { buildLociPeriodContext, buildLociDeadlinesBlock, detectDeadlineIntent, PERIOD_ANSWER_NOTE } from "../utils/coachPeriodDigest";
 import { readFocusOnce } from "../utils/readFocusOnce";
+import { detectFactIntent, buildFactCard } from "../utils/coachFactCards";
 import { buildCoachSystemPrompt } from "../utils/coachSystemPrompt";
 import {
   needsSummaryUpdate, llmHistoryStart, pendingSummaryMessages, buildPendingSummaryContext,
@@ -593,7 +594,30 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     const isClear = /^(clear chat|clear history|clear conversation)$/i.test(lowerText);
     const isFocus = /^(what is my current focus|what's my current focus|what is my focus|what's my focus|what focus task)$/i.test(lowerText);
 
-    if (crisisReply || isHi || isThanks || isDay || isWho || isClear || isFocus) {
+    // -- Fact cards --
+    // A plain factual question about the user's own data (deadlines, parked
+    // tasks, Mind Box, focus time, this week against last, what is saved) is
+    // answered here from the data, with no provider call: the numbers cannot be
+    // misquoted, and it costs no tokens. Not while a stuck or Brief chip is
+    // attached to the message, which the Coach has to read.
+    let factCardText = null;
+    if (!crisisReply && !(isHi || isThanks || isDay || isWho || isClear || isFocus) && !stuck && !briefChip) {
+      const factIntent = detectFactIntent(userText, { config: configRef.current });
+      if (factIntent) {
+        // The input is cleared before the (short, bounded) focus-log read, so a
+        // second press of Enter cannot send the same question again.
+        if (!pendingChip) setChatInput("");
+        const focusRaw = factIntent.needsFocus && !cloudSyncUnconfirmed
+          ? await readFocusOnce(uid, factIntent.focusDays, getFocusWindows(configRef.current))
+          : null;
+        factCardText = buildFactCard(factIntent, {
+          tasks: tasksRef.current, config: configRef.current, brainDump,
+          contributions: contributionsRef.current, focusRaw, now: new Date(), unconfirmed: cloudSyncUnconfirmed,
+        });
+      }
+    }
+
+    if (crisisReply || isHi || isThanks || isDay || isWho || isClear || isFocus || factCardText) {
       if (!pendingChip) setChatInput("");
       if (isClear) {
         endConversation();
@@ -646,6 +670,8 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
         } else {
           localReplyText = `You don't have a Now Focus set right now. Want to set one, or should we look at your Today list?`;
         }
+      } else if (factCardText) {
+        localReplyText = factCardText;
       }
       const replyMsg = { text: localReplyText, isUser: false, at: Date.now() };
       const withReply = [...savedHistory, replyMsg];

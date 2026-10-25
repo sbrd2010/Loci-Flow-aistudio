@@ -80,6 +80,13 @@ describe("offline syllabus: the data each question needs reaches the model", () 
         const check = () => {
           const turn = buildTurn(q);
           expect(turn.local).toBeUndefined();
+          if (turn.card !== undefined) {
+            // Answered by the app: the card's own text is the answer, so grade it.
+            expect(turn.card, `"${q.text}" was answered by a ${turn.cardKind} card`).toBeTruthy();
+            for (const re of q.expect?.must || []) expect(turn.card, `"${q.text}" must match ${re}`).toMatch(re);
+            for (const re of q.expect?.mustNot || []) expect(turn.card, `"${q.text}" must not match ${re}`).not.toMatch(re);
+            return;
+          }
           expect(missingNeeds(q, turn.system), `"${q.text}" went to ${turn.mode}`).toEqual([]);
         };
         if (q.gaps?.offline) it.fails(`GAP ${q.id}: "${q.text}": ${q.gaps.offline}`, check);
