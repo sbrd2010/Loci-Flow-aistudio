@@ -14,7 +14,8 @@
 import { verifyFirebaseToken } from "./auth.js";
 
 const NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
-const DEFAULT_NVIDIA_MODEL = "openai/gpt-oss-120b";
+// NVIDIA retired openai/gpt-oss-120b on 2026-09-03.
+const DEFAULT_NVIDIA_MODEL = "deepseek-ai/deepseek-v4.1-flash";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 // OpenRouter's own router that always picks a free model that exists (#568).
 const DEFAULT_OPENROUTER_MODEL = "openrouter/free";

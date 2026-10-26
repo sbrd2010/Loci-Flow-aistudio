@@ -97,7 +97,8 @@ describe("NVIDIA", () => {
     const [, init] = fetchImpl.mock.calls.find(([url]) => url === NVIDIA_URL);
     expect(init.headers.Authorization).toBe("Bearer nvapi-test");
     const sent = JSON.parse(init.body);
-    expect(sent).toMatchObject({ model: "openai/gpt-oss-120b", max_tokens: 300, reasoning_effort: "low", stream: false });
+    expect(sent).toMatchObject({ model: "deepseek-ai/deepseek-v4.1-flash", max_tokens: 300, stream: false });
+    expect(sent).not.toHaveProperty("reasoning_effort");
     expect(sent.messages).toHaveLength(2);
   });
 
