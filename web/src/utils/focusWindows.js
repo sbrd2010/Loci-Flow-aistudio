@@ -227,6 +227,10 @@ export function getCurrentFocusSlot(now, windows) {
   return "evening";
 }
 
+// Returns the Loci-day date string.
+// For overnight focus windows, hours in the early-morning tail of a window
+// (e.g., 1am when a window runs 16:00-03:00) belong to the PREVIOUS Loci day,
+// not the calendar day.
 export function getLociDayStr(now, windows) {
   const date = new Date(now);
   if (getLociNowMinutes(now, windows) >= 1440) {
