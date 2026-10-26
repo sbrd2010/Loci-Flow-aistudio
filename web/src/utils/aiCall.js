@@ -29,8 +29,8 @@ const ZAI_MODEL = import.meta.env.VITE_ZAI_MODEL || "glm-4.7-flash";
 
 // Loci's own relay Worker (ai-proxy/, docs/ai-relay.md) for the two providers a
 // browser cannot call itself: NVIDIA (its API sends no CORS headers, #356) and
-// Cloudflare Workers AI. It also carries the shared Groq, Gemini and OpenRouter
-// keys, so they are not in the app's public code. The relay holds the keys and lets in
+// Cloudflare Workers AI. It also carries the shared Groq, Gemini, OpenRouter and
+// Z.ai keys, so they are not in the app's public code. The relay holds the keys and lets in
 // signed-in users only. Unset VITE_AI_RELAY_URL means none of this is offered.
 export const RELAY_PROVIDERS = ["cloudflare", "nvidia"];
 function relayUrl() {
@@ -769,13 +769,19 @@ async function callZai(zaiKey, systemPrompt, messages, maxTokens, limits) {
     throw new Error("zai_too_large");
   }
 
+  // Without a key of the user's own, the shared key on Loci's relay; the size
+  // guards above apply either way.
+  const viaRelay = zaiKey === "relay";
+  const bearer = viaRelay ? await auth?.currentUser?.getIdToken?.() : zaiKey;
+  if (!bearer) throw new Error("zai_signed_out");
+
   zaiInFlight = true;
   try {
-    const res = await fetchWithTimeout(ZAI_URL, {
+    const res = await fetchWithTimeout(viaRelay ? `${relayUrl()}/zai` : ZAI_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${zaiKey}`
+        "Authorization": `Bearer ${bearer}`
       },
       body: JSON.stringify({
         model: ZAI_MODEL,
@@ -784,7 +790,12 @@ async function callZai(zaiKey, systemPrompt, messages, maxTokens, limits) {
         temperature: 0.4
       })
     }, limits);
-    if (!res.ok) throw await failedResponse("zai", res);
+    if (!res.ok) {
+      const err = await failedResponse("zai", res);
+      // As for the other relay providers: the relay's 401/403 is the Loci sign-in, not a Z.ai key.
+      if (viaRelay && (res.status === 401 || res.status === 403)) err.message = "zai_auth";
+      throw err;
+    }
     const data = await res.json();
     const message = data.choices?.[0]?.message;
     const reply = extractMessageContent(message);
@@ -814,7 +825,7 @@ export function isOnlyProviderKeyMissing() {
   if (RELAY_PROVIDERS.includes(pref)) return !isRelayAvailable();
   const { groqKey, geminiKey, cerebrasKey, zaiKey, openrouterKey } = getAIKeys();
   const relay = isRelayAvailable() ? "relay" : "";
-  const keys = { groq: groqKey || relay, gemini: geminiKey || relay, cerebras: cerebrasKey, zai: zaiKey, openrouter: openrouterKey || relay };
+  const keys = { groq: groqKey || relay, gemini: geminiKey || relay, cerebras: cerebrasKey, zai: zaiKey || relay, openrouter: openrouterKey || relay };
   return !keys[pref] && Object.values(keys).some(Boolean);
 }
 
@@ -831,7 +842,9 @@ export function buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCere
     cloudflare: relay              ? { name: "cloudflare",  key: "relay" }            : null,
     nvidia:     relay              ? { name: "nvidia",      key: "relay" }            : null,
     cerebras:   cleanCerebrasKey   ? { name: "cerebras",    key: cleanCerebrasKey }   : null,
-    zai:        cleanZaiKey        ? { name: "zai",         key: cleanZaiKey }        : null,
+    // Z.ai keeps its own call (size guards), so its relay entry is not viaRelay.
+    zai:        cleanZaiKey        ? { name: "zai",         key: cleanZaiKey }
+              : relay              ? { name: "zai",         key: "relay" }            : null,
   };
   // An unknown preference falls back to "auto". Cerebras ended its no-card
   // free tier, so Auto no longer leads with it; it stays an explicit choice and
@@ -982,9 +995,9 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, openrout
 
 // localStorage (user-entered BYOK) wins, otherwise a build-time VITE_* key.
 // The deploy workflows no longer pass any build-time AI key: a key in the
-// build is readable by anyone who opens the app, so the shared Groq, Gemini
-// and OpenRouter keys live on Loci's relay instead (docs/ai-relay.md). The
-// fallback stays for local development.
+// build is readable by anyone who opens the app, so the shared Groq, Gemini,
+// OpenRouter and Z.ai keys live on Loci's relay instead (docs/ai-relay.md).
+// The fallback stays for local development.
 export function getAIKeys() {
   return {
     groqKey:     (localStorage.getItem("loci_groq_key")     || import.meta.env.VITE_GROQ_KEY     || "").trim(),

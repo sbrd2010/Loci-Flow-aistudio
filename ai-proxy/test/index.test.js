@@ -275,8 +275,16 @@ describe("Groq and Gemini", () => {
     expect(sentTo(GEMINI_URL).body.model).toBe("gemini-2.5-flash-lite");
   });
 
-  it("says Groq or Gemini is not set up when its key is missing, without calling it", async () => {
-    for (const path of ["/groq", "/gemini"]) {
+  it("forwards to Z.ai with the relay's key and its default model", async () => {
+    const res = await call("/zai", { token: await signer.sign(), env: { ZAI_API_KEY: "zai-test" } });
+    expect(res.status).toBe(200);
+    const found = fetchImpl.mock.calls.find(([u]) => u === "https://api.z.ai/api/paas/v4/chat/completions");
+    expect(found[1].headers.Authorization).toBe("Bearer zai-test");
+    expect(JSON.parse(found[1].body).model).toBe("glm-4.7-flash");
+  });
+
+  it("says Groq, Gemini or Z.ai is not set up when its key is missing, without calling it", async () => {
+    for (const path of ["/groq", "/gemini", "/zai"]) {
       const res = await call(path, { token: await signer.sign() });
       expect(res.status).toBe(501);
       expect((await res.json()).error.message).toMatch(/not set up/);

@@ -1,4 +1,4 @@
-# Loci AI relay (Cloudflare AI, NVIDIA, OpenRouter, Groq, Gemini)
+# Loci AI relay (Cloudflare AI, NVIDIA, OpenRouter, Groq, Gemini, Z.ai)
 
 A small Cloudflare Worker, `loci-ai` (code in `ai-proxy/`), that lets the app use free AI providers without putting their keys in the app's public code:
 
@@ -6,13 +6,14 @@ A small Cloudflare Worker, `loci-ai` (code in `ai-proxy/`), that lets the app us
 - **NVIDIA** (build.nvidia.com): `nvidia/nemotron-3.5-lightning-30b-a3b` by default (NVIDIA retired `openai/gpt-oss-120b` on 2026-09-03; `deepseek-ai/deepseek-v4.1-flash` and `google/gemma-4-31b-it` both timed out past the app's 30-second limit). NVIDIA's API refuses calls from a browser (#356), so the relay calls it instead and keeps the key on Cloudflare.
 - **Groq**: your Groq key, kept on Cloudflare. `openai/gpt-oss-120b` by default (`GROQ_MODEL` changes it).
 - **Gemini**: your Gemini key, kept on Cloudflare, through Google's OpenAI-style endpoint. `gemini-2.5-flash-lite` by default; the repository secret `VITE_GEMINI_MODEL` picks another (the name as Google AI Studio shows it) for both the relay and someone's own key.
+- **Z.ai**: your Z.ai key, kept on Cloudflare. `glm-4.7-flash` by default (`ZAI_MODEL` changes it). Its free tier answers one request at a time per key, shared by every user through the relay, and the app only sends it short chats; it is Auto's last resort.
 - **OpenRouter**: your OpenRouter key, kept on Cloudflare. Free models only (`openrouter/free` by default), so the key can never be billed through the relay, even if credit is added later. Someone who adds their own OpenRouter key in Settings still goes direct with it.
 
 Only someone signed in to Loci with Google gets through: the app sends its Firebase sign-in token, and the relay checks it. There is no per-person limit yet (that is PR 9, #570). Prompts and replies pass through; the relay does not log or store them.
 
-In the app, Cloudflare AI and NVIDIA appear in **Settings → AI provider**, Groq, Gemini and OpenRouter show as "Built in", and **Auto** keeps its order: Groq, Gemini, OpenRouter, Cloudflare AI, NVIDIA. Someone who adds their own Groq, Gemini or OpenRouter key in Settings goes direct with it.
+In the app, Cloudflare AI and NVIDIA appear in **Settings → AI provider**, Groq, Gemini, OpenRouter and Z.ai show as "Built in", and **Auto** keeps its order: Groq, Gemini, OpenRouter, Cloudflare AI, NVIDIA, Z.ai. Someone who adds their own Groq, Gemini, OpenRouter or Z.ai key in Settings goes direct with it.
 
-**No AI key is built into the app any more.** A `VITE_..._KEY` in the build can be read by anyone who opens the app, so the deploy workflows no longer pass `VITE_GROQ_KEY`, `VITE_GEMINI_KEY`, `VITE_CEREBRAS_KEY` or `VITE_ZAI_KEY`. Cerebras and Z.ai are still offered to anyone who adds their own key. Someone not signed in has no built-in AI.
+**No AI key is built into the app any more.** A `VITE_..._KEY` in the build can be read by anyone who opens the app, so the deploy workflows no longer pass `VITE_GROQ_KEY`, `VITE_GEMINI_KEY`, `VITE_CEREBRAS_KEY` or `VITE_ZAI_KEY`. Cerebras is offered only to someone who adds their own (paid) key. Someone not signed in has no built-in AI.
 
 ## Setup (no terminal)
 
@@ -30,7 +31,8 @@ Use the same GitHub page as for the other secrets: GitHub repo → **Settings** 
 **3b. Groq and Gemini keys.** Make **new** keys, not the ones that were in `VITE_GROQ_KEY` / `VITE_GEMINI_KEY`: those were in the public app, so treat them as known to anyone.
 - Groq: console.groq.com → **API Keys** → **Create API Key** (starts with `gsk_`) → secret `AI_GROQ_KEY`.
 - Gemini: aistudio.google.com → **Get API key** → **Create API key** (starts with `AIza`) → secret `AI_GEMINI_KEY`.
-- Once the app answers through the relay (step 6), delete the old keys at Groq and Google, and delete the GitHub secrets `VITE_GROQ_KEY`, `VITE_GEMINI_KEY`, `VITE_CEREBRAS_KEY` and `VITE_ZAI_KEY`.
+- Z.ai: z.ai → **API Keys** → create a key → secret `AI_ZAI_KEY`.
+- Once the app answers through the relay (step 6), delete the old keys at Groq, Google and Z.ai, and delete the GitHub secrets `VITE_GROQ_KEY`, `VITE_GEMINI_KEY`, `VITE_CEREBRAS_KEY` and `VITE_ZAI_KEY`.
 
 Without a key, that provider answers "not set up" and the app moves on to the next one. Cloudflare AI needs no key. Deleting a key from GitHub later does not remove it from the Worker: delete it there too (Cloudflare dashboard → **Workers & Pages** → `loci-ai` → **Settings** → **Variables and Secrets**).
 
