@@ -31,6 +31,7 @@ describe("routing and CORS", () => {
     expect(res.status).toBe(204);
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
     expect(res.headers.get("Access-Control-Allow-Headers")).toMatch(/Authorization/);
+    expect(res.headers.get("Access-Control-Expose-Headers")).toBe("Retry-After");
   });
 
   it("refuses unknown paths and other methods", async () => {
@@ -39,7 +40,14 @@ describe("routing and CORS", () => {
   });
 
   it("says it is not set up when the project id is missing", async () => {
-    expect((await call("/nvidia", { token: await signer.sign(), env: { FIREBASE_PROJECT_ID: "" } })).status).toBe(503);
+    expect((await call("/nvidia", { token: await signer.sign(), env: { FIREBASE_PROJECT_ID: "" } })).status).toBe(501);
+  });
+
+  it("answers an unexpected crash with a 502 that still has CORS headers", async () => {
+    upstream = () => ({ ok: true, headers: new Headers(), text: async () => { throw new Error("stream broke"); } });
+    const res = await call("/nvidia", { token: await signer.sign() });
+    expect(res.status).toBe(502);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
   });
 });
 
@@ -102,7 +110,7 @@ describe("NVIDIA", () => {
 
   it("says NVIDIA is not set up when the key is missing", async () => {
     const res = await call("/nvidia", { token: await signer.sign(), env: { NVIDIA_API_KEY: "" } });
-    expect(res.status).toBe(503);
+    expect(res.status).toBe(501);
     expect((await res.json()).error.message).toMatch(/NVIDIA_API_KEY/);
   });
 
@@ -119,6 +127,20 @@ describe("NVIDIA", () => {
     const res = await call("/nvidia", { token: await signer.sign() });
     expect(res.status).toBe(502);
     expect((await res.json()).error.message).toMatch(/refused the relay's key \(Invalid API key\)/);
+  });
+
+  it("never echoes the key back, even if the provider's error contains it", async () => {
+    upstream = () => new Response(JSON.stringify({ error: { message: "Key nvapi-test is not valid" } }), { status: 401 });
+    const text = await (await call("/nvidia", { token: await signer.sign() })).text();
+    expect(text).not.toContain("nvapi-test");
+    expect(text).toContain("[key]");
+  });
+
+  it("labels the provider's 403 as a refused request, not a refused key", async () => {
+    upstream = () => new Response(JSON.stringify({ error: { message: "Input flagged by moderation" } }), { status: 403 });
+    const res = await call("/nvidia", { token: await signer.sign() });
+    expect(res.status).toBe(502);
+    expect((await res.json()).error.message).toBe("NVIDIA refused the request (Input flagged by moderation)");
   });
 
   it("answers 502 with CORS headers when NVIDIA cannot be reached", async () => {
@@ -162,7 +184,7 @@ describe("OpenRouter", () => {
 
   it("says OpenRouter is not set up when the key is missing", async () => {
     const res = await call("/openrouter", { token: await signer.sign() });
-    expect(res.status).toBe(503);
+    expect(res.status).toBe(501);
     expect((await res.json()).error.message).toMatch(/OPENROUTER_API_KEY/);
   });
 
@@ -193,6 +215,12 @@ describe("Cloudflare Workers AI", () => {
     expect(AI.run.mock.calls[0][1]).not.toHaveProperty("reasoning_effort");
   });
 
+  it("reads a Responses-style answer (output items) into a chat completion", async () => {
+    const AI = aiWith(async () => ({ output: [{ type: "reasoning", content: [{ type: "reasoning_text", text: "thinking" }] }, { type: "message", content: [{ type: "output_text", text: "Hi " }, { type: "output_text", text: "there" }] }] }));
+    const data = await (await call("/cloudflare", { token: await signer.sign(), env: { AI } })).json();
+    expect(data.choices[0].message.content).toBe("Hi there");
+  });
+
   it("answers 429 with a Retry-After when the free daily allowance is used up", async () => {
     const AI = aiWith(async () => { throw new Error("4006: you have used up your daily free allocation of 10,000 neurons"); });
     const res = await call("/cloudflare", { token: await signer.sign(), env: { AI } });
@@ -209,6 +237,6 @@ describe("Cloudflare Workers AI", () => {
   });
 
   it("says it is not set up without the AI binding", async () => {
-    expect((await call("/cloudflare", { token: await signer.sign() })).status).toBe(503);
+    expect((await call("/cloudflare", { token: await signer.sign() })).status).toBe(501);
   });
 });

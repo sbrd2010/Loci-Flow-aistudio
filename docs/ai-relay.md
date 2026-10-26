@@ -6,7 +6,7 @@ A small Cloudflare Worker, `loci-ai` (code in `ai-proxy/`), that lets the app us
 - **NVIDIA** (build.nvidia.com): `openai/gpt-oss-120b` by default. NVIDIA's API refuses calls from a browser (#356), so the relay calls it instead and keeps the key on Cloudflare.
 - **OpenRouter**: your OpenRouter key, kept on Cloudflare. Free models only (`openrouter/free` by default), so the key can never be billed through the relay, even if credit is added later. Someone who adds their own OpenRouter key in Settings still goes direct with it.
 
-Only someone signed in to Loci gets through: the app sends its Firebase sign-in token, and the relay checks it. There is no per-person limit yet (that is PR 9, #570). Prompts and replies pass through; the relay does not log or store them.
+Only someone signed in to Loci with Google gets through: the app sends its Firebase sign-in token, and the relay checks it. There is no per-person limit yet (that is PR 9, #570). Prompts and replies pass through; the relay does not log or store them.
 
 In the app, Cloudflare AI and NVIDIA appear in **Settings → AI provider**, OpenRouter shows as "Built in", and **Auto** tries them after Groq and Gemini.
 
@@ -23,7 +23,7 @@ Use the same GitHub page as for the other secrets: GitHub repo → **Settings** 
 
 **3. OpenRouter key (optional).** openrouter.ai → **Keys** → **Create Key**, copy it (starts with `sk-or-`), and add it as the secret `AI_OPENROUTER_KEY`.
 
-Without a key, that provider answers "not set up" and the app moves on to the next one. Cloudflare AI needs no key.
+Without a key, that provider answers "not set up" and the app moves on to the next one. Cloudflare AI needs no key. Deleting a key from GitHub later does not remove it from the Worker: delete it there too (Cloudflare dashboard → **Workers & Pages** → `loci-ai` → **Settings** → **Variables and Secrets**).
 
 **4. Press the button.** GitHub repo → **Actions** → **Deploy the AI relay (Cloudflare AI and NVIDIA)** → **Run workflow**. When it finishes, open the run: the summary shows the relay address (`https://loci-ai.<name>.workers.dev`).
 
@@ -32,6 +32,10 @@ Without a key, that provider answers "not set up" and the app moves on to the ne
 **6. Check it.** Hard-refresh Loci. **Settings → AI provider**: choose **Cloudflare AI**, turn on **Only use my provider**, and send one Coach message. Then the same with **NVIDIA** and **OpenRouter**. Afterwards choose **Auto** again and turn the switch off. If one fails, the line in brackets after the error is that provider's own reason.
 
 If the deploy fails with a permission error about AI, edit the Cloudflare token (profile → **API Tokens** → the token → **Edit**) and add **Account → Workers AI → Edit**. Not checked from a real deployment yet; the run log names any problem.
+
+## Stay on the free Cloudflare plan
+
+On the **free** Workers plan, Cloudflare AI simply stops for the day when the 10,000-neuron allowance is used up. On the **paid** Workers plan, use beyond the allowance is **billed with no cap**. Anyone with a Google account can sign in to Loci, and there is no per-person limit until PR 9 (#570), so do not move this Cloudflare account to the paid plan before PR 9. NVIDIA's trial and OpenRouter's free models cannot charge you.
 
 ## Changing models
 

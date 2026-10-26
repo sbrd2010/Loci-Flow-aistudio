@@ -17,7 +17,8 @@ export async function makeSigner(kid = "kid-1") {
     const nowSec = Math.floor(Date.now() / 1000);
     const claims = {
       iss: `https://securetoken.google.com/${PROJECT}`, aud: PROJECT, sub: "user-1",
-      iat: nowSec - 10, auth_time: nowSec - 10, exp: nowSec + 3600, ...overrides,
+      iat: nowSec - 10, auth_time: nowSec - 10, exp: nowSec + 3600,
+      firebase: { sign_in_provider: "google.com" }, ...overrides,
     };
     const unsigned = `${b64urlJson({ alg: "RS256", typ: "JWT", kid, ...header })}.${b64urlJson(claims)}`;
     const sig = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", privateKey, new TextEncoder().encode(unsigned));

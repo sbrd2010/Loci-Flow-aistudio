@@ -1821,6 +1821,17 @@ describe("Cloudflare AI and NVIDIA through Loci's relay", () => {
     expect(describeAIError(err)).not.toMatch(/AI key/);
   });
 
+  it("a provider not set up on the relay shows the relay's reason, not \"temporarily unavailable\"", async () => {
+    storage.setItem("loci_provider_pref", "nvidia");
+    storage.setItem("loci_provider_only", "1");
+    fetch.mockResolvedValueOnce(relayError(501, "NVIDIA is not set up on the relay yet (NVIDIA_API_KEY missing)."));
+
+    const err = await callAI(baseRequest()).catch(e => e);
+
+    expect(err.message).toBe("only_provider_failed");
+    expect(describeAIError(err)).toMatch(/\(nvidia: NVIDIA is not set up on the relay yet/);
+  });
+
   it("retries once at a larger budget when hidden reasoning used up the reply", async () => {
     storage.setItem("loci_provider_pref", "nvidia");
     storage.setItem("loci_provider_only", "1");

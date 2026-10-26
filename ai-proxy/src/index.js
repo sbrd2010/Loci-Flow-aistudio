@@ -9,7 +9,7 @@
 //   POST /openrouter  → OpenRouter, free models only, with the owner's key
 //   POST /cloudflare  → env.AI.run (Workers AI)
 //
-// Both answer in the OpenAI chat-completions shape the app already reads.
+// All answer in the OpenAI chat-completions shape the app already reads.
 
 import { verifyFirebaseToken } from "./auth.js";
 
@@ -33,6 +33,8 @@ const CORS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Authorization, Content-Type",
   "Access-Control-Max-Age": "86400",
+  // Lets the app read how long to wait after a 429.
+  "Access-Control-Expose-Headers": "Retry-After",
 };
 
 const isGptOss = (model) => /(^|\/)gpt-oss/i.test(model);
@@ -43,6 +45,9 @@ function json(status, body, extraHeaders = {}) {
 
 // Same shape as an OpenAI error, so the app's failedResponse() reads the reason.
 const fail = (status, message, extraHeaders) => json(status, { error: { message } }, extraHeaders);
+// 501, not 503: a missing setting is not a passing outage, and the app shows
+// a 501's reason instead of "temporarily unavailable".
+const notSetUp = (message) => fail(501, message);
 
 const secondsUntilUtcMidnight = (now = Date.now()) => {
   const d = new Date(now);
@@ -91,15 +96,17 @@ async function relayUpstream(label, url, key, payload, fetchImpl) {
     const body = await res.json();
     reason = String(body?.error?.message ?? body?.detail ?? body?.message ?? body?.error ?? "");
   } catch { /* not JSON */ }
-  reason = reason.replace(/\s+/g, " ").trim().slice(0, 200) || `HTTP ${res.status}`;
+  // The reason goes back to the user, so never let it carry the key.
+  reason = reason.split(key).join("[key]").replace(/\s+/g, " ").trim().slice(0, 200) || `HTTP ${res.status}`;
   // The app reads 401/403 from the relay as "not signed in to Loci"; the
-  // provider refusing the relay's own key is a relay problem, not the user's.
-  if (res.status === 401 || res.status === 403) return fail(502, `${label} refused the relay's key (${reason})`);
+  // provider refusing the relay's key or the request is not the user's sign-in.
+  if (res.status === 401) return fail(502, `${label} refused the relay's key (${reason})`);
+  if (res.status === 403) return fail(502, `${label} refused the request (${reason})`);
   return fail(res.status, reason, extra);
 }
 
 function relayNvidia(params, env, fetchImpl) {
-  if (!env.NVIDIA_API_KEY) return fail(503, "NVIDIA is not set up on the relay yet (NVIDIA_API_KEY missing).");
+  if (!env.NVIDIA_API_KEY) return notSetUp("NVIDIA is not set up on the relay yet (NVIDIA_API_KEY missing).");
   const model = env.NVIDIA_MODEL || DEFAULT_NVIDIA_MODEL;
   return relayUpstream("NVIDIA", NVIDIA_URL, env.NVIDIA_API_KEY, { model, ...forModel(params, model) }, fetchImpl);
 }
@@ -109,7 +116,7 @@ function relayNvidia(params, env, fetchImpl) {
 const isFreeOpenRouterModel = (model) => model === DEFAULT_OPENROUTER_MODEL || /:free$/.test(model);
 
 function relayOpenRouter(params, env, fetchImpl) {
-  if (!env.OPENROUTER_API_KEY) return fail(503, "OpenRouter is not set up on the relay yet (OPENROUTER_API_KEY missing).");
+  if (!env.OPENROUTER_API_KEY) return notSetUp("OpenRouter is not set up on the relay yet (OPENROUTER_API_KEY missing).");
   const model = isFreeOpenRouterModel(env.OPENROUTER_MODEL || "") ? env.OPENROUTER_MODEL : DEFAULT_OPENROUTER_MODEL;
   // OpenRouter takes a reasoning object rather than reasoning_effort.
   const { reasoning_effort: effort, ...rest } = params;
@@ -117,16 +124,27 @@ function relayOpenRouter(params, env, fetchImpl) {
   return relayUpstream("OpenRouter", OPENROUTER_URL, env.OPENROUTER_API_KEY, payload, fetchImpl);
 }
 
-// Workers AI answers gpt-oss in the chat-completions shape; other models may
-// answer { response } or { output_text }, so those are wrapped to match.
+// Workers AI answers gpt-oss in the chat-completions shape when given
+// `messages` (per @cloudflare/workers-types); other models or a Responses-style
+// answer give { response }, { output_text } or { output: [...] }, so those are
+// wrapped to match.
+function responsesText(output) {
+  if (!Array.isArray(output)) return "";
+  return output.flatMap(item => (Array.isArray(item?.content) ? item.content : []))
+    .filter(part => part?.type === "output_text" && typeof part.text === "string")
+    .map(part => part.text).join("");
+}
+
 function toChatCompletion(out, model) {
   if (Array.isArray(out?.choices)) return out;
-  const content = typeof out?.response === "string" ? out.response : typeof out?.output_text === "string" ? out.output_text : "";
+  const content = typeof out?.response === "string" ? out.response
+    : typeof out?.output_text === "string" ? out.output_text
+    : responsesText(out?.output);
   return { object: "chat.completion", model, choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: "stop" }], usage: out?.usage };
 }
 
 async function runCloudflare(params, env) {
-  if (!env.AI) return fail(503, "Cloudflare AI is not set up on the relay (no AI binding).");
+  if (!env.AI) return notSetUp("Cloudflare AI is not set up on the relay (no AI binding).");
   const model = env.CLOUDFLARE_MODEL || DEFAULT_CLOUDFLARE_MODEL;
   try {
     const out = await env.AI.run(model, forModel(params, model));
@@ -141,32 +159,42 @@ async function runCloudflare(params, env) {
   }
 }
 
+async function handle(request, env, fetchImpl) {
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+  const provider = new URL(request.url).pathname.replace(/^\/+|\/+$/g, "");
+  if (!RELAY_PATHS.has(provider)) return fail(404, "Not found.");
+  if (request.method !== "POST") return fail(405, "Use POST.");
+  if (!env.FIREBASE_PROJECT_ID) return notSetUp("The relay is not set up yet (FIREBASE_PROJECT_ID missing).");
+
+  const token = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+  try {
+    await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID, { fetchImpl });
+  } catch (err) {
+    // Google's key list unreachable is an outage, not a bad sign-in.
+    if (/^Google key request failed/.test(err?.message)) return fail(503, "The relay could not check your sign-in right now.");
+    return fail(401, "Sign in to Loci to use this provider.");
+  }
+
+  const raw = await request.text();
+  if (raw.length > MAX_BODY_CHARS) return fail(413, "Request too large for the relay.");
+  let body;
+  try { body = JSON.parse(raw); } catch { return fail(400, "Body must be JSON."); }
+  const params = cleanParams(body);
+  if (!params) return fail(400, "messages must be a non-empty list of { role, content }.");
+
+  if (provider === "nvidia") return relayNvidia(params, env, fetchImpl);
+  if (provider === "openrouter") return relayOpenRouter(params, env, fetchImpl);
+  return runCloudflare(params, env);
+}
+
 export default {
   async fetch(request, env, ctx, { fetchImpl = fetch } = {}) {
-    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
-    const provider = new URL(request.url).pathname.replace(/^\/+|\/+$/g, "");
-    if (!RELAY_PATHS.has(provider)) return fail(404, "Not found.");
-    if (request.method !== "POST") return fail(405, "Use POST.");
-    if (!env.FIREBASE_PROJECT_ID) return fail(503, "The relay is not set up yet (FIREBASE_PROJECT_ID missing).");
-
-    const token = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
     try {
-      await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID, { fetchImpl });
-    } catch (err) {
-      // Google's key list unreachable is an outage, not a bad sign-in.
-      if (/^Google key request failed/.test(err?.message)) return fail(503, "The relay could not check your sign-in right now.");
-      return fail(401, "Sign in to Loci to use this provider.");
+      return await handle(request, env, fetchImpl);
+    } catch {
+      // Without this, Cloudflare's own 500 has no CORS headers and the app
+      // would read it as "check your connection".
+      return fail(502, "The relay hit an unexpected error.");
     }
-
-    const raw = await request.text();
-    if (raw.length > MAX_BODY_CHARS) return fail(413, "Request too large for the relay.");
-    let body;
-    try { body = JSON.parse(raw); } catch { return fail(400, "Body must be JSON."); }
-    const params = cleanParams(body);
-    if (!params) return fail(400, "messages must be a non-empty list of { role, content }.");
-
-    if (provider === "nvidia") return relayNvidia(params, env, fetchImpl);
-    if (provider === "openrouter") return relayOpenRouter(params, env, fetchImpl);
-    return runCloudflare(params, env);
   },
 };
