@@ -5,7 +5,7 @@ vi.mock("../firebase", () => ({
 }));
 
 import { auth } from "../firebase";
-import { buildProviderOrder, callAI, classifyAIError, describeAIError, extractJsonArray, geminiUrl, hasOwnAIKey, isAISystemReply, isRelayAvailable, noKeyHint, resetProviderCooldowns } from "./aiCall";
+import { buildProviderOrder, callAI, classifyAIError, describeAIError, extractJsonArray, fullPromptAllowed, geminiUrl, isAISystemReply, isRelayAvailable, noKeyHint, resetProviderCooldowns } from "./aiCall";
 
 function makeStorage() {
   const store = new Map();
@@ -1983,44 +1983,64 @@ describe("Cloudflare AI and NVIDIA through Loci's relay", () => {
   });
 });
 
-describe("hasOwnAIKey", () => {
+describe("fullPromptAllowed", () => {
   // The deploy build runs these tests with the shared VITE_*_KEY variables set; each test
   // states which shared keys exist, so they start with none.
   beforeEach(() => {
     for (const k of ["GROQ", "GEMINI", "CEREBRAS", "ZAI", "OPENROUTER"]) vi.stubEnv(`VITE_${k}_KEY`, "");
+    vi.stubEnv("VITE_AI_RELAY_URL", "");
   });
   afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
   const withStorage = (entries) => vi.stubGlobal("localStorage", { getItem: (k) => (k in entries ? entries[k] : null) });
 
   it("is true only when the provider that leads the chain has a key the user entered", () => {
     withStorage({});
-    expect(hasOwnAIKey()).toBe(false);
+    expect(fullPromptAllowed()).toBe(false);
     withStorage({ loci_groq_key: "  " });
-    expect(hasOwnAIKey()).toBe(false);
+    expect(fullPromptAllowed()).toBe(false);
     withStorage({ loci_cerebras_key: "csk-123" });
-    expect(hasOwnAIKey()).toBe(true);
+    expect(fullPromptAllowed()).toBe(true);
     // Default order: Groq first, so a Groq key of their own is the first one tried.
     withStorage({ loci_groq_key: "gsk-123" });
-    expect(hasOwnAIKey()).toBe(true);
+    expect(fullPromptAllowed()).toBe(true);
     withStorage({ loci_openrouter_key: "sk-or-123" });
-    expect(hasOwnAIKey()).toBe(true);
+    expect(fullPromptAllowed()).toBe(true);
     withStorage({ loci_provider_pref: "gemini", loci_gemini_key: "AIza-123" });
-    expect(hasOwnAIKey()).toBe(true);
+    expect(fullPromptAllowed()).toBe(true);
+  });
+
+  it("is true for a tester with no key of their own when Loci's relay leads the chain (#589)", () => {
+    vi.stubEnv("VITE_AI_RELAY_URL", "https://loci-ai.example.workers.dev");
+    auth.currentUser = { uid: "u1" };
+    try {
+      withStorage({});
+      expect(fullPromptAllowed()).toBe(true);
+      withStorage({ loci_provider_pref: "nvidia" });
+      expect(fullPromptAllowed()).toBe(true);
+      // Z.ai through the relay still cannot take the full prompt.
+      withStorage({ loci_provider_pref: "zai", loci_provider_only: "1" });
+      expect(fullPromptAllowed()).toBe(false);
+    } finally {
+      auth.currentUser = null;
+    }
+    // Signed out, the relay answers no one, so nothing leads the chain.
+    withStorage({});
+    expect(fullPromptAllowed()).toBe(false);
   });
 
   it("is false when Z.ai leads the chain, which cannot take the full prompt", () => {
     withStorage({ loci_provider_pref: "zai", loci_zai_key: "z-123" });
-    expect(hasOwnAIKey()).toBe(false);
+    expect(fullPromptAllowed()).toBe(false);
   });
 
   it("is false when a shared build-time key would be tried first", () => {
     vi.stubEnv("VITE_GROQ_KEY", "shared-groq");
     withStorage({ loci_gemini_key: "AIza-123" }); // auto order: the shared Groq key leads
-    expect(hasOwnAIKey()).toBe(false);
+    expect(fullPromptAllowed()).toBe(false);
     withStorage({ loci_gemini_key: "AIza-123", loci_provider_pref: "gemini" }); // they chose Gemini
-    expect(hasOwnAIKey()).toBe(true);
+    expect(fullPromptAllowed()).toBe(true);
     withStorage({ loci_gemini_key: "AIza-123", loci_provider_pref: "groq", loci_provider_only: "1" }); // only the shared one
-    expect(hasOwnAIKey()).toBe(false);
+    expect(fullPromptAllowed()).toBe(false);
     vi.unstubAllEnvs();
   });
 });

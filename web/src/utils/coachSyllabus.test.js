@@ -107,11 +107,11 @@ describe("offline syllabus: the data each question needs reaches the model", () 
 describe("which prompt a reworded question gets", () => {
   const reworded = QUESTIONS.filter(x => ["perf-6", "hon-4"].includes(x.id));
 
-  it("gets the full prompt with the user's own key (the alpha case)", () => {
+  it("gets the full prompt with the user's own key or Loci's relay (every tester; fullPromptAllowed)", () => {
     for (const q of reworded) expect(buildTurn(q).mode, q.text).toBe("full_task");
   });
 
-  it("stays on the lean prompt with only the shared built-in keys", () => {
+  it("stays on the lean prompt with only a key built into the app", () => {
     for (const q of reworded) expect(buildTurn(q, { ownKey: false }).mode, q.text).toBe("light");
   });
 });

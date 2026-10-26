@@ -230,8 +230,9 @@ export const QUESTIONS = [
 const lastShown = (history) => history[history.length - 1];
 
 // Everything CoachTab would send for this question, or the local safety reply.
-// ownKey: the user entered a key of their own (the alpha case), so a message no rule
-// claims gets the full prompt. buildTurn mirrors the CoachTab send path.
+// ownKey: what fullPromptAllowed() gives in the app, true for a key of the user's own
+// and for Loci's relay (every tester), so a message no rule claims gets the full
+// prompt; false only for a key built into the app. buildTurn mirrors the CoachTab send path.
 export function buildTurn(q, { ownKey = true } = {}) {
   const local = buildLocalSafetyReply(q.text, FIRST_NAME);
   if (local) return { local };

@@ -1017,17 +1017,18 @@ export function getAIKeys() {
   };
 }
 
-// True when the provider that will get the request first is one the user entered
-// a key for (not a build-time key shared by everyone who opens the app): their
-// own quota, so the Coach can send the larger prompt. If a build-time key leads
-// the chain (the default order starts with Groq), the request goes to shared
-// quota first and stays lean.
-export function hasOwnAIKey() {
+// True when the provider that will get the request first can take the Coach's full
+// prompt: one the user entered a key for, or Loci's relay, which every tester uses
+// since the keys left the app (#589). A message the phrase rules do not recognise
+// then still gets the user's data, so rewording a question cannot lose it. A
+// build-time key shared by everyone who opens the app stays lean, and Z.ai refuses
+// anything over 12,000 characters, which the full prompt always is.
+export function fullPromptAllowed() {
   const { groqKey, geminiKey, cerebrasKey, zaiKey, openrouterKey } = getAIKeys();
   const pref = localStorage.getItem("loci_provider_pref") || "auto";
   const first = buildProviderOrder(pref, groqKey, geminiKey, cerebrasKey, zaiKey, isProviderOnly(), openrouterKey)[0];
-  // Z.ai refuses anything over 12,000 characters, which the full prompt always is.
-  return !!first && first.name !== "zai" && !!(localStorage.getItem(`loci_${first.name}_key`) || "").trim();
+  if (!first || first.name === "zai") return false;
+  return first.key === "relay" || !!(localStorage.getItem(`loci_${first.name}_key`) || "").trim();
 }
 
 // True only if the user's selected provider order actually has a usable
