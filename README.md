@@ -61,6 +61,7 @@ Copy `web/.env.example` to `web/.env`. All variables are optional for local deve
 | `VITE_GA_MEASUREMENT_ID` | Google Analytics (optional) |
 | `VITE_GROQ_KEY` | Groq API key for AI features (optional) |
 | `VITE_GEMINI_KEY` | Gemini API key for AI features (optional) |
+| `VITE_GEMINI_MODEL` | Gemini model override (optional, defaults to `gemini-2.5-flash-lite`). Copy the name exactly as Google AI Studio shows it; a free-tier model with a higher requests-per-day limit stretches the shared key |
 | `VITE_CEREBRAS_KEY` | Cerebras API key for AI features (optional) |
 | `VITE_CEREBRAS_MODEL` | Cerebras model override (optional, defaults to `gpt-oss-120b`) |
 | `VITE_OPENROUTER_MODEL` | OpenRouter model override (optional, defaults to `openrouter/free`, OpenRouter's free router; a person can also pin a model in Settings). OpenRouter keys are added per person in Settings; do not put a key with credit in a build variable |
