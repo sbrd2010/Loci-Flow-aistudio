@@ -583,7 +583,9 @@ export function AiProviderPage({ onBack, backLabel }) {
       { value: "cloudflare", label: "Cloudflare AI", sub: "Built in, free daily allowance" },
       { value: "nvidia", label: "NVIDIA", sub: "Built in, free trial" },
     ] : []),
-    { value: "zai", label: "Z.ai", sub: "Free fallback, slow when busy" },
+    // Z.ai's small limit fits only short chats, so it is Auto's last resort, not a
+    // choice; it is listed only while it is still someone's saved choice.
+    ...(pref === "zai" ? [{ value: "zai", label: "Z.ai", sub: "Short chats only — choose another provider" }] : []),
     { value: "cerebras", label: "Cerebras" },
   ];
 

@@ -246,6 +246,7 @@ const AI_ERROR_COPY = {
   network: "Couldn't reach the AI service — check your connection. Your tasks are safe, please try again.",
   timeout: "The AI took too long to answer. Your tasks are safe — please try again.",
   payload_too_large: "This request was too large for the AI provider. Your tasks are safe — try a shorter message or start a new conversation.",
+  zai_only_too_large: "Z.ai can only answer short chats, and this one is too long for it. Your tasks are safe — choose another provider in Settings → AI provider.",
   no_key: "Add an AI key in Settings to chat with your Coach.",
   no_key_only: "Only use my provider is on, and that provider has no key. Add its key in Settings → AI provider, or turn that setting off.",
   only_provider_failed: "Your chosen AI provider couldn't answer right now. Your tasks are safe — try again in a moment, or turn off Only use my provider in Settings to let Coach try the others.",
@@ -958,7 +959,10 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, openrout
   // its size, and none was merely cooling down from a rate limit or outage.
   if (decisionAttempts.length > 0 && decisionAttempts.every(a => a.classification === "payload_too_large")) {
     const coolingDown = attempts.find(a => !a.live && (a.classification === "rate_limit" || a.classification === "service_unavailable"));
-    throw coolingDown ? coolingDown.err : new Error("payload_too_large");
+    if (coolingDown) throw coolingDown.err;
+    // Only Z.ai was tried and its small limit refused it: a shorter message will
+    // not help, since Coach's own instructions alone nearly fill that limit.
+    throw new Error(decisionAttempts.every(a => a.err?.message === "zai_too_large") ? "zai_only_too_large" : "payload_too_large");
   }
   const lastDetail = [...liveAttempts].reverse().find(a => a.err?.detail)?.err.detail;
   throw Object.assign(
