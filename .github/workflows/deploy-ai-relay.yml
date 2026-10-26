@@ -2,7 +2,7 @@ name: Deploy the AI relay (Cloudflare AI and NVIDIA)
 
 # A button, not an automatic deploy: Actions > this workflow > Run workflow.
 # Uses the same CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets as the
-# connector, plus AI_NVIDIA_KEY for NVIDIA. See docs/ai-relay.md.
+# connector, plus AI_NVIDIA_KEY and AI_OPENROUTER_KEY. See docs/ai-relay.md.
 on:
   workflow_dispatch: {}
 
@@ -60,16 +60,21 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Store the NVIDIA key on the Worker
+      - name: Store the provider keys on the Worker
         env:
           AI_NVIDIA_KEY: ${{ secrets.AI_NVIDIA_KEY }}
+          AI_OPENROUTER_KEY: ${{ secrets.AI_OPENROUTER_KEY }}
         run: |
-          if [ -z "$AI_NVIDIA_KEY" ]; then
-            echo "NVIDIA is not set up: add the repository secret AI_NVIDIA_KEY and run this again. Cloudflare AI works without it." >> "$GITHUB_STEP_SUMMARY"
+          [ -n "$AI_NVIDIA_KEY" ] || echo "NVIDIA is not set up: add the repository secret AI_NVIDIA_KEY and run this again." >> "$GITHUB_STEP_SUMMARY"
+          [ -n "$AI_OPENROUTER_KEY" ] || echo "OpenRouter is not set up: add the repository secret AI_OPENROUTER_KEY and run this again." >> "$GITHUB_STEP_SUMMARY"
+          if [ -z "$AI_NVIDIA_KEY$AI_OPENROUTER_KEY" ]; then
+            echo "No keys to store. Cloudflare AI works without one." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           umask 077
-          jq -n --arg NVIDIA_API_KEY "$AI_NVIDIA_KEY" '{NVIDIA_API_KEY:$NVIDIA_API_KEY}' > "$RUNNER_TEMP/relay-secrets.json"
+          jq -n --arg n "$AI_NVIDIA_KEY" --arg o "$AI_OPENROUTER_KEY" \
+            '(if $n == "" then {} else {NVIDIA_API_KEY:$n} end) + (if $o == "" then {} else {OPENROUTER_API_KEY:$o} end)' \
+            > "$RUNNER_TEMP/relay-secrets.json"
           npx wrangler secret bulk "$RUNNER_TEMP/relay-secrets.json"
           rm -f "$RUNNER_TEMP/relay-secrets.json"
-          echo "NVIDIA key stored on the relay." >> "$GITHUB_STEP_SUMMARY"
+          echo "Keys stored on the relay." >> "$GITHUB_STEP_SUMMARY"

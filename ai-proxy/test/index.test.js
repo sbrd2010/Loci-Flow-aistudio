@@ -136,6 +136,44 @@ describe("NVIDIA", () => {
   });
 });
 
+describe("OpenRouter", () => {
+  const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+  const sentTo = () => JSON.parse(fetchImpl.mock.calls.find(([url]) => url === OPENROUTER_URL)[1].body);
+
+  it("forwards to OpenRouter with the server key and its free router", async () => {
+    const res = await call("/openrouter", { token: await signer.sign(), env: { OPENROUTER_API_KEY: "sk-or-test" } });
+    expect(res.status).toBe(200);
+    const [, init] = fetchImpl.mock.calls.find(([url]) => url === OPENROUTER_URL);
+    expect(init.headers.Authorization).toBe("Bearer sk-or-test");
+    expect(sentTo()).toMatchObject({ model: "openrouter/free", stream: false });
+    expect(sentTo()).not.toHaveProperty("reasoning_effort");
+    expect(sentTo()).not.toHaveProperty("reasoning");
+  });
+
+  it("uses a pinned free model, with OpenRouter's reasoning object for gpt-oss", async () => {
+    await call("/openrouter", { token: await signer.sign(), env: { OPENROUTER_API_KEY: "k", OPENROUTER_MODEL: "openai/gpt-oss-20b:free" } });
+    expect(sentTo()).toMatchObject({ model: "openai/gpt-oss-20b:free", reasoning: { effort: "low" } });
+  });
+
+  it("never uses a paid model, even if one is configured", async () => {
+    await call("/openrouter", { token: await signer.sign(), env: { OPENROUTER_API_KEY: "k", OPENROUTER_MODEL: "openai/gpt-oss-120b" } });
+    expect(sentTo().model).toBe("openrouter/free");
+  });
+
+  it("says OpenRouter is not set up when the key is missing", async () => {
+    const res = await call("/openrouter", { token: await signer.sign() });
+    expect(res.status).toBe(503);
+    expect((await res.json()).error.message).toMatch(/OPENROUTER_API_KEY/);
+  });
+
+  it("turns OpenRouter refusing the relay's key into 502", async () => {
+    upstream = () => new Response(JSON.stringify({ error: { message: "No auth credentials found" } }), { status: 401 });
+    const res = await call("/openrouter", { token: await signer.sign(), env: { OPENROUTER_API_KEY: "k" } });
+    expect(res.status).toBe(502);
+    expect((await res.json()).error.message).toMatch(/^OpenRouter refused the relay's key/);
+  });
+});
+
 describe("Cloudflare Workers AI", () => {
   const aiWith = (impl) => ({ run: vi.fn(impl) });
 

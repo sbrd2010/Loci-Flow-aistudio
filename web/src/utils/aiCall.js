@@ -22,8 +22,9 @@ const ZAI_MODEL = import.meta.env.VITE_ZAI_MODEL || "glm-4.7-flash";
 
 // Loci's own relay Worker (ai-proxy/, docs/ai-relay.md) for the two providers a
 // browser cannot call itself: NVIDIA (its API sends no CORS headers, #356) and
-// Cloudflare Workers AI. The relay holds the NVIDIA key and lets in signed-in
-// users only. Unset VITE_AI_RELAY_URL means neither provider is offered.
+// Cloudflare Workers AI. It also carries the shared OpenRouter key, so that key
+// is not in the app's public code. The relay holds the keys and lets in
+// signed-in users only. Unset VITE_AI_RELAY_URL means none of this is offered.
 export const RELAY_PROVIDERS = ["cloudflare", "nvidia"];
 function relayUrl() {
   return (import.meta.env.VITE_AI_RELAY_URL || "").trim().replace(/\/+$/, "");
@@ -804,7 +805,7 @@ export function isOnlyProviderKeyMissing() {
   if (!isProviderOnly() || pref === "auto") return false;
   if (RELAY_PROVIDERS.includes(pref)) return !isRelayAvailable();
   const { groqKey, geminiKey, cerebrasKey, zaiKey, openrouterKey } = getAIKeys();
-  const keys = { groq: groqKey, gemini: geminiKey, cerebras: cerebrasKey, zai: zaiKey, openrouter: openrouterKey };
+  const keys = { groq: groqKey, gemini: geminiKey, cerebras: cerebrasKey, zai: zaiKey, openrouter: openrouterKey || (isRelayAvailable() ? "relay" : "") };
   return !keys[pref] && Object.values(keys).some(Boolean);
 }
 
@@ -812,7 +813,9 @@ export function buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCere
   const available = {
     groq:       cleanGroqKey       ? { name: "groq",       key: cleanGroqKey }       : null,
     gemini:     cleanGeminiKey     ? { name: "gemini",      key: cleanGeminiKey }     : null,
-    openrouter: cleanOpenrouterKey ? { name: "openrouter",  key: cleanOpenrouterKey } : null,
+    // A person's own OpenRouter key goes direct; without one, the shared key on the relay.
+    openrouter: cleanOpenrouterKey ? { name: "openrouter",  key: cleanOpenrouterKey }
+              : relay              ? { name: "openrouter",  key: "relay", viaRelay: true } : null,
     cloudflare: relay              ? { name: "cloudflare",  key: "relay" }            : null,
     nvidia:     relay              ? { name: "nvidia",      key: "relay" }            : null,
     cerebras:   cleanCerebrasKey   ? { name: "cerebras",    key: cleanCerebrasKey }   : null,
@@ -893,6 +896,8 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, openrout
       let result;
       if (provider.name === "groq") {
         result = await callGroq(provider.key, systemPrompt, messages, maxTokens, reasoningEffort, limits);
+      } else if (provider.name === "openrouter" && provider.viaRelay) {
+        result = await callRelay("openrouter", systemPrompt, messages, maxTokens, reasoningEffort, limits);
       } else if (provider.name === "openrouter") {
         result = await callOpenRouter(provider.key, systemPrompt, messages, maxTokens, reasoningEffort, limits);
       } else if (provider.name === "cerebras") {

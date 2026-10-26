@@ -495,7 +495,8 @@ export function CoachMemoryPage({ config, saveConfigPatch, onBack, backLabel, on
 export const PROVIDERS = [
   { key: "groq", name: "Groq", storage: "loci_groq_key", builtin: import.meta.env.VITE_GROQ_KEY, getKey: "https://console.groq.com", placeholder: "gsk_…" },
   { key: "gemini", name: "Gemini", storage: "loci_gemini_key", builtin: import.meta.env.VITE_GEMINI_KEY, getKey: "https://aistudio.google.com", placeholder: "AIza…" },
-  { key: "openrouter", name: "OpenRouter", storage: "loci_openrouter_key", builtin: import.meta.env.VITE_OPENROUTER_KEY, getKey: "https://openrouter.ai/keys", placeholder: "sk-or-…" },
+  // Built in through Loci's relay when it is set up (the key stays on the relay).
+  { key: "openrouter", name: "OpenRouter", storage: "loci_openrouter_key", builtin: import.meta.env.VITE_OPENROUTER_KEY || isRelayConfigured(), getKey: "https://openrouter.ai/keys", placeholder: "sk-or-…" },
   { key: "zai", name: "Z.ai", storage: "loci_zai_key", builtin: import.meta.env.VITE_ZAI_KEY, getKey: "https://z.ai", placeholder: "API key" },
   { key: "cerebras", name: "Cerebras", storage: "loci_cerebras_key", builtin: import.meta.env.VITE_CEREBRAS_KEY, getKey: "https://cloud.cerebras.ai", placeholder: "csk-…" },
 ];
@@ -610,7 +611,7 @@ export function AiProviderPage({ onBack, backLabel }) {
           );
         })}
       </Group>
-      <Group label="OpenRouter model" note="Leave empty to let OpenRouter pick a free model each time. To pin one, paste its name from openrouter.ai/models, for example a model marked free.">
+      <Group label="OpenRouter model" note="For your own OpenRouter key. Leave empty to let OpenRouter pick a free model each time. To pin one, paste its name from openrouter.ai/models, for example a model marked free.">
         <label className="set-field">
           <span className="set-label">Model name</span>
           <input

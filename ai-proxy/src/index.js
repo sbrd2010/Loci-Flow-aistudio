@@ -1,10 +1,12 @@
-// Loci AI relay. NVIDIA's API refuses browser calls (no CORS, #356) and
-// Cloudflare's own models are reached through the Worker's AI binding, so the
-// app sends those two providers' requests here. Only a signed-in Loci user gets
-// through; the NVIDIA key never leaves the Worker. Prompts and replies are
+// Loci AI relay. NVIDIA's API refuses browser calls (no CORS, #356),
+// Cloudflare's own models are reached through the Worker's AI binding, and the
+// owner's OpenRouter key must not sit in the app's public code, so the app sends
+// those providers' requests here. Only a signed-in Loci user gets through; the
+// keys never leave the Worker. Prompts and replies are
 // passed on, never logged or stored.
 //
 //   POST /nvidia      → NVIDIA's OpenAI-style chat endpoint
+//   POST /openrouter  → OpenRouter, free models only, with the owner's key
 //   POST /cloudflare  → env.AI.run (Workers AI)
 //
 // Both answer in the OpenAI chat-completions shape the app already reads.
@@ -13,6 +15,10 @@ import { verifyFirebaseToken } from "./auth.js";
 
 const NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
 const DEFAULT_NVIDIA_MODEL = "openai/gpt-oss-120b";
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+// OpenRouter's own router that always picks a free model that exists (#568).
+const DEFAULT_OPENROUTER_MODEL = "openrouter/free";
+const RELAY_PATHS = new Set(["nvidia", "openrouter", "cloudflare"]);
 const DEFAULT_CLOUDFLARE_MODEL = "@cf/openai/gpt-oss-120b";
 const MAX_BODY_CHARS = 200_000;
 const MAX_MESSAGES = 100;
@@ -65,18 +71,17 @@ function forModel(params, model) {
   return effort && isGptOss(model) ? { ...rest, reasoning_effort: effort } : rest;
 }
 
-async function relayNvidia(params, env, fetchImpl) {
-  if (!env.NVIDIA_API_KEY) return fail(503, "NVIDIA is not set up on the relay yet (NVIDIA_API_KEY missing).");
-  const model = env.NVIDIA_MODEL || DEFAULT_NVIDIA_MODEL;
+// Forwards an OpenAI-style request with a key held on the Worker.
+async function relayUpstream(label, url, key, payload, fetchImpl) {
   let res;
   try {
-    res = await fetchImpl(NVIDIA_URL, {
+    res = await fetchImpl(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${env.NVIDIA_API_KEY}` },
-      body: JSON.stringify({ model, ...forModel(params, model), stream: false }),
+      headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ ...payload, stream: false }),
     });
   } catch {
-    return fail(502, "The relay could not reach NVIDIA.");
+    return fail(502, `The relay could not reach ${label}.`);
   }
   const extra = res.headers.get("Retry-After") ? { "Retry-After": res.headers.get("Retry-After") } : {};
   if (res.ok) return new Response(await res.text(), { status: 200, headers: { ...CORS, "Content-Type": "application/json" } });
@@ -87,10 +92,29 @@ async function relayNvidia(params, env, fetchImpl) {
     reason = String(body?.error?.message ?? body?.detail ?? body?.message ?? body?.error ?? "");
   } catch { /* not JSON */ }
   reason = reason.replace(/\s+/g, " ").trim().slice(0, 200) || `HTTP ${res.status}`;
-  // The app reads 401/403 from the relay as "not signed in to Loci"; NVIDIA
-  // refusing the relay's own key is a relay problem, not the user's.
-  if (res.status === 401 || res.status === 403) return fail(502, `NVIDIA refused the relay's key (${reason})`);
+  // The app reads 401/403 from the relay as "not signed in to Loci"; the
+  // provider refusing the relay's own key is a relay problem, not the user's.
+  if (res.status === 401 || res.status === 403) return fail(502, `${label} refused the relay's key (${reason})`);
   return fail(res.status, reason, extra);
+}
+
+function relayNvidia(params, env, fetchImpl) {
+  if (!env.NVIDIA_API_KEY) return fail(503, "NVIDIA is not set up on the relay yet (NVIDIA_API_KEY missing).");
+  const model = env.NVIDIA_MODEL || DEFAULT_NVIDIA_MODEL;
+  return relayUpstream("NVIDIA", NVIDIA_URL, env.NVIDIA_API_KEY, { model, ...forModel(params, model) }, fetchImpl);
+}
+
+// Free models only, so the owner's key can never be billed through the relay,
+// even if credit is added to the account later.
+const isFreeOpenRouterModel = (model) => model === DEFAULT_OPENROUTER_MODEL || /:free$/.test(model);
+
+function relayOpenRouter(params, env, fetchImpl) {
+  if (!env.OPENROUTER_API_KEY) return fail(503, "OpenRouter is not set up on the relay yet (OPENROUTER_API_KEY missing).");
+  const model = isFreeOpenRouterModel(env.OPENROUTER_MODEL || "") ? env.OPENROUTER_MODEL : DEFAULT_OPENROUTER_MODEL;
+  // OpenRouter takes a reasoning object rather than reasoning_effort.
+  const { reasoning_effort: effort, ...rest } = params;
+  const payload = { model, ...rest, ...(effort && isGptOss(model) ? { reasoning: { effort } } : {}) };
+  return relayUpstream("OpenRouter", OPENROUTER_URL, env.OPENROUTER_API_KEY, payload, fetchImpl);
 }
 
 // Workers AI answers gpt-oss in the chat-completions shape; other models may
@@ -121,7 +145,7 @@ export default {
   async fetch(request, env, ctx, { fetchImpl = fetch } = {}) {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
     const provider = new URL(request.url).pathname.replace(/^\/+|\/+$/g, "");
-    if (provider !== "nvidia" && provider !== "cloudflare") return fail(404, "Not found.");
+    if (!RELAY_PATHS.has(provider)) return fail(404, "Not found.");
     if (request.method !== "POST") return fail(405, "Use POST.");
     if (!env.FIREBASE_PROJECT_ID) return fail(503, "The relay is not set up yet (FIREBASE_PROJECT_ID missing).");
 
@@ -141,6 +165,8 @@ export default {
     const params = cleanParams(body);
     if (!params) return fail(400, "messages must be a non-empty list of { role, content }.");
 
-    return provider === "nvidia" ? relayNvidia(params, env, fetchImpl) : runCloudflare(params, env);
+    if (provider === "nvidia") return relayNvidia(params, env, fetchImpl);
+    if (provider === "openrouter") return relayOpenRouter(params, env, fetchImpl);
+    return runCloudflare(params, env);
   },
 };

@@ -1715,10 +1715,11 @@ describe("buildProviderOrder", () => {
   });
   it("with the relay, adds Cloudflare and NVIDIA after OpenRouter in Auto, and first when chosen", () => {
     expect(buildProviderOrder("auto", "g", "m", "c", "z", false, "o", true).map(p => p.name)).toEqual(["groq", "gemini", "openrouter", "cloudflare", "nvidia", "zai", "cerebras"]);
-    expect(buildProviderOrder("cloudflare", "g", "", "", "", false, "", true).map(p => p.name)).toEqual(["cloudflare", "nvidia", "groq"]);
-    expect(buildProviderOrder("nvidia", "", "", "", "", false, "", true).map(p => p.name)).toEqual(["nvidia", "cloudflare"]);
+    expect(buildProviderOrder("auto", "", "", "", "", false, "", true).map(p => p.name)).toEqual(["openrouter", "cloudflare", "nvidia"]);
+    expect(buildProviderOrder("cloudflare", "g", "", "", "", false, "", true).map(p => p.name)).toEqual(["cloudflare", "nvidia", "groq", "openrouter"]);
+    expect(buildProviderOrder("nvidia", "", "", "", "", false, "", true).map(p => p.name)).toEqual(["nvidia", "cloudflare", "openrouter"]);
     expect(buildProviderOrder("nvidia", "g", "m", "", "", true, "", true).map(p => p.name)).toEqual(["nvidia"]);
-    expect(buildProviderOrder("zai", "g", "", "", "z", false, "", true).map(p => p.name)).toEqual(["zai", "groq", "cloudflare", "nvidia"]);
+    expect(buildProviderOrder("zai", "g", "", "", "z", false, "", true).map(p => p.name)).toEqual(["zai", "groq", "openrouter", "cloudflare", "nvidia"]);
   });
   it("Only my provider keeps just the chosen provider, and ignores Auto", () => {
     expect(buildProviderOrder("gemini", "g", "m", "c", "z", true).map(p => p.name)).toEqual(["gemini"]);
@@ -1793,9 +1794,10 @@ describe("Cloudflare AI and NVIDIA through Loci's relay", () => {
     expect(init.body).not.toContain("test-groq-key");
   });
 
-  it("in Auto, reaches Cloudflare then NVIDIA after the providers already in the chain", async () => {
+  it("in Auto, reaches OpenRouter, Cloudflare then NVIDIA through the relay after Groq", async () => {
     fetch
       .mockResolvedValueOnce(providerError(429))
+      .mockResolvedValueOnce(relayError(429, "Free model limit reached"))
       .mockResolvedValueOnce(relayError(429, "Cloudflare's free daily AI allowance is used up"))
       .mockResolvedValueOnce(relayOk("NVIDIA answered."));
 
@@ -1803,7 +1805,7 @@ describe("Cloudflare AI and NVIDIA through Loci's relay", () => {
 
     expect(reply).toBe("NVIDIA answered.");
     expect(fetch.mock.calls.map(c => String(c[0]))).toEqual([
-      "https://api.groq.com/openai/v1/chat/completions", `${RELAY}/cloudflare`, `${RELAY}/nvidia`,
+      "https://api.groq.com/openai/v1/chat/completions", `${RELAY}/openrouter`, `${RELAY}/cloudflare`, `${RELAY}/nvidia`,
     ]);
   });
 
@@ -1826,6 +1828,26 @@ describe("Cloudflare AI and NVIDIA through Loci's relay", () => {
 
     expect(await callAI(baseRequest())).toBe("Done.");
     expect(JSON.parse(fetch.mock.calls[1][1].body).max_tokens).toBe(1000);
+  });
+
+  it("sends OpenRouter through the relay when this device has no OpenRouter key", async () => {
+    storage.setItem("loci_provider_pref", "openrouter");
+    storage.setItem("loci_provider_only", "1");
+    fetch.mockResolvedValueOnce(relayOk("Free model answered."));
+
+    expect(await callAI(baseRequest())).toBe("Free model answered.");
+    expect(fetch.mock.calls[0][0]).toBe(`${RELAY}/openrouter`);
+    expect(fetch.mock.calls[0][1].headers.Authorization).toBe("Bearer id-token");
+  });
+
+  it("a person's own OpenRouter key still goes straight to OpenRouter", async () => {
+    storage.setItem("loci_provider_pref", "openrouter");
+    storage.setItem("loci_provider_only", "1");
+    fetch.mockResolvedValueOnce(relayOk("Own key answered."));
+
+    expect(await callAI(baseRequest({ openrouterKey: "sk-or-own" }))).toBe("Own key answered.");
+    expect(fetch.mock.calls[0][0]).toBe("https://openrouter.ai/api/v1/chat/completions");
+    expect(fetch.mock.calls[0][1].headers.Authorization).toBe("Bearer sk-or-own");
   });
 
   it("is left out of the chain when signed out, so nothing is sent to the relay", async () => {
