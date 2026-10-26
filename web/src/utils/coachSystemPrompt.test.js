@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCoachSystemPrompt, buildLociVoiceCapsule } from "./coachSystemPrompt";
+import { partOfDay, buildCoachSystemPrompt, buildLociVoiceCapsule } from "./coachSystemPrompt";
 
 function baseCtx() {
   return {
@@ -58,7 +58,9 @@ describe("the prompts that cannot change tasks never promise to (#555 F9, F10)",
 
   it("the light and full prompts name poems, stories and trivia as off-topic (the proof run wrote a poem)", () => {
     for (const mode of ["light", "full_task"]) {
-      expect(buildCoachSystemPrompt(mode, baseCtx()), mode).toContain("e.g. poems, stories, trivia");
+      expect(buildCoachSystemPrompt(mode, baseCtx()), mode).toContain("Off-topic (poems, stories, trivia");
+      // #594: "What is the Mind Box for?" got "outside my scope"; Loci questions are in scope.
+      expect(buildCoachSystemPrompt(mode, baseCtx()), mode).toContain("Questions about Loci or their data are in scope.");
     }
   });
 
@@ -404,5 +406,11 @@ describe("buildCoachSystemPrompt", () => {
       expect(out).toContain("NOT durable memory");
       expect(out).toMatch(/summary of THIS chat session only/);
     });
+  });
+});
+
+describe("partOfDay (#594)", () => {
+  it("calls the small hours night, not morning", () => {
+    expect([0, 4, 5, 11, 12, 16, 17, 21, 22, 23].map(partOfDay)).toEqual(["night", "night", "morning", "morning", "afternoon", "afternoon", "evening", "evening", "night", "night"]);
   });
 });

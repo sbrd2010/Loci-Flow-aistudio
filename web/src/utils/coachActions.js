@@ -658,7 +658,7 @@ const CHANGE_CLAIM_RE = new RegExp(`${DONE_CLAIM_RE.source}|\\bi['’]ll\\s+(?:r
 const SAVED_ELSEWHERE_RE = /\b(?:memory|remember|note|check[- ]?in|remind)/i;
 // Advice and questions ("Try moving the report to next week", "Would
 // rescheduling it help?") claim nothing, so they stay.
-const ADVISORY_RE = /\?\s*$|\b(?:try|could|would|might|maybe|perhaps|consider|if|once|when|whether|should|want me to)\b/i;
+const ADVISORY_RE = /\?\s*$|\b(?:try|could|would|might|maybe|perhaps|consider|if|once|when|whether|should|want me to|let me know|tell me)\b/i;
 const claimsChange = (s) => CHANGE_CLAIM_RE.test(s.trim()) && !SAVED_ELSEWHERE_RE.test(s) && !ADVISORY_RE.test(s);
 export function withoutChangeClaims(text) {
   const sentences = String(text || "").split(/(?<=[.!?])\s+/).filter(Boolean);

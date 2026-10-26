@@ -17,7 +17,7 @@ import { getFocusWindows } from "./focusWindows";
 import { buildPersonaInstruction } from "./coachPersona";
 import { buildProfileContext } from "./coachProfile";
 import { buildLociMemoryContext } from "./coachMemory";
-import { buildCoachSystemPrompt } from "./coachSystemPrompt";
+import { buildCoachSystemPrompt, partOfDay } from "./coachSystemPrompt";
 import { classifyContextMode, needsConversationContext, historyLimitForMode, detectRequestedCategories, detectPeriodIntent } from "./coachContextMode";
 import { buildSessionSummaryContext, shouldIncludeSessionSummaryContext, llmHistoryStart } from "./coachSessionSummary";
 import { buildLociPeriodContext, buildLociDeadlinesBlock, detectDeadlineIntent, PERIOD_ANSWER_NOTE } from "./coachPeriodDigest";
@@ -156,10 +156,10 @@ export const COMPETENCES = {
 // fixing a gap flips the test and the entry must be cleaned up.
 export const QUESTIONS = [
   // 1. Know my day
-  { id: "day-1", c: "day", text: "What should I work on next?", needs: ["today"], live: true, expect: { must: [/slides|venue|invoice|report|bank/i], maxWords: 90 } },
-  { id: "day-2", c: "day", text: "What's on my plate today?", needs: ["today"], expect: { must: [/slides|venue|invoice|report/i] } },
-  { id: "day-3", c: "day", text: "Give me my top 3 priorities", needs: ["today"], expect: { must: [/slides|venue|invoice|report/i] } },
-  { id: "day-4", c: "day", text: "I only have 25 minutes, what can I get done?", needs: ["today"], live: true, expect: { must: [/slides|venue|invoice|report|bank/i], maxWords: 90 } },
+  { id: "day-1", c: "day", text: "What should I work on next?", needs: ["today"], live: true, expect: { must: [/slides?\b|venue|invoice|report|bank/i], maxWords: 90 } },
+  { id: "day-2", c: "day", text: "What's on my plate today?", needs: ["today"], expect: { must: [/slides?\b|venue|invoice|report/i] } },
+  { id: "day-3", c: "day", text: "Give me my top 3 priorities", needs: ["today"], expect: { must: [/slides?\b|venue|invoice|report/i] } },
+  { id: "day-4", c: "day", text: "I only have 25 minutes, what can I get done?", needs: ["today"], live: true, expect: { must: [/slides?\b|venue|invoice|report|bank/i], maxWords: 90 } },
   { id: "day-5", c: "day", text: "what's my current focus task", needs: ["nowFocus"], expect: { must: [/workshop slides/i] } },
 
   // 2. Know my performance
@@ -204,7 +204,7 @@ export const QUESTIONS = [
   { id: "dec-2", c: "decide", text: "Which should I do first, the report outline or the invoice bug?", needs: ["today"], live: true, expect: { must: [/outline|invoice/i], maxWords: 80 } },
   { id: "dec-3", c: "decide", text: "Break the workshop slides into small steps", needs: ["today"], expect: { must: [/1\./], maxWords: 120 } },
   { id: "dec-4", c: "decide", text: "I keep postponing the bank call", needs: [], live: true, expect: { must: [/bank|call/i], maxWords: 80 } },
-  { id: "dec-5", c: "decide", text: "Too many things on my list, where do I even begin?", needs: ["today"], expect: { must: [/slides|venue|invoice|report/i] } },
+  { id: "dec-5", c: "decide", text: "Too many things on my list, where do I even begin?", needs: ["today"], expect: { must: [/slides?\b|venue|invoice|report/i] } },
 
   // 8. Remember me
   { id: "mem-1", c: "memory", text: "Remember that I don't like meetings after 3pm", needs: ["memoryRules"], expect: { remembers: /3\s*pm/i } },
@@ -286,7 +286,7 @@ export function buildTurn(q, { ownKey = true, fixture = null, now = NOW, windows
     rescueHandoffContext: "",
     isEarlyConversation: false,
     nowLabel: now.toLocaleString("en-GB", { weekday: "short", year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "UTC" }) + " (fixture time)",
-    timeOfDay: hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening",
+    timeOfDay: partOfDay(hour),
     todayActiveCount: todayActive.length,
     profileBlock: userProfile ? profileToCoachContext(userProfile) : "",
     lastCoachPlan: null,

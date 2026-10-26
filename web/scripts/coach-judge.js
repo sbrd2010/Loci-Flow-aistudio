@@ -21,7 +21,10 @@ if (typeof run !== "string" || !existsSync(join(run, "results.jsonl"))) throw ne
 const judgeName = args.judge || "gemini";
 const judge = EVAL_PROVIDERS[judgeName];
 const out = join(run, `judged-${judgeName}.jsonl`);
-const results = readFileSync(join(run, "results.jsonl"), "utf8").split("\n").filter(Boolean).map(l => JSON.parse(l)).filter(r => !r.error);
+// --sample 1 judges one sample per question, to spare the judge's daily limit.
+const onlySample = Number(args.sample) || null;
+const results = [...new Map(readFileSync(join(run, "results.jsonl"), "utf8").split("\n").filter(Boolean).map(l => JSON.parse(l)).map(r => [`${r.id}#${r.sample}`, r])).values()]
+  .filter(r => !r.error && (!onlySample || r.sample === onlySample));
 const done = new Set(existsSync(out) ? readFileSync(out, "utf8").split("\n").filter(Boolean).map(l => JSON.parse(l)).filter(j => j.judge !== "unjudged").map(j => `${j.id}#${j.sample}`) : []);
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 

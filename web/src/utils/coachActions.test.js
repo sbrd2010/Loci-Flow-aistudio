@@ -1503,6 +1503,9 @@ describe("withoutChangeClaims (#592): a reply that changed nothing does not say 
     "Would rescheduling the appointment help?",
     "Consider parking the groceries task until Friday.",
     "Once it's moved to next week, today has room for the slides.",
+    // A conditional offer, from the #594 baseline: nothing is claimed.
+    "Let me know the exact wording and I'll set it up.",
+    "Tell me the exact wording and I'll add it as today's first task.",
   ])("leaves an honest reply alone: %s", (reply) => {
     expect(withoutChangeClaims(reply)).toBe(reply);
   });

@@ -16,7 +16,7 @@ import { getFocusWindows } from "./focusWindows";
 import { makeFixture, NOW } from "./coachSyllabus.fixture";
 
 const DAY = 86400000;
-const SAM_TASKS = /slides|venue|invoice|report|bank/i;
+const SAM_TASKS = /slides?\b|venue|invoice|report|bank/i;
 const SAM_NAMES = /workshop|invoice|slides|bank|venue|report/i;
 
 // A brand-new user: nothing in Loci yet, first message to the Coach.

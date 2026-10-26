@@ -68,7 +68,6 @@ describe("which questions a card answers", () => {
     "What's the point of all these deadlines",
     "What's due? Also add buy milk",
     "What do you know about me? I'm so tired of this",
-    "What is the mind box for?",
     "Is the mind box private?",
     "What does parked mean?",
     "Is 25 minutes of focus enough?",

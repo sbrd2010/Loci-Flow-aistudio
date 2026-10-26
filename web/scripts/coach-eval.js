@@ -99,7 +99,8 @@ outer: for (const t of turns) {
   }
 }
 
-const everything = readFileSync(resultsFile, "utf8").split("\n").filter(Boolean).map(l => JSON.parse(l));
+// A resumed run appends a retry after its error: the latest record per sample counts.
+const everything = [...new Map(readFileSync(resultsFile, "utf8").split("\n").filter(Boolean).map(l => JSON.parse(l)).map(r => [`${r.id}#${r.sample}`, r])).values()];
 const failures = everything.filter(r => r.error || r.verdict === "fail")
   .map(r => `- **${r.id}#${r.sample}** "${r.text}": ${r.error ? `error: ${r.error}` : `${r.reasons.join("; ")}\n  > ${String(r.visible).replace(/\n+/g, " ").slice(0, 400)}`}`);
 writeFileSync(join(outDir, "summary.md"), [`# Coach eval: ${provider} (${args.model || p.model}), set ${set}, ${ownKey ? "full" : "lean"} prompt`, "", summarize(everything), "", "## Failures and errors (auto-graded; read the replies too)", "", ...failures, ""].join("\n"));
