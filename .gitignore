@@ -38,3 +38,7 @@ ui-debug.log
 mcp/node_modules/
 mcp/.wrangler/
 mcp/.dev.vars
+# AI relay (Cloudflare Worker)
+ai-proxy/node_modules/
+ai-proxy/.wrangler/
+ai-proxy/.dev.vars

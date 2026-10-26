@@ -105,11 +105,11 @@ export default function App() {
   const tabStartRef = useRef(Date.now());
 
   // Retired NVIDIA BYOK credentials have no Settings control anymore. Clear
-  // the old local secret on startup, before any provider can be selected.
+  // the old local secret on startup. NVIDIA itself is a choice again, through
+  // Loci's relay (no key on the device), so the provider choice is kept.
   useEffect(() => {
     try {
       localStorage.removeItem("loci_nvidia_key");
-      if (localStorage.getItem("loci_provider_pref") === "nvidia") localStorage.removeItem("loci_provider_pref");
     } catch { /* storage blocked */ }
   }, []);
 

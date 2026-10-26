@@ -64,5 +64,6 @@ Copy `web/.env.example` to `web/.env`. All variables are optional for local deve
 | `VITE_CEREBRAS_KEY` | Cerebras API key for AI features (optional) |
 | `VITE_CEREBRAS_MODEL` | Cerebras model override (optional, defaults to `gpt-oss-120b`) |
 | `VITE_OPENROUTER_MODEL` | OpenRouter model override (optional, defaults to `openrouter/free`, OpenRouter's free router; a person can also pin a model in Settings). OpenRouter keys are added per person in Settings; do not put a key with credit in a build variable |
+| `VITE_AI_RELAY_URL` | Address of Loci's AI relay Worker (optional). When set, Cloudflare AI and NVIDIA are offered as providers; see `docs/ai-relay.md` |
 
 Firebase config beyond the app ID (API key, project ID, etc.) is baked into the app for the hosted version. For your own Firebase project, update `web/src/firebase.js`.

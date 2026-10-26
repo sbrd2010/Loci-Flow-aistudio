@@ -1,0 +1,75 @@
+name: Deploy the AI relay (Cloudflare AI and NVIDIA)
+
+# A button, not an automatic deploy: Actions > this workflow > Run workflow.
+# Uses the same CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets as the
+# connector, plus AI_NVIDIA_KEY for NVIDIA. See docs/ai-relay.md.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-ai-relay
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ai-proxy
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check the two Cloudflare secrets are there
+        run: |
+          missing=""
+          [ -n "$CLOUDFLARE_API_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -n "$CLOUDFLARE_ACCOUNT_ID" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing. See docs/ai-relay.md."
+            exit 1
+          fi
+
+      - name: Install and test
+        run: |
+          npm ci
+          npm test
+
+      - name: Deploy the Worker
+        run: |
+          npx wrangler deploy 2>&1 | tee "$RUNNER_TEMP/deploy.log"
+          url=$(grep -oE 'https://[A-Za-z0-9.-]+\.workers\.dev' "$RUNNER_TEMP/deploy.log" | head -1 || true)
+          {
+            echo "## Loci AI relay"
+            if [ -n "$url" ]; then
+              echo "Relay address: \`$url\`"
+              echo ""
+              echo "Add it as the repository secret \`VITE_AI_RELAY_URL\` (exactly as shown, no slash at the end),"
+              echo "then run **Deploy to Firebase Hosting** so the app picks it up."
+            else
+              echo "The deploy finished but no address was printed; look in the log above."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Store the NVIDIA key on the Worker
+        env:
+          AI_NVIDIA_KEY: ${{ secrets.AI_NVIDIA_KEY }}
+        run: |
+          if [ -z "$AI_NVIDIA_KEY" ]; then
+            echo "NVIDIA is not set up: add the repository secret AI_NVIDIA_KEY and run this again. Cloudflare AI works without it." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          umask 077
+          jq -n --arg NVIDIA_API_KEY "$AI_NVIDIA_KEY" '{NVIDIA_API_KEY:$NVIDIA_API_KEY}' > "$RUNNER_TEMP/relay-secrets.json"
+          npx wrangler secret bulk "$RUNNER_TEMP/relay-secrets.json"
+          rm -f "$RUNNER_TEMP/relay-secrets.json"
+          echo "NVIDIA key stored on the relay." >> "$GITHUB_STEP_SUMMARY"

@@ -4,7 +4,8 @@ vi.mock("../firebase", () => ({
   auth: { currentUser: null },
 }));
 
-import { buildProviderOrder, callAI, classifyAIError, describeAIError, extractJsonArray, hasOwnAIKey, isAISystemReply, resetProviderCooldowns } from "./aiCall";
+import { auth } from "../firebase";
+import { buildProviderOrder, callAI, classifyAIError, describeAIError, extractJsonArray, hasOwnAIKey, isAISystemReply, isRelayAvailable, resetProviderCooldowns } from "./aiCall";
 
 function makeStorage() {
   const store = new Map();
@@ -1705,9 +1706,19 @@ describe("extractJsonArray", () => {
   });
 });
 
-describe("buildProviderOrder without NVIDIA", () => {
-  it("a saved 'nvidia' preference (no longer offered) falls back to Auto", () => {
+describe("buildProviderOrder", () => {
+  it("a saved 'nvidia' preference without the relay skips NVIDIA and Cloudflare", () => {
     expect(buildProviderOrder("nvidia", "g", "", "c", "").map(p => p.name)).toEqual(["groq", "cerebras"]);
+  });
+  it("an unknown preference falls back to Auto", () => {
+    expect(buildProviderOrder("retired-provider", "g", "m", "c", "z").map(p => p.name)).toEqual(["groq", "gemini", "zai", "cerebras"]);
+  });
+  it("with the relay, adds Cloudflare and NVIDIA after OpenRouter in Auto, and first when chosen", () => {
+    expect(buildProviderOrder("auto", "g", "m", "c", "z", false, "o", true).map(p => p.name)).toEqual(["groq", "gemini", "openrouter", "cloudflare", "nvidia", "zai", "cerebras"]);
+    expect(buildProviderOrder("cloudflare", "g", "", "", "", false, "", true).map(p => p.name)).toEqual(["cloudflare", "nvidia", "groq"]);
+    expect(buildProviderOrder("nvidia", "", "", "", "", false, "", true).map(p => p.name)).toEqual(["nvidia", "cloudflare"]);
+    expect(buildProviderOrder("nvidia", "g", "m", "", "", true, "", true).map(p => p.name)).toEqual(["nvidia"]);
+    expect(buildProviderOrder("zai", "g", "", "", "z", false, "", true).map(p => p.name)).toEqual(["zai", "groq", "cloudflare", "nvidia"]);
   });
   it("Only my provider keeps just the chosen provider, and ignores Auto", () => {
     expect(buildProviderOrder("gemini", "g", "m", "c", "z", true).map(p => p.name)).toEqual(["gemini"]);
@@ -1724,6 +1735,106 @@ describe("buildProviderOrder without NVIDIA", () => {
     expect(buildProviderOrder("cerebras", "g", "m", "c", "z", false, "o").map(p => p.name)).toEqual(["cerebras", "groq", "gemini", "openrouter", "zai"]);
     expect(buildProviderOrder("openrouter", "g", "m", "c", "z", true, "o").map(p => p.name)).toEqual(["openrouter"]);
     expect(buildProviderOrder("auto", "", "", "", "", false, "o").map(p => p.name)).toEqual(["openrouter"]);
+  });
+});
+
+describe("Cloudflare AI and NVIDIA through Loci's relay", () => {
+  let storage;
+  const RELAY = "https://loci-ai.example.workers.dev";
+  const relayOk = (content = "Relay reply.", finishReason = "stop") => ({
+    ok: true, status: 200, json: async () => ({ choices: [{ message: { content }, finish_reason: finishReason }], usage: { total_tokens: 10 } }),
+  });
+  const relayError = (status, message) => {
+    const res = { ok: false, status, headers: { get: () => null }, json: async () => ({ error: { message } }) };
+    res.clone = () => res;
+    return res;
+  };
+
+  beforeEach(() => {
+    storage = makeStorage();
+    vi.stubGlobal("localStorage", storage);
+    vi.stubGlobal("fetch", vi.fn());
+    vi.stubEnv("VITE_AI_RELAY_URL", `${RELAY}/`);
+    auth.currentUser = { uid: "u1", getIdToken: vi.fn(async () => "id-token") };
+    resetProviderCooldowns();
+  });
+
+  afterEach(() => {
+    auth.currentUser = null;
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("is available only with both a relay address and a signed-in user", () => {
+    expect(isRelayAvailable()).toBe(true);
+    auth.currentUser = null;
+    expect(isRelayAvailable()).toBe(false);
+    auth.currentUser = { uid: "u1" };
+    vi.stubEnv("VITE_AI_RELAY_URL", "");
+    expect(isRelayAvailable()).toBe(false);
+  });
+
+  it("sends the request to the relay with the sign-in token, never a key", async () => {
+    storage.setItem("loci_provider_pref", "cloudflare");
+    storage.setItem("loci_provider_only", "1");
+    fetch.mockResolvedValueOnce(relayOk("Start with the first line."));
+
+    const reply = await callAI(baseRequest({ reasoningEffort: "low" }));
+
+    expect(reply).toBe("Start with the first line.");
+    const [url, init] = fetch.mock.calls[0];
+    expect(url).toBe(`${RELAY}/cloudflare`);
+    expect(init.headers.Authorization).toBe("Bearer id-token");
+    const body = JSON.parse(init.body);
+    expect(body.messages[0]).toEqual({ role: "system", content: "You are a focus coach." });
+    expect(body).toMatchObject({ max_tokens: 120, reasoning_effort: "low" });
+    expect(body).not.toHaveProperty("model");
+    expect(init.body).not.toContain("test-groq-key");
+  });
+
+  it("in Auto, reaches Cloudflare then NVIDIA after the providers already in the chain", async () => {
+    fetch
+      .mockResolvedValueOnce(providerError(429))
+      .mockResolvedValueOnce(relayError(429, "Cloudflare's free daily AI allowance is used up"))
+      .mockResolvedValueOnce(relayOk("NVIDIA answered."));
+
+    const reply = await callAI(baseRequest());
+
+    expect(reply).toBe("NVIDIA answered.");
+    expect(fetch.mock.calls.map(c => String(c[0]))).toEqual([
+      "https://api.groq.com/openai/v1/chat/completions", `${RELAY}/cloudflare`, `${RELAY}/nvidia`,
+    ]);
+  });
+
+  it("a refused sign-in reads as the relay's reason, not as an invalid AI key", async () => {
+    storage.setItem("loci_provider_pref", "nvidia");
+    storage.setItem("loci_provider_only", "1");
+    fetch.mockResolvedValueOnce(relayError(401, "Sign in to Loci to use this provider."));
+
+    const err = await callAI(baseRequest()).catch(e => e);
+
+    expect(err.message).toBe("only_provider_failed");
+    expect(describeAIError(err)).toMatch(/\(nvidia: Sign in to Loci to use this provider\.\)$/);
+    expect(describeAIError(err)).not.toMatch(/AI key/);
+  });
+
+  it("retries once at a larger budget when hidden reasoning used up the reply", async () => {
+    storage.setItem("loci_provider_pref", "nvidia");
+    storage.setItem("loci_provider_only", "1");
+    fetch.mockResolvedValueOnce(relayOk("", "length")).mockResolvedValueOnce(relayOk("Done."));
+
+    expect(await callAI(baseRequest())).toBe("Done.");
+    expect(JSON.parse(fetch.mock.calls[1][1].body).max_tokens).toBe(1000);
+  });
+
+  it("is left out of the chain when signed out, so nothing is sent to the relay", async () => {
+    auth.currentUser = null;
+    storage.setItem("loci_provider_pref", "cloudflare");
+    fetch.mockResolvedValueOnce(groqOk("Groq answered."));
+
+    expect(await callAI(baseRequest())).toBe("Groq answered.");
+    expect(fetch.mock.calls.every(c => !String(c[0]).startsWith(RELAY))).toBe(true);
   });
 });
 

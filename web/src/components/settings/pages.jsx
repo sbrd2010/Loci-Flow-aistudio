@@ -8,6 +8,7 @@ import { formatSpan } from "../../utils/dayMapPlan";
 import { focusWindowRows, focusWindowsSummary, reconcileFocusWindowRows, sortFocusWindowRows } from "../../utils/settingsSummary";
 import { exportPayloadAsJson, exportTasksAsCsv } from "../../utils/exportTasks";
 import { isNativeApp } from "../../utils/nativeNotifs";
+import { isRelayConfigured } from "../../utils/aiCall";
 import { IconPencil, IconPlus, IconX } from "../ui/icons";
 import { Group, RadioList, Row, SubPage, SwitchRow, useAutosave } from "./ui";
 
@@ -499,14 +500,25 @@ export const PROVIDERS = [
   { key: "cerebras", name: "Cerebras", storage: "loci_cerebras_key", builtin: import.meta.env.VITE_CEREBRAS_KEY, getKey: "https://cloud.cerebras.ai", placeholder: "csk-…" },
 ];
 
+// Reached through Loci's relay with the user's sign-in, so there is no key to add.
+export const RELAY_PROVIDER_ENTRIES = [
+  { key: "cloudflare", name: "Cloudflare AI", relay: true },
+  { key: "nvidia", name: "NVIDIA", relay: true },
+];
+
+// Same chains as buildProviderOrder in aiCall.js; keep the two in step.
 export const PREF_CHAINS = {
-  auto: ["groq", "gemini", "openrouter", "zai", "cerebras"],
-  groq: ["groq", "gemini", "openrouter", "zai", "cerebras"],
-  gemini: ["gemini", "groq", "openrouter", "zai", "cerebras"],
-  openrouter: ["openrouter", "groq", "gemini", "zai", "cerebras"],
-  cerebras: ["cerebras", "groq", "gemini", "openrouter", "zai"],
-  zai: ["zai", "groq", "gemini", "openrouter", "cerebras"],
+  auto: ["groq", "gemini", "openrouter", "cloudflare", "nvidia", "zai", "cerebras"],
+  groq: ["groq", "gemini", "openrouter", "cloudflare", "nvidia", "zai", "cerebras"],
+  gemini: ["gemini", "groq", "openrouter", "cloudflare", "nvidia", "zai", "cerebras"],
+  openrouter: ["openrouter", "groq", "gemini", "cloudflare", "nvidia", "zai", "cerebras"],
+  cloudflare: ["cloudflare", "nvidia", "groq", "gemini", "openrouter", "zai", "cerebras"],
+  nvidia: ["nvidia", "cloudflare", "groq", "gemini", "openrouter", "zai", "cerebras"],
+  cerebras: ["cerebras", "groq", "gemini", "openrouter", "cloudflare", "nvidia", "zai"],
+  zai: ["zai", "groq", "gemini", "openrouter", "cloudflare", "nvidia", "cerebras"],
 };
+
+const providerEntry = (key) => PROVIDERS.find(p => p.key === key) || RELAY_PROVIDER_ENTRIES.find(p => p.key === key) || null;
 
 function readStore(key) {
   try { return localStorage.getItem(key) || ""; } catch { return ""; }
@@ -525,16 +537,16 @@ export function readProviderOnly() {
 export function activeProvider(pref = readProviderPref(), only = readProviderOnly()) {
   const chain = only && pref !== "auto" ? PREF_CHAINS[pref].slice(0, 1) : PREF_CHAINS[pref];
   const key = chain.find(k => {
-    const p = PROVIDERS.find(x => x.key === k);
-    return readStore(p.storage) || p.builtin;
+    const p = providerEntry(k);
+    return p.relay ? isRelayConfigured() : readStore(p.storage) || p.builtin;
   });
-  return PROVIDERS.find(p => p.key === key) || null;
+  return providerEntry(key);
 }
 
 export function providerLine() {
   const pref = readProviderPref();
   const active = activeProvider(pref);
-  const label = pref === "auto" ? "Auto" : PROVIDERS.find(p => p.key === pref)?.name;
+  const label = pref === "auto" ? "Auto" : providerEntry(pref)?.name;
   return active ? `${label} · ${active.name} active` : `${label} · no key yet`;
 }
 
@@ -560,11 +572,16 @@ export function AiProviderPage({ onBack, backLabel }) {
     setOnly(v);
     try { v ? localStorage.setItem("loci_provider_only", "1") : localStorage.removeItem("loci_provider_only"); } catch { /* storage blocked */ }
   };
+  const relay = isRelayConfigured();
   const uses = [
-    { value: "auto", label: "Auto (recommended)", sub: "Groq → Gemini → OpenRouter → Z.ai → Cerebras" },
+    { value: "auto", label: "Auto (recommended)", sub: relay ? "Groq → Gemini → OpenRouter → Cloudflare AI → NVIDIA → Z.ai → Cerebras" : "Groq → Gemini → OpenRouter → Z.ai → Cerebras" },
     { value: "groq", label: "Groq" },
     { value: "gemini", label: "Gemini" },
     { value: "openrouter", label: "OpenRouter", sub: "Free models, small daily limit" },
+    ...(relay || RELAY_PROVIDER_ENTRIES.some(p => p.key === pref) ? [
+      { value: "cloudflare", label: "Cloudflare AI", sub: "Built in, free daily allowance" },
+      { value: "nvidia", label: "NVIDIA", sub: "Built in, free trial" },
+    ] : []),
     { value: "zai", label: "Z.ai", sub: "Free fallback, slow when busy" },
     { value: "cerebras", label: "Cerebras" },
   ];
@@ -576,7 +593,7 @@ export function AiProviderPage({ onBack, backLabel }) {
       </Group>
       {pref !== "auto" && (
         <Group label="Fallback" note={only
-          ? `Messages go only to ${PROVIDERS.find(p => p.key === pref)?.name}. When it is busy, you wait or get an error.`
+          ? `Messages go only to ${providerEntry(pref)?.name}. When it is busy, you wait or get an error.`
           : "When your provider is busy, Coach tries the others, including any key built into the app."}>
           <SwitchRow title="Only use my provider" checked={only} onChange={chooseOnly} />
         </Group>
