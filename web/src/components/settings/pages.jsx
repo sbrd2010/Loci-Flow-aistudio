@@ -505,6 +505,7 @@ export const PROVIDERS = [
 export const RELAY_PROVIDER_ENTRIES = [
   { key: "cloudflare", name: "Cloudflare AI", relay: true },
   { key: "nvidia", name: "NVIDIA", relay: true },
+  { key: "ollama", name: "Ollama Cloud", relay: true },
 ];
 
 // The chains buildProviderOrder uses, so Settings names the provider that answers.
@@ -568,7 +569,7 @@ export function AiProviderPage({ onBack, backLabel }) {
   // Cerebras has no free tier left, so it is offered (and in Auto) only with a key of one's own.
   const hasCerebrasKey = !!readStore("loci_cerebras_key");
   const inAuto = (k) => (providerEntry(k).relay ? relay : k !== "cerebras" || hasCerebrasKey);
-  const subs = { openrouter: "Free models, small daily limit", cloudflare: "Built in, free daily allowance", nvidia: "Built in, free trial", zai: "Short chats only — choose another provider" };
+  const subs = { openrouter: "Free models, small daily limit", cloudflare: "Built in, free daily allowance", nvidia: "Built in, free trial", ollama: "Built in, free monthly allowance", zai: "Short chats only — choose another provider" };
   // Z.ai's small limit fits only short chats, so it is Auto's last resort, not a
   // choice; it is listed only while it is still someone's saved choice.
   const listed = (k) => pref === k || (k !== "zai" && inAuto(k));

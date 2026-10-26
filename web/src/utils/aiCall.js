@@ -32,7 +32,7 @@ const ZAI_MODEL = import.meta.env.VITE_ZAI_MODEL || "glm-4.7-flash";
 // Cloudflare Workers AI. It also carries the shared Groq, Gemini, OpenRouter and
 // Z.ai keys, so they are not in the app's public code. The relay holds the keys and lets in
 // signed-in users only. Unset VITE_AI_RELAY_URL means none of this is offered.
-export const RELAY_PROVIDERS = ["cloudflare", "nvidia"];
+export const RELAY_PROVIDERS = ["cloudflare", "nvidia", "ollama"];
 function relayUrl() {
   return (import.meta.env.VITE_AI_RELAY_URL || "").trim().replace(/\/+$/, "");
 }
@@ -842,13 +842,15 @@ export function isOnlyProviderKeyMissing() {
   return !keys[pref] && Object.values(keys).some(Boolean);
 }
 
-// Auto: Groq first, then Gemini, OpenRouter, Cloudflare AI and NVIDIA (Gemini gave the
-// best answers after Groq in the #555 U8 run; OpenRouter's free router the weakest). Z.ai only
+// Auto: Groq first, then Ollama Cloud, Gemini, OpenRouter, Cloudflare AI and NVIDIA.
+// Groq's allowance resets daily, so it goes first; Ollama runs the same model on a
+// large monthly allowance; Gemini gave the best answers after them in the #555 U8
+// run, OpenRouter's free router the weakest. Z.ai only
 // fits a short prompt (12k-char guard, one request at a time), so it comes after
 // the providers that take any prompt. Cerebras ended its no-card free tier, so it
 // is a last resort for someone with a key of their own. A chosen provider goes
 // first, then the others in Auto's order.
-const AUTO_ORDER = ["groq", "gemini", "openrouter", "cloudflare", "nvidia", "zai", "cerebras"];
+const AUTO_ORDER = ["groq", "ollama", "gemini", "openrouter", "cloudflare", "nvidia", "zai", "cerebras"];
 export const PROVIDER_ORDERS = Object.fromEntries([
   ["auto", AUTO_ORDER],
   ...AUTO_ORDER.map(name => [name, [name, ...AUTO_ORDER.filter(n => n !== name)]]),
@@ -866,6 +868,7 @@ export function buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCere
               : relay              ? { name: "openrouter",  key: "relay", viaRelay: true } : null,
     cloudflare: relay              ? { name: "cloudflare",  key: "relay" }            : null,
     nvidia:     relay              ? { name: "nvidia",      key: "relay" }            : null,
+    ollama:     relay              ? { name: "ollama",      key: "relay" }            : null,
     cerebras:   cleanCerebrasKey   ? { name: "cerebras",    key: cleanCerebrasKey }   : null,
     // Z.ai keeps its own call (size guards), so its relay entry is not viaRelay.
     zai:        cleanZaiKey        ? { name: "zai",         key: cleanZaiKey }
