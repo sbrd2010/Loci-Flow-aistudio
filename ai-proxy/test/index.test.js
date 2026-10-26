@@ -100,6 +100,8 @@ describe("NVIDIA", () => {
     expect(sent).toMatchObject({ model: "nvidia/nemotron-3.5-lightning-30b-a3b", max_tokens: 300, stream: false });
     expect(sent).not.toHaveProperty("reasoning_effort");
     expect(sent.messages).toHaveLength(2);
+    // Nemotron's thinking used the whole budget and came back empty (#587).
+    expect(sent.chat_template_kwargs).toEqual({ enable_thinking: false });
   });
 
   it("uses NVIDIA_MODEL when set, without reasoning_effort for a non-gpt-oss model", async () => {
@@ -107,6 +109,7 @@ describe("NVIDIA", () => {
     const sent = JSON.parse(fetchImpl.mock.calls.find(([url]) => url === NVIDIA_URL)[1].body);
     expect(sent.model).toBe("meta/llama-3.3-70b-instruct");
     expect(sent).not.toHaveProperty("reasoning_effort");
+    expect(sent).not.toHaveProperty("chat_template_kwargs");
   });
 
   it("says NVIDIA is not set up when the key is missing", async () => {

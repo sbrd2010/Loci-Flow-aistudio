@@ -118,10 +118,15 @@ async function relayUpstream(label, url, key, payload, fetchImpl) {
   return fail(res.status, reason, extra);
 }
 
+// Nemotron thinks by default and can spend the whole reply budget on it, which
+// comes back as an empty answer or a timeout (#587), so thinking is switched off.
+const isNemotron = (model) => /nemotron/i.test(model);
+
 function relayNvidia(params, env, fetchImpl) {
   if (!env.NVIDIA_API_KEY) return notSetUp("NVIDIA is not set up on the relay yet (NVIDIA_API_KEY missing).");
   const model = env.NVIDIA_MODEL || DEFAULT_NVIDIA_MODEL;
-  return relayUpstream("NVIDIA", NVIDIA_URL, env.NVIDIA_API_KEY, { model, ...forModel(params, model) }, fetchImpl);
+  const thinking = isNemotron(model) ? { chat_template_kwargs: { enable_thinking: false } } : {};
+  return relayUpstream("NVIDIA", NVIDIA_URL, env.NVIDIA_API_KEY, { model, ...forModel(params, model), ...thinking }, fetchImpl);
 }
 
 function relayGroq(params, env, fetchImpl) {
