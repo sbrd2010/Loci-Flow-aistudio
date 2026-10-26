@@ -1,6 +1,6 @@
 // Loci AI relay. NVIDIA's API refuses browser calls (no CORS, #356),
 // Cloudflare's own models are reached through the Worker's AI binding, and the
-// owner's Groq, Gemini, OpenRouter and Z.ai keys must not sit in the app's
+// owner's Groq, Ollama, Gemini, OpenRouter and Z.ai keys must not sit in the app's
 // public code, so the app sends those providers' requests here. Only a signed-in Loci user gets through; the
 // keys never leave the Worker. Prompts and replies are
 // passed on, never logged or stored.
@@ -8,6 +8,7 @@
 //   POST /nvidia      → NVIDIA's OpenAI-style chat endpoint
 //   POST /openrouter  → OpenRouter, free models only, with the owner's key
 //   POST /groq        → Groq, with the owner's key
+//   POST /ollama      → Ollama Cloud's OpenAI-style endpoint, with the owner's key
 //   POST /gemini      → Gemini's OpenAI-style endpoint, with the owner's key
 //   POST /zai         → Z.ai, with the owner's key (the app keeps its size limits)
 //   POST /cloudflare  → env.AI.run (Workers AI)
@@ -24,12 +25,15 @@ const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_OPENROUTER_MODEL = "openrouter/free";
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
+const OLLAMA_URL = "https://ollama.com/v1/chat/completions";
+// The model Groq runs; on Ollama's free plan it draws on an allowance that refills monthly.
+const DEFAULT_OLLAMA_MODEL = "gpt-oss:120b";
 const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 // GEMINI_MODEL picks another (the name as Google AI Studio shows it).
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
 const ZAI_URL = "https://api.z.ai/api/paas/v4/chat/completions";
 const DEFAULT_ZAI_MODEL = "glm-4.7-flash";
-const RELAY_PATHS = new Set(["nvidia", "openrouter", "cloudflare", "groq", "gemini", "zai"]);
+const RELAY_PATHS = new Set(["nvidia", "openrouter", "cloudflare", "groq", "ollama", "gemini", "zai"]);
 const DEFAULT_CLOUDFLARE_MODEL = "@cf/openai/gpt-oss-120b";
 const MAX_BODY_CHARS = 200_000;
 const MAX_MESSAGES = 100;
@@ -135,6 +139,12 @@ function relayGroq(params, env, fetchImpl) {
   return relayUpstream("Groq", GROQ_URL, env.GROQ_API_KEY, { model, ...forModel(params, model) }, fetchImpl);
 }
 
+function relayOllama(params, env, fetchImpl) {
+  if (!env.OLLAMA_API_KEY) return notSetUp("Ollama is not set up on the relay yet (OLLAMA_API_KEY missing).");
+  const model = env.OLLAMA_MODEL || DEFAULT_OLLAMA_MODEL;
+  return relayUpstream("Ollama", OLLAMA_URL, env.OLLAMA_API_KEY, { model, ...forModel(params, model) }, fetchImpl);
+}
+
 function relayGemini(params, env, fetchImpl) {
   if (!env.GEMINI_API_KEY) return notSetUp("Gemini is not set up on the relay yet (GEMINI_API_KEY missing).");
   const model = (env.GEMINI_MODEL || "").trim().replace(/^models\//, "") || DEFAULT_GEMINI_MODEL;
@@ -227,6 +237,7 @@ async function handle(request, env, fetchImpl) {
   if (provider === "nvidia") return relayNvidia(params, env, fetchImpl);
   if (provider === "openrouter") return relayOpenRouter(params, env, fetchImpl);
   if (provider === "groq") return relayGroq(params, env, fetchImpl);
+  if (provider === "ollama") return relayOllama(params, env, fetchImpl);
   if (provider === "gemini") return relayGemini(params, env, fetchImpl);
   if (provider === "zai") return relayZai(params, env, fetchImpl);
   return runCloudflare(params, env);

@@ -3,6 +3,7 @@ web/node_modules/
 web/dist/
 web/test-results/
 web/playwright-report/
+web/coach-eval-out/
 
 # Local agent/tooling state
 .claude/*

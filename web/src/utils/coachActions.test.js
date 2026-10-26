@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildLociTodaySnapshotContext } from "./lociAIContext";
-import { parseCoachActionTags, findTaskByTitle, buildSetNowFocusTasks, buildParkTaskTasks, applyCoachActions, matchesUserIntent, buildActionReplyText, inferTaskMetadata, undoCoachAction, NOTHING_CHANGED_NOTE } from "./coachActions";
+import { parseCoachActionTags, findTaskByTitle, buildSetNowFocusTasks, buildParkTaskTasks, applyCoachActions, matchesUserIntent, buildActionReplyText, inferTaskMetadata, undoCoachAction, NOTHING_CHANGED_NOTE, withoutChangeClaims } from "./coachActions";
 import { parseCheckinTag } from "./coachCheckin";
 import { getFocusWindows, getLociDayStr } from "./focusWindows";
 import { getLocalDateString } from "./lociAIContext";
@@ -1474,5 +1474,45 @@ describe("Q50: actions are buttons the user taps", () => {
     expect(undoCoachAction(payload, { type: "ADD_TASK", taskUuid: uuid }).tasks.find(t => t.uuid === uuid).isDeleted).toBe(true);
     const done = { ...payload, tasks: payload.tasks.map(t => (t.uuid === uuid ? { ...t, isCompleted: true } : t)) };
     expect(undoCoachAction(done, { type: "ADD_TASK", taskUuid: uuid })).toBeNull();
+  });
+});
+
+describe("withoutChangeClaims (#592): a reply that changed nothing does not say it did", () => {
+  it.each([
+    ["Got it—I'll update the task title to **Fix export**. Let me know the next step you'd like to tackle.", "Let me know the next step you'd like to tackle."],
+    ["Got it—I'll set the budget spreadsheet aside for next week.", ""],
+    ["Got it. Budget spreadsheet rescheduled to next week. What's the next task you want to tackle?", "What's the next task you want to tackle?"],
+    ["Got it — moved to Week. What's the next task you want to tackle?", "What's the next task you want to tackle?"],
+    ["Parked. Let's get that intro slide written.", "Let's get that intro slide written."],
+    ["Sure, I'll rename it to Fix export.", ""],
+    ["Got it, moving that budget task aside.", ""],
+    ["Got it, I’ll park the budget spreadsheet for next week.", ""],
+  ])("%s", (reply, kept) => {
+    expect(withoutChangeClaims(reply)).toBe([kept, NOTHING_CHANGED_NOTE].filter(Boolean).join(" "));
+  });
+
+  it.each([
+    "I can't shift it for you, but you can open the task and change its horizon to Week.",
+    "You could move the report to next week if today is full.",
+    "Got it — I'll check in with you here in 20 minutes.",
+    "Got it — I've noted that in your Coach memory.",
+    "Nice work, that one is done! Want to pick the next?",
+    "Start with the intro slide: open the deck and type one line.",
+    // Codex review, PR 593: advice and questions claim nothing.
+    "Try moving the report to next week if today is full.",
+    "Would rescheduling the appointment help?",
+    "Consider parking the groceries task until Friday.",
+    "Once it's moved to next week, today has room for the slides.",
+  ])("leaves an honest reply alone: %s", (reply) => {
+    expect(withoutChangeClaims(reply)).toBe(reply);
+  });
+
+  it("drops a false claim next to a blocked, stale action tag too", () => {
+    const { cleanText, actions } = parseCoachActionTags("Got it—I'll set the budget spreadsheet aside for next week. [[PARK_TASK:Prepare the budget spreadsheet]]");
+    const lastUserMessage = "Move the budget spreadsheet to next week";
+    const payload = { tasks: [{ uuid: "b", title: "Prepare the budget spreadsheet", horizonLevel: "week", isCompleted: false, isDeleted: false, isParked: false }], config: {}, contributions: [] };
+    const { payload: next, results } = applyCoachActions(payload, actions, { lociDateStr: "2026-10-21", lastUserMessage });
+    expect(next).toBe(payload);
+    expect(buildActionReplyText(cleanText, results, lastUserMessage, { proposed: true })).toBe(NOTHING_CHANGED_NOTE);
   });
 });

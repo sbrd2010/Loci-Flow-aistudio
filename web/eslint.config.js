@@ -5,7 +5,7 @@ import globals from "globals";
 // Lint: JavaScript's recommended rules and React's rules of hooks. Only
 // errors fail `npm run lint` (and CI); warnings are there to read.
 export default [
-  { ignores: ["dist/**", "android/**", "node_modules/**", "test-results/**", "playwright-report/**"] },
+  { ignores: ["dist/**", "android/**", "node_modules/**", "test-results/**", "playwright-report/**", "coach-eval-out/**"] },
   {
     files: ["**/*.{js,jsx}"],
     languageOptions: {

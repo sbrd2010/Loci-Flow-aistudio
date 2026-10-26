@@ -261,6 +261,20 @@ describe("Groq and Gemini", () => {
     expect(sent.body).toMatchObject({ model: "openai/gpt-oss-120b", reasoning_effort: "low", stream: false });
   });
 
+  it("forwards to Ollama Cloud with the relay's key, gpt-oss:120b and reasoning_effort", async () => {
+    const res = await call("/ollama", { token: await signer.sign(), env: { OLLAMA_API_KEY: "ollama-test" } });
+    expect(res.status).toBe(200);
+    const sent = sentTo("https://ollama.com/v1/chat/completions");
+    expect(sent.auth).toBe("Bearer ollama-test");
+    expect(sent.body).toMatchObject({ model: "gpt-oss:120b", reasoning_effort: "low", stream: false });
+  });
+
+  it("says Ollama is not set up when its key is missing, so the app moves on", async () => {
+    const res = await call("/ollama", { token: await signer.sign() });
+    expect(res.status).toBe(501);
+    expect((await res.json()).error.message).toMatch(/OLLAMA_API_KEY/);
+  });
+
   it("forwards to Gemini's OpenAI-style endpoint with the chosen model and no reasoning_effort", async () => {
     const body = { ...BODY, messages: [{ role: "system", content: "S" }, { role: "assistant", content: "Hey!" }, { role: "user", content: "Hi" }] };
     const res = await call("/gemini", { token: await signer.sign(), body, env: { GEMINI_API_KEY: "AIza-test", GEMINI_MODEL: " models/gemini-test-lite " } });

@@ -8,6 +8,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "lint": "eslint .",
+    "coach:eval": "esbuild scripts/coach-eval.js --bundle --platform=node --format=esm --log-level=warning --outfile=coach-eval-out/coach-eval.mjs && node coach-eval-out/coach-eval.mjs",
+    "coach:judge": "esbuild scripts/coach-judge.js --bundle --platform=node --format=esm --log-level=warning --outfile=coach-eval-out/coach-judge.mjs && node coach-eval-out/coach-judge.mjs",
     "test:e2e": "playwright test",
     "test:rules-emulator": "npx --yes firebase-tools@15.22.1 emulators:exec --only database --project demo-loci-flow-rules-test \"vitest run --config vitest.rules-emulator.config.js\""
   },
