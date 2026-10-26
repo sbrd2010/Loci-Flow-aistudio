@@ -160,13 +160,13 @@ test("the coach page: name, tone and notes save as they change", async ({ page }
   await expect(page.getByRole("button", { name: "Direct" })).toHaveAttribute("aria-pressed", "true");
 });
 
-test("AI provider: Auto, Groq, OpenRouter, Gemini — no NVIDIA, Z.ai or Cerebras without its key; a key is added, shown masked and removed", async ({ page }) => {
+test("AI provider: Auto, Groq, Gemini, OpenRouter — no NVIDIA, Z.ai or Cerebras without its key; a key is added, shown masked and removed", async ({ page }) => {
   await enterDemo(page);
   await openTab(page, "Settings");
   await page.getByRole("button", { name: /^AI provider/ }).click();
   const radios = page.getByRole("radiogroup", { name: "AI provider" }).getByRole("radio");
-  await expect(radios).toHaveText([/Auto \(recommended\)/, /Groq/, /OpenRouter/, /Gemini/]);
-  await expect(radios.first()).toContainText("Groq → OpenRouter → Gemini → Z.ai");
+  await expect(radios).toHaveText([/Auto \(recommended\)/, /Groq/, /Gemini/, /OpenRouter/]);
+  await expect(radios.first()).toContainText("Groq → Gemini → OpenRouter → Z.ai");
   await expect(page.getByText(/NVIDIA/i)).toHaveCount(0);
   await page.getByRole("radio", { name: /^Gemini/ }).click();
   await expect(page.getByRole("radio", { name: /^Gemini/ })).toHaveAttribute("aria-checked", "true");

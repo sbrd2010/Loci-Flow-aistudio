@@ -791,8 +791,9 @@ export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan
   // one", "yes do it") needs the action protocol that `light` does not carry.
   if (lastReplyAsked && text.trim().length <= 80) return "compact_task";
 
-  // The shared built-in keys are small free tiers, so there a message no rule
-  // recognises stays light. With the user's own key the full prompt goes unless
+  // A key built into the app is a small shared free tier, so there a message no rule
+  // recognises stays light. With the user's own key or Loci's relay (every tester,
+  // see fullPromptAllowed) the full prompt goes unless
   // the message is plainly small talk, so rewording a question cannot lose the
   // data it needs.
   // A message with no letters in it (an emoji, "...", "👍") is small talk too.

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import FocusPill from "./FocusPill";
 import { auth } from "../firebase";
-import { aiNeedsSignIn, callAI, describeAIError, getAIKeys, hasAIKey, hasOwnAIKey, isAISystemReply, isOnlyProviderKeyMissing, noKeyHint } from "../utils/aiCall";
+import { aiNeedsSignIn, callAI, describeAIError, fullPromptAllowed, getAIKeys, hasAIKey, isAISystemReply, isOnlyProviderKeyMissing, noKeyHint } from "../utils/aiCall";
 import { stripAIUsageNote } from "../utils/aiUsageLimits";
 import { buildLocalSafetyReply, localSafetyTurns, PRIVATE_REPLY_TURN, PRIVATE_USER_TURN } from "../utils/crisisSafety";
 import { isEventTask } from "../utils/dayMapRoute";
@@ -760,10 +760,10 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     const lastShown = chatHistory[chatHistory.length - 1];
     const lastReplyAsked = !!lastShown && !lastShown.isUser && !isAISystemReply(lastShown.text) &&
       (stripSavedNote(String(lastShown.text || "")).trim().endsWith("?") || (lastShown.actions || []).some(a => a.state === "proposed"));
-    // With the user's own key a message no rule recognises gets the full prompt
-    // (see classifyContextMode); `unclaimed` is such a message, which also gets
-    // the period digest when it names a span of time.
-    const ownKey = hasOwnAIKey();
+    // With the user's own key or Loci's relay, a message no rule recognises gets the
+    // full prompt (see classifyContextMode); `unclaimed` is such a message, which
+    // also gets the period digest when it names a span of time.
+    const ownKey = fullPromptAllowed();
     const modeOptions = { lastFullTaskTime, hasLastPlan: !!lastPlan, lastReplyAsked };
     const contextMode = classifyContextMode(userText, { ...modeOptions, ownKey });
     const unclaimed = ownKey && contextMode === "full_task" && classifyContextMode(userText, modeOptions) === "light";
