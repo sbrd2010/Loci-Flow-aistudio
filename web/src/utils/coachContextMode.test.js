@@ -1390,6 +1390,12 @@ describe("period questions and the other phrasings that fell through to light (#
     "which task am I ignoring?",
     "what am I procrastinating on",
     "what's my oldest open task?",
+    "how has been my week?",
+    "how's my week going",
+    "how’s my week been?",
+    "how have been my last week",
+    "how do you think my week has been?",
+    "how do you feel my month went",
   ])("reads %s as a period question, past the 10-minute downgrade too", (q) => {
     expect(detectPeriodIntent(q)).not.toBeNull();
     expect(classifyContextMode(q)).toBe("full_task");
@@ -1397,7 +1403,7 @@ describe("period questions and the other phrasings that fell through to light (#
   });
 
   it("does not take a statement or a 'should I' question for the new wordings", () => {
-    for (const q of ["I keep putting off the report, help", "How long should I focus on this?", "how long did the meeting last", "how many hours should I work today?", "should I put off the report?", "which task should I do first?"]) {
+    for (const q of ["my week was busy, help me plan", "how do I plan my week?", "I keep putting off the report, help", "How long should I focus on this?", "how long did the meeting last", "how many hours should I work today?", "should I put off the report?", "which task should I do first?"]) {
       expect(detectPeriodIntent(q), q).toBeNull();
     }
   });
