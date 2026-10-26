@@ -680,6 +680,8 @@ describe("AI call resilience", () => {
   });
 
   it("calls the Gemini model a deployment names, and the default model otherwise", () => {
+    // The deploy job sets VITE_GEMINI_MODEL, so the default is checked with it emptied.
+    vi.stubEnv("VITE_GEMINI_MODEL", "");
     expect(geminiUrl()).toBe("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent");
     vi.stubEnv("VITE_GEMINI_MODEL", " models/gemini-test-lite ");
     expect(geminiUrl()).toBe("https://generativelanguage.googleapis.com/v1beta/models/gemini-test-lite:generateContent");
