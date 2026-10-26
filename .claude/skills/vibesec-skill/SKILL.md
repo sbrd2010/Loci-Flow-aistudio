@@ -1,6 +1,6 @@
 ---
 name: vibesec-skill
-description: This skill helps Claude write secure web applications. Use this when working on any web application or when a user requests a scan or audit to ensure security best practices are followed.
+description: Secure-coding checklist for web apps (access control, XSS, injection, redirects, headers, JWT, API keys). Use only when a change touches security-sensitive code — Firebase auth or database rules, API keys or secrets, user input rendered as HTML, URLs/redirects, the MCP connector, or network requests carrying user data — or when the user asks for a security scan or audit. Not for routine UI, CSS, copy or test changes.
 ---
 
 # Secure Coding Guide for Web Applications
