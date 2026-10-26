@@ -5,7 +5,7 @@ vi.mock("../firebase", () => ({
 }));
 
 import { auth } from "../firebase";
-import { buildProviderOrder, callAI, classifyAIError, describeAIError, extractJsonArray, geminiUrl, hasOwnAIKey, isAISystemReply, isRelayAvailable, resetProviderCooldowns } from "./aiCall";
+import { buildProviderOrder, callAI, classifyAIError, describeAIError, extractJsonArray, geminiUrl, hasOwnAIKey, isAISystemReply, isRelayAvailable, noKeyHint, resetProviderCooldowns } from "./aiCall";
 
 function makeStorage() {
   const store = new Map();
@@ -1797,6 +1797,15 @@ describe("Cloudflare AI and NVIDIA through Loci's relay", () => {
     auth.currentUser = { uid: "u1" };
     vi.stubEnv("VITE_AI_RELAY_URL", "");
     expect(isRelayAvailable()).toBe(false);
+  });
+
+  it("tells someone signed out to sign in, and keeps the key wording without a relay", () => {
+    expect(noKeyHint("get suggested steps")).toBe("Add an AI key in Settings to get suggested steps.");
+    auth.currentUser = null;
+    expect(noKeyHint("get suggested steps")).toBe("Sign in to get suggested steps, or add your own AI key in Settings.");
+    expect(describeAIError(new Error("no_key"))).toBe("Sign in to chat with your Coach, or add your own AI key in Settings.");
+    vi.stubEnv("VITE_AI_RELAY_URL", "");
+    expect(noKeyHint("get suggested steps")).toBe("Add an AI key in Settings to get suggested steps.");
   });
 
   it("sends the request to the relay with the sign-in token, never a key", async () => {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import FocusPill from "./FocusPill";
 import { auth } from "../firebase";
-import { callAI, describeAIError, getAIKeys, hasAIKey, hasOwnAIKey, isAISystemReply, isOnlyProviderKeyMissing } from "../utils/aiCall";
+import { aiNeedsSignIn, callAI, describeAIError, getAIKeys, hasAIKey, hasOwnAIKey, isAISystemReply, isOnlyProviderKeyMissing, noKeyHint } from "../utils/aiCall";
 import { stripAIUsageNote } from "../utils/aiUsageLimits";
 import { buildLocalSafetyReply, localSafetyTurns, PRIVATE_REPLY_TURN, PRIVATE_USER_TURN } from "../utils/crisisSafety";
 import { isEventTask } from "../utils/dayMapRoute";
@@ -124,6 +124,7 @@ function endConversation() {
   replyController?.abort();
 }
 const NO_KEY_REPLY = "🔑 Add an AI key in **Settings → AI Keys** to enable chat.";
+const SIGN_IN_REPLY = "🔑 Sign in to chat with your Coach, or add your own AI key in **Settings → AI Keys**.";
 // A tapped chat action's Undo record. The Coach tab remounts on every tab
 // switch, so it is kept here (not in state) for a while. It holds only ids
 // and the time the tap left the task, and Undo re-reads the live task list.
@@ -735,7 +736,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     // in-memory regardless — only the immediate, separate persistence is
     // removed.
     if (!hasAnyKey) {
-      const replyMsg = { text: isOnlyProviderKeyMissing() ? describeAIError(new Error("no_key_only")) : NO_KEY_REPLY, isUser: false, at: Date.now() };
+      const replyMsg = { text: isOnlyProviderKeyMissing() ? describeAIError(new Error("no_key_only")) : aiNeedsSignIn() ? SIGN_IN_REPLY : NO_KEY_REPLY, isUser: false, at: Date.now() };
       const withReply = [...savedHistory, replyMsg];
       const { history: savedWithReply, removedCount } =
         trimChatHistoryWithCursor(withReply, MAX_DB_HISTORY, summaryAfterEarlyTrim);
@@ -931,7 +932,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     // An error or limit notice shown in the chat was never said by the Coach:
     // left in, the model repeats it, and the usage note rides along with it.
     const messages = trimmedForLLM
-      .filter(m => m.isUser || !(m.text === NO_KEY_REPLY || isAISystemReply(m.text)))
+      .filter(m => m.isUser || !(m.text === NO_KEY_REPLY || m.text === SIGN_IN_REPLY || isAISystemReply(m.text)))
       .map(m => ({
         role: m.isUser ? "user" : "assistant",
         content: privateTurns.has(m) ? (m.isUser ? PRIVATE_USER_TURN : PRIVATE_REPLY_TURN) : m.isUser ? m.text : stripAIUsageNote(stripSavedNote(m.text)),
@@ -1600,7 +1601,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
   const [briefChip, setBriefChip] = useState(null);
   const handleBriefMe = async (focusRaw, frontNameOf) => {
     if (briefStatus === "running") return;
-    if (!hasAnyKey) { setBriefStatus("error"); setBriefError("Add an AI key in Settings → AI provider to use Coach’s brief."); return; }
+    if (!hasAnyKey) { setBriefStatus("error"); setBriefError(noKeyHint("use Coach’s brief")); return; }
     setBriefStatus("running");
     setBriefError("");
     const now = new Date();
