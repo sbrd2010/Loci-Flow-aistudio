@@ -12,6 +12,7 @@
 // key a judge model reads for the questions a regexp cannot grade.
 
 import { getLocalDateString } from "./lociAIContext";
+import { getFocusWindows } from "./focusWindows";
 import { makeFixture, NOW } from "./coachSyllabus.fixture";
 
 const DAY = 86400000;
@@ -51,14 +52,16 @@ function injectedUser() {
 // 00:30 on Thu 22 Oct, inside a focus window that runs until 02:00, so the Loci
 // day is still Wed 21 Oct: what was finished at 23:00 counts as today.
 export const LATE_NOW = new Date(2026, 9, 22, 0, 30);
-export const LATE_WINDOWS = [{ startMin: 420, endMin: 120, overnight: true }];
+// In the settings, as the app keeps them, so every part of the prompt reads the same day.
+const LATE_CONFIG = { focusWindows: [{ start: "07:00", end: "02:00" }] };
+export const LATE_WINDOWS = getFocusWindows(LATE_CONFIG);
 function lateUser() {
   const t = (n, title, extra = {}) => ({ uuid: `n${n}-aaaa-bbbb`, title, horizonLevel: "today", priority: "P2", category: "Personal", timeEstimateMinutes: 30, orderIndex: n, lastUpdated: LATE_NOW.getTime() - 90 * 60000, ...extra });
   const wed = getLocalDateString(new Date(2026, 9, 21, 12));
   const tue = getLocalDateString(new Date(2026, 9, 20, 12));
   return {
     tasks: [t(1, "Reply to the landlord", { isCompleted: true, dateCompletedString: wed }), t(2, "Pack the gym bag", { isCompleted: true, dateCompletedString: tue, lastUpdated: LATE_NOW.getTime() - 30 * 3600000 }), t(3, "Read chapter four")],
-    config: {}, brainDump: [], contributions: [{ dateString: wed, count: 1 }, { dateString: tue, count: 1 }], focusRaw: {}, userProfile: null,
+    config: LATE_CONFIG, brainDump: [], contributions: [{ dateString: wed, count: 1 }, { dateString: tue, count: 1 }], focusRaw: {}, userProfile: null,
   };
 }
 

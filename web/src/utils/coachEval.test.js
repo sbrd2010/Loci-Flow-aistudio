@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import fs from "fs";
-import { evalRequestBody, retryBudget, splitReply, gradeReply, summarize, toSpec, parsePlaybook } from "./coachEval";
+import { evalRequestBody, retryBudget, splitReply, gradeReply, summarize, toSpec, parsePlaybook, judgeMessages, parseJudge } from "./coachEval";
 
 const turn = { system: "S", messages: [{ role: "assistant", content: "Hi!" }, { role: "user", content: "What next?" }] };
 
@@ -61,5 +61,23 @@ describe("parsePlaybook", () => {
     expect(new Set(all.map(q => q.id)).size).toBe(all.length);
     expect(all[0]).toMatchObject({ id: "pb-001", c: "comfort", text: "Comfort me. I feel like I'm failing." });
     expect(all[0].key).toContain("Let's choose one small task.");
+  });
+});
+
+describe("the judge", () => {
+  it("shows the judge the message, the answer key and the reply", () => {
+    const { system, messages } = judgeMessages({ text: "Comfort me", key: "Stay with the feeling.", visible: "Let's pick a task." });
+    expect(system).toContain('"verdict"');
+    expect(messages[0].content).toContain("Answer key: Stay with the feeling.");
+    expect(messages[0].content).toContain("Coach reply: Let's pick a task.");
+  });
+  it("shows the judge the conversation before the message", () => {
+    const { messages } = judgeMessages({ text: "the second one", visible: "The report outline.", history: [{ role: "assistant", content: "1. Invoice 2. Report outline" }] });
+    expect(messages[0].content).toContain("Conversation before:\nCoach: 1. Invoice 2. Report outline");
+  });
+  it("reads its one line of JSON, and anything else as unjudged", () => {
+    expect(parseJudge('Sure: {"verdict":"fail","reason":"pushes a task"}')).toEqual({ verdict: "fail", reason: "pushes a task" });
+    expect(parseJudge('{"verdict":"great"}').verdict).toBe("unjudged");
+    expect(parseJudge("I think it passes").verdict).toBe("unjudged");
   });
 });

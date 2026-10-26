@@ -10,8 +10,8 @@
 // handed to curl on stdin, never printed or put on the command line.
 // Made-up data only: the questions are asked as the fixture user, never as you.
 
-import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { send as sendTo } from "./eval-http.js";
 import { join } from "node:path";
 import { QUESTIONS, buildTurn } from "../src/utils/coachSyllabus.fixture.js";
 import { EVAL_PROVIDERS, evalRequestBody, retryBudget, splitReply, gradeReply, summarize, toSpec, parsePlaybook } from "../src/utils/coachEval.js";
@@ -62,22 +62,7 @@ const done = new Set(existsSync(resultsFile)
   : []);
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-function send(body) {
-  const req = join(outDir, ".req.json"), res = join(outDir, ".res.json"), hdr = join(outDir, ".hdr.txt");
-  writeFileSync(req, JSON.stringify(body));
-  const key = process.env[p.keyEnv];
-  const started = Date.now();
-  let code = 0;
-  try {
-    code = Number(execFileSync("curl", ["-sS", "--max-time", "30", "-o", res, "-D", hdr, "-w", "%{http_code}", "-H", "Content-Type: application/json",
-      ...(key ? ["--config", "-"] : []), "--data-binary", `@${req}`, p.url], { input: key ? `header = "Authorization: Bearer ${key}"\n` : undefined, encoding: "utf8" }));
-  } catch { code = 0; } // timeout or network: the app gives up at 30 s too
-  const raw = existsSync(res) ? readFileSync(res, "utf8") : "";
-  const retryAfter = Number((existsSync(hdr) ? readFileSync(hdr, "utf8") : "").match(/^retry-after:\s*([\d.]+)/im)?.[1]) || null;
-  let json = null;
-  try { json = JSON.parse(raw); if (Array.isArray(json)) json = json[0]; } catch { /* not JSON */ }
-  return { code, json, raw, retryAfter, ms: Date.now() - started };
-}
+const send = (body) => sendTo(p, body, outDir);
 
 let lastTokens = 0;
 const all = [];
@@ -97,7 +82,8 @@ outer: for (const t of turns) {
       retried = true;
       r = send(evalRequestBody(provider, t, retryBudget(t.maxTokens), args.model));
     }
-    const rec = { id: t.id, c: t.c, text: t.text, mode: t.mode, sample, http: r.code, ms: r.ms, retried, ...(t.key ? { key: t.key } : {}) };
+    const history = t.messages.slice(0, -1).map(m => ({ role: m.role, content: String(m.content).slice(0, 400) }));
+    const rec = { id: t.id, c: t.c, text: t.text, mode: t.mode, sample, http: r.code, ms: r.ms, retried, ...(t.key ? { key: t.key } : {}), ...(history.length ? { history } : {}) };
     const choice = r.json?.choices?.[0];
     if (r.code !== 200 || !choice) {
       rec.error = String(r.json?.error?.message || r.raw || "no reply").slice(0, 200);
