@@ -47,10 +47,11 @@ export function isRelayAvailable() {
 export function aiNeedsSignIn() {
   return isRelayConfigured() && !auth?.currentUser;
 }
+const noKeyCopy = (action, signIn) => signIn
+  ? `Sign in to ${action}, or add your own AI key in Settings.`
+  : `Add an AI key in Settings to ${action}.`;
 export function noKeyHint(action) {
-  return aiNeedsSignIn()
-    ? `Sign in to ${action}, or add your own AI key in Settings.`
-    : `Add an AI key in Settings to ${action}.`;
+  return noKeyCopy(action, aiNeedsSignIn());
 }
 
 // Z.ai's free GLM-4.7-Flash tier has a concurrency limit of 1 — only one
@@ -288,7 +289,8 @@ export function describeAIError(err) {
 const LEGACY_AI_ERROR_COPY = [
   "AI is temporarily busy or rate-limited. Your tasks are safe. Please wait a minute and try again.",
 ];
-const AI_ERROR_TEXTS = new Set([...Object.values(AI_ERROR_COPY), ...LEGACY_AI_ERROR_COPY]);
+// The signed-out form of no_key is a notice too (describeAIError picks the form).
+const AI_ERROR_TEXTS = new Set([...Object.values(AI_ERROR_COPY), ...LEGACY_AI_ERROR_COPY, noKeyCopy("chat with your Coach", true)]);
 
 // True for a saved message that is only an error or limit notice, never a real
 // answer: it is shown to the user but must not be replayed to the model as
