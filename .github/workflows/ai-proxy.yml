@@ -1,0 +1,39 @@
+name: AI relay tests
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'ai-proxy/**'
+      - '.github/workflows/ai-proxy.yml'
+  push:
+    branches: [main, master]
+    paths:
+      - 'ai-proxy/**'
+      - '.github/workflows/ai-proxy.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-proxy-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ai-proxy
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ai-proxy/package-lock.json
+
+      - run: npm ci
+
+      - run: npm test

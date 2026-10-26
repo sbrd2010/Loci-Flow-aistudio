@@ -1,0 +1,15 @@
+{
+  "name": "loci-ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.5",
+    "wrangler": "^4.151.3"
+  }
+}

@@ -20,6 +20,22 @@ const GEMINI_URL   = "https://generativelanguage.googleapis.com/v1beta/models/ge
 const ZAI_URL   = "https://api.z.ai/api/paas/v4/chat/completions";
 const ZAI_MODEL = import.meta.env.VITE_ZAI_MODEL || "glm-4.7-flash";
 
+// Loci's own relay Worker (ai-proxy/, docs/ai-relay.md) for the two providers a
+// browser cannot call itself: NVIDIA (its API sends no CORS headers, #356) and
+// Cloudflare Workers AI. It also carries the shared OpenRouter key, so that key
+// is not in the app's public code. The relay holds the keys and lets in
+// signed-in users only. Unset VITE_AI_RELAY_URL means none of this is offered.
+export const RELAY_PROVIDERS = ["cloudflare", "nvidia"];
+function relayUrl() {
+  return (import.meta.env.VITE_AI_RELAY_URL || "").trim().replace(/\/+$/, "");
+}
+export function isRelayConfigured() {
+  return !!relayUrl();
+}
+export function isRelayAvailable() {
+  return isRelayConfigured() && !!auth?.currentUser;
+}
+
 // Z.ai's free GLM-4.7-Flash tier has a concurrency limit of 1 — only one
 // request may be in flight at a time across the whole app instance. No
 // queueing and no retries: a busy Z.ai is treated as "unavailable right now"
@@ -433,6 +449,56 @@ async function callOpenRouter(openrouterKey, systemPrompt, messages, maxTokens, 
   return { reply, usage };
 }
 
+// Relay providers: OpenAI-style, signed with the user's Firebase sign-in token
+// instead of a key. Both run gpt-oss-120b by default, so a "length" finish gets
+// one retry at a larger budget, as for Groq.
+const RELAY_RETRY_TOKEN_CAP = 4000;
+
+async function requestRelay(name, systemPrompt, messages, tokenBudget, reasoningEffort, limits) {
+  const token = await auth?.currentUser?.getIdToken?.();
+  if (!token) throw new Error(`${name}_signed_out`);
+  const res = await fetchWithTimeout(`${relayUrl()}/${name}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      messages: [{ role: "system", content: systemPrompt }, ...messages],
+      max_tokens: tokenBudget,
+      temperature: 0.4,
+      top_p: 0.9,
+      ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {})
+    })
+  }, limits);
+  if (!res.ok) {
+    const err = await failedResponse(name, res);
+    // The relay's 401/403 means the Loci sign-in was refused, not an AI key the
+    // user could fix in Settings, so it must not read as invalid_key.
+    if (res.status === 401 || res.status === 403) err.message = `${name}_auth`;
+    throw err;
+  }
+  const data = await res.json();
+  const message = data.choices?.[0]?.message;
+  return { reply: extractMessageContent(message), usage: data.usage, finishReason: data.choices?.[0]?.finish_reason, data, message };
+}
+
+async function callRelay(name, systemPrompt, messages, maxTokens, reasoningEffort, limits) {
+  const initialBudget = maxTokens ?? 300;
+  let { reply, usage, finishReason, data, message } = await requestRelay(name, systemPrompt, messages, initialBudget, reasoningEffort, limits);
+  if (finishReason === "length") {
+    const retryBudget = Math.min(Math.max(initialBudget * 2, 1000), RELAY_RETRY_TOKEN_CAP);
+    if (retryBudget > initialBudget) {
+      ({ reply, usage, finishReason, data, message } = await requestRelay(name, systemPrompt, messages, retryBudget, reasoningEffort, limits));
+    }
+  }
+  if (!reply) {
+    logEmptyReplyDiagnostics(name, data, message);
+    throw new Error(`${name}_empty`);
+  }
+  return { reply, usage };
+}
+
 async function callGemini(geminiKey, systemPrompt, messages, maxTokens, limits) {
   // Gemini requires contents to start with "user" role - strip leading AI messages
   let contents = messages.map(m => ({
@@ -737,31 +803,40 @@ export function isProviderOnly() {
 export function isOnlyProviderKeyMissing() {
   const pref = localStorage.getItem("loci_provider_pref") || "auto";
   if (!isProviderOnly() || pref === "auto") return false;
+  if (RELAY_PROVIDERS.includes(pref)) return !isRelayAvailable();
   const { groqKey, geminiKey, cerebrasKey, zaiKey, openrouterKey } = getAIKeys();
-  const keys = { groq: groqKey, gemini: geminiKey, cerebras: cerebrasKey, zai: zaiKey, openrouter: openrouterKey };
+  const keys = { groq: groqKey, gemini: geminiKey, cerebras: cerebrasKey, zai: zaiKey, openrouter: openrouterKey || (isRelayAvailable() ? "relay" : "") };
   return !keys[pref] && Object.values(keys).some(Boolean);
 }
 
-export function buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey, only = false, cleanOpenrouterKey = "") {
+export function buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey, only = false, cleanOpenrouterKey = "", relay = isRelayAvailable()) {
   const available = {
     groq:       cleanGroqKey       ? { name: "groq",       key: cleanGroqKey }       : null,
     gemini:     cleanGeminiKey     ? { name: "gemini",      key: cleanGeminiKey }     : null,
-    openrouter: cleanOpenrouterKey ? { name: "openrouter",  key: cleanOpenrouterKey } : null,
+    // A person's own OpenRouter key goes direct; without one, the shared key on the relay.
+    openrouter: cleanOpenrouterKey ? { name: "openrouter",  key: cleanOpenrouterKey }
+              : relay              ? { name: "openrouter",  key: "relay", viaRelay: true } : null,
+    cloudflare: relay              ? { name: "cloudflare",  key: "relay" }            : null,
+    nvidia:     relay              ? { name: "nvidia",      key: "relay" }            : null,
     cerebras:   cleanCerebrasKey   ? { name: "cerebras",    key: cleanCerebrasKey }   : null,
     zai:        cleanZaiKey        ? { name: "zai",         key: cleanZaiKey }        : null,
   };
-  // An unknown preference (e.g. "nvidia", which Loci no longer offers) falls
-  // back to "auto". Cerebras ended its no-card free tier, so Auto no longer
-  // leads with it; it stays an explicit choice and a last resort for those who
-  // have a key. Z.ai only fits the short prompt (12k-char guard, one request at a
-  // time), so it comes after the providers that can take any prompt.
+  // An unknown preference falls back to "auto". Cerebras ended its no-card
+  // free tier, so Auto no longer leads with it; it stays an explicit choice and
+  // a last resort for those who have a key. Z.ai only fits the short prompt
+  // (12k-char guard, one request at a time), so it comes after the providers
+  // that can take any prompt. Cloudflare and NVIDIA (through Loci's relay) come
+  // after the providers that were already in the chain, so they add quota
+  // without changing who answers first.
   const orders = {
-    auto:       ["groq", "gemini", "openrouter", "zai", "cerebras"],
-    groq:       ["groq", "gemini", "openrouter", "zai", "cerebras"],
-    gemini:     ["gemini", "groq", "openrouter", "zai", "cerebras"],
-    openrouter: ["openrouter", "groq", "gemini", "zai", "cerebras"],
-    cerebras:   ["cerebras", "groq", "gemini", "openrouter", "zai"],
-    zai:        ["zai", "groq", "gemini", "openrouter", "cerebras"],
+    auto:       ["groq", "gemini", "openrouter", "cloudflare", "nvidia", "zai", "cerebras"],
+    groq:       ["groq", "gemini", "openrouter", "cloudflare", "nvidia", "zai", "cerebras"],
+    gemini:     ["gemini", "groq", "openrouter", "cloudflare", "nvidia", "zai", "cerebras"],
+    openrouter: ["openrouter", "groq", "gemini", "cloudflare", "nvidia", "zai", "cerebras"],
+    cloudflare: ["cloudflare", "nvidia", "groq", "gemini", "openrouter", "zai", "cerebras"],
+    nvidia:     ["nvidia", "cloudflare", "groq", "gemini", "openrouter", "zai", "cerebras"],
+    cerebras:   ["cerebras", "groq", "gemini", "openrouter", "cloudflare", "nvidia", "zai"],
+    zai:        ["zai", "groq", "gemini", "openrouter", "cloudflare", "nvidia", "cerebras"],
   };
   const chain = orders[pref] || orders.auto;
   return (only && orders[pref] && pref !== "auto" ? chain.slice(0, 1) : chain).map(n => available[n]).filter(Boolean);
@@ -821,12 +896,16 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, openrout
       let result;
       if (provider.name === "groq") {
         result = await callGroq(provider.key, systemPrompt, messages, maxTokens, reasoningEffort, limits);
+      } else if (provider.name === "openrouter" && provider.viaRelay) {
+        result = await callRelay("openrouter", systemPrompt, messages, maxTokens, reasoningEffort, limits);
       } else if (provider.name === "openrouter") {
         result = await callOpenRouter(provider.key, systemPrompt, messages, maxTokens, reasoningEffort, limits);
       } else if (provider.name === "cerebras") {
         result = await callCerebras(provider.key, systemPrompt, messages, maxTokens, reasoningEffort, limits);
       } else if (provider.name === "zai") {
         result = await callZai(provider.key, systemPrompt, messages, maxTokens, limits);
+      } else if (RELAY_PROVIDERS.includes(provider.name)) {
+        result = await callRelay(provider.name, systemPrompt, messages, maxTokens, reasoningEffort, limits);
       } else {
         result = await callGemini(provider.key, systemPrompt, messages, maxTokens, limits);
       }

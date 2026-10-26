@@ -1,0 +1,15 @@
+{
+  "name": "loci-ai",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  // Cloudflare's own models (Workers AI), billed against the account's free
+  // daily allowance; no key needed.
+  "ai": { "binding": "AI" },
+  "vars": {
+    // Public: the same id is in web/src/firebase.js. Sign-in tokens must be
+    // issued for this project.
+    "FIREBASE_PROJECT_ID": "loci-flow"
+  }
+  // NVIDIA_API_KEY is a secret, stored by the deploy workflow: see docs/ai-relay.md.
+  // NVIDIA_MODEL and CLOUDFLARE_MODEL may be added as vars to swap models.
+}

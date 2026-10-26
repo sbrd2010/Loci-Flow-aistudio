@@ -301,14 +301,15 @@ test("wide-only Settings sections return to the phone root on resize", async ({ 
   }
 });
 
-test("retired NVIDIA storage is cleared and theme choices have 44px targets", async ({ page }) => {
+test("the retired NVIDIA key is cleared, the NVIDIA choice is kept, and theme choices have 44px targets", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem("loci_nvidia_key", "retired-secret");
     localStorage.setItem("loci_provider_pref", "nvidia");
   });
   await enterDemo(page);
   expect(await page.evaluate(() => localStorage.getItem("loci_nvidia_key"))).toBeNull();
-  expect(await page.evaluate(() => localStorage.getItem("loci_provider_pref"))).toBeNull();
+  // NVIDIA is offered again through Loci's relay (no key on the device), so the choice stays.
+  expect(await page.evaluate(() => localStorage.getItem("loci_provider_pref"))).toBe("nvidia");
   await openTab(page, "Settings");
   const choices = page.getByRole("radiogroup", { name: "Theme" }).getByRole("radio");
   for (let i = 0; i < 3; i++) {
