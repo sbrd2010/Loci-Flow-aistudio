@@ -3,7 +3,7 @@
 A small Cloudflare Worker, `loci-ai` (code in `ai-proxy/`), that lets the app use free AI providers without putting their keys in the app's public code:
 
 - **Cloudflare AI** (Workers AI): Cloudflare's own models, `gpt-oss-120b` by default, the same model Groq runs. No key: it uses the Cloudflare account's free daily allowance (10,000 "neurons" a day, reset at 00:00 UTC).
-- **NVIDIA** (build.nvidia.com): `openai/gpt-oss-120b` by default. NVIDIA's API refuses calls from a browser (#356), so the relay calls it instead and keeps the key on Cloudflare.
+- **NVIDIA** (build.nvidia.com): `deepseek-ai/deepseek-v4.1-flash` by default (NVIDIA retired `openai/gpt-oss-120b` on 2026-09-03). NVIDIA's API refuses calls from a browser (#356), so the relay calls it instead and keeps the key on Cloudflare.
 - **OpenRouter**: your OpenRouter key, kept on Cloudflare. Free models only (`openrouter/free` by default), so the key can never be billed through the relay, even if credit is added later. Someone who adds their own OpenRouter key in Settings still goes direct with it.
 
 Only someone signed in to Loci with Google gets through: the app sends its Firebase sign-in token, and the relay checks it. There is no per-person limit yet (that is PR 9, #570). Prompts and replies pass through; the relay does not log or store them.
