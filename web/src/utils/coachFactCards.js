@@ -87,8 +87,10 @@ export function detectFactIntent(message, { config = {} } = {}) {
   // One sentence only: a second clause ("what's due? also add milk", "…I feel like a failure") is for the Coach.
   if (/[.?!]\s*\S/.test(t)) return null;
   // How Loci works (#594): before the advice check, which "how do I…" would trip,
-  // but never for a message that sounds distressed.
-  const help = !DISTRESS.test(t) && detectHelpTopic(t);
+  // but only for a question: never a request ("add a task to sync my calendar",
+  // "can you add…?") or a message that sounds distressed.
+  const asked = t.replace(/^(?:(?:can|could|would|will) you|please|pls)\s+/, "");
+  const help = isQuestion(t) && !IMPERATIVE.test(asked) && !DISTRESS.test(t) && detectHelpTopic(t);
   if (help) return { kind: "help", topic: help };
   if (IMPERATIVE.test(t) || ADVICE.test(t) || !isQuestion(t)) return null;
 

@@ -32,6 +32,11 @@ describe("help cards", () => {
     "Is the mind box private?",
     "I hate my calendar",
     "what's my current focus task",
+    // Codex review, PR 595: a request to capture work is not a feature question.
+    "Add a task to sync my calendar",
+    "can you add a task to sync my calendar?",
+    "remind me to connect my work calendar",
+    "I need to sync my calendar today",
   ])("leaves %s alone", (text) => {
     expect(detectFactIntent(text, { config: {} })?.kind).not.toBe("help");
   });
