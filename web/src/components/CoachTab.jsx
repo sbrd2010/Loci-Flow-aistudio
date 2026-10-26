@@ -20,7 +20,7 @@ import { horizonsFromConfig } from "../utils/horizons";
 import { requestNotifPermission } from "../utils/focusNotifications";
 import { scheduleCoachCheckin } from "../utils/reminders";
 import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, parseCheckinRequestFromMessage, buildCoachCheckinContext } from "../utils/coachCheckin";
-import { parseCoachActionTags, applyCoachActions, buildActionReplyText, buildSetNowFocusTasks, buildParkTaskTasks, findTaskByTitle, undoCoachAction } from "../utils/coachActions";
+import { parseCoachActionTags, applyCoachActions, buildActionReplyText, buildSetNowFocusTasks, buildParkTaskTasks, findTaskByTitle, undoCoachAction, withoutChangeClaims } from "../utils/coachActions";
 import { buildPersonaInstruction } from "../utils/coachPersona";
 import { buildProfileContext } from "../utils/coachProfile";
 import { addPinnedFact, addRecentObservation, buildLociMemoryContext, describeMemoryChange, findForgetTargets, forgetFromMemory, isMemoryEnabled, isPlainQuestion, isStorableMemoryText, parseForgetRequest, parseMemoryTags, parseRememberRequest, isResurrectedMemoryEntry, savedNote, splitSavedNote, stripSavedNote } from "../utils/coachMemory";
@@ -1147,7 +1147,8 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
         };
       }
 
-      let replyText = cleanText;
+      // A reply with no action behind it must not claim a change (#592).
+      let replyText = actions.length === 0 ? withoutChangeClaims(cleanText) : cleanText;
       let actionResults = [];
       if (actions.length > 0 && isSyncingFromCache) {
         // The model's narration above (e.g. "Added 'X' to your list") describes an
