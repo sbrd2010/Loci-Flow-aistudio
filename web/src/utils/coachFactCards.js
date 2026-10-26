@@ -1,3 +1,4 @@
+import { detectHelpTopic, helpCardText } from "./coachHelpCards";
 import { frontsFromConfig, frontDaysLeft, frontProgress, LEGACY_DEADLINE_FRONT_ID } from "./fronts";
 import { lociDayWindow, weekSummary, formatMinutes } from "./focusLedger";
 import { sliceContributions } from "./insightsContext";
@@ -40,6 +41,7 @@ const QUESTION_START = /^(?:(?:please|pls|ok|okay|so|and|hey|can you|could you)\
 const isQuestion = (t) => /\?\s*$/.test(t) || QUESTION_START.test(t);
 const IMPERATIVE = /^(?:(?:please|pls|ok|okay|and)\s+)*(?:add|put|move|park|defer|mark|start|set|schedule|remind|delete|remove|clear|create|rename|change|make|pin|switch|finish|complete|plan|help|capture|dump|note|remember|forget)\b/;
 // Asking what to do, or venting, is for the Coach, not for a list of facts.
+const DISTRESS = /\b(?:stressed|stressing|overwhelm\w*|anxious|worried|scared|panick\w*|freaking|hopeless|failure|give up|exhausted|sad|depress\w*|cry\w*|hate)\b/;
 const ADVICE = /\b(?:should i|could i|would i|can i|will i|why|how come|how do i|how can i|what do i do|what can i do|help me|stressed|stressing|overwhelm\w*|anxious|worried|scared|panick\w*|freaking|i can't|i cannot|feel|feeling|hopeless|failure|fail\w*|give up|point|worth\w*|wasting|tired|exhausted|sad|depress\w*|i'm|i am|going to)\b/;
 // The question has to be about the user's own data, not about the feature or in general.
 const FIRST_PERSON = /\b(?:my|me|i|i've|mine)\b|^(?:any|total|list|show)\b/;
@@ -84,6 +86,10 @@ export function detectFactIntent(message, { config = {} } = {}) {
   if (!t || t.length > 200) return null;
   // One sentence only: a second clause ("what's due? also add milk", "…I feel like a failure") is for the Coach.
   if (/[.?!]\s*\S/.test(t)) return null;
+  // How Loci works (#594): before the advice check, which "how do I…" would trip,
+  // but never for a message that sounds distressed.
+  const help = !DISTRESS.test(t) && detectHelpTopic(t);
+  if (help) return { kind: "help", topic: help };
   if (IMPERATIVE.test(t) || ADVICE.test(t) || !isQuestion(t)) return null;
 
   if (KNOWN_RE.test(t)) return { kind: "known" };
@@ -246,6 +252,8 @@ export function buildFactCard(intent, data) {
   if (!intent) return null;
   const now = data.now || new Date();
   const d = { ...data, now, tasks: data.tasks || [], config: data.config || {}, contributions: data.contributions || [] };
+  // About Loci, not the user's data: true whatever the sync state.
+  if (intent.kind === "help") return helpCardText(intent.topic);
   // Cloud data may still be the cached copy: do not state it as fact.
   if (d.unconfirmed) return SYNC_TEXT;
   switch (intent.kind) {

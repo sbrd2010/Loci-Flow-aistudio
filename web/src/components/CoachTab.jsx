@@ -29,7 +29,7 @@ import { classifyContextMode, needsConversationContext, historyLimitForMode, det
 import { buildLociPeriodContext, buildLociDeadlinesBlock, detectDeadlineIntent, PERIOD_ANSWER_NOTE } from "../utils/coachPeriodDigest";
 import { readFocusOnce } from "../utils/readFocusOnce";
 import { detectFactIntent, buildFactCard } from "../utils/coachFactCards";
-import { buildCoachSystemPrompt } from "../utils/coachSystemPrompt";
+import { buildCoachSystemPrompt, partOfDay } from "../utils/coachSystemPrompt";
 import {
   needsSummaryUpdate, llmHistoryStart, pendingSummaryMessages, buildPendingSummaryContext,
   pendingSummaryIncludedCount, buildSessionSummaryContext, parseSessionSummaryTag,
@@ -825,7 +825,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
 
     const now = new Date();
     const hour = now.getHours();
-    const timeOfDay = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
+    const timeOfDay = partOfDay(hour);
     const nowLabel = now.toLocaleString([], { weekday: "short", year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
     const todayActive = tasks.filter(t => isOnToday(t, lociDayNow()) && isActiveLociTask(t));
     const taskContext = buildLociTaskContext(tasks, new Date(), getFocusWindows(config));

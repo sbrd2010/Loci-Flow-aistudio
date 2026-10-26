@@ -80,7 +80,7 @@ BODY-DOUBLE SESSIONS: When ${firstName} asks you to "be my body double," "sit wi
 ${buildCompactSupportModeInstruction(firstName)}
 
 GUARD RAILS:
-- Off-topic (not related to productivity/wellbeing, e.g. poems, stories, trivia; or illegal, harmful, explicit): "That's outside my scope, ${firstName}. What's one thing blocking you right now?" Do not elaborate.
+- Off-topic (poems, stories, trivia; illegal, harmful, explicit): "That's outside my scope, ${firstName}. What's one thing blocking you right now?" Do not elaborate. Questions about Loci or their data are in scope.
 - Safety, panic, self-harm, medical-risk, and emotional-distress messages are not off-topic. Route them to the support/safety modes above. Do not use the off-topic refusal for those.
 - Stay within: productivity, tasks, focus, execution support, time management, motivation, gentle life-management support — and the human support modes above.
 
@@ -157,7 +157,7 @@ LOCI'S PHILOSOPHY — you embody this:
 ${buildSupportModeInstruction(firstName)}
 
 GUARD RAILS:
-- Off-topic (not related to productivity/wellbeing, e.g. poems, stories, trivia; or illegal, harmful, explicit): "That's outside my scope, ${firstName}. What's one thing blocking you right now?" Do not elaborate.
+- Off-topic (poems, stories, trivia; illegal, harmful, explicit): "That's outside my scope, ${firstName}. What's one thing blocking you right now?" Do not elaborate. Questions about Loci or their data are in scope.
 - Safety, panic, self-harm, medical-risk, and emotional-distress messages are not off-topic. Route them to the support/safety modes above. Do not use the off-topic refusal for those.
 
 CHECK-IN: If ${firstName} explicitly asks you to check in, follow up, circle back, or remind them later — by a duration ("in 30 minutes") or a specific time ("at 11am") — end your reply with [[CHECKIN_IN:N]] on its own line. In your visible reply, call it a check-in here in the app — never "reminder," "notification," or "alert."
@@ -237,7 +237,7 @@ ${todaySnapshotContext ? "TODAY SNAPSHOT: The TODAY SNAPSHOT below lists Today's
 CHANGES: You cannot change tasks from here. Never say you moved, renamed, rescheduled, updated or added anything, or that you will; say what you cannot do and point to the task's own screen. Tasks have no due dates, only horizons (Today, Week, Month…), so never offer to change a due date.
 
 GUARD RAILS:
-- Off-topic (not related to productivity/wellbeing, e.g. poems, stories, trivia; or illegal, harmful, explicit): "That's outside my scope, ${firstName}. What's one thing blocking you right now?" Do not elaborate.
+- Off-topic (poems, stories, trivia; illegal, harmful, explicit): "That's outside my scope, ${firstName}. What's one thing blocking you right now?" Do not elaborate. Questions about Loci or their data are in scope.
 - If anything in ${firstName}'s message signals distress, panic, or a safety risk, drop this casual tone immediately and respond with care, not small talk.
 
 ${pendingSummaryContext ? `\n${buildSessionSummaryWritingInstruction(firstName)}\n` : ""}
@@ -335,6 +335,15 @@ const PROMPT_BUILDERS = {
   light: buildLightPrompt,
   compact_task: buildCompactTaskPrompt,
 };
+
+// The word after "Current Time" in the prompt. 00:30 was "morning" (#594), so a
+// late-night user could be told to start their morning.
+export function partOfDay(hour) {
+  if (hour >= 5 && hour < 12) return "morning";
+  if (hour >= 12 && hour < 17) return "afternoon";
+  if (hour >= 17 && hour < 22) return "evening";
+  return "night";
+}
 
 export function buildCoachSystemPrompt(mode, ctx) {
   const builder = PROMPT_BUILDERS[mode] || PROMPT_BUILDERS.light;
