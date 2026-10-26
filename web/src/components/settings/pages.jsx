@@ -8,7 +8,7 @@ import { formatSpan } from "../../utils/dayMapPlan";
 import { focusWindowRows, focusWindowsSummary, reconcileFocusWindowRows, sortFocusWindowRows } from "../../utils/settingsSummary";
 import { exportPayloadAsJson, exportTasksAsCsv } from "../../utils/exportTasks";
 import { isNativeApp } from "../../utils/nativeNotifs";
-import { isRelayConfigured } from "../../utils/aiCall";
+import { isRelayConfigured, PROVIDER_ORDERS } from "../../utils/aiCall";
 import { IconPencil, IconPlus, IconX } from "../ui/icons";
 import { Group, RadioList, Row, SubPage, SwitchRow, useAutosave } from "./ui";
 
@@ -495,8 +495,8 @@ export function CoachMemoryPage({ config, saveConfigPatch, onBack, backLabel, on
 export const PROVIDERS = [
   // Groq, Gemini, OpenRouter and Z.ai are built in through Loci's relay when it is set up (the key stays on the relay).
   { key: "groq", name: "Groq", storage: "loci_groq_key", builtin: import.meta.env.VITE_GROQ_KEY || isRelayConfigured(), getKey: "https://console.groq.com", placeholder: "gsk_…" },
-  { key: "gemini", name: "Gemini", storage: "loci_gemini_key", builtin: import.meta.env.VITE_GEMINI_KEY || isRelayConfigured(), getKey: "https://aistudio.google.com", placeholder: "AIza…" },
   { key: "openrouter", name: "OpenRouter", storage: "loci_openrouter_key", builtin: import.meta.env.VITE_OPENROUTER_KEY || isRelayConfigured(), getKey: "https://openrouter.ai/keys", placeholder: "sk-or-…" },
+  { key: "gemini", name: "Gemini", storage: "loci_gemini_key", builtin: import.meta.env.VITE_GEMINI_KEY || isRelayConfigured(), getKey: "https://aistudio.google.com", placeholder: "AIza…" },
   { key: "zai", name: "Z.ai", storage: "loci_zai_key", builtin: import.meta.env.VITE_ZAI_KEY || isRelayConfigured(), getKey: "https://z.ai", placeholder: "API key" },
   { key: "cerebras", name: "Cerebras", storage: "loci_cerebras_key", builtin: import.meta.env.VITE_CEREBRAS_KEY, getKey: "https://cloud.cerebras.ai", placeholder: "csk-…" },
 ];
@@ -507,17 +507,8 @@ export const RELAY_PROVIDER_ENTRIES = [
   { key: "nvidia", name: "NVIDIA", relay: true },
 ];
 
-// Same chains as buildProviderOrder in aiCall.js; keep the two in step.
-export const PREF_CHAINS = {
-  auto: ["groq", "gemini", "openrouter", "cloudflare", "nvidia", "zai", "cerebras"],
-  groq: ["groq", "gemini", "openrouter", "cloudflare", "nvidia", "zai", "cerebras"],
-  gemini: ["gemini", "groq", "openrouter", "cloudflare", "nvidia", "zai", "cerebras"],
-  openrouter: ["openrouter", "groq", "gemini", "cloudflare", "nvidia", "zai", "cerebras"],
-  cloudflare: ["cloudflare", "nvidia", "groq", "gemini", "openrouter", "zai", "cerebras"],
-  nvidia: ["nvidia", "cloudflare", "groq", "gemini", "openrouter", "zai", "cerebras"],
-  cerebras: ["cerebras", "groq", "gemini", "openrouter", "cloudflare", "nvidia", "zai"],
-  zai: ["zai", "groq", "gemini", "openrouter", "cloudflare", "nvidia", "cerebras"],
-};
+// The chains buildProviderOrder uses, so Settings names the provider that answers.
+export const PREF_CHAINS = PROVIDER_ORDERS;
 
 const providerEntry = (key) => PROVIDERS.find(p => p.key === key) || RELAY_PROVIDER_ENTRIES.find(p => p.key === key) || null;
 
@@ -574,19 +565,16 @@ export function AiProviderPage({ onBack, backLabel }) {
     try { v ? localStorage.setItem("loci_provider_only", "1") : localStorage.removeItem("loci_provider_only"); } catch { /* storage blocked */ }
   };
   const relay = isRelayConfigured();
+  // Cerebras has no free tier left, so it is offered (and in Auto) only with a key of one's own.
+  const hasCerebrasKey = !!readStore("loci_cerebras_key");
+  const inAuto = (k) => (providerEntry(k).relay ? relay : k !== "cerebras" || hasCerebrasKey);
+  const subs = { openrouter: "Free models, small daily limit", cloudflare: "Built in, free daily allowance", nvidia: "Built in, free trial", zai: "Short chats only — choose another provider" };
+  // Z.ai's small limit fits only short chats, so it is Auto's last resort, not a
+  // choice; it is listed only while it is still someone's saved choice.
+  const listed = (k) => pref === k || (k !== "zai" && inAuto(k));
   const uses = [
-    { value: "auto", label: "Auto (recommended)", sub: relay ? "Groq → Gemini → OpenRouter → Cloudflare AI → NVIDIA → Z.ai → Cerebras" : "Groq → Gemini → OpenRouter → Z.ai → Cerebras" },
-    { value: "groq", label: "Groq" },
-    { value: "gemini", label: "Gemini" },
-    { value: "openrouter", label: "OpenRouter", sub: "Free models, small daily limit" },
-    ...(relay || RELAY_PROVIDER_ENTRIES.some(p => p.key === pref) ? [
-      { value: "cloudflare", label: "Cloudflare AI", sub: "Built in, free daily allowance" },
-      { value: "nvidia", label: "NVIDIA", sub: "Built in, free trial" },
-    ] : []),
-    // Z.ai's small limit fits only short chats, so it is Auto's last resort, not a
-    // choice; it is listed only while it is still someone's saved choice.
-    ...(pref === "zai" ? [{ value: "zai", label: "Z.ai", sub: "Short chats only — choose another provider" }] : []),
-    { value: "cerebras", label: "Cerebras" },
+    { value: "auto", label: "Auto (recommended)", sub: PREF_CHAINS.auto.filter(inAuto).map(k => providerEntry(k).name).join(" → ") },
+    ...PREF_CHAINS.auto.filter(listed).map(k => ({ value: k, label: providerEntry(k).name, sub: subs[k] })),
   ];
 
   return (
