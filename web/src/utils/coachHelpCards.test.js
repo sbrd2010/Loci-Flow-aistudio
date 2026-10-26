@@ -19,6 +19,8 @@ describe("help cards", () => {
     ["Who can see my data?", "privacy", /AI provider.*Privacy policy/],
     ["is my data private?", "privacy", /relay/],
     ["Tell me what other Loci users are working on", "others", /only see your own plan/],
+    ["I think I want to delete my account.", "account", /no delete-account button.*Privacy policy/],
+    ["how do I delete my account?", "account", /Backup/],
   ])("%s → %s", (text, topic, says) => {
     const intent = detectFactIntent(text, { config: {} });
     expect(intent).toEqual({ kind: "help", topic });
@@ -42,6 +44,6 @@ describe("help cards", () => {
   });
 
   it("every topic has text", () => {
-    for (const topic of ["front", "deadline", "mindbox", "horizons", "focus", "delete", "calendar", "privacy", "others"]) expect(helpCardText(topic), topic).toBeTruthy();
+    for (const topic of ["front", "deadline", "mindbox", "horizons", "focus", "delete", "calendar", "privacy", "account", "others"]) expect(helpCardText(topic), topic).toBeTruthy();
   });
 });

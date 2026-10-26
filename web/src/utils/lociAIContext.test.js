@@ -115,8 +115,9 @@ describe("lociAIContext", () => {
   it("instructs the coach that COMPLETED TODAY and RECENTLY COMPLETED can differ without it being a contradiction", () => {
     const instruction = buildLociCoreInstruction({ firstName: "Rohan" });
 
-    expect(instruction).toContain("can legitimately show different counts or tasks");
-    expect(instruction).toContain("not a contradiction to flag or explain");
+    // Shortened in #594 to make room for "never invent Loci screens…"; same meaning.
+    expect(instruction).toContain('"COMPLETED TODAY" (Loci\'s day) and "RECENTLY COMPLETED" (rolling 24h) can differ; not a contradiction.');
+    expect(instruction).toContain("Never invent Loci screens, settings, contacts or emails");
   });
 });
 

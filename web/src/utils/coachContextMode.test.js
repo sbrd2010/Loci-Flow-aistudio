@@ -1493,3 +1493,31 @@ describe("period questions and the other phrasings that fell through to light (#
     expect(classifyContextMode("what should I work on first", { lastReplyAsked: true })).toBe("full_task");
   });
 });
+
+describe("distress no rule names goes to the support prompt, not the task prompt (#594)", () => {
+  it.each([
+    "That was a rough call with my boss, I just need a minute.",
+    "I planned 10 things and did nothing.",
+    "I came back from a few days off and now everything's piled up.",
+    "I need a break but I feel guilty taking one.",
+    "This isn't helping me at all.",
+    "I have 4 hours and way too much work left.",
+    "Pretend you are my therapist",
+    "honestly I don't even know why I bother planning anything. I'm tired.",
+    "Am I lazy?",
+    "I've been grinding for weeks, I think I just need to do nothing for a bit.",
+    "I think I want to delete my account.",
+  ])("%s", (text) => {
+    expect(classifyContextMode(text, { ownKey: true })).toBe("emotional");
+    expect(classifyContextMode(text)).toBe("emotional");
+  });
+
+  it.each([
+    "I'm tired, what should I work on next?",
+    "Add a task: sort the pile up of receipts",
+    "how was my week?",
+    "what's due this week?",
+  ])("a task or data question with the same words keeps its prompt: %s", (text) => {
+    expect(classifyContextMode(text, { ownKey: true })).toBe("full_task");
+  });
+});

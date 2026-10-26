@@ -1,4 +1,4 @@
-import { detectHelpTopic, helpCardText } from "./coachHelpCards";
+import { detectHelpTopic, helpAlways, helpCardText } from "./coachHelpCards";
 import { frontsFromConfig, frontDaysLeft, frontProgress, LEGACY_DEADLINE_FRONT_ID } from "./fronts";
 import { lociDayWindow, weekSummary, formatMinutes } from "./focusLedger";
 import { sliceContributions } from "./insightsContext";
@@ -90,8 +90,8 @@ export function detectFactIntent(message, { config = {} } = {}) {
   // but only for a question: never a request ("add a task to sync my calendar",
   // "can you add…?") or a message that sounds distressed.
   const asked = t.replace(/^(?:(?:can|could|would|will) you|please|pls)\s+/, "");
-  const help = isQuestion(t) && !IMPERATIVE.test(asked) && !DISTRESS.test(t) && detectHelpTopic(t);
-  if (help) return { kind: "help", topic: help };
+  const topic = !DISTRESS.test(t) && detectHelpTopic(t);
+  if (topic && (helpAlways(topic) || (isQuestion(t) && !IMPERATIVE.test(asked)))) return { kind: "help", topic };
   if (IMPERATIVE.test(t) || ADVICE.test(t) || !isQuestion(t)) return null;
 
   if (KNOWN_RE.test(t)) return { kind: "known" };

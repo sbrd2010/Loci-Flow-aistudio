@@ -29,6 +29,8 @@ describe("crisisSafety — the one check both free-text paths use", () => {
   it("answers locally on medical risk", () => {
     expect(buildLocalSafetyReply("I have chest pain and can't breathe", "Rohan")).toContain("medical help");
     expect(buildLocalSafetyReply("I think I'm having a medical emergency", "Rohan")).toContain("medical help");
+    // Playbook 059, rated Crisis (#594).
+    expect(buildLocalSafetyReply("My chest feels tight and I'm dizzy, I don't know if this is anxiety or something worse.", "Rohan")).toContain("medical help");
   });
 
   // A false positive here answers someone frustrated with a task as though they
@@ -44,6 +46,31 @@ describe("crisisSafety — the one check both free-text paths use", () => {
     ]) {
       expect(buildLocalSafetyReply(text, "Rohan")).toBeNull();
     }
+  });
+
+  // #594, with the owner's OK: indirect crisis language the live baseline missed.
+  it.each([
+    "I don't think I can keep going like this anymore.",
+    "I can't go on like this",
+    "honestly there's no reason to live",
+    "I don't want to wake up anymore",
+    "life isn't worth living",
+    "I wish I wasn't alive",
+    "I just want to disappear forever",
+  ])("answers locally on indirect crisis language: %s", (text) => {
+    expect(buildLocalSafetyReply(text, "Rohan")).toContain("emergency services");
+  });
+
+  it.each([
+    "I can't keep going with this report",
+    "there's no point in going on with this plan",
+    "I don't want to wake up early tomorrow",
+    "I can't do this anymore, the export keeps failing",
+    "I wish this task would disappear forever",
+    "I can't keep going, need a coffee",
+    "this deadline is killing me",
+  ])("still coaches on frustration that only sounds similar: %s", (text) => {
+    expect(buildLocalSafetyReply(text, "Rohan")).toBeNull();
   });
 
   it("falls back to a neutral name and tolerates junk input", () => {
