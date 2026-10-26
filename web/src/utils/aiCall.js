@@ -842,12 +842,13 @@ export function isOnlyProviderKeyMissing() {
   return !keys[pref] && Object.values(keys).some(Boolean);
 }
 
-// Auto: Groq first, then OpenRouter, Cloudflare AI, Gemini and NVIDIA. Z.ai only
+// Auto: Groq first, then Gemini, OpenRouter, Cloudflare AI and NVIDIA (Gemini gave the
+// best answers after Groq in the #555 U8 run; OpenRouter's free router the weakest). Z.ai only
 // fits a short prompt (12k-char guard, one request at a time), so it comes after
 // the providers that take any prompt. Cerebras ended its no-card free tier, so it
 // is a last resort for someone with a key of their own. A chosen provider goes
 // first, then the others in Auto's order.
-const AUTO_ORDER = ["groq", "openrouter", "cloudflare", "gemini", "nvidia", "zai", "cerebras"];
+const AUTO_ORDER = ["groq", "gemini", "openrouter", "cloudflare", "nvidia", "zai", "cerebras"];
 export const PROVIDER_ORDERS = Object.fromEntries([
   ["auto", AUTO_ORDER],
   ...AUTO_ORDER.map(name => [name, [name, ...AUTO_ORDER.filter(n => n !== name)]]),
