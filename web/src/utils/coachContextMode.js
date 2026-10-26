@@ -153,8 +153,11 @@ const FRESH_SCAN_RE = /\b(scan (everything|all|my list|all my tasks|my whole lis
 // the message to full_task (and past the 10-minute downgrade), and the caller
 // adds the period digest (see detectPeriodIntent).
 const PERIOD_RE = new RegExp([
-  // "how was my week", "how did my last week go", "how is the month going", "how was yesterday"
-  "how (?:was|is|has|did|have|were) (?:my|the|this|last|our)\\s+(?:(?:last|past|this)\\s+)?(?:day|week|month)\\b",
+  // "how was my week", "how did my last week go", "how is the month going", "how was yesterday",
+  // "how's my week going", "how has been my week"
+  "how(?:['’]s| (?:was|is|has|did|have|were)(?: been)?) (?:my|the|this|last|our)\\s+(?:(?:last|past|this)\\s+)?(?:day|week|month)\\b",
+  // "how do you think my week has been", "how do you feel my month went"
+  "how\\b.{0,30}\\bmy\\s+(?:(?:last|past|this)\\s+)?(?:week|month)\\s+(?:has been|has gone|is going|went|was|been)\\b",
   "how (?:was|is|has|did) yesterday\\b",
   // "what did I get done this week", "what did I finish yesterday"
   "what did i (?:get done|finish|complete|accomplish|achieve)\\b",
