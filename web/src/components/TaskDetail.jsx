@@ -9,6 +9,7 @@ import { ROADMAP_HORIZONS } from "./TaskRow";
 import { safeUUID } from "../utils/uuid";
 import { taskSteps } from "../utils/taskSteps";
 import { suggestSteps } from "../utils/stepSuggestions";
+import { noKeyHint } from "../utils/aiCall";
 import { formatReminderLabel } from "../utils/reminders";
 import { notifPermissionState, requestNotifPermission } from "../utils/nativeNotifs";
 import { isEventTask } from "../utils/dayMapRoute";
@@ -445,7 +446,7 @@ export default function TaskDetail({
           )}
           {suggested?.error && (
             <p className="detail-suggest-note" role="status">
-              {suggested.error === "no-key" ? "Add an AI key in Settings to get suggested steps." : "Couldn't suggest steps just now. Try again."}
+              {suggested.error === "no-key" ? noKeyHint("get suggested steps") : "Couldn't suggest steps just now. Try again."}
             </p>
           )}
           <div className="detail-add-step">

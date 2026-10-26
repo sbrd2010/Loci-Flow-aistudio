@@ -3,6 +3,7 @@ import { formatReminderLabel } from "../utils/reminders";
 import LinkifyText from "./LinkifyText";
 import { formatClock24, formatSpanCaps } from "../utils/dayMapPlan";
 import { isEventTask } from "../utils/dayMapRoute";
+import { noKeyHint } from "../utils/aiCall";
 import "../styles/taskRow.css";
 
 const GripIcon = () => (
@@ -245,7 +246,7 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
         )}
 
         {breakdownNoKey && !isBreakingDown && (
-          <span className="task-row-meta">Add an AI key in Settings to use this.</span>
+          <span className="task-row-meta">{noKeyHint("use this")}</span>
         )}
 
         {breakdownError && !breakdownNoKey && !isBreakingDown && (

@@ -42,6 +42,16 @@ export function isRelayConfigured() {
 export function isRelayAvailable() {
   return isRelayConfigured() && !!auth?.currentUser;
 }
+// With Loci's relay set up, the built-in AI answers only signed-in users, so
+// someone signed out (the demo) is told to sign in rather than to find a key.
+export function aiNeedsSignIn() {
+  return isRelayConfigured() && !auth?.currentUser;
+}
+export function noKeyHint(action) {
+  return aiNeedsSignIn()
+    ? `Sign in to ${action}, or add your own AI key in Settings.`
+    : `Add an AI key in Settings to ${action}.`;
+}
 
 // Z.ai's free GLM-4.7-Flash tier has a concurrency limit of 1 — only one
 // request may be in flight at a time across the whole app instance. No
@@ -267,6 +277,7 @@ export function describeAIError(err) {
   // The limit message carries the live counts ("used 120/120"), so it is read
   // off the error rather than from this table.
   if (message === "usage_limit" && err instanceof Error && err.limitMessage) return err.limitMessage;
+  if (message === "no_key") return noKeyHint("chat with your Coach");
   const copy = (Object.prototype.hasOwnProperty.call(AI_ERROR_COPY, message) && AI_ERROR_COPY[message]) || AI_ERROR_COPY.other;
   // When no provider could answer for a reason the table has no wording for, say what the provider said.
   const showDetail = err instanceof Error && err.detail && (message === "only_provider_failed" || message === "all_providers_failed");
