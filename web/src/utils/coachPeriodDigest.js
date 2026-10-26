@@ -131,9 +131,6 @@ export function buildLociPeriodContext({ tasks = [], contributions = [], config 
   }
   if (shift) lines.push("- The deadline and open-task lines below describe today, not that period.");
 
-  const deadlines = buildLociDeadlinesContext({ tasks, config, now });
-  if (deadlines) lines.push(deadlines);
-
   const active = tasks.filter(isActiveLociTask);
   const todayStart = parseDay(getLociDayStr(now, windows)).getTime();
   const cutoff = todayStart - staleDays * 86400000;
@@ -144,6 +141,9 @@ export function buildLociPeriodContext({ tasks = [], contributions = [], config 
     const shown = untouched.slice(0, DIGEST_LIST_MAX).map(t => `'${clip(t.title)}' (${Math.round((todayStart - t.lastUpdated) / 86400000)} days)`).join(", ");
     lines.push(`- Open but not touched for ${staleDays}+ days (${untouched.length}), oldest first: ${shown}${untouched.length > DIGEST_LIST_MAX ? ", …" : ""}. ${staleDays} days is a default, not the user's own rule.`);
   }
+  // Deadlines go last: a digest line after their header reads as a deadline (#588).
+  const deadlines = buildLociDeadlinesContext({ tasks, config, now });
+  if (deadlines) lines.push(deadlines);
 
   return lines.join("\n");
 }

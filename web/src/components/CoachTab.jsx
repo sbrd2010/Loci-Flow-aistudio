@@ -842,7 +842,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     const remindersContext = buildLociRemindersContext(tasks, now);
     const pendingCheckinContext = buildCoachCheckinContext(config.coachCheckin, now.getTime());
     const recentlyParkedContext = buildLociRecentlyParkedContext(tasks, now);
-    const recentlyCompletedContext = cloudSyncUnconfirmed ? "" : buildLociRecentlyCompletedContext(tasks, now);
+    const recentlyCompletedContext = cloudSyncUnconfirmed ? "" : buildLociRecentlyCompletedContext(tasks, now, getFocusWindows(config));
     const requestedCategories = detectRequestedCategories(userText);
     const categoryFilterContext = buildLociCategoryFilterContext(tasks, requestedCategories, windows);
     const lociCoreInstruction = buildLociCoreInstruction({ firstName });

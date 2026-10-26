@@ -648,6 +648,8 @@ function honestOffer(cleanText, matched) {
   return [...kept, ...offers].join(" ");
 }
 
+export const NOTHING_CHANGED_NOTE = "I didn't change anything from chat. You can edit the task itself in Loci.";
+
 export function buildActionReplyText(cleanText, results = [], lastUserMessage = "", { proposed = false } = {}) {
   if (proposed && results.some(r => r.matched)) cleanText = honestOffer(cleanText, results.filter(r => r.matched));
   const userWantedAction = Object.keys(INTENT_PATTERNS).some(type => messageSeemsActionLike(type, lastUserMessage));
@@ -669,7 +671,9 @@ export function buildActionReplyText(cleanText, results = [], lastUserMessage = 
 
   if (results.length > 0) {
     if (allUnmatchedAreStaleBlocked) {
-      return cleanText;
+      // With no words of its own, the chat would fall back to "Got it.", which
+      // reads as a yes to a change that was never made (#588).
+      return cleanText || NOTHING_CHANGED_NOTE;
     }
   } else {
     if (!userWantedAction) {

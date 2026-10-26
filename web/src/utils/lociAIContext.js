@@ -538,7 +538,7 @@ export function buildLociTodaySnapshotContext(allTasks = [], { dayStr, focusTime
   return lines.join("\n");
 }
 
-export function buildLociRecentlyCompletedContext(tasks = [], date = new Date()) {
+export function buildLociRecentlyCompletedContext(tasks = [], date = new Date(), windows = getFocusWindows({})) {
   const cutoff = date.getTime() - RECENT_COMPLETE_WINDOW_MS;
   const recentlyCompleted = (tasks || []).filter(t =>
     t.isCompleted && !t.isDeleted && t.lastUpdated && t.lastUpdated >= cutoff
@@ -546,9 +546,13 @@ export function buildLociRecentlyCompletedContext(tasks = [], date = new Date())
   if (recentlyCompleted.length === 0) return "";
 
   const activeTitles = new Set((tasks || []).filter(isActiveLociTask).map(t => t.title));
-  const labelFor = (t) => activeTitles.has(t.title)
-    ? `'${t.title}' (a separate active task also has this exact title — they are different tasks)`
-    : `'${t.title}'`;
+  // The 24 hours span two days; without the day, "yesterday" questions get today's tasks (#588).
+  const [today, yesterday] = lociDaysBack(date, windows, 2);
+  const dayOf = (t) => t.dateCompletedString === today ? "today" : t.dateCompletedString === yesterday ? "yesterday" : "";
+  const labelFor = (t) => {
+    const notes = [dayOf(t), activeTitles.has(t.title) ? "a separate active task also has this exact title — they are different tasks" : ""].filter(Boolean);
+    return notes.length ? `'${t.title}' (${notes.join("; ")})` : `'${t.title}'`;
+  };
 
   const sortedCompleted = [...recentlyCompleted].sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
   const displayed = sortedCompleted.slice(0, 3);
