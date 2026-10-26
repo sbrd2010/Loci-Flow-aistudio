@@ -14,7 +14,8 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { QUESTIONS, buildTurn } from "../src/utils/coachSyllabus.fixture.js";
-import { EVAL_PROVIDERS, evalRequestBody, retryBudget, splitReply, gradeReply, summarize, toSpec } from "../src/utils/coachEval.js";
+import { EVAL_PROVIDERS, evalRequestBody, retryBudget, splitReply, gradeReply, summarize, toSpec, parsePlaybook } from "../src/utils/coachEval.js";
+import { SCENARIOS, SCENARIO_USERS } from "../src/utils/coachScenarios.fixture.js";
 
 const args = Object.fromEntries(process.argv.slice(2).join(" ").split(/\s*--/).filter(Boolean).map(a => {
   const [k, ...v] = a.trim().split(/\s+/);
@@ -31,15 +32,28 @@ const only = typeof args.only === "string" ? new Set(args.only.split(",")) : nul
 const outDir = typeof args.out === "string" ? args.out : join("coach-eval-out", `${provider}-${set}-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "")}`);
 mkdirSync(outDir, { recursive: true });
 
-// The unseen paper is run once, at the end (#555), so it is loaded only when asked for.
-const bank = set === "holdout" ? (await import("../src/utils/coachSyllabus.holdout.js")).HOLDOUT : QUESTIONS;
+// syllabus: #555's questions. scenarios: #594's bank (other users, follow-ups, safety…).
+// playbook: the support scenarios in web/docs. holdout: the unseen paper, run once at
+// the end (#555), so it is loaded only when asked for.
+const SETS = {
+  syllabus: () => QUESTIONS,
+  scenarios: () => SCENARIOS,
+  playbook: () => parsePlaybook(readFileSync(new URL("../docs/coach-scenario-playbook.md", import.meta.url), "utf8")),
+  holdout: async () => (await import("../src/utils/coachSyllabus.holdout.js")).HOLDOUT,
+};
+if (!SETS[set]) throw new Error(`--set must be one of ${Object.keys(SETS).join(", ")}`);
+const bank = await SETS[set]();
 const turns = [];
 for (const q of bank) {
   if (only && !only.has(q.id)) continue;
-  const t = buildTurn(q, { ownKey });
+  const u = SCENARIO_USERS[q.user || "sam"];
+  // A user with no past conversation sends this as their first message.
+  const asked = q.history || !u.history ? q : { ...q, history: u.history };
+  const t = buildTurn(asked, { ownKey, fixture: u.make(), ...(u.now ? { now: u.now } : {}), ...(u.windows ? { windows: u.windows } : {}) });
   if (t.local || t.card !== undefined) continue; // answered on the device or by the app, not a model
   turns.push({ id: q.id, c: q.c, text: q.text, mode: t.mode, system: t.system, messages: t.messages, maxTokens: t.maxTokens,
-    expect: { must: (q.expect?.must || []).map(toSpec), mustNot: (q.expect?.mustNot || []).map(toSpec), tags: (q.expect?.tags || []).map(toSpec), maxWords: q.expect?.maxWords || null } });
+    key: q.key || null,
+    expect: { must: (q.expect?.must || []).map(toSpec), mustNot: (q.expect?.mustNot || []).map(toSpec), tags: (q.expect?.tags || []).map(toSpec), noTags: (q.expect?.noTags || []).map(toSpec), maxWords: q.expect?.maxWords || null } });
 }
 
 const resultsFile = join(outDir, "results.jsonl");
@@ -83,7 +97,7 @@ outer: for (const t of turns) {
       retried = true;
       r = send(evalRequestBody(provider, t, retryBudget(t.maxTokens), args.model));
     }
-    const rec = { id: t.id, c: t.c, text: t.text, mode: t.mode, sample, http: r.code, ms: r.ms, retried };
+    const rec = { id: t.id, c: t.c, text: t.text, mode: t.mode, sample, http: r.code, ms: r.ms, retried, ...(t.key ? { key: t.key } : {}) };
     const choice = r.json?.choices?.[0];
     if (r.code !== 200 || !choice) {
       rec.error = String(r.json?.error?.message || r.raw || "no reply").slice(0, 200);

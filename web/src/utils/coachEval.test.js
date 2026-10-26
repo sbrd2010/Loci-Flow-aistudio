@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { evalRequestBody, retryBudget, splitReply, gradeReply, summarize, toSpec } from "./coachEval";
+import fs from "fs";
+import { evalRequestBody, retryBudget, splitReply, gradeReply, summarize, toSpec, parsePlaybook } from "./coachEval";
 
 const turn = { system: "S", messages: [{ role: "assistant", content: "Hi!" }, { role: "user", content: "What next?" }] };
 
@@ -49,5 +50,16 @@ describe("summarize", () => {
     expect(out).toContain("| day | 1/2 | 0 |");
     expect(out).toContain("| lane | 0/0 | 1 |");
     expect(out).toContain("**1/2** (50%)");
+  });
+});
+
+describe("parsePlaybook", () => {
+  it("reads every scenario of the support playbook, with its answer key", () => {
+    const md = fs.readFileSync(new URL("../../docs/coach-scenario-playbook.md", import.meta.url), "utf-8");
+    const all = parsePlaybook(md);
+    expect(all.length).toBeGreaterThanOrEqual(120);
+    expect(new Set(all.map(q => q.id)).size).toBe(all.length);
+    expect(all[0]).toMatchObject({ id: "pb-001", c: "comfort", text: "Comfort me. I feel like I'm failing." });
+    expect(all[0].key).toContain("Let's choose one small task.");
   });
 });

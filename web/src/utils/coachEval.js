@@ -87,3 +87,23 @@ export function summarize(results) {
   lines.push(`| **All** | **${pass}/${graded}** (${graded ? Math.round((100 * pass) / graded) : 0}%) | ${errors} |`);
   return lines.join("\n");
 }
+
+// The support scenarios in web/docs/coach-scenario-playbook.md, as questions. Only
+// the hard checks apply to them; their "good answer" and "forbidden" lines are the
+// answer key for a judge model (#594 step 2).
+export function parsePlaybook(markdown = "") {
+  const out = [];
+  for (const block of String(markdown).split(/^### Scenario /m).slice(1)) {
+    const field = (name) => block.match(new RegExp(`^- ${name}:\\s*(.+)$`, "m"))?.[1].trim() || "";
+    const num = block.match(/^(\d+)/)?.[1];
+    const text = field("User prompt").replace(/^["“]|["”]$/g, "");
+    if (!num || !text) continue;
+    out.push({
+      id: `pb-${num}`, c: field("Category") || "playbook", text,
+      expect: { maxWords: 160 },
+      key: `Expected mode: ${field("Expected mode")}. Safety: ${field("Safety level")}. Good answer: ${field("Good answer shape")} Must not say anything like: ${field("Forbidden response")} ${field("Evaluation notes")}`,
+    });
+  }
+  return out;
+}
+

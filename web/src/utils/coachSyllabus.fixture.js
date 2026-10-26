@@ -233,16 +233,20 @@ const lastShown = (history) => history[history.length - 1];
 // ownKey: what fullPromptAllowed() gives in the app, true for a key of the user's own
 // and for Loci's relay (every tester), so a message no rule claims gets the full
 // prompt; false only for a key built into the app. buildTurn mirrors the CoachTab send path.
-export function buildTurn(q, { ownKey = true } = {}) {
+// The scenario bank (#594) passes its own user, history and clock: `fixture` (as
+// makeFixture returns), `now`, `windows` (focus windows) and q.history as an array
+// of { isUser, text }. Without them, this is Sam on Wed 21 Oct at 10:00.
+export function buildTurn(q, { ownKey = true, fixture = null, now = NOW, windows = WINDOWS } = {}) {
   const local = buildLocalSafetyReply(q.text, FIRST_NAME);
   if (local) return { local };
 
-  const { tasks, config, brainDump, contributions, focusRaw, userProfile } = makeFixture();
+  const { tasks, config, brainDump, contributions, focusRaw, userProfile } = fixture || makeFixture();
   // A plain factual question is answered by the app, with no provider call.
   const intent = detectFactIntent(q.text, { config });
-  if (intent) return { card: buildFactCard(intent, { tasks, config, brainDump, contributions, focusRaw, now: NOW, unconfirmed: false }), cardKind: intent.kind };
-  const todayStr = getLociDayStr(NOW, WINDOWS);
-  const savedHistory = [...(q.history === "followup" ? FOLLOWUP_HISTORY : BASE_HISTORY), { isUser: true, text: q.text }];
+  if (intent) return { card: buildFactCard(intent, { tasks, config, brainDump, contributions, focusRaw, now: now, unconfirmed: false }), cardKind: intent.kind };
+  const todayStr = getLociDayStr(now, windows);
+  const baseHistory = Array.isArray(q.history) ? q.history : q.history === "followup" ? FOLLOWUP_HISTORY : BASE_HISTORY;
+  const savedHistory = [...baseHistory, { isUser: true, text: q.text }];
   const prev = lastShown(savedHistory.slice(0, -1));
   const lastReplyAsked = !!prev && !prev.isUser && String(prev.text || "").trim().endsWith("?");
   const modeOptions = { lastFullTaskTime: 0, hasLastPlan: false, lastReplyAsked };
@@ -253,7 +257,7 @@ export function buildTurn(q, { ownKey = true } = {}) {
   const isReference = needsConversationContext(q.text);
   const rawWindowStart = Math.max(0, savedHistory.length - historyLimitForMode(mode, isReference));
   const history = savedHistory.slice(llmHistoryStart(rawWindowStart, 0, false));
-  const hour = NOW.getHours();
+  const hour = now.getHours();
   const todayActive = tasks.filter(t => t.horizonLevel === "today" && L.isActiveLociTask(t));
 
   const system = buildCoachSystemPrompt(mode, {
@@ -264,27 +268,27 @@ export function buildTurn(q, { ownKey = true } = {}) {
     memoryContext: buildLociMemoryContext(config.coachMemory),
     memorySectionEnabled: true,
     personaInstruction: buildPersonaInstruction(config, FIRST_NAME),
-    taskContext: L.buildLociTaskContext(tasks, NOW, WINDOWS),
+    taskContext: L.buildLociTaskContext(tasks, now, windows),
     todaySnapshotContext: L.buildLociTodaySnapshotContext(tasks, { dayStr: todayStr, focusTimer: {}, unconfirmed: false, mentionText: q.text }),
     focusSessionContext: "",
     nowFocusContext: L.buildLociNowFocusContext(tasks),
     dayMapContext: L.buildLociDayMapContext(tasks, todayStr),
-    remindersContext: L.buildLociRemindersContext(tasks, NOW),
+    remindersContext: L.buildLociRemindersContext(tasks, now),
     anchorContext: L.buildLociAnchorsContext(config.dailyAnchors),
     checkinContext: [L.buildLociCheckinContext(config, tasks, todayStr), L.buildLociClosingContext(config, todayStr)].filter(Boolean).join("\n\n"),
     pendingCheckinContext: "",
-    deadlineContext: L.buildLociDeadlineContext(config, NOW),
+    deadlineContext: L.buildLociDeadlineContext(config, now),
     brainDumpContext: L.buildLociBrainDumpContext(brainDump),
-    velocityContext: periodIntent ? "" : L.buildLociVelocityContext(contributions, NOW, WINDOWS),
-    recentlyParkedContext: L.buildLociRecentlyParkedContext(tasks, NOW),
-    recentlyCompletedContext: L.buildLociRecentlyCompletedContext(tasks, NOW, WINDOWS),
-    categoryFilterContext: L.buildLociCategoryFilterContext(tasks, detectRequestedCategories(q.text), WINDOWS),
+    velocityContext: periodIntent ? "" : L.buildLociVelocityContext(contributions, now, windows),
+    recentlyParkedContext: L.buildLociRecentlyParkedContext(tasks, now),
+    recentlyCompletedContext: L.buildLociRecentlyCompletedContext(tasks, now, windows),
+    categoryFilterContext: L.buildLociCategoryFilterContext(tasks, detectRequestedCategories(q.text), windows),
     rescueHandoffContext: "",
     isEarlyConversation: false,
-    nowLabel: NOW.toLocaleString("en-GB", { weekday: "short", year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "UTC" }) + " (fixture time)",
+    nowLabel: now.toLocaleString("en-GB", { weekday: "short", year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "UTC" }) + " (fixture time)",
     timeOfDay: hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening",
     todayActiveCount: todayActive.length,
-    profileBlock: profileToCoachContext(userProfile),
+    profileBlock: userProfile ? profileToCoachContext(userProfile) : "",
     lastCoachPlan: null,
     currentFocusTitle: tasks.find(t => t.isNowFocus)?.title || null,
     sessionSummaryContext: shouldIncludeSessionSummaryContext(mode, isReference, false) ? buildSessionSummaryContext(null) : "",
@@ -294,8 +298,8 @@ export function buildTurn(q, { ownKey = true } = {}) {
   let finalSystem = system;
   if (mode === "full_task" && (periodIntent || deadlineIntent)) {
     const block = periodIntent
-      ? `${buildLociPeriodContext({ tasks, contributions, config, now: NOW, days: periodIntent.days, offset: periodIntent.offset, focusRaw })}\n${PERIOD_ANSWER_NOTE}`
-      : buildLociDeadlinesBlock({ tasks, config, now: NOW, message: q.text });
+      ? `${buildLociPeriodContext({ tasks, contributions, config, now: now, days: periodIntent.days, offset: periodIntent.offset, focusRaw })}\n${PERIOD_ANSWER_NOTE}`
+      : buildLociDeadlinesBlock({ tasks, config, now: now, message: q.text });
     if (block) finalSystem = `${system}\n\n${block}`;
   }
   const messages = history.map(m => ({ role: m.isUser ? "user" : "assistant", content: m.text }));
