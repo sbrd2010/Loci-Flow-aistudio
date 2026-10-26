@@ -57,7 +57,8 @@ const fromSpec = (s) => (s instanceof RegExp ? s : new RegExp(s.source, s.flags)
 // button behind it), then the question's own expectations.
 export function gradeReply(expect = {}, { visible = "", tags = [] } = {}) {
   const reasons = [];
-  if (!visible) reasons.push("empty reply");
+  // A reply that is only an action tag is not empty: the app writes its offer line.
+  if (!visible && tags.length === 0) reasons.push("empty reply");
   if (/<\/?think>|\[\[THINK/i.test(visible)) reasons.push("reasoning shown");
   if (visible && tags.length === 0 && withoutChangeClaims(visible) !== visible) reasons.push("claims a change it did not make");
   for (const s of expect.must || []) if (!fromSpec(s).test(visible)) reasons.push(`missing /${s.source || s}/`);

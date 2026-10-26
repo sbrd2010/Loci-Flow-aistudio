@@ -33,6 +33,8 @@ describe("gradeReply", () => {
   });
   it("fails an empty reply, shown reasoning and a claimed change with no button", () => {
     expect(gradeReply({}, { visible: "" }).reasons).toContain("empty reply");
+    // Only a tag: the app shows the offer line itself (#562).
+    expect(gradeReply({}, { visible: "", tags: ["[[START_FOCUS:Draft the slides|25]]"] }).verdict).toBe("pass");
     expect(gradeReply({}, { visible: "<think>hmm</think> Do the slides." }).reasons).toContain("reasoning shown");
     expect(gradeReply({}, { visible: "Got it, I'll rename it to Fix export." }).reasons).toContain("claims a change it did not make");
     expect(gradeReply({}, { visible: "Want me to park it?", tags: ["[[PARK_TASK:Report]]"] }).verdict).toBe("pass");
