@@ -35,7 +35,7 @@ describe("routing and CORS", () => {
   });
 
   it("refuses unknown paths and other methods", async () => {
-    expect((await call("/groq", { token: await signer.sign() })).status).toBe(404);
+    expect((await call("/mistral", { token: await signer.sign() })).status).toBe(404);
     expect((await call("/nvidia", { method: "GET" })).status).toBe(405);
   });
 
@@ -239,5 +239,49 @@ describe("Cloudflare Workers AI", () => {
 
   it("says it is not set up without the AI binding", async () => {
     expect((await call("/cloudflare", { token: await signer.sign() })).status).toBe(501);
+  });
+});
+
+describe("Groq and Gemini", () => {
+  const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+  const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+  const sentTo = (url) => {
+    const found = fetchImpl.mock.calls.find(([u]) => u === url);
+    return found && { auth: found[1].headers.Authorization, body: JSON.parse(found[1].body) };
+  };
+
+  it("forwards to Groq with the relay's key, keeping reasoning_effort for gpt-oss", async () => {
+    const res = await call("/groq", { token: await signer.sign(), env: { GROQ_API_KEY: "gsk-test" } });
+    expect(res.status).toBe(200);
+    const sent = sentTo(GROQ_URL);
+    expect(sent.auth).toBe("Bearer gsk-test");
+    expect(sent.body).toMatchObject({ model: "openai/gpt-oss-120b", reasoning_effort: "low", stream: false });
+  });
+
+  it("forwards to Gemini's OpenAI-style endpoint with the chosen model and no reasoning_effort", async () => {
+    const body = { ...BODY, messages: [{ role: "system", content: "S" }, { role: "assistant", content: "Hey!" }, { role: "user", content: "Hi" }] };
+    const res = await call("/gemini", { token: await signer.sign(), body, env: { GEMINI_API_KEY: "AIza-test", GEMINI_MODEL: " models/gemini-test-lite " } });
+    expect(res.status).toBe(200);
+    const sent = sentTo(GEMINI_URL);
+    expect(sent.auth).toBe("Bearer AIza-test");
+    expect(sent.body.model).toBe("gemini-test-lite");
+    expect(sent.body).not.toHaveProperty("reasoning_effort");
+    // The opening assistant greeting is dropped: Gemini wants the user first.
+    expect(sent.body.messages.map(m => m.role)).toEqual(["system", "user"]);
+  });
+
+  it("uses gemini-2.5-flash-lite when no model is set", async () => {
+    await call("/gemini", { token: await signer.sign(), env: { GEMINI_API_KEY: "k" } });
+    expect(sentTo(GEMINI_URL).body.model).toBe("gemini-2.5-flash-lite");
+  });
+
+  it("says Groq or Gemini is not set up when its key is missing, without calling it", async () => {
+    for (const path of ["/groq", "/gemini"]) {
+      const res = await call(path, { token: await signer.sign() });
+      expect(res.status).toBe(501);
+      expect((await res.json()).error.message).toMatch(/not set up/);
+    }
+    expect(sentTo(GROQ_URL)).toBeUndefined();
+    expect(sentTo(GEMINI_URL)).toBeUndefined();
   });
 });

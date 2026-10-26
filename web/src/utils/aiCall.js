@@ -29,8 +29,8 @@ const ZAI_MODEL = import.meta.env.VITE_ZAI_MODEL || "glm-4.7-flash";
 
 // Loci's own relay Worker (ai-proxy/, docs/ai-relay.md) for the two providers a
 // browser cannot call itself: NVIDIA (its API sends no CORS headers, #356) and
-// Cloudflare Workers AI. It also carries the shared OpenRouter key, so that key
-// is not in the app's public code. The relay holds the keys and lets in
+// Cloudflare Workers AI. It also carries the shared Groq, Gemini and OpenRouter
+// keys, so they are not in the app's public code. The relay holds the keys and lets in
 // signed-in users only. Unset VITE_AI_RELAY_URL means none of this is offered.
 export const RELAY_PROVIDERS = ["cloudflare", "nvidia"];
 function relayUrl() {
@@ -813,15 +813,19 @@ export function isOnlyProviderKeyMissing() {
   if (!isProviderOnly() || pref === "auto") return false;
   if (RELAY_PROVIDERS.includes(pref)) return !isRelayAvailable();
   const { groqKey, geminiKey, cerebrasKey, zaiKey, openrouterKey } = getAIKeys();
-  const keys = { groq: groqKey, gemini: geminiKey, cerebras: cerebrasKey, zai: zaiKey, openrouter: openrouterKey || (isRelayAvailable() ? "relay" : "") };
+  const relay = isRelayAvailable() ? "relay" : "";
+  const keys = { groq: groqKey || relay, gemini: geminiKey || relay, cerebras: cerebrasKey, zai: zaiKey, openrouter: openrouterKey || relay };
   return !keys[pref] && Object.values(keys).some(Boolean);
 }
 
 export function buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey, only = false, cleanOpenrouterKey = "", relay = isRelayAvailable()) {
   const available = {
-    groq:       cleanGroqKey       ? { name: "groq",       key: cleanGroqKey }       : null,
-    gemini:     cleanGeminiKey     ? { name: "gemini",      key: cleanGeminiKey }     : null,
-    // A person's own OpenRouter key goes direct; without one, the shared key on the relay.
+    // A person's own Groq, Gemini or OpenRouter key goes direct; without one,
+    // the shared key on the relay, so it is never in the app's public code.
+    groq:       cleanGroqKey       ? { name: "groq",       key: cleanGroqKey }
+              : relay              ? { name: "groq",       key: "relay", viaRelay: true } : null,
+    gemini:     cleanGeminiKey     ? { name: "gemini",      key: cleanGeminiKey }
+              : relay              ? { name: "gemini",      key: "relay", viaRelay: true } : null,
     openrouter: cleanOpenrouterKey ? { name: "openrouter",  key: cleanOpenrouterKey }
               : relay              ? { name: "openrouter",  key: "relay", viaRelay: true } : null,
     cloudflare: relay              ? { name: "cloudflare",  key: "relay" }            : null,
@@ -902,18 +906,16 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, openrout
     if (deadline - Date.now() < MIN_ATTEMPT_MS && attempts.some(a => a.live)) break;
     try {
       let result;
-      if (provider.name === "groq") {
+      if (provider.viaRelay || RELAY_PROVIDERS.includes(provider.name)) {
+        result = await callRelay(provider.name, systemPrompt, messages, maxTokens, reasoningEffort, limits);
+      } else if (provider.name === "groq") {
         result = await callGroq(provider.key, systemPrompt, messages, maxTokens, reasoningEffort, limits);
-      } else if (provider.name === "openrouter" && provider.viaRelay) {
-        result = await callRelay("openrouter", systemPrompt, messages, maxTokens, reasoningEffort, limits);
       } else if (provider.name === "openrouter") {
         result = await callOpenRouter(provider.key, systemPrompt, messages, maxTokens, reasoningEffort, limits);
       } else if (provider.name === "cerebras") {
         result = await callCerebras(provider.key, systemPrompt, messages, maxTokens, reasoningEffort, limits);
       } else if (provider.name === "zai") {
         result = await callZai(provider.key, systemPrompt, messages, maxTokens, limits);
-      } else if (RELAY_PROVIDERS.includes(provider.name)) {
-        result = await callRelay(provider.name, systemPrompt, messages, maxTokens, reasoningEffort, limits);
       } else {
         result = await callGemini(provider.key, systemPrompt, messages, maxTokens, limits);
       }
@@ -978,11 +980,11 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, openrout
   );
 }
 
-// Private-alpha build-key pattern: localStorage (user-entered BYOK) wins,
-// otherwise falls back to a build-time VITE_* env var. This is the same
-// pattern already in use for Groq/Gemini and is a known, accepted
-// exposure for this stage — see SettingsTab.jsx AI Keys section copy and
-// the PR description for the server-side-proxy migration plan.
+// localStorage (user-entered BYOK) wins, otherwise a build-time VITE_* key.
+// The deploy workflows no longer pass any build-time AI key: a key in the
+// build is readable by anyone who opens the app, so the shared Groq, Gemini
+// and OpenRouter keys live on Loci's relay instead (docs/ai-relay.md). The
+// fallback stays for local development.
 export function getAIKeys() {
   return {
     groqKey:     (localStorage.getItem("loci_groq_key")     || import.meta.env.VITE_GROQ_KEY     || "").trim(),

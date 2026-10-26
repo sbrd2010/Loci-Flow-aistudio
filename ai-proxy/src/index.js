@@ -1,12 +1,14 @@
 // Loci AI relay. NVIDIA's API refuses browser calls (no CORS, #356),
 // Cloudflare's own models are reached through the Worker's AI binding, and the
-// owner's OpenRouter key must not sit in the app's public code, so the app sends
-// those providers' requests here. Only a signed-in Loci user gets through; the
+// owner's Groq, Gemini and OpenRouter keys must not sit in the app's public
+// code, so the app sends those providers' requests here. Only a signed-in Loci user gets through; the
 // keys never leave the Worker. Prompts and replies are
 // passed on, never logged or stored.
 //
 //   POST /nvidia      → NVIDIA's OpenAI-style chat endpoint
 //   POST /openrouter  → OpenRouter, free models only, with the owner's key
+//   POST /groq        → Groq, with the owner's key
+//   POST /gemini      → Gemini's OpenAI-style endpoint, with the owner's key
 //   POST /cloudflare  → env.AI.run (Workers AI)
 //
 // All answer in the OpenAI chat-completions shape the app already reads.
@@ -19,7 +21,12 @@ const DEFAULT_NVIDIA_MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 // OpenRouter's own router that always picks a free model that exists (#568).
 const DEFAULT_OPENROUTER_MODEL = "openrouter/free";
-const RELAY_PATHS = new Set(["nvidia", "openrouter", "cloudflare"]);
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+// GEMINI_MODEL picks another (the name as Google AI Studio shows it).
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
+const RELAY_PATHS = new Set(["nvidia", "openrouter", "cloudflare", "groq", "gemini"]);
 const DEFAULT_CLOUDFLARE_MODEL = "@cf/openai/gpt-oss-120b";
 const MAX_BODY_CHARS = 200_000;
 const MAX_MESSAGES = 100;
@@ -112,6 +119,22 @@ function relayNvidia(params, env, fetchImpl) {
   return relayUpstream("NVIDIA", NVIDIA_URL, env.NVIDIA_API_KEY, { model, ...forModel(params, model) }, fetchImpl);
 }
 
+function relayGroq(params, env, fetchImpl) {
+  if (!env.GROQ_API_KEY) return notSetUp("Groq is not set up on the relay yet (GROQ_API_KEY missing).");
+  const model = env.GROQ_MODEL || DEFAULT_GROQ_MODEL;
+  return relayUpstream("Groq", GROQ_URL, env.GROQ_API_KEY, { model, ...forModel(params, model) }, fetchImpl);
+}
+
+function relayGemini(params, env, fetchImpl) {
+  if (!env.GEMINI_API_KEY) return notSetUp("Gemini is not set up on the relay yet (GEMINI_API_KEY missing).");
+  const model = (env.GEMINI_MODEL || "").trim().replace(/^models\//, "") || DEFAULT_GEMINI_MODEL;
+  // Gemini wants the conversation to open with the user, as the app's direct call does.
+  const firstUser = params.messages.findIndex(m => m.role === "user");
+  if (firstUser < 0) return fail(400, "messages must include a user message.");
+  const messages = params.messages.filter((m, i) => m.role === "system" || i >= firstUser);
+  return relayUpstream("Gemini", GEMINI_URL, env.GEMINI_API_KEY, { model, ...forModel({ ...params, messages }, model) }, fetchImpl);
+}
+
 // Free models only, so the owner's key can never be billed through the relay,
 // even if credit is added to the account later.
 const isFreeOpenRouterModel = (model) => model === DEFAULT_OPENROUTER_MODEL || /:free$/.test(model);
@@ -185,6 +208,8 @@ async function handle(request, env, fetchImpl) {
 
   if (provider === "nvidia") return relayNvidia(params, env, fetchImpl);
   if (provider === "openrouter") return relayOpenRouter(params, env, fetchImpl);
+  if (provider === "groq") return relayGroq(params, env, fetchImpl);
+  if (provider === "gemini") return relayGemini(params, env, fetchImpl);
   return runCloudflare(params, env);
 }
 

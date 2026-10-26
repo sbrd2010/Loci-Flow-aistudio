@@ -59,10 +59,10 @@ Copy `web/.env.example` to `web/.env`. All variables are optional for local deve
 |---|---|
 | `VITE_FIREBASE_APP_ID` | Firebase web app ID (enables cloud sync) |
 | `VITE_GA_MEASUREMENT_ID` | Google Analytics (optional) |
-| `VITE_GROQ_KEY` | Groq API key for AI features (optional) |
-| `VITE_GEMINI_KEY` | Gemini API key for AI features (optional) |
+| `VITE_GROQ_KEY` | Groq API key, **local development only**: a key in the build is public, so the deploy workflows do not pass it; the deployed app uses the relay (`docs/ai-relay.md`) |
+| `VITE_GEMINI_KEY` | Gemini API key, **local development only** (as `VITE_GROQ_KEY`) |
 | `VITE_GEMINI_MODEL` | Gemini model override (optional, defaults to `gemini-2.5-flash-lite`). Copy the name exactly as Google AI Studio shows it; a free-tier model with a higher requests-per-day limit stretches the shared key |
-| `VITE_CEREBRAS_KEY` | Cerebras API key for AI features (optional) |
+| `VITE_CEREBRAS_KEY` | Cerebras API key, **local development only** (as `VITE_GROQ_KEY`) |
 | `VITE_CEREBRAS_MODEL` | Cerebras model override (optional, defaults to `gpt-oss-120b`) |
 | `VITE_OPENROUTER_MODEL` | OpenRouter model override (optional, defaults to `openrouter/free`, OpenRouter's free router; a person can also pin a model in Settings). OpenRouter keys are added per person in Settings; do not put a key with credit in a build variable |
 | `VITE_AI_RELAY_URL` | Address of Loci's AI relay Worker (optional). When set, Cloudflare AI and NVIDIA are offered as providers and OpenRouter works without a key on the device; see `docs/ai-relay.md` |

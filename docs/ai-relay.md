@@ -1,14 +1,18 @@
-# Loci AI relay (Cloudflare AI and NVIDIA)
+# Loci AI relay (Cloudflare AI, NVIDIA, OpenRouter, Groq, Gemini)
 
 A small Cloudflare Worker, `loci-ai` (code in `ai-proxy/`), that lets the app use free AI providers without putting their keys in the app's public code:
 
 - **Cloudflare AI** (Workers AI): Cloudflare's own models, `gpt-oss-120b` by default, the same model Groq runs. No key: it uses the Cloudflare account's free daily allowance (10,000 "neurons" a day, reset at 00:00 UTC).
 - **NVIDIA** (build.nvidia.com): `nvidia/nemotron-3.5-lightning-30b-a3b` by default (NVIDIA retired `openai/gpt-oss-120b` on 2026-09-03; `deepseek-ai/deepseek-v4.1-flash` and `google/gemma-4-31b-it` both timed out past the app's 30-second limit). NVIDIA's API refuses calls from a browser (#356), so the relay calls it instead and keeps the key on Cloudflare.
+- **Groq**: your Groq key, kept on Cloudflare. `openai/gpt-oss-120b` by default (`GROQ_MODEL` changes it).
+- **Gemini**: your Gemini key, kept on Cloudflare, through Google's OpenAI-style endpoint. `gemini-2.5-flash-lite` by default; the repository secret `VITE_GEMINI_MODEL` picks another (the name as Google AI Studio shows it) for both the relay and someone's own key.
 - **OpenRouter**: your OpenRouter key, kept on Cloudflare. Free models only (`openrouter/free` by default), so the key can never be billed through the relay, even if credit is added later. Someone who adds their own OpenRouter key in Settings still goes direct with it.
 
 Only someone signed in to Loci with Google gets through: the app sends its Firebase sign-in token, and the relay checks it. There is no per-person limit yet (that is PR 9, #570). Prompts and replies pass through; the relay does not log or store them.
 
-In the app, Cloudflare AI and NVIDIA appear in **Settings → AI provider**, OpenRouter shows as "Built in", and **Auto** tries them after Groq and Gemini.
+In the app, Cloudflare AI and NVIDIA appear in **Settings → AI provider**, Groq, Gemini and OpenRouter show as "Built in", and **Auto** keeps its order: Groq, Gemini, OpenRouter, Cloudflare AI, NVIDIA. Someone who adds their own Groq, Gemini or OpenRouter key in Settings goes direct with it.
+
+**No AI key is built into the app any more.** A `VITE_..._KEY` in the build can be read by anyone who opens the app, so the deploy workflows no longer pass `VITE_GROQ_KEY`, `VITE_GEMINI_KEY`, `VITE_CEREBRAS_KEY` or `VITE_ZAI_KEY`. Cerebras and Z.ai are still offered to anyone who adds their own key. Someone not signed in has no built-in AI.
 
 ## Setup (no terminal)
 
@@ -23,13 +27,18 @@ Use the same GitHub page as for the other secrets: GitHub repo → **Settings** 
 
 **3. OpenRouter key (optional).** openrouter.ai → **Keys** → **Create Key**, copy it (starts with `sk-or-`), and add it as the secret `AI_OPENROUTER_KEY`.
 
+**3b. Groq and Gemini keys.** Make **new** keys, not the ones that were in `VITE_GROQ_KEY` / `VITE_GEMINI_KEY`: those were in the public app, so treat them as known to anyone.
+- Groq: console.groq.com → **API Keys** → **Create API Key** (starts with `gsk_`) → secret `AI_GROQ_KEY`.
+- Gemini: aistudio.google.com → **Get API key** → **Create API key** (starts with `AIza`) → secret `AI_GEMINI_KEY`.
+- Once the app answers through the relay (step 6), delete the old keys at Groq and Google, and delete the GitHub secrets `VITE_GROQ_KEY`, `VITE_GEMINI_KEY`, `VITE_CEREBRAS_KEY` and `VITE_ZAI_KEY`.
+
 Without a key, that provider answers "not set up" and the app moves on to the next one. Cloudflare AI needs no key. Deleting a key from GitHub later does not remove it from the Worker: delete it there too (Cloudflare dashboard → **Workers & Pages** → `loci-ai` → **Settings** → **Variables and Secrets**).
 
-**4. Press the button.** GitHub repo → **Actions** → **Deploy the AI relay (Cloudflare AI and NVIDIA)** → **Run workflow**. When it finishes, open the run: the summary shows the relay address (`https://loci-ai.<name>.workers.dev`).
+**4. Press the button.** GitHub repo → **Actions** → **Deploy the AI relay** → **Run workflow**. When it finishes, open the run: the summary shows the relay address (`https://loci-ai.<name>.workers.dev`).
 
 **5. Tell the app.** Add that address, with no slash at the end, as the secret `VITE_AI_RELAY_URL`. Then **Actions** → **Deploy to Firebase Hosting** → **Run workflow** (or merge any PR).
 
-**6. Check it.** Hard-refresh Loci. **Settings → AI provider**: choose **Cloudflare AI**, turn on **Only use my provider**, and send one Coach message. Then the same with **NVIDIA** and **OpenRouter**. Afterwards choose **Auto** again and turn the switch off. If one fails, the line in brackets after the error is that provider's own reason.
+**6. Check it.** Hard-refresh Loci. **Settings → AI provider**: choose **Cloudflare AI**, turn on **Only use my provider**, and send one Coach message. Then the same with **NVIDIA**, **OpenRouter**, **Groq** and **Gemini**. Afterwards choose **Auto** again and turn the switch off. If one fails, the line in brackets after the error is that provider's own reason.
 
 If the deploy fails with a permission error about AI, edit the Cloudflare token (profile → **API Tokens** → the token → **Edit**) and add **Account → Workers AI → Edit**. Not checked from a real deployment yet; the run log names any problem.
 
