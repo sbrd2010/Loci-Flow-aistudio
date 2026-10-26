@@ -1,4 +1,8 @@
-import { getLociNowMinutes, getCurrentFocusSlot } from "./focusWindows";
+import { getCurrentFocusSlot } from "./focusWindows";
+
+// One definition of the Loci day lives in focusWindows.js; re-exported here for
+// existing imports, so the two can never disagree about what "today" is.
+export { getLociDayStr } from "./focusWindows";
 
 const ANCHOR_COPIES = [
   { title: "One small check-in", intro: "Before the day runs away." },
@@ -11,17 +15,6 @@ const ANCHOR_COPIES = [
 
 // Three accent variants: teal, amber, soft purple
 const ANCHOR_ACCENTS = ["var(--accent)", "#d97706", "var(--accent-secondary)"];
-
-// Returns the Loci-day date string.
-// For overnight focus windows, hours in the early-morning tail of a window
-// (e.g., 1am when a window runs 16:00-03:00) belong to the PREVIOUS Loci day,
-// not the calendar day.
-export function getLociDayStr(now = new Date(), windows) {
-  const lociNow = getLociNowMinutes(now, windows);
-  const date = new Date(now);
-  if (lociNow >= 1440) date.setDate(date.getDate() - 1);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
 
 // Returns "morning" | "afternoon" | "evening" | null based on the active focus
 // windows, dividing total focus time (across all windows) into thirds.
