@@ -1291,7 +1291,10 @@ describe("describeAIError", () => {
     expect(describeAIError(new Error("503"))).toMatch(/temporarily unavailable.*tasks are safe/i);
     expect(describeAIError(new Error("invalid_key"))).toMatch(/invalid or unauthorized.*tasks are safe/i);
     expect(describeAIError(new Error("network"))).toMatch(/couldn.t reach the ai service.*tasks are safe/i);
+    // Without a relay address; with one, a signed-out user is told to sign in (tested with the relay).
+    vi.stubEnv("VITE_AI_RELAY_URL", "");
     expect(describeAIError(new Error("no_key"))).toMatch(/add an ai key in settings/i);
+    vi.unstubAllEnvs();
   });
 
   it("does not blame a rate limit when every provider failed for another reason", () => {
@@ -1330,6 +1333,7 @@ describe("isAISystemReply", () => {
       expect(isAISystemReply(describeAIError(new Error(code)))).toBe(true);
     }
     expect(isAISystemReply("AI daily limit reached: you have used 120/120 AI calls today. Loci will reset your AI allowance tomorrow.")).toBe(true);
+    expect(isAISystemReply("Sign in to chat with your Coach, or add your own AI key in Settings.")).toBe(true);
     expect(isAISystemReply("AI hourly limit reached: you have used 40/40 AI calls this hour. Try again after the hour resets.")).toBe(true);
   });
 
