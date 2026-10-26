@@ -1498,6 +1498,11 @@ describe("withoutChangeClaims (#592): a reply that changed nothing does not say 
     "Got it — I've noted that in your Coach memory.",
     "Nice work, that one is done! Want to pick the next?",
     "Start with the intro slide: open the deck and type one line.",
+    // Codex review, PR 593: advice and questions claim nothing.
+    "Try moving the report to next week if today is full.",
+    "Would rescheduling the appointment help?",
+    "Consider parking the groceries task until Friday.",
+    "Once it's moved to next week, today has room for the slides.",
   ])("leaves an honest reply alone: %s", (reply) => {
     expect(withoutChangeClaims(reply)).toBe(reply);
   });

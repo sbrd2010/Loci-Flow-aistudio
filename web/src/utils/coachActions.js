@@ -656,9 +656,13 @@ export const NOTHING_CHANGED_NOTE = "I didn't change anything from chat. You can
 // Memory and check-in lines are left alone: the app does save those.
 const CHANGE_CLAIM_RE = new RegExp(`${DONE_CLAIM_RE.source}|\\bi['’]ll\\s+(?:rename|reschedule|shift|push)\\b|\\b(?:rescheduled|renamed|moved|shifted|moving|shifting|rescheduling|renaming)\\s+(?:it|that|this|the|to)\\b|\\bi['’]ll\\s+(?:set|put)\\s+.{1,60}\\baside\\b|^(?:parked|moved|renamed)\\b`, "i");
 const SAVED_ELSEWHERE_RE = /\b(?:memory|remember|note|check[- ]?in|remind)/i;
+// Advice and questions ("Try moving the report to next week", "Would
+// rescheduling it help?") claim nothing, so they stay.
+const ADVISORY_RE = /\?\s*$|\b(?:try|could|would|might|maybe|perhaps|consider|if|once|when|whether|should|want me to)\b/i;
+const claimsChange = (s) => CHANGE_CLAIM_RE.test(s.trim()) && !SAVED_ELSEWHERE_RE.test(s) && !ADVISORY_RE.test(s);
 export function withoutChangeClaims(text) {
   const sentences = String(text || "").split(/(?<=[.!?])\s+/).filter(Boolean);
-  const kept = sentences.filter(s => !CHANGE_CLAIM_RE.test(s.trim()) || SAVED_ELSEWHERE_RE.test(s));
+  const kept = sentences.filter(s => !claimsChange(s));
   if (kept.length === sentences.length) return text;
   // A bare "Got it." left in front would read as a yes.
   return [...kept.filter(s => !/^(?:got it|sure|okay|ok|alright|done)[.!]?$/i.test(s.trim())), NOTHING_CHANGED_NOTE].join(" ");
