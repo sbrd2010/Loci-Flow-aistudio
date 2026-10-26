@@ -1357,6 +1357,15 @@ describe("AI call limits: payload size, timeouts and the call deadline", () => {
 
   const bigRequest = (overrides = {}) => baseRequest({ systemPrompt: "x".repeat(30000), ...overrides });
 
+  it("says Z.ai only handles short chats when Z.ai alone refused the request for its size", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    storage.setItem("loci_provider_only", "1");
+    await expect(callAI(bigRequest({ groqKey: "", zaiKey: "test-zai-key" }))).rejects.toThrow("zai_only_too_large");
+    expect(fetch).not.toHaveBeenCalled();
+    expect(describeAIError(new Error("zai_only_too_large"))).toMatch(/Z\.ai can only answer short chats.*choose another provider/);
+    expect(describeAIError(new Error("zai_only_too_large"))).not.toMatch(/shorter message/);
+  });
+
   it("throws payload_too_large, not a rate limit, when the only provider answers 413", async () => {
     fetch.mockResolvedValueOnce(providerError(413));
     await expect(callAI(bigRequest())).rejects.toThrow("payload_too_large");
