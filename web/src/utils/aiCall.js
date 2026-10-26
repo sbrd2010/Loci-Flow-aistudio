@@ -840,6 +840,17 @@ export function isOnlyProviderKeyMissing() {
   return !keys[pref] && Object.values(keys).some(Boolean);
 }
 
+// Auto: Groq first, then OpenRouter, Cloudflare AI, Gemini and NVIDIA. Z.ai only
+// fits a short prompt (12k-char guard, one request at a time), so it comes after
+// the providers that take any prompt. Cerebras ended its no-card free tier, so it
+// is a last resort for someone with a key of their own. A chosen provider goes
+// first, then the others in Auto's order.
+const AUTO_ORDER = ["groq", "openrouter", "cloudflare", "gemini", "nvidia", "zai", "cerebras"];
+export const PROVIDER_ORDERS = Object.fromEntries([
+  ["auto", AUTO_ORDER],
+  ...AUTO_ORDER.map(name => [name, [name, ...AUTO_ORDER.filter(n => n !== name)]]),
+]);
+
 export function buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey, only = false, cleanOpenrouterKey = "", relay = isRelayAvailable()) {
   const available = {
     // A person's own Groq, Gemini or OpenRouter key goes direct; without one,
@@ -857,25 +868,9 @@ export function buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCere
     zai:        cleanZaiKey        ? { name: "zai",         key: cleanZaiKey }
               : relay              ? { name: "zai",         key: "relay" }            : null,
   };
-  // An unknown preference falls back to "auto". Cerebras ended its no-card
-  // free tier, so Auto no longer leads with it; it stays an explicit choice and
-  // a last resort for those who have a key. Z.ai only fits the short prompt
-  // (12k-char guard, one request at a time), so it comes after the providers
-  // that can take any prompt. Cloudflare and NVIDIA (through Loci's relay) come
-  // after the providers that were already in the chain, so they add quota
-  // without changing who answers first.
-  const orders = {
-    auto:       ["groq", "gemini", "openrouter", "cloudflare", "nvidia", "zai", "cerebras"],
-    groq:       ["groq", "gemini", "openrouter", "cloudflare", "nvidia", "zai", "cerebras"],
-    gemini:     ["gemini", "groq", "openrouter", "cloudflare", "nvidia", "zai", "cerebras"],
-    openrouter: ["openrouter", "groq", "gemini", "cloudflare", "nvidia", "zai", "cerebras"],
-    cloudflare: ["cloudflare", "nvidia", "groq", "gemini", "openrouter", "zai", "cerebras"],
-    nvidia:     ["nvidia", "cloudflare", "groq", "gemini", "openrouter", "zai", "cerebras"],
-    cerebras:   ["cerebras", "groq", "gemini", "openrouter", "cloudflare", "nvidia", "zai"],
-    zai:        ["zai", "groq", "gemini", "openrouter", "cloudflare", "nvidia", "cerebras"],
-  };
-  const chain = orders[pref] || orders.auto;
-  return (only && orders[pref] && pref !== "auto" ? chain.slice(0, 1) : chain).map(n => available[n]).filter(Boolean);
+  // An unknown preference falls back to "auto".
+  const chain = PROVIDER_ORDERS[pref] || PROVIDER_ORDERS.auto;
+  return (only && PROVIDER_ORDERS[pref] && pref !== "auto" ? chain.slice(0, 1) : chain).map(n => available[n]).filter(Boolean);
 }
 
 export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, openrouterKey = getAIKeys().openrouterKey, systemPrompt, messages, maxTokens, contextMode, reasoningEffort, signal }) {
