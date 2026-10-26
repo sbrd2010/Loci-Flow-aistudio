@@ -16,7 +16,14 @@ export const OPENROUTER_MODEL_KEY = "loci_openrouter_model";
 function openrouterModel() {
   try { return (localStorage.getItem(OPENROUTER_MODEL_KEY) || "").trim() || OPENROUTER_MODEL; } catch { return OPENROUTER_MODEL; }
 }
-const GEMINI_URL   = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
+// Google retires and re-limits its free models, so a deployment can pick another
+// one with VITE_GEMINI_MODEL (the name exactly as Google AI Studio shows it; a
+// leading "models/" is fine) without a code change.
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
+export function geminiUrl() {
+  const model = (import.meta.env.VITE_GEMINI_MODEL || "").trim().replace(/^models\//, "") || DEFAULT_GEMINI_MODEL;
+  return `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+}
 const ZAI_URL   = "https://api.z.ai/api/paas/v4/chat/completions";
 const ZAI_MODEL = import.meta.env.VITE_ZAI_MODEL || "glm-4.7-flash";
 
@@ -519,7 +526,7 @@ async function callGemini(geminiKey, systemPrompt, messages, maxTokens, limits) 
     requestBody.generationConfig = { maxOutputTokens: parsedMaxTokens };
   }
   // The key goes in a header, not the URL, so it stays out of logs and history.
-  const res = await fetchWithTimeout(GEMINI_URL, {
+  const res = await fetchWithTimeout(geminiUrl(), {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey },
     body: JSON.stringify(requestBody)

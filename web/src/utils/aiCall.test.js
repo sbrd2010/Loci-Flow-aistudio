@@ -5,7 +5,7 @@ vi.mock("../firebase", () => ({
 }));
 
 import { auth } from "../firebase";
-import { buildProviderOrder, callAI, classifyAIError, describeAIError, extractJsonArray, hasOwnAIKey, isAISystemReply, isRelayAvailable, resetProviderCooldowns } from "./aiCall";
+import { buildProviderOrder, callAI, classifyAIError, describeAIError, extractJsonArray, geminiUrl, hasOwnAIKey, isAISystemReply, isRelayAvailable, resetProviderCooldowns } from "./aiCall";
 
 function makeStorage() {
   const store = new Map();
@@ -677,6 +677,13 @@ describe("AI call resilience", () => {
     expect(String(fetch.mock.calls[0][0])).toContain("generativelanguage.googleapis.com");
     expect(fetch.mock.calls[1][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
     expect(fetch.mock.calls[2][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
+  });
+
+  it("calls the Gemini model a deployment names, and the default model otherwise", () => {
+    expect(geminiUrl()).toBe("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent");
+    vi.stubEnv("VITE_GEMINI_MODEL", " models/gemini-test-lite ");
+    expect(geminiUrl()).toBe("https://generativelanguage.googleapis.com/v1beta/models/gemini-test-lite:generateContent");
+    vi.unstubAllEnvs();
   });
 
   it("uses Gemini first when pref is gemini", async () => {

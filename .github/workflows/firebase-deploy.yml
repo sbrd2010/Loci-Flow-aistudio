@@ -26,6 +26,7 @@ jobs:
         env:
           VITE_GROQ_KEY: ${{ secrets.VITE_GROQ_KEY }}
           VITE_GEMINI_KEY: ${{ secrets.VITE_GEMINI_KEY }}
+          VITE_GEMINI_MODEL: ${{ secrets.VITE_GEMINI_MODEL }}
           VITE_AI_RELAY_URL: ${{ secrets.VITE_AI_RELAY_URL }}
           VITE_CEREBRAS_KEY: ${{ secrets.VITE_CEREBRAS_KEY }}
           VITE_ZAI_KEY: ${{ secrets.VITE_ZAI_KEY }}
