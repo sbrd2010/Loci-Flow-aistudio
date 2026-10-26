@@ -1731,11 +1731,18 @@ describe("buildProviderOrder", () => {
   });
   it("with the relay, adds Cloudflare and NVIDIA after OpenRouter in Auto, and first when chosen", () => {
     expect(buildProviderOrder("auto", "g", "m", "c", "z", false, "o", true).map(p => p.name)).toEqual(["groq", "gemini", "openrouter", "cloudflare", "nvidia", "zai", "cerebras"]);
-    expect(buildProviderOrder("auto", "", "", "", "", false, "", true).map(p => p.name)).toEqual(["openrouter", "cloudflare", "nvidia"]);
-    expect(buildProviderOrder("cloudflare", "g", "", "", "", false, "", true).map(p => p.name)).toEqual(["cloudflare", "nvidia", "groq", "openrouter"]);
-    expect(buildProviderOrder("nvidia", "", "", "", "", false, "", true).map(p => p.name)).toEqual(["nvidia", "cloudflare", "openrouter"]);
+    // No key of the user's own: Groq, Gemini and OpenRouter use the shared keys on the relay.
+    const noKeys = buildProviderOrder("auto", "", "", "", "", false, "", true);
+    expect(noKeys.map(p => p.name)).toEqual(["groq", "gemini", "openrouter", "cloudflare", "nvidia", "zai"]);
+    expect(noKeys.filter(p => p.viaRelay).map(p => p.name)).toEqual(["groq", "gemini", "openrouter"]);
+    // An own key goes direct.
+    expect(buildProviderOrder("auto", "g", "", "", "", false, "", true).find(p => p.name === "groq")).toEqual({ name: "groq", key: "g" });
+    expect(buildProviderOrder("cloudflare", "g", "", "", "", false, "", true).map(p => p.name)).toEqual(["cloudflare", "nvidia", "groq", "gemini", "openrouter", "zai"]);
+    expect(buildProviderOrder("nvidia", "", "", "", "", false, "", true).map(p => p.name)).toEqual(["nvidia", "cloudflare", "groq", "gemini", "openrouter", "zai"]);
+    // Z.ai through the relay keeps its own call (size guards), so it is not marked viaRelay.
+    expect(noKeys.find(p => p.name === "zai")).toEqual({ name: "zai", key: "relay" });
     expect(buildProviderOrder("nvidia", "g", "m", "", "", true, "", true).map(p => p.name)).toEqual(["nvidia"]);
-    expect(buildProviderOrder("zai", "g", "", "", "z", false, "", true).map(p => p.name)).toEqual(["zai", "groq", "openrouter", "cloudflare", "nvidia"]);
+    expect(buildProviderOrder("zai", "g", "", "", "z", false, "", true).map(p => p.name)).toEqual(["zai", "groq", "gemini", "openrouter", "cloudflare", "nvidia"]);
   });
   it("Only my provider keeps just the chosen provider, and ignores Auto", () => {
     expect(buildProviderOrder("gemini", "g", "m", "c", "z", true).map(p => p.name)).toEqual(["gemini"]);
@@ -1810,9 +1817,10 @@ describe("Cloudflare AI and NVIDIA through Loci's relay", () => {
     expect(init.body).not.toContain("test-groq-key");
   });
 
-  it("in Auto, reaches OpenRouter, Cloudflare then NVIDIA through the relay after Groq", async () => {
+  it("in Auto, reaches Gemini, OpenRouter, Cloudflare then NVIDIA through the relay after the user's own Groq key", async () => {
     fetch
       .mockResolvedValueOnce(providerError(429))
+      .mockResolvedValueOnce(relayError(429, "Gemini quota used up"))
       .mockResolvedValueOnce(relayError(429, "Free model limit reached"))
       .mockResolvedValueOnce(relayError(429, "Cloudflare's free daily AI allowance is used up"))
       .mockResolvedValueOnce(relayOk("NVIDIA answered."));
@@ -1821,8 +1829,68 @@ describe("Cloudflare AI and NVIDIA through Loci's relay", () => {
 
     expect(reply).toBe("NVIDIA answered.");
     expect(fetch.mock.calls.map(c => String(c[0]))).toEqual([
-      "https://api.groq.com/openai/v1/chat/completions", `${RELAY}/openrouter`, `${RELAY}/cloudflare`, `${RELAY}/nvidia`,
+      "https://api.groq.com/openai/v1/chat/completions", `${RELAY}/gemini`, `${RELAY}/openrouter`, `${RELAY}/cloudflare`, `${RELAY}/nvidia`,
     ]);
+  });
+
+  it("with no Z.ai key of the user's own, sends Z.ai's short request through the relay with the sign-in token", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    storage.setItem("loci_provider_only", "1");
+    fetch.mockResolvedValueOnce(relayOk("Z.ai through the relay."));
+
+    const reply = await callAI(baseRequest({ groqKey: "", zaiKey: "" }));
+
+    expect(reply).toBe("Z.ai through the relay.");
+    expect(String(fetch.mock.calls[0][0])).toBe(`${RELAY}/zai`);
+    expect(fetch.mock.calls[0][1].headers.Authorization).toBe("Bearer id-token");
+  });
+
+  it("reads the relay's 401 on Z.ai as the Loci sign-in, not a Z.ai key", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    storage.setItem("loci_provider_only", "1");
+    fetch.mockResolvedValueOnce(relayError(401, "Sign in to Loci"));
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+
+    await expect(callAI(baseRequest({ groqKey: "", zaiKey: "" }))).rejects.toThrow("only_provider_failed");
+    expect(debug).toHaveBeenCalledWith("[aiCall]", expect.objectContaining({ provider: "zai", outcome: "zai_auth" }));
+  });
+
+  it("lets only one Z.ai call through at a time, even while the sign-in token is fetched", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    storage.setItem("loci_provider_only", "1");
+    let releaseToken;
+    auth.currentUser.getIdToken = vi.fn(() => new Promise(r => { releaseToken = () => r("id-token"); }));
+    fetch.mockResolvedValue(relayOk("Z.ai through the relay."));
+
+    const first = callAI(baseRequest({ groqKey: "", zaiKey: "" }));
+    await vi.waitFor(() => expect(auth.currentUser.getIdToken).toHaveBeenCalled());
+    const second = callAI(baseRequest({ groqKey: "", zaiKey: "" }));
+    await expect(second).rejects.toThrow();
+    releaseToken();
+
+    await expect(first).resolves.toBe("Z.ai through the relay.");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps Z.ai's size limit through the relay: too large is refused before any request", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    storage.setItem("loci_provider_only", "1");
+
+    await expect(callAI(baseRequest({ groqKey: "", zaiKey: "", systemPrompt: "x".repeat(30000) }))).rejects.toThrow("zai_only_too_large");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("with no key of the user's own, sends Groq then Gemini through the relay, signed with the sign-in token", async () => {
+    fetch
+      .mockResolvedValueOnce(relayError(503, "Groq is busy"))
+      .mockResolvedValueOnce(relayOk("Gemini through the relay."));
+
+    const reply = await callAI(baseRequest({ groqKey: "", geminiKey: "" }));
+
+    expect(reply).toBe("Gemini through the relay.");
+    expect(fetch.mock.calls.map(c => String(c[0]))).toEqual([`${RELAY}/groq`, `${RELAY}/gemini`]);
+    expect(fetch.mock.calls[1][1].headers.Authorization).toBe("Bearer id-token");
+    expect(fetch.mock.calls[1][1].headers).not.toHaveProperty("x-goog-api-key");
   });
 
   it("a refused sign-in reads as the relay's reason, not as an invalid AI key", async () => {

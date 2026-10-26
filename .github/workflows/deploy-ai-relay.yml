@@ -1,8 +1,9 @@
-name: Deploy the AI relay (Cloudflare AI and NVIDIA)
+name: Deploy the AI relay (Cloudflare AI, NVIDIA, OpenRouter, Groq, Gemini, Z.ai)
 
 # A button, not an automatic deploy: Actions > this workflow > Run workflow.
 # Uses the same CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets as the
-# connector, plus AI_NVIDIA_KEY and AI_OPENROUTER_KEY. See docs/ai-relay.md.
+# connector, plus AI_NVIDIA_KEY, AI_OPENROUTER_KEY, AI_GROQ_KEY, AI_GEMINI_KEY
+# and AI_ZAI_KEY (and VITE_GEMINI_MODEL, optional). See docs/ai-relay.md.
 on:
   workflow_dispatch: {}
 
@@ -68,17 +69,26 @@ jobs:
         env:
           AI_NVIDIA_KEY: ${{ secrets.AI_NVIDIA_KEY }}
           AI_OPENROUTER_KEY: ${{ secrets.AI_OPENROUTER_KEY }}
+          AI_GROQ_KEY: ${{ secrets.AI_GROQ_KEY }}
+          AI_GEMINI_KEY: ${{ secrets.AI_GEMINI_KEY }}
+          AI_ZAI_KEY: ${{ secrets.AI_ZAI_KEY }}
+          # Not a secret, but stored the same way: the Gemini model to use.
+          VITE_GEMINI_MODEL: ${{ secrets.VITE_GEMINI_MODEL }}
         run: |
-          [ -n "$AI_NVIDIA_KEY" ] || echo "NVIDIA is not set up: add the repository secret AI_NVIDIA_KEY and run this again." >> "$GITHUB_STEP_SUMMARY"
-          [ -n "$AI_OPENROUTER_KEY" ] || echo "OpenRouter is not set up: add the repository secret AI_OPENROUTER_KEY and run this again." >> "$GITHUB_STEP_SUMMARY"
-          if [ -z "$AI_NVIDIA_KEY$AI_OPENROUTER_KEY" ]; then
+          for pair in "NVIDIA:AI_NVIDIA_KEY" "OpenRouter:AI_OPENROUTER_KEY" "Groq:AI_GROQ_KEY" "Gemini:AI_GEMINI_KEY" "Z.ai:AI_ZAI_KEY"; do
+            name="${pair%%:*}"; var="${pair#*:}"
+            [ -n "${!var}" ] || echo "$name is not set up: add the repository secret $var and run this again." >> "$GITHUB_STEP_SUMMARY"
+          done
+          umask 077
+          jq -n --arg n "$AI_NVIDIA_KEY" --arg o "$AI_OPENROUTER_KEY" --arg g "$AI_GROQ_KEY" --arg m "$AI_GEMINI_KEY" --arg gm "$VITE_GEMINI_MODEL" --arg z "$AI_ZAI_KEY" \
+            '[["NVIDIA_API_KEY",$n],["OPENROUTER_API_KEY",$o],["GROQ_API_KEY",$g],["GEMINI_API_KEY",$m],["GEMINI_MODEL",$gm],["ZAI_API_KEY",$z]]
+             | map(.[1] |= gsub("^\\s+|\\s+$"; "")) | map(select(.[1] != "")) | map({(.[0]): .[1]}) | add // {}' \
+            > "$RUNNER_TEMP/relay-secrets.json"
+          if [ "$(jq 'length' "$RUNNER_TEMP/relay-secrets.json")" = "0" ]; then
+            rm -f "$RUNNER_TEMP/relay-secrets.json"
             echo "No keys to store. Cloudflare AI works without one." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          umask 077
-          jq -n --arg n "$AI_NVIDIA_KEY" --arg o "$AI_OPENROUTER_KEY" \
-            '(if $n == "" then {} else {NVIDIA_API_KEY:$n} end) + (if $o == "" then {} else {OPENROUTER_API_KEY:$o} end)' \
-            > "$RUNNER_TEMP/relay-secrets.json"
           npx wrangler secret bulk "$RUNNER_TEMP/relay-secrets.json"
           rm -f "$RUNNER_TEMP/relay-secrets.json"
           echo "Keys stored on the relay." >> "$GITHUB_STEP_SUMMARY"

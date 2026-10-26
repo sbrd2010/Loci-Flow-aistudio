@@ -10,6 +10,7 @@
     // issued for this project.
     "FIREBASE_PROJECT_ID": "loci-flow"
   }
-  // NVIDIA_API_KEY is a secret, stored by the deploy workflow: see docs/ai-relay.md.
+  // The provider keys (NVIDIA, OpenRouter, Groq, Gemini, Z.ai) and GEMINI_MODEL are
+  // secrets, stored by the deploy workflow: see docs/ai-relay.md.
   // NVIDIA_MODEL and CLOUDFLARE_MODEL may be added as vars to swap models.
 }
