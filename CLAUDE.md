@@ -122,3 +122,11 @@ Cerebras's 5 RPM is the binding constraint — `callAI`'s auto-fallback chain tr
 - Space out real API calls (roughly 15-20s apart minimum) rather than firing several in quick succession.
 - Prefer one live call per scenario over loops of many small calls.
 - A `429`/`403` from the provider during testing is very likely this rate limit, not a real bug — wait it out (the error's `retryAfterMs` tells you how long) rather than treating it as a regression.
+
+## 9. Known bug hotspots — check before pushing
+
+From the repo's history (Aug–Oct 2026): about a third of Coach/AI commits were fixes, and half of all Codex-driven fixes landed there. Day-boundary and sync bugs kept reaching users. If a change touches one of these areas, check the listed cases yourself before pushing, and add a unit test for any that applies:
+- **Coach / AI (`web/src/utils/aiCall.js`, Coach prompts):** every provider in the chain, not just the first; a 429 or a cooldown vs a request that is too large; Z.ai's small size limit; Stop/abort mid-reply; history trimming. Any new free-text path to an AI provider must run the crisis check (`crisisSafety.js`).
+- **Day boundaries:** a Loci day can end after midnight. Use the existing helpers (`getLociDayStr`, `lociDaysBack`, `lociDayEndsAt` in `focusWindows.js`); don't do new date maths. Check 00:30 inside a late window, a DST change, and "today" vs "this week" vs "last week".
+- **Saved state and sync:** a page refresh mid-action, offline then reconnect, and two devices editing the same thing. Never let an older save overwrite a newer one (`resendPolicy.js`).
+- **UI/CSS-only changes** rarely needed fixes. A quick check on a phone-width and a desktop screenshot is enough.
