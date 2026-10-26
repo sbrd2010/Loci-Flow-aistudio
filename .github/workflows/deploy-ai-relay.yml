@@ -82,7 +82,7 @@ jobs:
           umask 077
           jq -n --arg n "$AI_NVIDIA_KEY" --arg o "$AI_OPENROUTER_KEY" --arg g "$AI_GROQ_KEY" --arg m "$AI_GEMINI_KEY" --arg gm "$VITE_GEMINI_MODEL" --arg z "$AI_ZAI_KEY" \
             '[["NVIDIA_API_KEY",$n],["OPENROUTER_API_KEY",$o],["GROQ_API_KEY",$g],["GEMINI_API_KEY",$m],["GEMINI_MODEL",$gm],["ZAI_API_KEY",$z]]
-             | map(select(.[1] != "")) | map({(.[0]): .[1]}) | add // {}' \
+             | map(.[1] |= gsub("^\\s+|\\s+$"; "")) | map(select(.[1] != "")) | map({(.[0]): .[1]}) | add // {}' \
             > "$RUNNER_TEMP/relay-secrets.json"
           if [ "$(jq 'length' "$RUNNER_TEMP/relay-secrets.json")" = "0" ]; then
             rm -f "$RUNNER_TEMP/relay-secrets.json"

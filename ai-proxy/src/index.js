@@ -104,7 +104,9 @@ async function relayUpstream(label, url, key, payload, fetchImpl) {
 
   let reason = "";
   try {
-    const body = await res.json();
+    let body = await res.json();
+    // Gemini's OpenAI-style endpoint wraps its error in a one-item array.
+    if (Array.isArray(body)) body = body[0];
     reason = String(body?.error?.message ?? body?.detail ?? body?.message ?? body?.error ?? "");
   } catch { /* not JSON */ }
   // The reason goes back to the user, so never let it carry the key.

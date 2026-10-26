@@ -1845,6 +1845,33 @@ describe("Cloudflare AI and NVIDIA through Loci's relay", () => {
     expect(fetch.mock.calls[0][1].headers.Authorization).toBe("Bearer id-token");
   });
 
+  it("reads the relay's 401 on Z.ai as the Loci sign-in, not a Z.ai key", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    storage.setItem("loci_provider_only", "1");
+    fetch.mockResolvedValueOnce(relayError(401, "Sign in to Loci"));
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+
+    await expect(callAI(baseRequest({ groqKey: "", zaiKey: "" }))).rejects.toThrow("only_provider_failed");
+    expect(debug).toHaveBeenCalledWith("[aiCall]", expect.objectContaining({ provider: "zai", outcome: "zai_auth" }));
+  });
+
+  it("lets only one Z.ai call through at a time, even while the sign-in token is fetched", async () => {
+    storage.setItem("loci_provider_pref", "zai");
+    storage.setItem("loci_provider_only", "1");
+    let releaseToken;
+    auth.currentUser.getIdToken = vi.fn(() => new Promise(r => { releaseToken = () => r("id-token"); }));
+    fetch.mockResolvedValue(relayOk("Z.ai through the relay."));
+
+    const first = callAI(baseRequest({ groqKey: "", zaiKey: "" }));
+    await vi.waitFor(() => expect(auth.currentUser.getIdToken).toHaveBeenCalled());
+    const second = callAI(baseRequest({ groqKey: "", zaiKey: "" }));
+    await expect(second).rejects.toThrow();
+    releaseToken();
+
+    await expect(first).resolves.toBe("Z.ai through the relay.");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps Z.ai's size limit through the relay: too large is refused before any request", async () => {
     storage.setItem("loci_provider_pref", "zai");
     storage.setItem("loci_provider_only", "1");

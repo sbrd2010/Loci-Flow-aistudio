@@ -772,11 +772,11 @@ async function callZai(zaiKey, systemPrompt, messages, maxTokens, limits) {
   // Without a key of the user's own, the shared key on Loci's relay; the size
   // guards above apply either way.
   const viaRelay = zaiKey === "relay";
-  const bearer = viaRelay ? await auth?.currentUser?.getIdToken?.() : zaiKey;
-  if (!bearer) throw new Error("zai_signed_out");
-
+  // Marked busy before the sign-in token is awaited, so a second call can't slip past the check above.
   zaiInFlight = true;
   try {
+    const bearer = viaRelay ? await auth?.currentUser?.getIdToken?.() : zaiKey;
+    if (!bearer) throw new Error("zai_signed_out");
     const res = await fetchWithTimeout(viaRelay ? `${relayUrl()}/zai` : ZAI_URL, {
       method: "POST",
       headers: {

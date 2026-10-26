@@ -28,19 +28,19 @@ Use the same GitHub page as for the other secrets: GitHub repo → **Settings** 
 
 **3. OpenRouter key (optional).** openrouter.ai → **Keys** → **Create Key**, copy it (starts with `sk-or-`), and add it as the secret `AI_OPENROUTER_KEY`.
 
-**3b. Groq and Gemini keys.** Make **new** keys, not the ones that were in `VITE_GROQ_KEY` / `VITE_GEMINI_KEY`: those were in the public app, so treat them as known to anyone.
+**3b. Groq, Gemini and Z.ai keys.** Make **new** keys, not the ones that were in `VITE_GROQ_KEY` / `VITE_GEMINI_KEY`: those were in the public app, so treat them as known to anyone.
 - Groq: console.groq.com → **API Keys** → **Create API Key** (starts with `gsk_`) → secret `AI_GROQ_KEY`.
-- Gemini: aistudio.google.com → **Get API key** → **Create API key** (starts with `AIza`) → secret `AI_GEMINI_KEY`.
+- Gemini: aistudio.google.com → **Get API key** → **Create API key** (starts with `AIza`) → secret `AI_GEMINI_KEY`. Make it in a Google Cloud project **without billing** (not the Firebase project if that is on the Blaze plan): until PR 9 (#570) anyone signed in can use it, and a billed key would charge you.
 - Z.ai: z.ai → **API Keys** → create a key → secret `AI_ZAI_KEY`.
 - Once the app answers through the relay (step 6), delete the old keys at Groq, Google and Z.ai, and delete the GitHub secrets `VITE_GROQ_KEY`, `VITE_GEMINI_KEY`, `VITE_CEREBRAS_KEY` and `VITE_ZAI_KEY`.
 
-Without a key, that provider answers "not set up" and the app moves on to the next one. Cloudflare AI needs no key. Deleting a key from GitHub later does not remove it from the Worker: delete it there too (Cloudflare dashboard → **Workers & Pages** → `loci-ai` → **Settings** → **Variables and Secrets**).
+Without a key, that provider answers "not set up" and the app moves on to the next one. Cloudflare AI needs no key. Deleting a key from GitHub later does not remove it from the Worker: delete it there too (Cloudflare dashboard → **Workers & Pages** → `loci-ai` → **Settings** → **Variables and Secrets**). The same goes for `VITE_GEMINI_MODEL`: the relay keeps the last model it was given (stored there as `GEMINI_MODEL`) until you delete it on the Worker.
 
 **4. Press the button.** GitHub repo → **Actions** → **Deploy the AI relay** → **Run workflow**. When it finishes, open the run: the summary shows the relay address (`https://loci-ai.<name>.workers.dev`).
 
 **5. Tell the app.** Add that address, with no slash at the end, as the secret `VITE_AI_RELAY_URL`. Then **Actions** → **Deploy to Firebase Hosting** → **Run workflow** (or merge any PR).
 
-**6. Check it.** Hard-refresh Loci. **Settings → AI provider**: choose **Cloudflare AI**, turn on **Only use my provider**, and send one Coach message. Then the same with **NVIDIA**, **OpenRouter**, **Groq** and **Gemini**. Afterwards choose **Auto** again and turn the switch off. If one fails, the line in brackets after the error is that provider's own reason.
+**6. Check it.** Hard-refresh Loci. **Settings → AI provider**: choose **Cloudflare AI**, turn on **Only use my provider**, and send one Coach message. Then the same with **NVIDIA**, **OpenRouter**, **Groq** and **Gemini**. Z.ai's limit is too small for a Coach message, so check it with **Z.ai** chosen and a task's suggested steps instead. First remove any key of your own in **Settings → AI Keys**, or the app goes straight to the provider and the check proves nothing about the relay. Afterwards choose **Auto** again and turn the switch off. If one fails, the line in brackets after the error is that provider's own reason.
 
 If the deploy fails with a permission error about AI, edit the Cloudflare token (profile → **API Tokens** → the token → **Edit**) and add **Account → Workers AI → Edit**. Not checked from a real deployment yet; the run log names any problem.
 

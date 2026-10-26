@@ -283,6 +283,13 @@ describe("Groq and Gemini", () => {
     expect(JSON.parse(found[1].body).model).toBe("glm-4.7-flash");
   });
 
+  it("reads Gemini's error reason from its one-item array", async () => {
+    upstream = () => new Response(JSON.stringify([{ error: { message: "Quota exceeded for model" } }]), { status: 429 });
+    const res = await call("/gemini", { token: await signer.sign(), env: { GEMINI_API_KEY: "k" } });
+    expect(res.status).toBe(429);
+    expect((await res.json()).error.message).toBe("Quota exceeded for model");
+  });
+
   it("says Groq, Gemini or Z.ai is not set up when its key is missing, without calling it", async () => {
     for (const path of ["/groq", "/gemini", "/zai"]) {
       const res = await call(path, { token: await signer.sign() });
@@ -291,5 +298,6 @@ describe("Groq and Gemini", () => {
     }
     expect(sentTo(GROQ_URL)).toBeUndefined();
     expect(sentTo(GEMINI_URL)).toBeUndefined();
+    expect(sentTo("https://api.z.ai/api/paas/v4/chat/completions")).toBeUndefined();
   });
 });
