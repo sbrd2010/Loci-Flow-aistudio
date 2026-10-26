@@ -61,6 +61,8 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
+Before writing new code, check whether the codebase, the platform or an installed dependency already does it. New logic with branches (dates, horizons, sync/merge, parsing, AI fallback) ships with at least one small unit test; UI/CSS-only changes don't need one. End each change summary with what you did not verify. For bugs and red CI, use the `debug` skill.
+
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
