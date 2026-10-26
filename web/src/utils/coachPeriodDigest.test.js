@@ -137,6 +137,15 @@ describe("buildLociPeriodContext", () => {
       expect(out).not.toContain("'Fresh'");
     });
 
+    it("comes before the front deadlines, so it is not read as a deadline (#588)", () => {
+      const tasks = [open("Stale", { lastUpdated: NOW.getTime() - 20 * DAY })];
+      const config = { fronts: [{ id: "f1", name: "Workshop", dueAt: "2026-11-02", parked: false }] };
+      const out = buildLociPeriodContext({ now: NOW, tasks, config });
+      expect(out).toContain("FRONT DEADLINES");
+      expect(out.indexOf("Open but not touched")).toBeGreaterThan(-1);
+      expect(out.indexOf("Open but not touched")).toBeLessThan(out.indexOf("FRONT DEADLINES"));
+    });
+
     it("ignores parked, finished and deleted tasks, and caps the list", () => {
       const old = NOW.getTime() - 50 * DAY;
       const tasks = [

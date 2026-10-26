@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildLociTodaySnapshotContext } from "./lociAIContext";
-import { parseCoachActionTags, findTaskByTitle, buildSetNowFocusTasks, buildParkTaskTasks, applyCoachActions, matchesUserIntent, buildActionReplyText, inferTaskMetadata, undoCoachAction } from "./coachActions";
+import { parseCoachActionTags, findTaskByTitle, buildSetNowFocusTasks, buildParkTaskTasks, applyCoachActions, matchesUserIntent, buildActionReplyText, inferTaskMetadata, undoCoachAction, NOTHING_CHANGED_NOTE } from "./coachActions";
 import { parseCheckinTag } from "./coachCheckin";
 import { getFocusWindows, getLociDayStr } from "./focusWindows";
 import { getLocalDateString } from "./lociAIContext";
@@ -1121,9 +1121,18 @@ describe("buildActionReplyText", () => {
     expect(buildActionReplyText("Sounds good, let's chat about your day.", results, "How's it going?")).toBe("Sounds good, let's chat about your day.");
   });
 
-  it("returns empty cleanText unchanged when a blocked action is stale and the model wrote nothing else", () => {
+  it("says nothing changed when a blocked action is stale and the model wrote nothing else (#588)", () => {
     const results = [{ type: "ADD_TASK", title: "Write report", matched: false, blocked: true }];
-    expect(buildActionReplyText("", results, "How's it going?")).toBe("");
+    expect(buildActionReplyText("", results, "How's it going?")).toBe(NOTHING_CHANGED_NOTE);
+  });
+
+  it("does not read as a yes when a rename comes back as a blocked park tag (#588)", () => {
+    const { cleanText, actions } = parseCoachActionTags("[[PARK_TASK:Fix the export bug]]");
+    const lastUserMessage = "Rename the export bug task to 'Fix export'";
+    const payload = { tasks: [{ uuid: "1", title: "Fix the export bug", horizonLevel: "today", isCompleted: false, isDeleted: false, isParked: false }], config: {}, contributions: [] };
+    const { payload: next, results } = applyCoachActions(payload, actions, { lociDateStr: "2026-06-13", lastUserMessage });
+    expect(next).toBe(payload);
+    expect(buildActionReplyText(cleanText, results, lastUserMessage, { proposed: true })).toBe(NOTHING_CHANGED_NOTE);
   });
 
   it("drops the model's narration and asks which task when the message is action-like but the tag's title didn't match", () => {

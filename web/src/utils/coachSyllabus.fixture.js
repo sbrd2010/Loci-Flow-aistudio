@@ -276,7 +276,7 @@ export function buildTurn(q, { ownKey = true } = {}) {
     brainDumpContext: L.buildLociBrainDumpContext(brainDump),
     velocityContext: periodIntent ? "" : L.buildLociVelocityContext(contributions, NOW, WINDOWS),
     recentlyParkedContext: L.buildLociRecentlyParkedContext(tasks, NOW),
-    recentlyCompletedContext: L.buildLociRecentlyCompletedContext(tasks, NOW),
+    recentlyCompletedContext: L.buildLociRecentlyCompletedContext(tasks, NOW, WINDOWS),
     categoryFilterContext: L.buildLociCategoryFilterContext(tasks, detectRequestedCategories(q.text), WINDOWS),
     rescueHandoffContext: "",
     isEarlyConversation: false,

@@ -184,6 +184,24 @@ describe("buildLociRecentlyCompletedContext", () => {
 
     expect(context).toBe("RECENTLY COMPLETED (last 24h): 'Pay rent'.");
   });
+
+  it("says which day each task was finished, since the 24 hours span two days (#588)", () => {
+    const context = buildLociRecentlyCompletedContext([
+      { title: "Send the update", isCompleted: true, dateCompletedString: "2026-06-12", lastUpdated: NOW.getTime() - 60 * 60 * 1000 },
+      { title: "Pay rent", isCompleted: true, dateCompletedString: "2026-06-11", lastUpdated: NOW.getTime() - 20 * 60 * 60 * 1000 },
+      { title: "Pay rent", isCompleted: false, isDeleted: false, isParked: false, lastUpdated: NOW.getTime() },
+    ], NOW);
+    expect(context).toBe("RECENTLY COMPLETED (last 24h): 'Send the update' (today), 'Pay rent' (yesterday; a separate active task also has this exact title — they are different tasks).");
+  });
+
+  it("counts a finish at 00:30 inside a late window as the Loci day it belongs to", () => {
+    const lateNight = new Date(2026, 5, 13, 0, 30); // a window running to 02:00, so 00:30 still belongs to 12 Jun
+    const windows = [{ startMin: 420, endMin: 120, overnight: true }];
+    const context = buildLociRecentlyCompletedContext([
+      { title: "Late task", isCompleted: true, dateCompletedString: "2026-06-12", lastUpdated: lateNight.getTime() - 10 * 60 * 1000 },
+    ], lateNight, windows);
+    expect(context).toContain("'Late task' (today)");
+  });
 });
 
 describe("buildLociCheckinContext", () => {
