@@ -11,9 +11,10 @@ import { MAX_STEP_MINUTES, STEP_MINUTE_OPTIONS } from "./splitTask";
 import { thoughtText } from "./thoughts";
 import { plainThought } from "./thoughtFormat";
 
-// From the live evaluation (#603): a capitalised first verb was read as a company
-// ("Chase the refund" became the bank Chase) and vague titles got invented details.
-const AS_MEANT = 'Read the task as the user meant it: an emoji is decoration, and a first word like "Chase" or "Book" is usually a verb, not a company. Never add people, companies, products or facts that aren\'t in it; if it\'s vague, make the first step finding out what it means.';
+// From the live evaluation (#603): vague titles got invented details. A rule that a
+// capitalised first word is a verb didn't stop "Chase the refund" becoming the bank
+// Chase in Split and Organize, so it isn't here.
+const AS_MEANT = 'Read the task as the user meant it (an emoji is decoration). Never add people, companies, products or facts that aren\'t in it; if it\'s vague, make the first step finding out what it means.';
 
 // Without "low" effort, gpt-oss spent the whole 200-350 tokens reasoning and most
 // replies were cut off and retried. 800 keeps Z.ai (its limit) in the chain.

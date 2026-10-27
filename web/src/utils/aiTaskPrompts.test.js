@@ -12,7 +12,7 @@ describe("AI task-writing requests", () => {
     const text = r.messages[0].content;
     expect(text).toMatch(/^Split this task into 2-4 concrete steps, each 45 minutes or less, together about 90 minutes\.\n\nTask: "Plan the team offsite"\n\n/);
     expect(text).toContain("Each step becomes its own task in the list, so name what it is for");
-    expect(text).toContain('a first word like "Chase" or "Book" is usually a verb, not a company');
+    expect(text).toContain("Never add people, companies, products or facts that aren't in it");
     expect(text).toContain('Each text under 12 words. minutes is one of 10, 15, 20, 25, 30, 45.');
     expect(buildSplitRequest({ title: "x" }).messages[0].content).toContain("together about 60 minutes");
   });
