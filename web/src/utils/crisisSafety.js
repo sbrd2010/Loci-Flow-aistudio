@@ -29,6 +29,7 @@ export const CRISIS_RE = new RegExp([
   `\\b(su(?:ic|c|is)i?d(?:e|al)|kil+(?:ing)? my ?self|${WANT_TO} die|d(?:o)?n['’]?t ${WANT_TO} (?:exist|be here|live)|end(?:ing)? (?:it all|my life)|self[-\\s]?harm|hurt(?:ing)? my ?self|might hurt my ?self|better off (?:dead|without me)|i feel unsafe|done with life)\\b`,
   "\\b(?:can['’]?t|cannot|can not|don['’]?t think i can|not sure i can) (?:keep going|go on|carry on) (?:like this|anymore|any more|much longer)\\b",
   "\\bno (?:reason|point) (?:to|in) (?:live|living|go on|going on|be(?:ing)? (?:here|alive))\\b(?! with\\b)",
+  "\\b(?:no|lost (?:the|my|all)) (?:desire|will|wish) to live\\b(?! (?:in|with|like|near|abroad|there)\\b)",
   "\\bdon['’]?t want to wake up(?! (?:early|at|before|for|so|in time|to|tomorrow)\\b)",
   "\\b(?:is(?:n['’]?t| not)|not) worth living\\b|\\bwish i (?:was|were)n['’]?t (?:alive|here|born)\\b|\\bwish i (?:was|were) (?:dead|never born)\\b",
   "\\bi (?:want to|wish i could|just want to) disappear (?:forever|for good)\\b",
