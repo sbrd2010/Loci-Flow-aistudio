@@ -40,6 +40,7 @@ test("a reply over 4 lines is cut, with Show all in its name row", async ({ page
   const showAll = reply.getByRole("button", { name: "Show all" });
   await expect(showAll).toBeVisible();
   await expect(reply.locator(".coach-reply")).toHaveClass(/is-clamped/);
+  await expect(reply.locator(".coach-reply")).toHaveClass(/is-cut/);
   const cut = await reply.locator(".coach-reply").evaluate(el => el.clientHeight);
   await showAll.click();
   await expect(reply.getByRole("button", { name: "Show less" })).toHaveAttribute("aria-expanded", "true");

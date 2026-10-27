@@ -8,7 +8,7 @@
 import { extractJsonArray } from "./jsonArray";
 import { normalizeAiOrganizeSuggestions } from "./taskOps";
 import { buildSplitRequest, buildBreakdownRequest, buildAskAIRequest, buildOrganizeRequest } from "./aiTaskPrompts";
-import { STEP_MINUTE_OPTIONS } from "./splitTask";
+import { STEP_MINUTE_OPTIONS, splitStepRange } from "./splitTask";
 
 export const TASK_AI_PATHS = ["split", "breakdown", "askAI", "organize"];
 
@@ -22,14 +22,15 @@ export function taskAiRequest(path, c) {
 }
 
 // The texts the user would see, or null when the screen would fall back.
-export function parseTaskAiReply(path, raw) {
+export function parseTaskAiReply(path, raw, minutes) {
   try {
     if (path === "split") {
       const match = String(raw).replace(/```json|```/g, "").match(/\[[\s\S]*\]/);
       const parsed = JSON.parse(match ? match[0] : raw);
       const good = (Array.isArray(parsed) ? parsed : []).filter(s => s && typeof s.text === "string" && s.text.trim())
         .map(s => ({ text: s.text.trim(), minutes: STEP_MINUTE_OPTIONS.includes(Number(s.minutes)) ? Number(s.minutes) : 25 }));
-      return good.length >= 2 && good.length <= 4 ? good.map(s => s.text) : null;
+      const { min, max } = splitStepRange(minutes);
+      return good.length >= min && good.length <= max ? good.map(s => s.text) : null;
     }
     if (path === "breakdown") {
       const steps = extractJsonArray(raw).filter(s => typeof s === "string" && s.trim()).slice(0, 5);

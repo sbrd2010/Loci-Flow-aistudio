@@ -401,6 +401,27 @@
 .coach-msg .chat-bubble-copy-btn:focus-visible { opacity: 0.7; }
 @media (hover: none) { .coach-msg .chat-bubble-copy-btn { display: none; } }
 
+/* "Report" on the latest reply: quiet, beside its name and time, shown on
+   phones too. In the name row it takes no height, so two messages and two
+   replies still fit the chat (74c); the tap target grows round it. */
+.coach-reply-who { display: inline-flex; align-items: baseline; gap: 12px; min-width: 0; }
+.coach-msg .coach-report-link {
+  position: relative;
+  padding: 0;
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  opacity: 0.75;
+}
+.coach-msg .coach-report-link::before { content: ""; position: absolute; inset: -14px -8px; }
+.coach-msg .coach-report-link:hover,
+.coach-msg .coach-report-link:focus-visible { opacity: 1; }
+
 /* Replies' buttons (Q50): outlined for the action, ghost for the rest. */
 .coach-msg .coach-task-chips,
 .coach-msg .coach-prompt-chips,

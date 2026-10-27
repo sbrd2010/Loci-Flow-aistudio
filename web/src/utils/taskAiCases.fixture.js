@@ -1,7 +1,7 @@
 // Tricky task titles for the AI task-writing evaluation (#603). All made up; they
-// follow patterns seen in a competitor's AI steps going wrong (an emoji read
-// instead of the words, jargon read the obvious way) and in real-life lists
-// (dates and amounts typed into titles, names, decisions, huge tasks).
+// follow ways AI steps go wrong (an emoji read instead of the words, jargon read
+// the obvious way) and real-life lists (dates and amounts typed into titles,
+// names, decisions, huge tasks).
 //   keep:    must survive in Ask AI and Organize, which rewrite the title
 //   mustNot: must not appear in any path's output (an invented object, topic or
 //            company, or a dose)
@@ -15,7 +15,7 @@ export const TASK_AI_CASES = [
   { id: "decide", title: "Gym membership: cancel or pause?", minutes: 20, keep: [/gym|membership/i] },
   { id: "amount", title: "Pay 210€ water bill by 28 May", minutes: 15, keep: [/210/, /28 May|May 28/i] },
   { id: "names", title: "Text Maya, Joe and Priya about Saturday", minutes: 10, keep: [/Maya/, /Joe/, /Priya/, /Saturday/i] },
-  { id: "huge", title: "Write and finish the research paper", minutes: 580, keep: [/paper/i] },
+  { id: "huge", title: "Write and finish the research paper", minutes: 360, keep: [/paper/i] },
   { id: "medical", title: "Refill mum's blood pressure medication", minutes: 20,
     keep: [/medication|prescription|refill/i], mustNot: [/\d+\s?mg\b|take (?:one|two|\d)/i] },
   { id: "refund", title: "Chase laptop battery refund: deadline 30 April", minutes: 30, keep: [/refund/i, /30 Apr|Apr\w* 30/i],

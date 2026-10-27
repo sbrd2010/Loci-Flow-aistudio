@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSplit, evenMinutes, stepsFromSubSteps, undoSplit } from "./splitTask";
+import { buildSplit, evenMinutes, splitStepRange, stepsFromSubSteps, undoSplit } from "./splitTask";
 
 describe("evenMinutes", () => {
   it("shares the total, 45 minutes at most per step", () => {
@@ -25,6 +25,17 @@ describe("stepsFromSubSteps", () => {
   });
 });
 
+describe("splitStepRange", () => {
+  it("asks for enough 45-minute steps to cover the estimate, 2-4 for a short task, 8 at most", () => {
+    expect(splitStepRange(90)).toEqual({ min: 2, max: 4, cover: 90 });
+    expect(splitStepRange(0)).toEqual({ min: 2, max: 4, cover: 60 });
+    expect(splitStepRange(240)).toEqual({ min: 6, max: 8, cover: 240 });
+    expect(splitStepRange(360)).toEqual({ min: 8, max: 8, cover: 360 });
+    // An estimate past 6 hours (old data) asks only for what 8 steps can hold.
+    expect(splitStepRange(580)).toEqual({ min: 8, max: 8, cover: 360 });
+  });
+});
+
 describe("buildSplit / undoSplit", () => {
   let n = 0;
   const makeId = () => `new-${++n}`;
@@ -39,6 +50,15 @@ describe("buildSplit / undoSplit", () => {
     expect(created[1].isNowFocus).toBe(false);
     expect(created.every(t => t.orderIndex >= 3 && t.orderIndex < 4)).toBe(true);
     expect(tasks.find(t => t.uuid === "o")).toMatchObject({ isDeleted: true, isNowFocus: false });
+  });
+
+  it("every step keeps the deadline; only the first keeps the reminder (#606)", () => {
+    const dated = { ...original, deadlineTimestamp: 1767225600000, reminderAt: 1767200000000 };
+    const { created } = buildSplit([dated, other], dated, [{ text: "A", minutes: 30 }, { text: "B", minutes: 30 }, { text: "C", minutes: 30 }], { now: 1, makeId });
+    expect(created.map(t => t.deadlineTimestamp)).toEqual([1767225600000, 1767225600000, 1767225600000]);
+    expect(created.map(t => t.reminderAt)).toEqual([1767200000000, null, null]);
+    const { created: undated } = buildSplit([original, other], original, [{ text: "A", minutes: 30 }, { text: "B", minutes: 30 }], { now: 1, makeId });
+    expect(undated.every(t => t.deadlineTimestamp === null && t.reminderAt === null)).toBe(true);
   });
 
   it("splitting a task a split made stays inside its own gap: no interleaving, no ties", () => {

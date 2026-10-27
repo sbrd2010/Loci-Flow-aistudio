@@ -5,6 +5,7 @@ import { isEveningGuardBlocked } from "../utils/eveningGuard";
 import { callAI, getAIKeys, hasAIKey } from "../utils/aiCall";
 import { buildLocalSafetyReply } from "../utils/crisisSafety";
 import { buildAskAIRequest } from "../utils/aiTaskPrompts";
+import { retryUnreadable } from "../utils/aiRetry";
 import { safeUUID } from "../utils/uuid";
 import { scheduleReminder, formatReminderLabel } from "../utils/reminders";
 import { notifPermissionState, requestNotifPermission as nativeRequestPermission } from "../utils/nativeNotifs";
@@ -97,16 +98,19 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
     const request = buildAskAIRequest({ title, challengeType: cfg.challengeType, tasks: payload.tasks, profile: userProfile });
 
     try {
-      const raw = await callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, ...request });
-      let cleaned = raw.replace(/```json|```/g, "").trim();
-      let parsed;
-      try {
-        parsed = JSON.parse(cleaned);
-      } catch {
-        const match = cleaned.match(/\{[\s\S]*\}/);
-        if (match) parsed = JSON.parse(match[0]);
-        else throw new Error("No JSON");
-      }
+      const parsed = await retryUnreadable(
+        () => callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, ...request }),
+        (raw) => {
+          const cleaned = String(raw).replace(/```json|```/g, "").trim();
+          try {
+            return JSON.parse(cleaned);
+          } catch {
+            const match = cleaned.match(/\{[\s\S]*\}/);
+            return match ? JSON.parse(match[0]) : null;
+          }
+        },
+      );
+      if (!parsed || typeof parsed !== "object") throw new Error("No JSON");
       setAiSuggestion({
         title: parsed.title || title.trim(),
         microStep: parsed.microStep || "",

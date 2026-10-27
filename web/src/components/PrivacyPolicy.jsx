@@ -15,7 +15,7 @@ export default function PrivacyPolicy({ onClose }) {
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer", color: "var(--text-secondary)", lineHeight: 1 }}>✕</button>
         </div>
 
-        <p style={{ fontSize: "11px", color: "var(--text-muted)" }}>Last updated: July 2026 · Loci Focus (loci-flow.web.app)</p>
+        <p style={{ fontSize: "11px", color: "var(--text-muted)" }}>Last updated: October 2026 · Loci Focus (loci-flow.web.app)</p>
 
         {[
           {
@@ -29,6 +29,10 @@ export default function PrivacyPolicy({ onClose }) {
           {
             title: "AI features (Coach, breakdown)",
             body: "When you use AI coaching or task breakdown, the text of your task or message — plus, if Coach Memory is enabled, any pinned facts and recent notes your coach has saved — is sent to one of our AI providers for processing: Groq (groq.com), Ollama Cloud (ollama.com), Google Gemini, OpenRouter (openrouter.ai), Cloudflare Workers AI, NVIDIA or Z.ai (all seven can go through Loci's own relay on Cloudflare, which passes the text on without storing it), or Cerebras (cerebras.ai), depending on which provider is active for your account. These services have their own privacy policies; free AI tiers, such as OpenRouter's and Google Gemini's, may log the text or use it to improve their models. We do not store your AI conversations on our servers beyond what Firebase RTDB syncs for your account. You can review, delete, or turn off Coach Memory anytime in Settings."
+          },
+          {
+            title: "Bug reports",
+            body: "If you send a bug report, or report a Coach reply, what's in the form is stored in Firebase with your account ID and email: what you write and, for a reply, your message and the reply, which you can see and edit before sending. Only the developer can read reports."
           },
           {
             title: "Analytics",

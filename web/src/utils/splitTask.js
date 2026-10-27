@@ -3,6 +3,17 @@
 export const MAX_STEP_MINUTES = 45;
 export const STEP_MINUTE_OPTIONS = [10, 15, 20, 25, 30, 45];
 
+// How many steps a split asks for: enough steps of 45 minutes or less to cover
+// the whole estimate, as the largest estimate (6 hours) is 8 such steps. A short
+// task keeps 2-4. `cover` is the minutes the steps can add up to.
+export const MAX_SPLIT_STEPS = 8;
+export function splitStepRange(total) {
+  const t = Number(total) || 60;
+  const min = Math.min(MAX_SPLIT_STEPS, Math.max(2, Math.ceil(t / MAX_STEP_MINUTES)));
+  const max = Math.min(MAX_SPLIT_STEPS, Math.max(4, min + 2));
+  return { min, max, cover: Math.min(t, max * MAX_STEP_MINUTES) };
+}
+
 // N durations that share `total` minutes as evenly as the step options allow,
 // each capped at 45: 120 over 3 → [45, 45, 30].
 export function evenMinutes(total, n) {
@@ -35,8 +46,8 @@ export function stepsFromSubSteps(task) {
 }
 
 // The tasks the split creates, in the original's place, and the list with the
-// original replaced. Steps without text are dropped. The first new task takes
-// the original's pin.
+// original replaced. Steps without text are dropped. Every new task keeps the
+// original's deadline (#606); the first takes its pin and its reminder.
 export function buildSplit(allTasks, original, steps, { now = Date.now(), makeId } = {}) {
   const real = steps.filter(s => String(s.text || "").trim());
   const base = Number(original.orderIndex) || 0;
@@ -66,8 +77,8 @@ export function buildSplit(allTasks, original, steps, { now = Date.now(), makeId
     isParked: false,
     isDeleted: false,
     dateCompletedString: null,
-    deadlineTimestamp: null,
-    reminderAt: null,
+    deadlineTimestamp: original.deadlineTimestamp ?? null,
+    reminderAt: i === 0 ? original.reminderAt ?? null : null,
     subSteps: [],
     splitFrom: original.uuid,
     lastUpdated: now,

@@ -74,7 +74,7 @@ outer: for (const c of args.regrade ? [] : TASK_AI_CASES) {
         rec.error = String(r.json?.error?.message || r.raw || "no reply").slice(0, 200);
       } else {
         const raw = typeof choice.message?.content === "string" ? choice.message.content : "";
-        const texts = parseTaskAiReply(path, raw);
+        const texts = parseTaskAiReply(path, raw, c.minutes);
         Object.assign(rec, { finish: choice.finish_reason, texts, ...(texts ? {} : { raw: raw.slice(0, 4000) }), ...gradeTaskAi(path, texts, c) });
         lastTokens = r.json.usage?.total_tokens || 2000;
       }
