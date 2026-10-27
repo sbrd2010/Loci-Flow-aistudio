@@ -1409,7 +1409,7 @@ describe("period questions and the other phrasings that fell through to light (#
     ["How would you rate my productivity this month?", 30],
     ["what do you make of my performance over the past month", 30],
     ["how has my performance been today?", 7],
-    ["my performance this week, honestly?", 7],
+    ["can you assess my performance this week?", 7],
     ["how productive have I been?", 7],
     ["how productive was I yesterday", 7],
     ["which things have been sitting in my list the longest?", 7],
@@ -1420,7 +1420,8 @@ describe("period questions and the other phrasings that fell through to light (#
   });
 
   it("leaves feelings about performance with the support prompt", () => {
-    for (const q of ["I'm stressed about my performance", "I'm overwhelmed by my productivity goals"]) {
+    // Codex review, PR 599: a time qualifier does not make a statement a question.
+    for (const q of ["I'm stressed about my performance", "I'm overwhelmed by my productivity goals", "I'm stressed about my performance this week", "I'm overwhelmed by all the tasks sitting in my list"]) {
       expect(detectPeriodIntent(q), q).toBeNull();
       expect(classifyContextMode(q, { ownKey: true }), q).toBe("emotional");
     }

@@ -183,8 +183,8 @@ const PERIOD_RE = new RegExp([
   // "how do you think has been my performance today", "my productivity over one month",
   // "how productive was I this week" (#594: these got no numbers). Question-shaped
   // only, so "I'm stressed about my performance" stays with the support prompt.
-  "how\\b.{0,40}\\bmy (?:performance|productivity)\\b",
-  "\\bmy (?:performance|productivity) (?:today|this|last|over|in|for|during|so far)\\b",
+  "(?:how|what)\\b.{0,40}\\bmy (?:performance|productivity)\\b",
+  "\\b(?:rate|judge|assess|review|evaluate)\\b.{0,20}\\bmy (?:performance|productivity)\\b",
   "how (?:productive|efficient|consistent) (?:was|were|am|have|has) (?:i|been)\\b",
   // progress
   "how am i (?:doing|progressing|tracking|going)\\b",
@@ -199,7 +199,7 @@ const PERIOD_RE = new RegExp([
   "(?:which|what)\\s+(?:of\\s+)?(?:my\\s+)?(?:(?:tasks?|things|items|ones?)\\s+)?(?:have|am|do)\\s+i\\s+(?:been\\s+)?(?:putting\\s+off|avoiding|ignoring|neglecting|procrastinating(?:\\s+on)?|delaying|postponing)\\b",
   "(?:what|which)(?:['’]s| is)? (?:my |the )?oldest (?:open |unfinished )?(?:task|one)s?\\b",
   // "how many tasks have been lying in my task list without completion, and for how long"
-  "\\b(?:tasks?|things|items)\\b.{0,30}\\b(?:lying|sitting|pending|waiting) (?:in|on|around)\\b",
+  "\\b(?:how many|which|what)\\b.{0,30}\\b(?:tasks?|things|items)\\b.{0,30}\\b(?:lying|sitting|pending|waiting) (?:in|on|around)\\b",
   "how long\\b.{0,40}\\b(?:open|pending|lying|sitting|waiting|incomplete|unfinished|without (?:completion|being done))\\b",
   // focus time
   "how much (?:time )?(?:did|have) i (?:focus\\w*|spend|work\\w*)",
