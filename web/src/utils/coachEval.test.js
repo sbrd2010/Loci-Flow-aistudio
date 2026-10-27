@@ -63,6 +63,10 @@ describe("parsePlaybook", () => {
     expect(new Set(all.map(q => q.id)).size).toBe(all.length);
     expect(all[0]).toMatchObject({ id: "pb-001", c: "comfort", text: "Comfort me. I feel like I'm failing." });
     expect(all[0].key).toContain("Let's choose one small task.");
+    expect(all[0]).not.toHaveProperty("history");
+    const bullets = all.find(q => q.id === "pb-086");
+    expect(bullets.history.map(m => m.isUser)).toEqual([true, false]);
+    expect(bullets.history[1].text).toMatch(/^Start with the intro slide/);
   });
 });
 
