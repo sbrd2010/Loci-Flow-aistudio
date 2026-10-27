@@ -47,6 +47,14 @@ const HELP = [
     text: "Your plan is kept in your own Loci account. When you use Coach or another AI feature, the text of your message and the parts of your plan it needs go to the AI provider that answers, through Loci's relay, which passes them on without storing them. Loci doesn't sell your data. The details are in Settings → Privacy policy.",
   },
   {
+    // Answered even as a statement ("I want to delete my account"): the model
+    // invented "Help → Contact Support" and a support email (#594).
+    topic: "account",
+    always: true,
+    re: /\b(?:delete|close|remove|cancel|deactivate) (?:my |the )?(?:loci )?account\b/,
+    text: "Loci has no delete-account button yet. To have your account data deleted, sign out and use the contact under \"Deleting your data\" in Settings → Privacy policy. You can download a backup first in Settings → Data → Backup.",
+  },
+  {
     topic: "others",
     re: /\bother (?:loci )?(?:users|people)(?:'s)?\b.{0,40}\b(?:working on|doing|tasks|plans?|data)\b|\bwhat (?:are|is) (?:other|everyone else)\b/,
     text: "I can only see your own plan. I have no access to anyone else's tasks or data.",
@@ -57,6 +65,13 @@ const HELP = [
 export function detectHelpTopic(t) {
   return HELP.find(h => h.re.test(t))?.topic || null;
 }
+
+// Topics answered whether the message is a question or not.
+export const helpAlways = (topic) => !!HELP.find(h => h.topic === topic)?.always;
+
+// The message opens with the topic itself ("delete my account"), so it is the ask,
+// not a task about it ("remind me to close my account").
+export const helpLeads = (topic, t) => HELP.find(h => h.topic === topic)?.re.exec(t)?.index === 0;
 
 export function helpCardText(topic) {
   return HELP.find(h => h.topic === topic)?.text || null;

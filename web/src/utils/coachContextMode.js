@@ -146,6 +146,13 @@ const TASK_RE = /\b(plan(?:ning)? (?:my|the|today)|prioriti[sz]e|deadline|schedu
 
 const EMOTIONAL_RE = /\b(comfort me|i feel (?:terrible|awful|horrible|useless|down|bad|sad|low|hopeless)|i feel like (?:such a |a total |a real |a complete |a )failure\b|i hate this|i failed|i(?:['’]ve| have)? wasted (?:the|my)(?:\s+\w+){0,2}\s+day|i(['’]m| am) overwhelmed|too many things|don['’]?t know where to start|don['’]?t push (?:tasks|me)|i(['’]m| am) stuck|can['’]?t (?:start|focus)|i(['’]m| am) stressed|i(['’]m| am) anxious|fight with|my family is stressing me|i need rest|i just want to (?:play games|rest)|i did it|small win|i(['’]m| am) frustrated|i can['’]?t work|done with everything)\b/i;
 
+// Distress the narrow EMOTIONAL_RE does not name (#594 baseline): a rough call, guilt
+// about resting, "I did nothing", a pile-up after time off, "this isn't helping",
+// "why I even bother", a request for a therapist. With the full prompt these got a
+// task pushed at them; they go to the support prompt instead. Used only for a message
+// no other rule claimed, so a task request or a data question is unaffected.
+const DISTRESS_CUE_RE = /\b(?:need (?:a|some) (?:minute|moment|breather|break)|(?:rough|bad|awful|terrible|horrible|hard|brutal) (?:call|day|morning|meeting|week|night|time)|(?:feel(?:ing)?|so|really) guilty|guilt|did nothing|done nothing|got nothing done|nothing (?:done|got done)|haven['’]?t done anything|piled? up|behind on everything|(?:is|was)n['’]?t helping|not helping|why i (?:even )?bother|(?:i['’]?m|i am|so|really) (?:tired|exhausted|drained|burn(?:ed|t) out)|ashamed|embarrassed|disappointed in myself|need to vent|just venting|freaking out|losing control|way too much|too much (?:to do|work|on my plate)|cry(?:ing)?|cried|lonely|therapist|leave (?:this|the) app|delete (?:this|the) app|delete my account|give up on (?:this|loci|the app)|am i (?:lazy|useless|hopeless|stupid)|i['’]?m (?:so )?(?:lazy|useless|worthless|stupid)|grinding|(?:need|want) to do nothing)\b/i;
+
 const FRESH_SCAN_RE = /\b(scan (everything|all|my list|all my tasks|my whole list) again|re-plan|look at (everything|all my tasks) again|fresh scan|full scan|check all my tasks|review my whole list|re-plan from my full list|look at all my tasks|scan all my tasks)\b/i;
 
 // How a stretch of time went: the questions the light and compact prompts
@@ -799,6 +806,7 @@ export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan
   // A message with no letters in it (an emoji, "...", "👍") is small talk too.
   const words = text.replace(/[^\p{L}\p{N}\s'’,.!?-]/gu, "").trim(); // emoji and symbols dropped
   const smallTalk = !/\p{L}/u.test(text) || (words.length <= 40 && SMALL_TALK_RE.test(words));
+  if (DISTRESS_CUE_RE.test(text)) return "emotional";
   if (ownKey && !smallTalk) return "full_task";
 
   return "light";

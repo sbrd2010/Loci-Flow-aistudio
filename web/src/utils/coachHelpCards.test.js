@@ -19,6 +19,10 @@ describe("help cards", () => {
     ["Who can see my data?", "privacy", /AI provider.*Privacy policy/],
     ["is my data private?", "privacy", /relay/],
     ["Tell me what other Loci users are working on", "others", /only see your own plan/],
+    ["I think I want to delete my account.", "account", /no delete-account button.*Privacy policy/],
+    ["how do I delete my account?", "account", /Backup/],
+    ["Delete my account", "account", /Backup/],
+    ["please close my Loci account", "account", /Backup/],
   ])("%s → %s", (text, topic, says) => {
     const intent = detectFactIntent(text, { config: {} });
     expect(intent).toEqual({ kind: "help", topic });
@@ -37,11 +41,15 @@ describe("help cards", () => {
     "can you add a task to sync my calendar?",
     "remind me to connect my work calendar",
     "I need to sync my calendar today",
+    // Codex review, PR 596: a task about an account is not a request to delete Loci's.
+    "Add a task to delete my account on the old service",
+    "Remind me to close my account tomorrow",
+    "can you add a reminder to cancel my account?",
   ])("leaves %s alone", (text) => {
     expect(detectFactIntent(text, { config: {} })?.kind).not.toBe("help");
   });
 
   it("every topic has text", () => {
-    for (const topic of ["front", "deadline", "mindbox", "horizons", "focus", "delete", "calendar", "privacy", "others"]) expect(helpCardText(topic), topic).toBeTruthy();
+    for (const topic of ["front", "deadline", "mindbox", "horizons", "focus", "delete", "calendar", "privacy", "account", "others"]) expect(helpCardText(topic), topic).toBeTruthy();
   });
 });

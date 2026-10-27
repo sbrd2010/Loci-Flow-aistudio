@@ -18,8 +18,19 @@
 // coachContextMode.js carries a slightly broader variant for choosing a reply
 // *mode*, where a false positive costs nothing — here it would answer someone
 // frustrated with a task as though they were in danger.
-export const CRISIS_RE = /\b(suicid(?:e|al)|kill(?:ing)? myself|want(?:s|ed)? to die|don['’]?t want to (?:exist|be here|live)|end(?:ing)? (?:it all|my life)|self[-\s]?harm|hurt(?:ing)? myself|might hurt myself|better off (?:dead|without me)|i feel unsafe|done with life)\b/i;
-export const MEDICAL_RISK_RE = /\b(can['’]?t breathe|chest (?:pain|tight\w*)|heart\w*.{0,15}racing|faint(?:ing)?|passed out|overdose|medical emergency)\b/i;
+// Widened with the owner's OK (#594): the live baseline answered "I don't think I
+// can keep going like this anymore" (playbook 063, rated Crisis) as a productivity
+// block. Each added phrase needs its crisis cue ("like this", "anymore", "to live",
+// "forever") so frustration with a task still reaches the Coach; see the tests.
+export const CRISIS_RE = new RegExp([
+  "\\b(suicid(?:e|al)|kill(?:ing)? myself|want(?:s|ed)? to die|don['’]?t want to (?:exist|be here|live)|end(?:ing)? (?:it all|my life)|self[-\\s]?harm|hurt(?:ing)? myself|might hurt myself|better off (?:dead|without me)|i feel unsafe|done with life)\\b",
+  "\\b(?:can['’]?t|cannot|can not|don['’]?t think i can|not sure i can) (?:keep going|go on|carry on) (?:like this|anymore|any more|much longer)\\b",
+  "\\bno (?:reason|point) (?:to|in) (?:live|living|go on|going on|be(?:ing)? (?:here|alive))\\b(?! with\\b)",
+  "\\bdon['’]?t want to wake up(?! (?:early|at|before|for|so|in time|to|tomorrow)\\b)",
+  "\\b(?:is(?:n['’]?t| not)|not) worth living\\b|\\bwish i (?:was|were)n['’]?t (?:alive|here|born)\\b|\\bwish i (?:was|were) (?:dead|never born)\\b",
+  "\\bi (?:want to|wish i could|just want to) disappear (?:forever|for good)\\b",
+].join("|"), "i");
+export const MEDICAL_RISK_RE = /\b(can['’]?t breathe|chest (?:pain|(?:feels |is |feeling |gets )?tight\w*)|heart\w*.{0,15}racing|faint(?:ing)?|passed out|overdose|medical emergency)\b/i;
 
 // What the model sees in place of such a turn: that something private was said
 // and answered here, but not what. Silence would let the next reply carry on
