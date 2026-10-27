@@ -29,6 +29,7 @@ const BROAD_TASK_QUERY_RE = /\b(what are my tasks|what['’]?s due|what is due|a
 // touches the message actually sent to the LLM or stored in chat history —
 // it only affects which context mode the classifier picks.
 const SHORTHAND_MAP = [
+  [/\bhwo\b/gi, "how"],
   [/\bwut\b/gi, "what"],
   [/\bwat\b/gi, "what"],
   [/\bshud\b/gi, "should"],
@@ -179,6 +180,12 @@ const PERIOD_RE = new RegExp([
   "what did i do (?:this|last|the last|the past|over the) (?:week|month|few days)\\b",
   "what did i do (?:yesterday|today)\\b",
   "how many (?:tasks|things|items) (?:did|have) i (?:finish|finished|complete|completed|do|done|get done)\\b",
+  // "how do you think has been my performance today", "my productivity over one month",
+  // "how productive was I this week" (#594: these got no numbers). Question-shaped
+  // only, so "I'm stressed about my performance" stays with the support prompt.
+  "how\\b.{0,40}\\bmy (?:performance|productivity)\\b",
+  "\\bmy (?:performance|productivity) (?:today|this|last|over|in|for|during|so far)\\b",
+  "how (?:productive|efficient|consistent) (?:was|were|am|have|has) (?:i|been)\\b",
   // progress
   "how am i (?:doing|progressing|tracking|going)\\b",
   "am i (?:on track|behind|falling behind|making progress)\\b",
@@ -191,6 +198,9 @@ const PERIOD_RE = new RegExp([
   // "which of my tasks have I been putting off the longest", "what am I ignoring"
   "(?:which|what)\\s+(?:of\\s+)?(?:my\\s+)?(?:(?:tasks?|things|items|ones?)\\s+)?(?:have|am|do)\\s+i\\s+(?:been\\s+)?(?:putting\\s+off|avoiding|ignoring|neglecting|procrastinating(?:\\s+on)?|delaying|postponing)\\b",
   "(?:what|which)(?:['’]s| is)? (?:my |the )?oldest (?:open |unfinished )?(?:task|one)s?\\b",
+  // "how many tasks have been lying in my task list without completion, and for how long"
+  "\\b(?:tasks?|things|items)\\b.{0,30}\\b(?:lying|sitting|pending|waiting) (?:in|on|around)\\b",
+  "how long\\b.{0,40}\\b(?:open|pending|lying|sitting|waiting|incomplete|unfinished|without (?:completion|being done))\\b",
   // focus time
   "how much (?:time )?(?:did|have) i (?:focus\\w*|spend|work\\w*)",
   // "how long did I focus this week", "how many hours have I focused"
@@ -216,16 +226,19 @@ const FAR_BACK_RE = /\b(?:months?|monthly|30 days|this quarter|this year)\b|\b(?
 
 export function detectPeriodIntent(message, { loose = false } = {}) {
   const text = normalizeForClassification(String(message || ""));
+  // Read on the raw text too: the shorthand pass turns "2 weeks" into "to weeks".
+  const farBack = FAR_BACK_RE.test(text) || FAR_BACK_RE.test(String(message || ""));
   if (!PERIOD_RE.test(text)) {
     if (!(loose && LOOSE_PERIOD_RE.test(text))) return null;
     const named = text.replace(/\bthe (?:last|past) (week|month)\b/gi, "$1");
-    return { days: FAR_BACK_RE.test(text) ? 30 : 7, offset: /\b(?:last|previous|prior) (?:week|month)\b/i.test(named) ? 1 : 0 };
+    return { days: farBack ? 30 : 7, offset: /\b(?:last|previous|prior) (?:week|month)\b/i.test(named) ? 1 : 0 };
   }
   // "in the last week" / "the last month" is the rolling window ending today;
   // "last week", "my last month", "previous week" is the period before this one.
   const named = text.replace(/\bthe (?:last|past) (week|month)\b/gi, "$1");
   return {
-    days: /\b(?:month|monthly|30 days)\b/i.test(text) ? 30 : 7,
+    // "last 2 weeks", "last 30 days" need more than the week (#594).
+    days: /\b(?:month|monthly|30 days)\b/i.test(text) || farBack ? 30 : 7,
     offset: /\b(?:last|previous|prior) (?:week|month)\b/i.test(named) ? 1 : 0,
   };
 }

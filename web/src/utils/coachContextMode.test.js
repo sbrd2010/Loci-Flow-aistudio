@@ -1402,6 +1402,30 @@ describe("period questions and the other phrasings that fell through to light (#
     expect(classifyContextMode(q, paced)).toBe("full_task");
   });
 
+  // #594: performance, typo and backlog-age wordings that got no numbers live.
+  it.each([
+    ["hwo many tasks did i finish in the past 30 days?", 30],
+    ["how many tasks have I completed over the last 2 weeks", 30],
+    ["How would you rate my productivity this month?", 30],
+    ["what do you make of my performance over the past month", 30],
+    ["how has my performance been today?", 7],
+    ["my performance this week, honestly?", 7],
+    ["how productive have I been?", 7],
+    ["how productive was I yesterday", 7],
+    ["which things have been sitting in my list the longest?", 7],
+    ["how long have my tasks been open without being done?", 7],
+  ])("reads %s as a period question of %i days", (q, days) => {
+    expect(detectPeriodIntent(q)).toEqual({ days, offset: 0 });
+    expect(classifyContextMode(q, { ownKey: true })).toBe("full_task");
+  });
+
+  it("leaves feelings about performance with the support prompt", () => {
+    for (const q of ["I'm stressed about my performance", "I'm overwhelmed by my productivity goals"]) {
+      expect(detectPeriodIntent(q), q).toBeNull();
+      expect(classifyContextMode(q, { ownKey: true }), q).toBe("emotional");
+    }
+  });
+
   it("does not take a statement or a 'should I' question for the new wordings", () => {
     for (const q of ["my week was busy, help me plan", "how do I plan my week?", "I keep putting off the report, help", "How long should I focus on this?", "how long did the meeting last", "how many hours should I work today?", "should I put off the report?", "which task should I do first?"]) {
       expect(detectPeriodIntent(q), q).toBeNull();
