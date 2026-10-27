@@ -1507,6 +1507,10 @@ describe("distress no rule names goes to the support prompt, not the task prompt
     "Am I lazy?",
     "I've been grinding for weeks, I think I just need to do nothing for a bit.",
     "I think I want to delete my account.",
+    "I told myself I'd start this morning and I didn't.",
+    "I promised myself I would finish it and never did",
+    "I was supposed to call the bank and I didn't",
+    "didn't start again today",
   ])("%s", (text) => {
     expect(classifyContextMode(text, { ownKey: true })).toBe("emotional");
     expect(classifyContextMode(text)).toBe("emotional");
@@ -1517,6 +1521,7 @@ describe("distress no rule names goes to the support prompt, not the task prompt
     "Add a task: sort the pile up of receipts",
     "how was my week?",
     "what's due this week?",
+    "I told myself I'd start this morning, what should I work on first?",
   ])("a task or data question with the same words keeps its prompt: %s", (text) => {
     expect(classifyContextMode(text, { ownKey: true })).toBe("full_task");
   });
