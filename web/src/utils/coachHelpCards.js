@@ -65,7 +65,7 @@ const HELP = [
   {
     topic: "built",
     re: /\bhow (?:was|is) loci (?:made|built|developed|coded)\b|\bvibe[- ]?coded\b|\bis loci (?:any |even |actually |really )*(?:useful|any good|good|worth it)\b/,
-    text: "Rohan builds Loci with AI coding tools, and every change goes through tests and review. Whether it's useful depends on you: it's built for people who plan a lot and do too little, or lose track of what matters this week.",
+    text: "Loci is built by Rohan Das. Whether it's useful depends on you: it's made for people who plan a lot and do too little, or lose track of what matters this week.",
   },
   {
     topic: "compare",
