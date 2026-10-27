@@ -35,8 +35,8 @@ export function stepsFromSubSteps(task) {
 }
 
 // The tasks the split creates, in the original's place, and the list with the
-// original replaced. Steps without text are dropped. The first new task takes
-// the original's pin.
+// original replaced. Steps without text are dropped. Every new task keeps the
+// original's deadline (#606); the first takes its pin and its reminder.
 export function buildSplit(allTasks, original, steps, { now = Date.now(), makeId } = {}) {
   const real = steps.filter(s => String(s.text || "").trim());
   const base = Number(original.orderIndex) || 0;
@@ -66,8 +66,8 @@ export function buildSplit(allTasks, original, steps, { now = Date.now(), makeId
     isParked: false,
     isDeleted: false,
     dateCompletedString: null,
-    deadlineTimestamp: null,
-    reminderAt: null,
+    deadlineTimestamp: original.deadlineTimestamp ?? null,
+    reminderAt: i === 0 ? original.reminderAt ?? null : null,
     subSteps: [],
     splitFrom: original.uuid,
     lastUpdated: now,

@@ -41,6 +41,15 @@ describe("buildSplit / undoSplit", () => {
     expect(tasks.find(t => t.uuid === "o")).toMatchObject({ isDeleted: true, isNowFocus: false });
   });
 
+  it("every step keeps the deadline; only the first keeps the reminder (#606)", () => {
+    const dated = { ...original, deadlineTimestamp: 1767225600000, reminderAt: 1767200000000 };
+    const { created } = buildSplit([dated, other], dated, [{ text: "A", minutes: 30 }, { text: "B", minutes: 30 }, { text: "C", minutes: 30 }], { now: 1, makeId });
+    expect(created.map(t => t.deadlineTimestamp)).toEqual([1767225600000, 1767225600000, 1767225600000]);
+    expect(created.map(t => t.reminderAt)).toEqual([1767200000000, null, null]);
+    const { created: undated } = buildSplit([original, other], original, [{ text: "A", minutes: 30 }, { text: "B", minutes: 30 }], { now: 1, makeId });
+    expect(undated.every(t => t.deadlineTimestamp === null && t.reminderAt === null)).toBe(true);
+  });
+
   it("splitting a task a split made stays inside its own gap: no interleaving, no ties", () => {
     const { tasks: once, created: four } = buildSplit([original, other], original, ["A", "B", "C", "D"].map(text => ({ text, minutes: 30 })), { now: 1, makeId });
     expect(four.map(t => t.orderIndex)).toEqual([3, 3.25, 3.5, 3.75]);
