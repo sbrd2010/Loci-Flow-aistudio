@@ -69,6 +69,10 @@ export function detectHelpTopic(t) {
 // Topics answered whether the message is a question or not.
 export const helpAlways = (topic) => !!HELP.find(h => h.topic === topic)?.always;
 
+// The message opens with the topic itself ("delete my account"), so it is the ask,
+// not a task about it ("remind me to close my account").
+export const helpLeads = (topic, t) => HELP.find(h => h.topic === topic)?.re.exec(t)?.index === 0;
+
 export function helpCardText(topic) {
   return HELP.find(h => h.topic === topic)?.text || null;
 }
