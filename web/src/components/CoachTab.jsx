@@ -1894,7 +1894,14 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
                 // 74: a reply longer than four lines shows four and "Show all";
                 // its action buttons and chips stay in view under it.
                 <>
-                <ClampedReply text={splitSavedNote(m.text).body} head={<span className="coach-msg-kicker"><span className="coach-msg-name">{coachName}</span>{m.at ? <><span className="coach-msg-sep"> · </span><span className="coach-msg-time">{dateClock(m.at)}</span></> : null}</span>}>
+                <ClampedReply text={splitSavedNote(m.text).body} head={<span className="coach-reply-who"><span className="coach-msg-kicker"><span className="coach-msg-name">{coachName}</span>{m.at ? <><span className="coach-msg-sep"> · </span><span className="coach-msg-time">{dateClock(m.at)}</span></> : null}</span>
+                  {/* The latest reply can be reported into Report a bug; in the name row, so it takes no height (74c). */}
+                  {idx === lastMentorIdx && !chatLoading && (
+                    <button type="button" className="coach-report-link" aria-label="Report this reply"
+                      onClick={() => setReportContext(replyReportContext(chatHistory.slice(0, idx).reverse().find(x => x.isUser)?.text, stripSavedNote(m.text)))}>
+                      Report
+                    </button>
+                  )}</span>}>
                 <ReactMarkdown
                   className="coach-md coach-msg-text"
                   remarkPlugins={[remarkGfm]}
@@ -2011,12 +2018,6 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
                   </div>
                 ) : null;
               })()}
-              {!m.isUser && idx === lastMentorIdx && !chatLoading && (
-                <button type="button" className="coach-report-link"
-                  onClick={() => setReportContext(replyReportContext(chatHistory.slice(0, idx).reverse().find(x => x.isUser)?.text, stripSavedNote(m.text)))}>
-                  Report this reply
-                </button>
-              )}
             </div>
           ));
           })()}
