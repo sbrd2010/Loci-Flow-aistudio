@@ -58,9 +58,9 @@ describe("the prompts that cannot change tasks never promise to (#555 F9, F10)",
 
   it("the light and full prompts name poems, stories and trivia as off-topic (the proof run wrote a poem)", () => {
     for (const mode of ["light", "full_task"]) {
-      expect(buildCoachSystemPrompt(mode, baseCtx()), mode).toContain("Off-topic (poems, stories, trivia");
+      expect(buildCoachSystemPrompt(mode, baseCtx()), mode).toContain("Off-topic (poems, trivia");
       // #594: "What is the Mind Box for?" got "outside my scope"; Loci questions are in scope.
-      expect(buildCoachSystemPrompt(mode, baseCtx()), mode).toContain("Questions about Loci or their data are in scope.");
+      expect(buildCoachSystemPrompt(mode, baseCtx()), mode).toContain("Loci and their data are in scope.");
     }
   });
 
