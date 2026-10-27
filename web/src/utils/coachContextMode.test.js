@@ -1557,6 +1557,8 @@ describe("distress no rule names goes to the support prompt, not the task prompt
     "you're not good enough to coach me",
     "just shut up",
     "fuck off",
+    "honestly I have no friends here",
+    "how do people even make friends as an adult",
     "I finally finished something after a really hard week.",
     "I know it's small but I actually opened the file today.",
   ])("%s", (text) => {
