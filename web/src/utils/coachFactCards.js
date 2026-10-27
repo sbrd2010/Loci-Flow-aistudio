@@ -40,6 +40,9 @@ const dayMonth = (dayStr) => `${parseDay(dayStr).getDate()} ${MONTHS[parseDay(da
 const QUESTION_START = /^(?:(?:please|pls|ok|okay|so|and|hey|can you|could you)\s+)*(?:what|what's|whats|which|who|when|how|is|are|am|do|does|did|have|has|any|anything|list|show|tell me|give me|check|total|number of)\b/;
 const isQuestion = (t) => /\?\s*$/.test(t) || QUESTION_START.test(t);
 const IMPERATIVE = /^(?:(?:please|pls|ok|okay|and)\s+)*(?:add|put|move|park|defer|mark|start|set|schedule|remind|delete|remove|clear|create|rename|change|make|pin|switch|finish|complete|plan|help|capture|dump|note|remember|forget)\b/;
+const FOLLOW_UP = /\b(?:he|him|his|she|her|it|its|they|them|their)\b/;
+const SHORT_OR = /^(?:or|and)\b(?:\s+\S+){0,3}\s*\??$/;
+const DATA_WORDS = /\b(?:tasks?|due|today|tomorrow|week|month|plan|focus|deadlines?|work on|should i)\b/;
 // Asking what to do, or venting, is for the Coach, not for a list of facts.
 const DISTRESS = /\b(?:stressed|stressing|overwhelm\w*|anxious|worried|scared|panick\w*|freaking|hopeless|failure|give up|exhausted|sad|depress\w*|cry\w*|hate)\b/;
 const ADVICE = /\b(?:should i|could i|would i|can i|will i|why|how come|how do i|how can i|what do i do|what can i do|help me|stressed|stressing|overwhelm\w*|anxious|worried|scared|panick\w*|freaking|i can't|i cannot|feel|feeling|hopeless|failure|fail\w*|give up|point|worth\w*|wasting|tired|exhausted|sad|depress\w*|i'm|i am|going to)\b/;
@@ -85,7 +88,16 @@ export function detectFactIntent(message, { config = {} } = {}) {
   const t = norm(message);
   if (!t || t.length > 200) return null;
   // One sentence only: a second clause ("what's due? also add milk", "…I feel like a failure") is for the Coach.
-  if (/[.?!]\s*\S/.test(t)) return null;
+  // A run of questions about Loci itself ("who made loci? is he indian?") is the
+  // exception: it still gets the help card below (#594).
+  const parts = t.split(/(?<=[.?!])\s+(?=\S)/);
+  // Each extra question must stay on Loci itself: another help topic, a follow-up about
+  // it ("is he indian?", "was it vibe coded?") or a short "or structured?". A question
+  // about tasks or data in the mix ("who made loci? what should i work on today?")
+  // leaves the whole message to the Coach (Codex review, PR 601).
+  const onTopic = (p) => detectHelpTopic(p) || ((FOLLOW_UP.test(p) || SHORT_OR.test(p)) && !DATA_WORDS.test(p));
+  const onlyQuestions = parts.every(p => isQuestion(p) && !IMPERATIVE.test(p.replace(/^(?:(?:can|could|would|will) you|please|pls)\s+/, "")) && onTopic(p));
+  if (parts.length > 1 && !onlyQuestions) return null;
   // How Loci works (#594): before the advice check, which "how do I…" would trip,
   // but only for a question: never a request ("add a task to sync my calendar",
   // "can you add…?") or a message that sounds distressed.
@@ -96,6 +108,7 @@ export function detectFactIntent(message, { config = {} } = {}) {
   const always = topic && helpAlways(topic);
   const command = IMPERATIVE.test(asked) && !(always && helpLeads(topic, asked));
   if (topic && !command && (always || isQuestion(t))) return { kind: "help", topic };
+  if (parts.length > 1) return null;
   if (IMPERATIVE.test(t) || ADVICE.test(t) || !isQuestion(t)) return null;
 
   if (KNOWN_RE.test(t)) return { kind: "known" };
