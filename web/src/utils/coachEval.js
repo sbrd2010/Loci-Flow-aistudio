@@ -19,7 +19,9 @@ export const EVAL_PROVIDERS = {
 };
 
 // The request body the relay would send for this turn.
-export function evalRequestBody(name, { system, messages }, maxTokens, model) {
+// effort: the reasoning effort the screen asks for (the Coach always asks "low");
+// null sends none, as the relay does for a screen that doesn't ask.
+export function evalRequestBody(name, { system, messages }, maxTokens, model, effort = "low") {
   const p = EVAL_PROVIDERS[name];
   if (!p) throw new Error(`unknown provider ${name}`);
   const m = model || p.model;
@@ -29,9 +31,9 @@ export function evalRequestBody(name, { system, messages }, maxTokens, model) {
     msgs = first < 0 ? msgs : msgs.slice(first);
   }
   const body = { model: m, messages: [{ role: "system", content: system }, ...msgs], max_tokens: maxTokens, temperature: 0.4, top_p: 0.9 };
-  if (isGptOss(m)) {
-    if (p.reasoningObject) body.reasoning = { effort: "low" };
-    else body.reasoning_effort = "low";
+  if (effort && isGptOss(m)) {
+    if (p.reasoningObject) body.reasoning = { effort };
+    else body.reasoning_effort = effort;
   }
   if (p.noThinking && /nemotron/i.test(m)) body.chat_template_kwargs = { enable_thinking: false };
   return body;

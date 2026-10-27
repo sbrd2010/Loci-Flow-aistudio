@@ -12,7 +12,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { send } from "./eval-http.js";
-import { EVAL_PROVIDERS, retryBudget } from "../src/utils/coachEval.js";
+import { EVAL_PROVIDERS, evalRequestBody, retryBudget } from "../src/utils/coachEval.js";
 import { TASK_AI_PATHS, taskAiRequest, parseTaskAiReply, gradeTaskAi } from "../src/utils/taskAiEval.js";
 import { TASK_AI_CASES } from "../src/utils/taskAiCases.fixture.js";
 import { buildLocalSafetyReply } from "../src/utils/crisisSafety.js";
@@ -30,19 +30,10 @@ const paths = typeof args.paths === "string" ? args.paths.split(",") : TASK_AI_P
 const outDir = typeof args.out === "string" ? args.out : join("coach-eval-out", `task-ai-${provider}-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "")}`);
 mkdirSync(outDir, { recursive: true });
 
-// The body the app's relay call sends (aiCall.js requestRelay): reasoning_effort
-// only when the screen asks for one, and only to a gpt-oss model (the Worker's forModel).
-function body(req, maxTokens) {
-  const model = args.model || p.model;
-  return {
-    model,
-    messages: [{ role: "system", content: req.systemPrompt }, ...req.messages],
-    max_tokens: maxTokens,
-    temperature: 0.4,
-    top_p: 0.9,
-    ...(req.reasoningEffort && /(^|\/)gpt-oss/i.test(model) ? { reasoning_effort: req.reasoningEffort } : {}),
-  };
-}
+// The body the app's relay call sends, with each provider's own settings
+// (coachEval.js evalRequestBody) and the reasoning effort the screen asks for.
+const body = (req, maxTokens) =>
+  evalRequestBody(provider, { system: req.systemPrompt, messages: req.messages }, maxTokens, args.model, req.reasoningEffort || null);
 
 const resultsFile = join(outDir, "results.jsonl");
 const done = new Set(existsSync(resultsFile)

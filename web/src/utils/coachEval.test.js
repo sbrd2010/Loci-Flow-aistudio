@@ -14,6 +14,11 @@ describe("evalRequestBody: shaped as Loci's relay sends it", () => {
     expect(body.messages.map(m => m.role)).toEqual(["system", "user"]);
     expect(body).not.toHaveProperty("reasoning_effort");
   });
+  it("sends the effort a task screen asks for, none when it asks for none, and Nemotron's no-thinking flag", () => {
+    expect(evalRequestBody("ollama", turn, 800, undefined, "medium").reasoning_effort).toBe("medium");
+    expect(evalRequestBody("ollama", turn, 800, undefined, null)).not.toHaveProperty("reasoning_effort");
+    expect(evalRequestBody("nvidia", turn, 800, undefined, "low").chat_template_kwargs).toEqual({ enable_thinking: false });
+  });
   it("gives OpenRouter a reasoning object only for a gpt-oss model", () => {
     expect(evalRequestBody("openrouter", turn, 300)).not.toHaveProperty("reasoning");
     expect(evalRequestBody("openrouter", turn, 300, "openai/gpt-oss-120b:free").reasoning).toEqual({ effort: "low" });
