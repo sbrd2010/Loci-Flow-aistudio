@@ -719,3 +719,32 @@ test("Coach stays quiet on open; the privacy line opens Settings › Coach › P
   await line.click();
   await expect(page.getByRole("heading", { name: "Privacy", level: 2 })).toBeVisible();
 });
+
+// Testers report a bad reply into Report a bug, with the reply attached (#603
+// follow-up). The latest reply only; the dialog shows what will be sent.
+test("Report this reply opens Report a bug with the message and reply attached", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("loci_groq_key", "test-key-not-a-real-key");
+  });
+  await page.route("https://api.groq.com/**", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ choices: [{ message: { content: "Let's pick one tiny next step." } }] }),
+  }));
+  await enterDemo(page);
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Coach", exact: true }).click();
+  await page.locator(".coach-composer-input").fill("I feel a bit scattered right now");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText("Let's pick one tiny next step.").first()).toBeVisible({ timeout: 8_000 });
+
+  await expect(page.getByRole("button", { name: "Report this reply" })).toHaveCount(1);
+  await page.getByRole("button", { name: "Report this reply" }).click();
+  const dialog = page.getByRole("dialog", { name: "Report this reply" });
+  await expect(dialog).toBeVisible();
+  await expect(page.locator("#bug-steps")).toHaveValue("Your message:\nI feel a bit scattered right now\n\nCoach reply:\nLet's pick one tiny next step.");
+  await expect(dialog.getByRole("button", { name: "Send report" })).toBeDisabled();
+  await page.locator("#bug-what").fill("It moved to a task when I wanted to talk.");
+  await expect(dialog.getByRole("button", { name: "Send report" })).toBeEnabled();
+  await dialog.getByRole("button", { name: "Close" }).click();
+  await expect(dialog).toHaveCount(0);
+});

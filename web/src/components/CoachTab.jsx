@@ -14,6 +14,8 @@ import { safeUUID } from "../utils/uuid";
 import CoachReview from "./CoachReview";
 import CoachBrief from "./CoachBrief";
 import SplitTaskSheet from "./SplitTaskSheet";
+import BugReport from "./BugReport";
+import { replyReportContext } from "../utils/replyReport";
 import { buildBriefInput, BRIEF_SYSTEM_PROMPT, parseBrief, moveTaskToHorizon, undoMoveTask, briefToText } from "../utils/coachBrief";
 import { buildSplit, undoSplit } from "../utils/splitTask";
 import { horizonsFromConfig } from "../utils/horizons";
@@ -1669,6 +1671,8 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
   };
   // Split it: the same sheet as Today's; the brief line shows the result.
   const [splitFor, setSplitFor] = useState(null);
+  // A tester reports the latest reply into /bugReports (Settings → Report a bug).
+  const [reportContext, setReportContext] = useState("");
   const handleBriefSplit = (uuid, markDone) => {
     if (cloudSyncUnconfirmed) return;
     const task = tasksRef.current.find(t => t.uuid === uuid && !t.isDeleted && !t.isCompleted);
@@ -2005,6 +2009,12 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
                   </div>
                 ) : null;
               })()}
+              {!m.isUser && idx === lastMentorIdx && !chatLoading && (
+                <button type="button" className="coach-report-link"
+                  onClick={() => setReportContext(replyReportContext(chatHistory.slice(0, idx).reverse().find(x => x.isUser)?.text, stripSavedNote(m.text)))}>
+                  Report this reply
+                </button>
+              )}
             </div>
           ));
           })()}
@@ -2086,6 +2096,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
       </div>
       )}
       {splitFor && <SplitTaskSheet task={splitFor.task} firstName={firstName} onClose={() => setSplitFor(null)} onSplit={handleSplitDone} />}
+      {reportContext && <BugReport context={reportContext} onClose={() => setReportContext("")} />}
     </div>
   );
 }
