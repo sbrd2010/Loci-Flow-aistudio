@@ -36,7 +36,7 @@ export default function ClampedReply({ text, head, children }) {
           </button>
         )}
       </div>
-      <div ref={ref} className={`coach-reply${open ? "" : " is-clamped"}`}>{children}</div>
+      <div ref={ref} className={`coach-reply${open ? "" : " is-clamped"}${long && !open ? " is-cut" : ""}`}>{children}</div>
     </>
   );
 }

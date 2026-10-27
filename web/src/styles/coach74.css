@@ -29,12 +29,15 @@
 .coach-msg { gap: 6px; }
 .coach-msg.is-you .coach-msg-text { border-radius: 10px; padding: 10px 14px; }
 
-/* A long reply: four lines, then "Show all". The cut can fall mid-line when
-   paragraphs have gaps, so the last line fades out instead of being sliced. */
+/* A long reply: four lines, then "Show all". */
 .coach-reply.is-clamped {
   max-height: 4lh;
   overflow: hidden;
   line-height: 1.55;
+}
+/* The cut can fall mid-line when paragraphs have gaps, so the last line fades
+   out instead of being sliced; only on a reply that really is cut. */
+.coach-reply.is-cut {
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 1.5lh), transparent);
   mask-image: linear-gradient(to bottom, #000 calc(100% - 1.5lh), transparent);
 }

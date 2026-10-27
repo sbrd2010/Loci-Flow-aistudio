@@ -738,6 +738,8 @@ test("Report this reply opens Report a bug with the message and reply attached",
   await expect(page.getByText("Let's pick one tiny next step.").first()).toBeVisible({ timeout: 8_000 });
 
   await expect(page.getByRole("button", { name: "Report this reply" })).toHaveCount(1);
+  // A reply that fits in four lines isn't faded: only a cut one is.
+  await expect(page.locator(".coach-msg.is-coach .coach-reply").last()).not.toHaveClass(/is-cut/);
   await page.getByRole("button", { name: "Report this reply" }).click();
   const dialog = page.getByRole("dialog", { name: "Report this reply" });
   await expect(dialog).toBeVisible();
