@@ -15,6 +15,7 @@ import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
 import "../styles/thoughts.css";
 import { plainThought } from "../utils/thoughtFormat";
 import { buildOrganizeRequest } from "../utils/aiTaskPrompts";
+import { retryUnreadable } from "../utils/aiRetry";
 import { buildLocalSafetyReply } from "../utils/crisisSafety";
 
 // 78 §5: the editor takes focus on a laptop; on a phone the keyboard would
@@ -154,9 +155,10 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
     const request = buildOrganizeRequest({ items: brainDumpItems, profile: userProfile });
 
     try {
-      const raw = await callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, ...request });
-      const parsed = extractJsonArray(raw);
-      const valid = normalizeAiOrganizeSuggestions(parsed, brainDumpItems);
+      const valid = await retryUnreadable(
+        () => callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, ...request }),
+        (raw) => { const v = normalizeAiOrganizeSuggestions(extractJsonArray(raw), brainDumpItems); return v.length ? v : null; },
+      ) || [];
       setOrganizeResults(valid);
       setOrganizeDroppedSourceIds(valid.droppedSourceIds || new Set());
       setOrganizeInvalidCount(valid.invalidCount || 0);
