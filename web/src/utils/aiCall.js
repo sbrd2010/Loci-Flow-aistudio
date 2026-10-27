@@ -1,5 +1,9 @@
 import { auth } from "../firebase";
 import { appendAIUsageWarning, checkAndRecordAIUsage } from "./aiUsageLimits";
+import { extractJsonArray } from "./jsonArray";
+
+// Pure, so the live evaluation can load it without Firebase (#603).
+export { extractJsonArray };
 
 const GROQ_URL     = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL   = "openai/gpt-oss-120b";
@@ -1040,25 +1044,4 @@ export function hasAIKey() {
   const { groqKey, geminiKey, cerebrasKey, zaiKey, openrouterKey } = getAIKeys();
   const pref = localStorage.getItem("loci_provider_pref") || "auto";
   return buildProviderOrder(pref, groqKey, geminiKey, cerebrasKey, zaiKey, isProviderOnly(), openrouterKey).length > 0;
-}
-
-// Parses a JSON array out of an AI reply, tolerating markdown code fences,
-// leading sentences, and the "AI usage note" callAI appends after the reply.
-// Throws if no JSON array can be found or parsed.
-export function extractJsonArray(raw) {
-  // Strip usage warning appended by appendAIUsageWarning before any parsing —
-  // the warning text is not JSON and causes JSON.parse to fail on first try.
-  const noWarning = String(raw || "").replace(/\n\nAI usage note:[\s\S]*/i, "");
-  const cleaned = noWarning.replace(/```[a-z]*\n?/gi, "").replace(/```/g, "").trim();
-  let parsed;
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch {
-    const start = cleaned.indexOf("[");
-    const end = cleaned.lastIndexOf("]");
-    if (start === -1 || end === -1 || end < start) throw new Error("invalid_json_array");
-    parsed = JSON.parse(cleaned.substring(start, end + 1));
-  }
-  if (!Array.isArray(parsed)) throw new Error("invalid_json_array");
-  return parsed;
 }

@@ -21,6 +21,7 @@ import { addCompletionTick, takeBackTick } from "../utils/completionTicks";
 import { buildParkTaskTasks } from "../utils/coachActions";
 import { shouldStopFocusOnComplete, focusBlockSeconds, chosenStartOption } from "../utils/focusSession";
 import { getAIKeys, callAI, extractJsonArray, hasAIKey } from "../utils/aiCall";
+import { buildBreakdownRequest } from "../utils/aiTaskPrompts";
 import { buildLocalSafetyReply } from "../utils/crisisSafety";
 import { celebrate } from "../utils/celebrations";
 import { playListTone, uiSoundsOn } from "../utils/uiSounds";
@@ -1157,15 +1158,7 @@ export default function TodayTab({
     setBreakdownLoadingUuid(task.uuid);
     const { groqKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
     try {
-      const raw = await callAI({
-        groqKey, geminiKey, cerebrasKey, zaiKey,
-        systemPrompt: "You are a productivity coach. Respond ONLY with a valid JSON array of strings, no markdown, no explanation.",
-        messages: [{
-          role: "user",
-          content: `Break this task into 3–5 tiny, concrete micro-steps that each take under 5 minutes and feel easy to start.\n\nTask: "${task.title}"\nConcrete step: "${task.concreteStep || ""}"\nTime estimate: ${task.timeEstimateMinutes || 25} minutes\n\nReturn ONLY a JSON array of short strings (each under 12 words). Example: ["Open the document", "Write one sentence", "Save the file"]`
-        }],
-        maxTokens: 200
-      });
+      const raw = await callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, ...buildBreakdownRequest(task) });
       const steps = extractJsonArray(raw);
       const validSteps = steps.filter(s => typeof s === "string" && s.trim());
       if (validSteps.length === 0) throw new Error("bad response");
