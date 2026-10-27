@@ -4,6 +4,7 @@ import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from "@dnd-kit/utilities";
 import { callAI, getAIKeys, hasAIKey } from "../utils/aiCall";
 import { buildLocalSafetyReply } from "../utils/crisisSafety";
+import { buildSplitRequest } from "../utils/aiTaskPrompts";
 import { MAX_STEP_MINUTES, STEP_MINUTE_OPTIONS, evenMinutes, stepsFromSubSteps } from "../utils/splitTask";
 import { safeUUID } from "../utils/uuid";
 import { unzoomTransform } from "../utils/cssZoom";
@@ -71,15 +72,7 @@ export default function SplitTaskSheet({ task, onClose, onSplit, firstName = "" 
     if (source !== "ai") return undefined;
     let live = true;
     const { groqKey, geminiKey, cerebrasKey, zaiKey } = getAIKeys();
-    callAI({
-      groqKey, geminiKey, cerebrasKey, zaiKey,
-      systemPrompt: "You split tasks into concrete steps. Respond ONLY with a valid JSON array, no markdown.",
-      messages: [{
-        role: "user",
-        content: `Split this task into 2-4 concrete steps, each ${MAX_STEP_MINUTES} minutes or less, together about ${original || 60} minutes.\n\nTask: "${task.title}"\n\nReturn ONLY a JSON array like [{"text":"Collect the latest figures","minutes":30}]. Each text under 10 words. minutes is one of ${STEP_MINUTE_OPTIONS.join(", ")}.`,
-      }],
-      maxTokens: 250,
-    })
+    callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, ...buildSplitRequest(task) })
       .then(raw => {
         const match = String(raw).replace(/```json|```/g, "").match(/\[[\s\S]*\]/);
         const parsed = JSON.parse(match ? match[0] : raw);
