@@ -1532,6 +1532,9 @@ describe("distress no rule names goes to the support prompt, not the task prompt
     "I finally finished the slides, what should I do next?",
     // Finishing a named task keeps the task prompt, which can offer to mark it done.
     "I finished the invoice export bug",
+    // Codex review, PR 597: a support cue with a task or data question keeps its data.
+    "I finally finished something! What's due tomorrow?",
+    "I don't want to see my list, just tell me what should I work on first?",
   ])("a task or data question with the same words keeps its prompt: %s", (text) => {
     expect(classifyContextMode(text, { ownKey: true })).toBe("full_task");
   });

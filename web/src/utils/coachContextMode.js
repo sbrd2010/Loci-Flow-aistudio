@@ -787,7 +787,8 @@ export function classifyContextMode(message, { lastFullTaskTime = 0, hasLastPlan
 
   // Broad task/deadline queries, standalone fresh-scan requests, and
   // category/horizon-filtered priority questions route to full_task
-  if (SUPPORT_FIRST_RE.test(text)) return "emotional";
+  // ...unless it also asks for tasks or data, which only full_task carries (Codex, PR 597).
+  if (SUPPORT_FIRST_RE.test(text) && !TASK_ASK_RE.test(text) && !isBroadQuery) return "emotional";
 
   if (isBroadQuery || isFreshScanRequested || isPriorityFiltered) return "full_task";
 
