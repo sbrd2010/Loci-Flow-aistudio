@@ -29,11 +29,14 @@
 .coach-msg { gap: 6px; }
 .coach-msg.is-you .coach-msg-text { border-radius: 10px; padding: 10px 14px; }
 
-/* A long reply: four lines, then "Show all". */
+/* A long reply: four lines, then "Show all". The cut can fall mid-line when
+   paragraphs have gaps, so the last line fades out instead of being sliced. */
 .coach-reply.is-clamped {
   max-height: 4lh;
   overflow: hidden;
   line-height: 1.55;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 1.5lh), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 1.5lh), transparent);
 }
 .coach-reply .coach-md > :first-child { margin-top: 0; }
 .coach-reply-head {
@@ -53,6 +56,11 @@
   background: none;
   border: 0;
   cursor: pointer;
+}
+/* Where the copy icon shows (a pointer that hovers), it sits at the top right
+   of the reply: keep "Show all" clear of it. */
+@media (hover: hover) {
+  .coach-msg.is-coach .coach-reply-head { padding-right: 32px; }
 }
 .coach-show-all:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* A 44px target round the small link, without making the row taller. */

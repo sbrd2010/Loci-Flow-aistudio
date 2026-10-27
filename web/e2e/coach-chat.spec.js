@@ -345,7 +345,7 @@ test("Coach Chat: empty state, starters, kicker and New conversation", async ({ 
   await empty.getByRole("button", { name: "What should I start with?" }).click();
   const you = page.locator(".coach-msg.is-you").first();
   await expect(you).toContainText("What should I start with?");
-  await expect(you.locator(".coach-msg-kicker")).toHaveText(/^You · \d\d:\d\d$/);
+  await expect(you.locator(".coach-msg-kicker")).toHaveText(/^You · \d{1,2} [A-Z][a-z]{2} \d\d:\d\d$/);
   await expect(page.getByText("Start with the smallest open task.").first()).toBeVisible({ timeout: 8_000 });
 
   await page.getByRole("button", { name: "New conversation" }).click();

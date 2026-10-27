@@ -143,11 +143,13 @@ const clockHHMM = (ms) => {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 
-// "Brief · 1 Oct 09:41" (62h).
-const briefChipLabel = (brief) => {
-  const d = new Date(brief.at);
-  return `${d.getDate()} ${d.toLocaleString("en-GB", { month: "short" })} ${clockHHMM(brief.at)}`;
+// "1 Oct 09:41": the brief chip (62h) and each message's kicker, so a
+// conversation that spans days can be followed.
+const dateClock = (ms) => {
+  const d = new Date(ms);
+  return `${d.getDate()} ${d.toLocaleString("en-GB", { month: "short" })} ${clockHHMM(ms)}`;
 };
+const briefChipLabel = (brief) => dateClock(brief.at);
 
 export default function CoachTab({ payload, savePayload, savePayloadAsync, saveSubPath, saveSubPaths, saveSubPathsAsync, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null, chatDraft = "", setChatDraft = () => {}, uid, writeActivityEvents, stuck = null, onClearStuck, onBackToFocus, onOpenPrivacy, onOpenDayMap = null }) {
   // 75i/75k: a session running while Chat is open shows as the focus pill.
@@ -1883,7 +1885,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
             return chatHistory.map((m, idx) => (
             <div key={msgKey(m, idx)} className={`coach-msg ${m.isUser ? "is-you" : "is-coach"}`}>
               {(() => {
-                const kicker = <span className="coach-msg-kicker"><span className="coach-msg-name">{m.isUser ? "You" : coachName}</span>{m.at ? <><span className="coach-msg-sep"> · </span><span className="coach-msg-time">{clockHHMM(m.at)}</span></> : null}</span>;
+                const kicker = <span className="coach-msg-kicker"><span className="coach-msg-name">{m.isUser ? "You" : coachName}</span>{m.at ? <><span className="coach-msg-sep"> · </span><span className="coach-msg-time">{dateClock(m.at)}</span></> : null}</span>;
                 return m.isUser ? kicker : null;
               })()}
               {m.isUser ? (
@@ -1892,7 +1894,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
                 // 74: a reply longer than four lines shows four and "Show all";
                 // its action buttons and chips stay in view under it.
                 <>
-                <ClampedReply text={splitSavedNote(m.text).body} head={<span className="coach-msg-kicker"><span className="coach-msg-name">{coachName}</span>{m.at ? <><span className="coach-msg-sep"> · </span><span className="coach-msg-time">{clockHHMM(m.at)}</span></> : null}</span>}>
+                <ClampedReply text={splitSavedNote(m.text).body} head={<span className="coach-msg-kicker"><span className="coach-msg-name">{coachName}</span>{m.at ? <><span className="coach-msg-sep"> · </span><span className="coach-msg-time">{dateClock(m.at)}</span></> : null}</span>}>
                 <ReactMarkdown
                   className="coach-md coach-msg-text"
                   remarkPlugins={[remarkGfm]}
