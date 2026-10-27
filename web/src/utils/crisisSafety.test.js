@@ -57,6 +57,9 @@ describe("crisisSafety — the one check both free-text paths use", () => {
     "life isn't worth living",
     "I wish I wasn't alive",
     "I just want to disappear forever",
+    "i have no money and no desire to live anymore",
+    "I have no will to live",
+    "I've lost the will to live",
   ])("answers locally on indirect crisis language: %s", (text) => {
     expect(buildLocalSafetyReply(text, "Rohan")).toContain("emergency services");
   });
@@ -69,7 +72,36 @@ describe("crisisSafety — the one check both free-text paths use", () => {
     "I wish this task would disappear forever",
     "I can't keep going, need a coffee",
     "this deadline is killing me",
+    "I have no desire to live in a big city",
+    "no wish to live with my parents again",
   ])("still coaches on frustration that only sounds similar: %s", (text) => {
+    expect(buildLocalSafetyReply(text, "Rohan")).toBeNull();
+  });
+
+  // #594, with the owner's OK: typos and slang in crisis words still reach the
+  // local reply, not a model ("i just wnat to die" was missed).
+  it.each([
+    "life has been terrible lately and i just wnat to die",
+    "i wanna die",
+    "i wana die",
+    "i dont wnat to live anymore",
+    "i dnt want to live",
+    "i dont wanna be here",
+    "thinking about sucide",
+    "i feel suicdal",
+    "suiside",
+    "i want to kil myself",
+    "i might hurt my self",
+  ])("answers locally on a typo or slang: %s", (text) => {
+    expect(buildLocalSafetyReply(text, "Rohan")).toContain("emergency services");
+  });
+
+  it.each([
+    "I wanna finish this today",
+    "i wnat to live in Amsterdam one day",
+    "I don't wanna start the report",
+    "the suspense is killing me",
+  ])("still coaches on typo look-alikes: %s", (text) => {
     expect(buildLocalSafetyReply(text, "Rohan")).toBeNull();
   });
 
