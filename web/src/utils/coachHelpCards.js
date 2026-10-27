@@ -43,7 +43,7 @@ const HELP = [
   },
   {
     topic: "privacy",
-    re: /\bwho (?:can|could) see my (?:data|tasks|plan|chats?|messages)\b|\bis my (?:data|chat|plan|info\w*) (?:private|safe|secure|shared)\b|\bwhere is my data\b|\bdo you (?:store|save|share|sell|keep) my (?:data|chats?|messages)\b/,
+    re: /\bare you (?:digging|looking|snooping|spying) (?:into|on|at) my (?:privacy|data|life|stuff|tasks)\b|\bwho (?:can|could) see my (?:data|tasks|plan|chats?|messages)\b|\bis my (?:data|chat|plan|info\w*) (?:private|safe|secure|shared)\b|\bwhere is my data\b|\bdo you (?:store|save|share|sell|keep) my (?:data|chats?|messages)\b/,
     text: "Your plan is kept in your own Loci account. When you use Coach or another AI feature, the text of your message and the parts of your plan it needs go to the AI provider that answers, through Loci's relay, which passes them on without storing them. Loci doesn't sell your data. The details are in Settings → Privacy policy.",
   },
   {
@@ -53,6 +53,42 @@ const HELP = [
     always: true,
     re: /\b(?:delete|close|remove|cancel|deactivate) (?:my |the )?(?:loci )?account\b/,
     text: "Loci has no delete-account button yet. To have your account data deleted, sign out and use the contact under \"Deleting your data\" in Settings → Privacy policy. You can download a backup first in Settings → Data → Backup.",
+  },
+  // About Loci and the Coach (#594). The model invented "a team of productivity
+  // designers", "tasks tied to a concrete deadline" and "I'm not familiar with
+  // Loci". Wording approved by the owner, including their name as maker.
+  {
+    topic: "maker",
+    re: /\bwho (?:made|makes|built|builds|created|owns|runs|developed|is behind)\b.{0,15}\bloci\b|\b(?:owner|founder|creator|developer|maker)s? of loci\b|\bloci'?s (?:owner|founder|creator|developer|maker)\b/,
+    text: "Loci is made by Rohan Das, an independent developer building it in the open. I don't share personal details about him beyond that, and I can't search the web.",
+  },
+  {
+    topic: "built",
+    re: /\bhow (?:was|is) loci (?:made|built|developed|coded)\b|\bvibe[- ]?coded\b|\bis loci (?:any |even |actually |really )*(?:useful|any good|good|worth it)\b/,
+    text: "Rohan builds Loci with AI coding tools, and every change goes through tests and review. Whether it's useful depends on you: it's built for people who plan a lot and do too little, or lose track of what matters this week.",
+  },
+  {
+    topic: "compare",
+    re: /\b(?:better|different|worse)\b.{0,30}\b(?:todoist|structured|ticktick|notion|google tasks|other (?:apps|planners|to-?do apps))\b|\bloci (?:vs\.?|versus|or) (?:todoist|structured|ticktick|notion)\b|\bwhy (?:would|will|should) i (?:not )?use\b.{0,40}\b(?:loci|structured|todoist)\b/,
+    text: "Most task apps are a list of due dates. Loci plans by horizon (Today, This week, This month, This quarter, 6 months), so you see what matters now without losing what comes later. Real deadlines get their own fronts, the Mind Box catches loose thoughts, and the Coach sees your whole plan. Todoist and Structured are good apps; if you live by a calendar, Structured may suit you better. Loci is for deciding what deserves your time.",
+  },
+  {
+    topic: "loci",
+    re: /\bhow (?:does|do) loci work\b|\bwhat(?:'s| is) loci(?: for| about)?\s*\??$|\bhow (?:do|can|should) i use loci\b|\bwhat does loci do\b/,
+    text: "Loci plans by horizon instead of due dates: every task sits in Today, This week, This month, This quarter or 6 months, so you see what matters now without losing what comes later. Real deadlines get their own fronts, the Mind Box catches loose thoughts so they stop circling, and I, the Coach, see your whole plan, so my advice is about your actual week, not generic tips.",
+  },
+  {
+    topic: "ai",
+    re: /\b(?:which|what) (?:ai|model|llm|ai model)\b.{0,15}\b(?:are you|is this|do you use|powers you)\b|\bare you (?:chatgpt|gpt|gemini|claude|an? ai|a bot|a robot|human|a real person)\b|\bh(?:ow|wo) do you (?:work|f\w*tion)\b|\bhow does (?:the )?coach work\b|\bhow can (?:the )?coach help\b|\bwhat can (?:you|the coach) do\b/,
+    text: "I'm Loci's Coach, an AI. My replies come from AI models that Loci reaches through its relay (Groq, Ollama Cloud, Google Gemini and a few others). I read your plan and our recent chat to suggest a next step, and anything I offer to change needs your tap on a button. I can't see your screen, search the web, make images or talk by voice.",
+  },
+  {
+    // Answered even phrased as "remember what I say": a question about memory, not a
+    // request to save something ("remember that I prefer mornings" stays with the Coach).
+    topic: "memory",
+    always: true,
+    re: /^(?:can you )?remember (?:what i (?:say|tell you|said)|things i (?:say|tell you)|our (?:chats?|conversations?))\b|\bh(?:ow|wo) do you remember\b|\bdo you remember (?:what i say|our (?:chats?|conversations?)|things)\b|\bwhat do you (?:store|save|keep) about me\b/,
+    text: "With Coach memory on, I keep short notes of things worth remembering, like a preference or a goal. You can see, edit or delete each one in Settings → Coach memory, or switch off \"Remember across chats\". Beyond those notes I see your plan and our recent chat.",
   },
   {
     topic: "others",

@@ -23,6 +23,21 @@ describe("help cards", () => {
     ["how do I delete my account?", "account", /Backup/],
     ["Delete my account", "account", /Backup/],
     ["please close my Loci account", "account", /Backup/],
+    // #594: questions about Loci and the Coach the model answered with inventions.
+    ["Who built Loci?", "maker", /Rohan Das.*independent developer/],
+    ["who's the founder of loci? where is he from?", "maker", /don't share personal details/],
+    ["was this app vibe coded?", "built", /AI coding tools/],
+    ["Is Loci even useful?", "built", /depends on you/],
+    ["why is loci better than todoist?", "compare", /Structured may suit you better/],
+    ["why should I use Loci and not Structured?", "compare", /horizon/],
+    ["how does Loci work?", "loci", /fronts.*Mind Box/],
+    ["what is loci?", "loci", /horizon/],
+    ["what AI model are you?", "ai", /relay/],
+    ["how does the coach work?", "ai", /tap on a button/],
+    ["hwo do you funtion?", "ai", /relay/],
+    ["can you remember what i tell you?", "memory", /Settings → Coach memory/],
+    ["how do you remember things?", "memory", /Remember across chats/],
+    ["are you snooping on my data?", "privacy", /Privacy policy/],
   ])("%s → %s", (text, topic, says) => {
     const intent = detectFactIntent(text, { config: {} });
     expect(intent).toEqual({ kind: "help", topic });
@@ -41,6 +56,11 @@ describe("help cards", () => {
     "can you add a task to sync my calendar?",
     "remind me to connect my work calendar",
     "I need to sync my calendar today",
+    // A request or a feeling mixed in still goes to the Coach.
+    "who made loci? add a task to email them",
+    "how does loci work? i feel lost",
+    "remember that I prefer mornings",
+    "what model of laptop should I buy?",
     // Codex review, PR 596: a task about an account is not a request to delete Loci's.
     "Add a task to delete my account on the old service",
     "Remind me to close my account tomorrow",
@@ -50,6 +70,6 @@ describe("help cards", () => {
   });
 
   it("every topic has text", () => {
-    for (const topic of ["front", "deadline", "mindbox", "horizons", "focus", "delete", "calendar", "privacy", "account", "others"]) expect(helpCardText(topic), topic).toBeTruthy();
+    for (const topic of ["front", "deadline", "mindbox", "horizons", "focus", "delete", "calendar", "privacy", "account", "maker", "built", "compare", "loci", "ai", "memory", "others"]) expect(helpCardText(topic), topic).toBeTruthy();
   });
 });

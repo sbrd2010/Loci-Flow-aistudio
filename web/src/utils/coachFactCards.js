@@ -85,7 +85,11 @@ export function detectFactIntent(message, { config = {} } = {}) {
   const t = norm(message);
   if (!t || t.length > 200) return null;
   // One sentence only: a second clause ("what's due? also add milk", "…I feel like a failure") is for the Coach.
-  if (/[.?!]\s*\S/.test(t)) return null;
+  // A run of questions about Loci itself ("who made loci? is he indian?") is the
+  // exception: it still gets the help card below (#594).
+  const parts = t.split(/(?<=[.?!])\s+(?=\S)/);
+  const onlyQuestions = parts.every(p => isQuestion(p) && !IMPERATIVE.test(p.replace(/^(?:(?:can|could|would|will) you|please|pls)\s+/, "")));
+  if (parts.length > 1 && !onlyQuestions) return null;
   // How Loci works (#594): before the advice check, which "how do I…" would trip,
   // but only for a question: never a request ("add a task to sync my calendar",
   // "can you add…?") or a message that sounds distressed.
@@ -96,6 +100,7 @@ export function detectFactIntent(message, { config = {} } = {}) {
   const always = topic && helpAlways(topic);
   const command = IMPERATIVE.test(asked) && !(always && helpLeads(topic, asked));
   if (topic && !command && (always || isQuestion(t))) return { kind: "help", topic };
+  if (parts.length > 1) return null;
   if (IMPERATIVE.test(t) || ADVICE.test(t) || !isQuestion(t)) return null;
 
   if (KNOWN_RE.test(t)) return { kind: "known" };
