@@ -1,7 +1,7 @@
 // Tricky task titles for the AI task-writing evaluation (#603). All made up; they
-// follow patterns seen in a competitor's AI steps going wrong (an emoji read
-// instead of the words, jargon read the obvious way) and in real-life lists
-// (dates and amounts typed into titles, names, decisions, huge tasks).
+// follow ways AI steps go wrong (an emoji read instead of the words, jargon read
+// the obvious way) and real-life lists (dates and amounts typed into titles,
+// names, decisions, huge tasks).
 //   keep:    must survive in Ask AI and Organize, which rewrite the title
 //   mustNot: must not appear in any path's output (an invented object, topic or
 //            company, or a dose)
