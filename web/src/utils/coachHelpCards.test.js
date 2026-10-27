@@ -26,7 +26,7 @@ describe("help cards", () => {
     // #594: questions about Loci and the Coach the model answered with inventions.
     ["Who built Loci?", "maker", /Rohan Das.*independent developer/],
     ["who's the founder of loci? where is he from?", "maker", /don't share personal details/],
-    ["was this app vibe coded?", "built", /AI coding tools/],
+    ["was this app vibe coded?", "built", /built by Rohan Das/],
     ["Is Loci even useful?", "built", /depends on you/],
     ["why is loci better than todoist?", "compare", /Structured may suit you better/],
     ["why should I use Loci and not Structured?", "compare", /horizon/],
@@ -36,7 +36,7 @@ describe("help cards", () => {
     ["how does the coach work?", "ai", /tap on a button/],
     ["hwo do you funtion?", "ai", /relay/],
     ["who owns loci? is he from india? can you look him up?", "maker", /can't search the web/],
-    ["how was loci built? was it vibe coded?", "built", /AI coding tools/],
+    ["how was loci built? was it vibe coded?", "built", /built by Rohan Das/],
     ["is loci better than todoist? or structured?", "compare", /Structured/],
     ["can you remember what i tell you?", "memory", /Settings → Coach memory/],
     ["how do you remember things?", "memory", /Remember across chats/],
