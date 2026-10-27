@@ -5,7 +5,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { callAI, getAIKeys, hasAIKey } from "../utils/aiCall";
 import { buildLocalSafetyReply } from "../utils/crisisSafety";
 import { buildSplitRequest } from "../utils/aiTaskPrompts";
-import { MAX_STEP_MINUTES, STEP_MINUTE_OPTIONS, evenMinutes, stepsFromSubSteps } from "../utils/splitTask";
+import { MAX_STEP_MINUTES, STEP_MINUTE_OPTIONS, evenMinutes, splitStepRange, stepsFromSubSteps } from "../utils/splitTask";
 import { safeUUID } from "../utils/uuid";
 import { unzoomTransform } from "../utils/cssZoom";
 import { IconGripVertical, IconPlus, IconX } from "./ui/icons";
@@ -61,7 +61,7 @@ export default function SplitTaskSheet({ task, onClose, onSplit, firstName = "" 
   const [source, setSource] = useState(fromSubSteps.length ? "substeps" : hasAIKey() && !safetyReply ? "ai" : "manual");
   const [steps, setSteps] = useState(() => fromSubSteps.length
     ? withIds(fromSubSteps)
-    : withIds(evenMinutes(original || 50, 2).map(minutes => ({ text: "", minutes }))));
+    : withIds(evenMinutes(original || 50, splitStepRange(original || 50).min).map(minutes => ({ text: "", minutes }))));
   const [loading, setLoading] = useState(source === "ai");
   // How many Loci suggested — not how many rows there are after edits.
   const [suggested, setSuggested] = useState(fromSubSteps.length);
@@ -79,8 +79,9 @@ export default function SplitTaskSheet({ task, onClose, onSplit, firstName = "" 
         const good = (Array.isArray(parsed) ? parsed : [])
           .filter(s => s && typeof s.text === "string" && s.text.trim())
           .map(s => ({ text: s.text.trim(), minutes: STEP_MINUTE_OPTIONS.includes(Number(s.minutes)) ? Number(s.minutes) : 25 }));
-        // The ask is two to four; anything else is not the suggestion asked for.
-        if (good.length < 2 || good.length > 4) throw new Error("out of range");
+        // Fewer or more steps than asked for is not the suggestion asked for.
+        const { min, max } = splitStepRange(original);
+        if (good.length < min || good.length > max) throw new Error("out of range");
         if (live) { setSteps(withIds(good)); setSuggested(good.length); }
       })
       .catch(() => { if (live) setSource("manual"); })

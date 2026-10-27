@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSplit, evenMinutes, stepsFromSubSteps, undoSplit } from "./splitTask";
+import { buildSplit, evenMinutes, splitStepRange, stepsFromSubSteps, undoSplit } from "./splitTask";
 
 describe("evenMinutes", () => {
   it("shares the total, 45 minutes at most per step", () => {
@@ -22,6 +22,17 @@ describe("stepsFromSubSteps", () => {
   it("offers nothing for one or no sub-step", () => {
     expect(stepsFromSubSteps({ subSteps: [{ text: "Only", done: false }] })).toEqual([]);
     expect(stepsFromSubSteps({})).toEqual([]);
+  });
+});
+
+describe("splitStepRange", () => {
+  it("asks for enough 45-minute steps to cover the estimate, 2-4 for a short task, 8 at most", () => {
+    expect(splitStepRange(90)).toEqual({ min: 2, max: 4, cover: 90 });
+    expect(splitStepRange(0)).toEqual({ min: 2, max: 4, cover: 60 });
+    expect(splitStepRange(240)).toEqual({ min: 6, max: 8, cover: 240 });
+    expect(splitStepRange(360)).toEqual({ min: 8, max: 8, cover: 360 });
+    // An estimate past 6 hours (old data) asks only for what 8 steps can hold.
+    expect(splitStepRange(580)).toEqual({ min: 8, max: 8, cover: 360 });
   });
 });
 

@@ -7,7 +7,7 @@
 // findings changed the budgets and added AS_MEANT, the stand-alone Split steps
 // and the date rule in Ask AI.
 
-import { MAX_STEP_MINUTES, STEP_MINUTE_OPTIONS } from "./splitTask";
+import { MAX_STEP_MINUTES, STEP_MINUTE_OPTIONS, splitStepRange } from "./splitTask";
 import { thoughtText } from "./thoughts";
 import { plainThought } from "./thoughtFormat";
 
@@ -20,14 +20,16 @@ const AS_MEANT = 'Read the task as the user meant it (an emoji is decoration). N
 // replies were cut off and retried. 800 keeps Z.ai (its limit) in the chain.
 const STEP_BUDGET = { maxTokens: 800, reasoningEffort: "low" };
 
-// Split a task: 2-4 steps of 45 minutes or less.
+// Split a task: steps of 45 minutes or less that cover the estimate (2-4 for a
+// short task, up to 8 for 6 hours).
 export function buildSplitRequest(task) {
-  const original = Number(task.timeEstimateMinutes) || 0;
+  const { min, max, cover } = splitStepRange(task.timeEstimateMinutes);
+  const count = min === max ? `${min}` : `${min}-${max}`;
   return {
     systemPrompt: "You split tasks into concrete steps. Respond ONLY with a valid JSON array, no markdown.",
     messages: [{
       role: "user",
-      content: `Split this task into 2-4 concrete steps, each ${MAX_STEP_MINUTES} minutes or less, together about ${original || 60} minutes.\n\nTask: "${task.title}"\n\nEach step becomes its own task in the list, so name what it is for: "Call the dentist about the crown", not "Make the call". ${AS_MEANT}\n\nReturn ONLY a JSON array like [{"text":"Collect the latest figures","minutes":30}]. Each text under 12 words. minutes is one of ${STEP_MINUTE_OPTIONS.join(", ")}.`,
+      content: `Split this task into ${count} concrete steps, each ${MAX_STEP_MINUTES} minutes or less, together about ${cover} minutes.\n\nTask: "${task.title}"\n\nEach step becomes its own task in the list, so name what it is for: "Call the dentist about the crown", not "Make the call". ${AS_MEANT}\n\nReturn ONLY a JSON array like [{"text":"Collect the latest figures","minutes":30}]. Each text under 12 words. minutes is one of ${STEP_MINUTE_OPTIONS.join(", ")}.`,
     }],
     ...STEP_BUDGET,
   };

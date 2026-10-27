@@ -16,6 +16,10 @@ describe("task-writing evaluation (#603)", () => {
   it("reads replies the way each screen does, null when the screen falls back", () => {
     expect(parseTaskAiReply("split", '[{"text":"Open Amazon","minutes":10},{"text":"Add B12","minutes":10}]')).toEqual(["Open Amazon", "Add B12"]);
     expect(parseTaskAiReply("split", '[{"text":"Only one","minutes":10}]')).toBeNull();
+    const five = JSON.stringify(Array.from({ length: 5 }, (_, i) => ({ text: `Step ${i}`, minutes: 45 })));
+    expect(parseTaskAiReply("split", five, 60)).toBeNull();
+    expect(parseTaskAiReply("split", five, 240)).toBeNull();
+    expect(parseTaskAiReply("split", five, 200)).toHaveLength(5);
     expect(parseTaskAiReply("breakdown", '```json\n["Open the site", "Search B12"]\n```')).toEqual(["Open the site", "Search B12"]);
     expect(parseTaskAiReply("askAI", 'Sure: {"title":"Order B12","microStep":"Open Amazon","subSteps":[{"text":"zinc"}]}')).toEqual(["Order B12", "Open Amazon", "zinc"]);
     expect(parseTaskAiReply("organize", '[{"sourceId":"t1","title":"Order B12 on Amazon","horizonLevel":"week","priority":"P3","concreteStep":"Open Amazon"}]')).toContain("Order B12 on Amazon");

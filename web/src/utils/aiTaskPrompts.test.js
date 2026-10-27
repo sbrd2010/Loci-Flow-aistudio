@@ -15,6 +15,9 @@ describe("AI task-writing requests", () => {
     expect(text).toContain("Never add people, companies, products or facts that aren't in it");
     expect(text).toContain('Each text under 12 words. minutes is one of 10, 15, 20, 25, 30, 45.');
     expect(buildSplitRequest({ title: "x" }).messages[0].content).toContain("together about 60 minutes");
+    // A 6-hour task is split into steps that cover all of it.
+    expect(buildSplitRequest({ title: "x", timeEstimateMinutes: 360 }).messages[0].content).toMatch(/^Split this task into 8 concrete steps, each 45 minutes or less, together about 360 minutes\./);
+    expect(buildSplitRequest({ title: "x", timeEstimateMinutes: 240 }).messages[0].content).toContain("into 6-8 concrete steps");
   });
 
   it("Break-down sends the title, the concrete step and the estimate", () => {
