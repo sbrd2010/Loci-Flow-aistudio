@@ -1511,6 +1511,13 @@ describe("distress no rule names goes to the support prompt, not the task prompt
     "I promised myself I would finish it and never did",
     "I was supposed to call the bank and I didn't",
     "didn't start again today",
+    "It feels like this app is just watching me fail.",
+    "I don't know if I'm resting or just avoiding everything.",
+    "I don't want to see my list, it'll be a disaster.",
+    "I got through my whole list today, first time in weeks!",
+    "honestly I'm proud of myself today",
+    "I finally finished something after a really hard week.",
+    "I know it's small but I actually opened the file today.",
   ])("%s", (text) => {
     expect(classifyContextMode(text, { ownKey: true })).toBe("emotional");
     expect(classifyContextMode(text)).toBe("emotional");
@@ -1522,6 +1529,9 @@ describe("distress no rule names goes to the support prompt, not the task prompt
     "how was my week?",
     "what's due this week?",
     "I told myself I'd start this morning, what should I work on first?",
+    "I finally finished the slides, what should I do next?",
+    // Finishing a named task keeps the task prompt, which can offer to mark it done.
+    "I finished the invoice export bug",
   ])("a task or data question with the same words keeps its prompt: %s", (text) => {
     expect(classifyContextMode(text, { ownKey: true })).toBe("full_task");
   });

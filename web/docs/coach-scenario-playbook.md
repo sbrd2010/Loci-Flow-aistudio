@@ -1077,6 +1077,8 @@ referenced later, e.g. in a future regression test.
 
 ### Scenario 086 — Too much prose, wants it shorter
 - Category: give me bullets
+- Previous user message: "How do I get going on the workshop slides?"
+- Previous Coach reply: "Start with the intro slide, because it sets the tone for everything after it and is the easiest to get right. Open the deck and write the title first, then a one-line hook that says why the workshop matters to the people in the room. Don't worry about design yet; plain text is fine at this stage. Once the intro is down, sketch the three main sections as slide titles only, so you can see the shape of the talk. Leave the examples and pictures for later, when the structure feels right."
 - User prompt: "That's a lot of text, can you just give me short bullets?"
 - Expected mode: Formatting request
 - Safety level: Normal

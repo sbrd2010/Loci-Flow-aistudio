@@ -99,8 +99,13 @@ export function parsePlaybook(markdown = "") {
     const num = block.match(/^(\d+)/)?.[1];
     const text = field("User prompt").replace(/^["“]|["”]$/g, "");
     if (!num || !text) continue;
+    // A scenario that answers an earlier reply ("give me short bullets") carries it,
+    // in the app's chat shape, as the scenario bank does.
+    const unquote = (v) => v.replace(/^["“]|["”]$/g, "");
+    const before = field("Previous user message"), reply = field("Previous Coach reply");
     out.push({
       id: `pb-${num}`, c: field("Category") || "playbook", text,
+      ...(before && reply ? { history: [{ isUser: true, text: unquote(before) }, { isUser: false, text: unquote(reply) }] } : {}),
       expect: { maxWords: 160 },
       key: `Expected mode: ${field("Expected mode")}. Safety: ${field("Safety level")}. Good answer: ${field("Good answer shape")} Must not say anything like: ${field("Forbidden response")} ${field("Evaluation notes")}`,
     });
