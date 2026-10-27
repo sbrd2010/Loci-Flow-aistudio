@@ -34,12 +34,15 @@ mkdirSync(outDir, { recursive: true });
 
 // syllabus: #555's questions. scenarios: #594's bank (other users, follow-ups, safety…).
 // playbook: the support scenarios in web/docs. holdout: the unseen paper, run once at
-// the end (#555), so it is loaded only when asked for.
+// the end (#555), so it is loaded only when asked for. owner: the owner's own
+// phrasings, a private JSON file in coach-eval-out/ (regexps as { source, flags }).
 const SETS = {
   syllabus: () => QUESTIONS,
   scenarios: () => SCENARIOS,
   playbook: () => parsePlaybook(readFileSync(new URL("../docs/coach-scenario-playbook.md", import.meta.url), "utf8")),
   holdout: async () => (await import("../src/utils/coachSyllabus.holdout.js")).HOLDOUT,
+  // Kept out of the repo: coach-eval-out/ is gitignored.
+  owner: () => JSON.parse(readFileSync(new URL("./owner-questions.json", import.meta.url), "utf8")),
 };
 if (!SETS[set]) throw new Error(`--set must be one of ${Object.keys(SETS).join(", ")}`);
 const bank = await SETS[set]();

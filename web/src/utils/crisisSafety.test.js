@@ -73,6 +73,33 @@ describe("crisisSafety — the one check both free-text paths use", () => {
     expect(buildLocalSafetyReply(text, "Rohan")).toBeNull();
   });
 
+  // #594, with the owner's OK: typos and slang in crisis words still reach the
+  // local reply, not a model ("i just wnat to die" was missed).
+  it.each([
+    "life has been terrible lately and i just wnat to die",
+    "i wanna die",
+    "i wana die",
+    "i dont wnat to live anymore",
+    "i dnt want to live",
+    "i dont wanna be here",
+    "thinking about sucide",
+    "i feel suicdal",
+    "suiside",
+    "i want to kil myself",
+    "i might hurt my self",
+  ])("answers locally on a typo or slang: %s", (text) => {
+    expect(buildLocalSafetyReply(text, "Rohan")).toContain("emergency services");
+  });
+
+  it.each([
+    "I wanna finish this today",
+    "i wnat to live in Amsterdam one day",
+    "I don't wanna start the report",
+    "the suspense is killing me",
+  ])("still coaches on typo look-alikes: %s", (text) => {
+    expect(buildLocalSafetyReply(text, "Rohan")).toBeNull();
+  });
+
   it("falls back to a neutral name and tolerates junk input", () => {
     expect(buildLocalSafetyReply("I want to die")).toContain("friend");
     expect(buildLocalSafetyReply(null, "Rohan")).toBeNull();
