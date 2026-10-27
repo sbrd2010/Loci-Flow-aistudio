@@ -35,6 +35,9 @@ describe("help cards", () => {
     ["what AI model are you?", "ai", /relay/],
     ["how does the coach work?", "ai", /tap on a button/],
     ["hwo do you funtion?", "ai", /relay/],
+    ["who owns loci? is he from india? can you look him up?", "maker", /can't search the web/],
+    ["how was loci built? was it vibe coded?", "built", /AI coding tools/],
+    ["is loci better than todoist? or structured?", "compare", /Structured/],
     ["can you remember what i tell you?", "memory", /Settings → Coach memory/],
     ["how do you remember things?", "memory", /Remember across chats/],
     ["are you snooping on my data?", "privacy", /Privacy policy/],
@@ -58,6 +61,11 @@ describe("help cards", () => {
     "I need to sync my calendar today",
     // A request or a feeling mixed in still goes to the Coach.
     "who made loci? add a task to email them",
+    // Codex review, PR 601: a task or data question in the mix keeps the whole message.
+    "who made loci? what should I work on today?",
+    "how do fronts work? what is due today?",
+    // ...and "what do you store about me?" keeps the card with the actual saved notes.
+    "what do you store about me?",
     "how does loci work? i feel lost",
     "remember that I prefer mornings",
     "what model of laptop should I buy?",

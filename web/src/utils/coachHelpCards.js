@@ -87,7 +87,7 @@ const HELP = [
     // request to save something ("remember that I prefer mornings" stays with the Coach).
     topic: "memory",
     always: true,
-    re: /^(?:can you )?remember (?:what i (?:say|tell you|said)|things i (?:say|tell you)|our (?:chats?|conversations?))\b|\bh(?:ow|wo) do you remember\b|\bdo you remember (?:what i say|our (?:chats?|conversations?)|things)\b|\bwhat do you (?:store|save|keep) about me\b/,
+    re: /^(?:can you )?remember (?:what i (?:say|tell you|said)|things i (?:say|tell you)|our (?:chats?|conversations?))\b|\bh(?:ow|wo) do you remember\b|\bdo you remember (?:what i say|our (?:chats?|conversations?)|things)\b/,
     text: "With Coach memory on, I keep short notes of things worth remembering, like a preference or a goal. You can see, edit or delete each one in Settings → Coach memory, or switch off \"Remember across chats\". Beyond those notes I see your plan and our recent chat.",
   },
   {
