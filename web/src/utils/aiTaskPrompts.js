@@ -3,11 +3,21 @@
 // Each builder returns the callAI request its screen sends, so the screen and the
 // live evaluation (web/scripts/task-ai-eval.js) ask exactly the same thing.
 // Moved here unchanged from SplitTaskSheet.jsx, TodayTab.jsx, AddTaskDialog.jsx and
-// MindBoxTab.jsx; aiTaskPrompts.test.js pins the text.
+// MindBoxTab.jsx; aiTaskPrompts.test.js pins the text. The live evaluation's
+// findings changed the budgets and added AS_MEANT, the stand-alone Split steps
+// and the date rule in Ask AI.
 
 import { MAX_STEP_MINUTES, STEP_MINUTE_OPTIONS } from "./splitTask";
 import { thoughtText } from "./thoughts";
 import { plainThought } from "./thoughtFormat";
+
+// From the live evaluation (#603): a capitalised first verb was read as a company
+// ("Chase the refund" became the bank Chase) and vague titles got invented details.
+const AS_MEANT = 'Read the task as the user meant it: an emoji is decoration, and a first word like "Chase" or "Book" is usually a verb, not a company. Never add people, companies, products or facts that aren\'t in it; if it\'s vague, make the first step finding out what it means.';
+
+// Without "low" effort, gpt-oss spent the whole 200-350 tokens reasoning and most
+// replies were cut off and retried. 800 keeps Z.ai (its limit) in the chain.
+const STEP_BUDGET = { maxTokens: 800, reasoningEffort: "low" };
 
 // Split a task: 2-4 steps of 45 minutes or less.
 export function buildSplitRequest(task) {
@@ -16,9 +26,9 @@ export function buildSplitRequest(task) {
     systemPrompt: "You split tasks into concrete steps. Respond ONLY with a valid JSON array, no markdown.",
     messages: [{
       role: "user",
-      content: `Split this task into 2-4 concrete steps, each ${MAX_STEP_MINUTES} minutes or less, together about ${original || 60} minutes.\n\nTask: "${task.title}"\n\nReturn ONLY a JSON array like [{"text":"Collect the latest figures","minutes":30}]. Each text under 10 words. minutes is one of ${STEP_MINUTE_OPTIONS.join(", ")}.`,
+      content: `Split this task into 2-4 concrete steps, each ${MAX_STEP_MINUTES} minutes or less, together about ${original || 60} minutes.\n\nTask: "${task.title}"\n\nEach step becomes its own task in the list, so name what it is for: "Call the dentist about the crown", not "Make the call". ${AS_MEANT}\n\nReturn ONLY a JSON array like [{"text":"Collect the latest figures","minutes":30}]. Each text under 12 words. minutes is one of ${STEP_MINUTE_OPTIONS.join(", ")}.`,
     }],
-    maxTokens: 250,
+    ...STEP_BUDGET,
   };
 }
 
@@ -30,7 +40,7 @@ export function buildBreakdownRequest(task) {
       role: "user",
       content: `Break this task into 3–5 tiny, concrete micro-steps that each take under 5 minutes and feel easy to start.\n\nTask: "${task.title}"\nConcrete step: "${task.concreteStep || ""}"\nTime estimate: ${task.timeEstimateMinutes || 25} minutes\n\nReturn ONLY a JSON array of short strings (each under 12 words). Example: ["Open the document", "Write one sentence", "Save the file"]`
     }],
-    maxTokens: 200
+    ...STEP_BUDGET
   };
 }
 
@@ -59,6 +69,8 @@ Transform it into a well-structured, focus-friendly task. The user's core challe
 
 TASK DESIGN RULES:
 - Title must be specific and outcome-oriented (not vague verbs like "work on" or "think about")
+- Keep every date, deadline, amount, name and place from the idea in the title
+- ${AS_MEANT}
 - microStep is the DOOR-HANDLE move — the single physical action that takes under 2 minutes and removes the initiation barrier
 - Priority should account for the user's challenge: if they struggle to start, lean P3/P4 to reduce pressure
 - Time estimate should be honest — tasks often take 1.5x expected time
@@ -76,7 +88,7 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
   return {
     systemPrompt: "You are a productivity coach. Respond ONLY with valid JSON, no markdown.",
     messages: [{ role: "user", content: prompt }],
-    maxTokens: 350
+    ...STEP_BUDGET
   };
 }
 
@@ -101,6 +113,7 @@ Hard rules:
 - Every task has a concreteStep: the single easiest physical/digital first action (max 60 chars), e.g. "Email Priya at Acme re: June 20 deadline", not "Follow up"
 - Preserve every concrete detail — names, dates, deadlines, companies, amounts, links, places, people, constraints, decision criteria. Never invent details that aren't in the original text. Anything that doesn't fit in the title/concreteStep goes in subSteps (2-7 short bullet points) and/or sourceSummary (1-2 sentences). Don't drop it
 - Prefer 10-45 minute tasks; if a thought is too big for one, split it rather than writing one vague multi-hour task
+- ${AS_MEANT}
 
 For each task, return:
 - sourceId: the id from the [id:...] tag of the thought it came from. Every task split from the same thought shares that sourceId

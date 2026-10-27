@@ -48,19 +48,24 @@ export function parseTaskAiReply(path, raw) {
   } catch { return null; }
 }
 
-const STOP = new Set(["with", "from", "that", "this", "your", "about", "before", "after", "into", "what", "when", "then", "them", "they", "have", "will", "should"]);
-const words = (text) => (String(text).toLowerCase().match(/[\p{L}\p{N}]{4,}/gu) || []).filter(w => !STOP.has(w));
+const STOP = new Set(["the", "and", "for", "out", "with", "from", "that", "this", "your", "about", "before", "after", "into", "what", "when", "then", "them", "they", "have", "will", "should", "due", "deadline"]);
+const words = (text) => (String(text).toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) || []).filter(w => !STOP.has(w));
 
 // "pass" or "fail" with reasons for one parsed reply.
-//   grounded: at least one text shares a word (4+ letters) with the title.
+//   grounded: at least one text shares a word (3+ letters) with the title; for
+//     Split every step must, as each step becomes its own task in the list.
 //   keep (Ask AI and Organize, which rewrite the title): every pattern appears.
 //   mustNot (all paths): no pattern appears.
 export function gradeTaskAi(path, texts, c) {
   if (!texts) return { verdict: "fail", reasons: ["fallback: the screen shows no AI result"] };
   const reasons = [];
-  const all = texts.join(" \n ");
+  // Models write narrow and no-break spaces and hyphens ("May\u202f28").
+  const plain = texts.map(t => String(t).replace(/[\u00a0\u202f]/g, " ").replace(/\u2011/g, "-"));
+  const all = plain.join(" \n ");
   const titleWords = new Set(words(c.title));
-  if (!words(all).some(w => titleWords.has(w))) reasons.push("not grounded in the title");
+  const grounded = (t) => words(t).some(w => titleWords.has(w));
+  if (!grounded(all)) reasons.push("not grounded in the title");
+  else if (path === "split" && !plain.every(grounded)) reasons.push("a step doesn't name the task");
   if (path === "askAI" || path === "organize") {
     for (const re of c.keep || []) if (!re.test(all)) reasons.push(`dropped /${re.source}/`);
   }

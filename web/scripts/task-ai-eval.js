@@ -5,6 +5,7 @@
 //
 //   npm run task-ai:eval -- --provider ollama --samples 3
 //   npm run task-ai:eval -- --provider ollama --only emoji,jargon --paths split
+//   npm run task-ai:eval -- --out coach-eval-out/task-ai-p1 --regrade   (no calls)
 //
 // Keys: as in coach-eval.js (the cloud proxy adds them; locally, an env variable).
 
@@ -50,7 +51,7 @@ const done = new Set(existsSync(resultsFile)
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 let lastTokens = 0;
-outer: for (const c of TASK_AI_CASES) {
+outer: for (const c of args.regrade ? [] : TASK_AI_CASES) {
   if (only && !only.has(c.id)) continue;
   if (c.local) {
     const ok = !!buildLocalSafetyReply(c.title, "Sam");
@@ -83,7 +84,7 @@ outer: for (const c of TASK_AI_CASES) {
       } else {
         const raw = typeof choice.message?.content === "string" ? choice.message.content : "";
         const texts = parseTaskAiReply(path, raw);
-        Object.assign(rec, { finish: choice.finish_reason, texts, ...(texts ? {} : { raw: raw.slice(0, 300) }), ...gradeTaskAi(path, texts, c) });
+        Object.assign(rec, { finish: choice.finish_reason, texts, ...(texts ? {} : { raw: raw.slice(0, 4000) }), ...gradeTaskAi(path, texts, c) });
         lastTokens = r.json.usage?.total_tokens || 2000;
       }
       appendFileSync(resultsFile, `${JSON.stringify(rec)}\n`);
@@ -93,9 +94,11 @@ outer: for (const c of TASK_AI_CASES) {
 }
 
 // The latest record per sample counts (a resumed run appends after an error).
+// Replies are graded again here, so a changed grader or case needs no new calls.
 const latest = new Map();
 for (const r of readFileSync(resultsFile, "utf8").split("\n").filter(Boolean).map(l => JSON.parse(l))) latest.set(`${r.id}/${r.path}#${r.sample}`, r);
-const all = [...latest.values()];
+const cases = new Map(TASK_AI_CASES.map(c => [c.id, c]));
+const all = [...latest.values()].map(r => r.error || r.path === "local" ? r : { ...r, ...gradeTaskAi(r.path, r.texts || null, cases.get(r.id)) });
 const lines = ["| Path | Pass | Errors |", "|---|---|---|"];
 for (const path of ["local", ...TASK_AI_PATHS]) {
   const rs = all.filter(r => r.path === path);
