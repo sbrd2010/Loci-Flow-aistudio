@@ -721,7 +721,8 @@ export function deleteFailedText(err) {
 }
 
 const DELETE_ALL_MESSAGE = "Delete all your Loci data?\n\n"
-  + "Your tasks, plans, Coach chats and memory, Mind Box and focus history are deleted for good, on every device, and your Loci account is removed. This can't be undone.\n\n"
+  + "Your tasks, plans, Coach chats and memory, Mind Box and focus history are deleted from Loci on every device, and your Loci account is removed.\n\n"
+  + "A copy is kept for 30 days, so we can restore your account if you email us. After that it's erased for good.\n\n"
   + "Bug reports you sent are kept for up to 12 months. Email us to have them deleted sooner.\n\n"
   + "Next, Google asks you to sign in again to confirm.";
 

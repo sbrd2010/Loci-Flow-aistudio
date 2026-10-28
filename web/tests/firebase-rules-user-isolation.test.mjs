@@ -216,13 +216,35 @@ test("delete all my data (#612): one update removes the data, and nothing can wr
   await assertAllowed(await putJson(`sync/${userA.uid}`, validSyncPayload(userA), userA.idToken), "user A should write sync/userA");
   await assertAllowed(await putJson(`activityLogs/${userA.uid}/events/2026-10-28/e1`, { type: "focus_started" }, userA.idToken), "user A should write an activity event");
 
+  const deletion = (uid, payload) => ({
+    [`deletedAccounts/${uid}`]: { deletedAt: Date.now(), email: "kept@example.test", sync: payload },
+    [`sync/${uid}`]: null,
+    [`activityLogs/${uid}`]: { accountDeletedAt: Date.now() },
+  });
+
   await assertDenied(
-    await patchRoot({ [`sync/${userA.uid}`]: null, [`activityLogs/${userA.uid}`]: { accountDeletedAt: Date.now() } }, userB.idToken),
+    await patchRoot(deletion(userA.uid, validSyncPayload(userA)), userB.idToken),
     "user B must not delete user A's data"
   );
+  await assertDenied(
+    await putJson(`deletedAccounts/${userA.uid}`, { deletedAt: Date.now() }, userA.idToken),
+    "a 30-day copy can only be written together with the deletion"
+  );
   await assertAllowed(
-    await patchRoot({ [`sync/${userA.uid}`]: null, [`activityLogs/${userA.uid}`]: { accountDeletedAt: Date.now() } }, userA.idToken),
-    "user A should delete their own data in one update"
+    await patchRoot(deletion(userA.uid, validSyncPayload(userA)), userA.idToken),
+    "user A should copy and delete their own data in one update"
+  );
+  await assertDenied(
+    await getJson(`deletedAccounts/${userA.uid}`, userA.idToken),
+    "no app can read the 30-day copy"
+  );
+  await assertDenied(
+    await putJson(`deletedAccounts/${userA.uid}`, { deletedAt: 1 }, userA.idToken),
+    "the 30-day copy cannot be overwritten or back-dated"
+  );
+  await assertDenied(
+    await putJson(`deletedAccounts/${userA.uid}`, null, userA.idToken),
+    "the 30-day copy cannot be removed by the user"
   );
 
   const left = await getJson(`sync/${userA.uid}`, userA.idToken);

@@ -48,7 +48,7 @@ export default function PrivacyPolicy({ onClose }) {
           },
           {
             title: "Deleting your data",
-            body: "Settings › Data › Delete all my data deletes your tasks, plans, Coach chats and memory, Mind Box and focus history from Firebase and from that device, and removes your Loci account. Other devices sign out the next time they connect. Only a record of when the account was deleted is kept, so its data can't be written back. Bug reports are handled as described above."
+            body: "Settings › Data › Delete all my data deletes your tasks, plans, Coach chats and memory, Mind Box and focus history from Loci and from that device, and removes your Loci account. Other devices sign out the next time they connect. A copy of that data, with your email, is kept for 30 days in a place no app can read, so we can restore your account if you ask; after 30 days it is erased automatically. A record of when the account was deleted stays, so its data can't be written back. Bug reports are handled as described above."
           },
           {
             title: "Contact",

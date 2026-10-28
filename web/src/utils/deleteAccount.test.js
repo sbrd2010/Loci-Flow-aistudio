@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { deletionUpdate, tombstonePath, clearLocalLociData, deleteAllMyData } from "./deleteAccount";
 
-vi.mock("firebase/database", () => ({ ref: vi.fn(), update: vi.fn() }));
+vi.mock("firebase/database", () => ({ ref: vi.fn(), update: vi.fn(), get: vi.fn() }));
 vi.mock("firebase/auth", () => ({ deleteUser: vi.fn() }));
 
 function memoryStorage(entries) {
@@ -15,11 +15,14 @@ function memoryStorage(entries) {
 }
 
 describe("deletionUpdate (#612)", () => {
-  it("removes the payload and replaces the activity log with only the tombstone", () => {
-    expect(deletionUpdate("u1", 123)).toEqual({
+  it("removes the payload, leaves only the tombstone, and keeps a 30-day copy", () => {
+    const copy = { email: "a@example.test", sync: { tasks: [] }, activityLogs: { events: {} } };
+    expect(deletionUpdate("u1", 123, copy)).toEqual({
+      "deletedAccounts/u1": { deletedAt: 123, email: "a@example.test", sync: { tasks: [] }, activityLogs: { events: {} } },
       "sync/u1": null,
       "activityLogs/u1": { accountDeletedAt: 123 },
     });
+    expect(deletionUpdate("u1", 123)["deletedAccounts/u1"]).toEqual({ deletedAt: 123, email: null, sync: null, activityLogs: null });
     expect(tombstonePath("u1")).toBe("activityLogs/u1/accountDeletedAt");
   });
 
@@ -42,24 +45,33 @@ describe("clearLocalLociData", () => {
 });
 
 describe("deleteAllMyData", () => {
-  const user = { uid: "u1" };
+  const user = { uid: "u1", email: "a@example.test" };
   const make = () => {
     const calls = [];
     return {
       calls,
       reauthenticate: vi.fn(async () => { calls.push("reauth"); }),
       deps: {
-        ref: vi.fn(() => "root"),
+        ref: vi.fn((db, path) => path || "root"),
+        get: vi.fn(async (path) => { calls.push(["get", path]); return { val: () => ({ from: path }) }; }),
         update: vi.fn(async (r, v) => { calls.push(["update", r, v]); }),
         deleteUser: vi.fn(async () => { calls.push("deleteUser"); }),
       },
     };
   };
 
-  it("signs in again, then deletes the data in one update, then the account", async () => {
+  it("signs in again, reads the server's data, then copies and deletes it in one update, then the account", async () => {
     const m = make();
     await deleteAllMyData({ db: {}, user, reauthenticate: m.reauthenticate, now: 5, deps: m.deps });
-    expect(m.calls).toEqual(["reauth", ["update", "root", deletionUpdate("u1", 5)], "deleteUser"]);
+    const copy = { email: "a@example.test", sync: { from: "sync/u1" }, activityLogs: { from: "activityLogs/u1" } };
+    expect(m.calls).toEqual(["reauth", ["get", "sync/u1"], ["get", "activityLogs/u1"], ["update", "root", deletionUpdate("u1", 5, copy)], "deleteUser"]);
+  });
+
+  it("deletes nothing when the data to keep can't be read", async () => {
+    const m = make();
+    m.deps.get.mockRejectedValueOnce(new Error("network"));
+    await expect(deleteAllMyData({ db: {}, user, reauthenticate: m.reauthenticate, deps: m.deps })).rejects.toThrow("network");
+    expect(m.deps.update).not.toHaveBeenCalled();
   });
 
   it("deletes nothing when the new sign-in fails or is cancelled", async () => {

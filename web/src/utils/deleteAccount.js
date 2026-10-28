@@ -3,14 +3,26 @@
 // deleted) under the old uid. The rules refuse any later write to sync/{uid}
 // or activityLogs/{uid} once it exists, so a save still in flight, or another
 // device still signed in, cannot write the data back.
-import { ref, update } from "firebase/database";
+//
+// The same update keeps a copy in deletedAccounts/{uid}, which no app can
+// read: the owner can restore it on request for 30 days, and a daily job
+// (scripts/purge-deleted-accounts.mjs) erases it after that.
+import { ref, update, get } from "firebase/database";
 import { deleteUser } from "firebase/auth";
+
+export const RETENTION_DAYS = 30;
 
 export const tombstonePath = (uid) => `activityLogs/${uid}/accountDeletedAt`;
 
-export function deletionUpdate(uid, now = Date.now()) {
+export function deletionUpdate(uid, now = Date.now(), copy = {}) {
   if (!uid) throw new Error("deletionUpdate: no uid");
   return {
+    [`deletedAccounts/${uid}`]: {
+      deletedAt: now,
+      email: copy.email || null,
+      sync: copy.sync ?? null,
+      activityLogs: copy.activityLogs ?? null,
+    },
     [`sync/${uid}`]: null,
     [`activityLogs/${uid}`]: { accountDeletedAt: now },
   };
@@ -33,10 +45,17 @@ export function clearLocalLociData(storage = globalThis.localStorage) {
 // Signs in again first: Firebase only deletes an account after a recent
 // sign-in, and if that fails nothing has been deleted. If the data goes but
 // the sign-in record can't be removed, the error says so ("account_left").
-export async function deleteAllMyData({ db, user, reauthenticate, now = Date.now(), deps = { ref, update, deleteUser } }) {
+export async function deleteAllMyData({ db, user, reauthenticate, now = Date.now(), deps = { ref, update, get, deleteUser } }) {
   if (!user?.uid) throw new Error("not_signed_in");
   await reauthenticate(user);
-  await deps.update(deps.ref(db), deletionUpdate(user.uid, now));
+  // The copy is taken from the server, not this device's cache, so it holds
+  // what other devices saved too.
+  const [syncSnap, logsSnap] = await Promise.all([
+    deps.get(deps.ref(db, `sync/${user.uid}`)),
+    deps.get(deps.ref(db, `activityLogs/${user.uid}`)),
+  ]);
+  const copy = { email: user.email, sync: syncSnap.val(), activityLogs: logsSnap.val() };
+  await deps.update(deps.ref(db), deletionUpdate(user.uid, now, copy));
   try {
     await deps.deleteUser(user);
   } catch (err) {
