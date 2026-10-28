@@ -1,31 +1,35 @@
 # Loci
 
-**A day planner that helps you choose the one thing to do now, and gets you started on it.**
+**Stop managing your list. Start doing the one thing that matters.**
 
-Most to-do apps help you collect tasks. Loci helps with the harder step: picking one when everything feels urgent, and starting.
+Most productivity apps help you collect tasks, and the list keeps growing. Loci helps with the hard part: deciding what to do *right now* and getting started, even on days when everything feels urgent.
 
-> Copyright (c) 2026 sbrd2010. All rights reserved. This is not open source: see [LICENSE](LICENSE).
-> Loci is in private testing at [loci-flow.web.app](https://loci-flow.web.app).
+> Loci is in early access at [loci-flow.web.app](https://loci-flow.web.app), free to use while we grow.
+> Copyright (c) 2026 sbrd2010. All rights reserved. Not open source: see [LICENSE](LICENSE).
 
-## What it does
+## Why Loci
 
-- **One thing at a time.** Today is built around a single task you've chosen. With nothing chosen, Loci offers three, its own pick first with the reason, and **Choose for me** if you can't decide.
-- **Honest reasons.** When Loci narrows your list down, it shows its working (what's due, what won't fit in the time you have left) and states only what is true. No pep talk, no guesses.
-- **Horizons and deadlines.** Work sits at the horizon it belongs to: today, this week, month, quarter or half-year. Fronts group related work under one deadline, and your Key Deadline always shows.
-- **Day Map.** Lays today's tasks over the hours you actually have, and says plainly what won't fit.
-- **A day that fits your hours.** If you work late, your Loci day can end after midnight.
-- **Focus sessions** for the task in front of you, with gentle help when it isn't moving ("I'm stuck").
-- **Mind Box.** Somewhere to drop a stray thought so it stops pulling at you.
-- **Coach.** An AI coach that knows your plan: ask it what to do next, how to plan the week or how to get unstuck. AI can also split a big task into steps. It runs on free AI providers.
-- **Works across devices.** Sign in and your plan syncs. An Android app is on its way.
+**One thing at a time.** Your day is built around a single task you've chosen. Can't decide? Loci offers its three best picks, explains its top choice, and one tap on **Choose for me** gets you moving.
 
-## Built with
+**Advice you can trust.** When Loci narrows your list down, it shows its working: what's due, what won't fit in the time you have left, what can wait. No pep talks and no guesswork, just clear reasons.
 
-React and Vite, Firebase (sign-in and sync), and a small Cloudflare Worker that relays AI requests. Tests run with Vitest and Playwright.
+**See the whole picture.** Plan across today, this week, this month, this quarter and the next six months. Group related work under a shared deadline, and keep your most important deadline in view.
 
-## Running it locally
+**A realistic day.** The Day Map lays your tasks over the hours you actually have, and tells you plainly what won't fit before the day runs out.
 
-For the owner and invited collaborators. Needs Node.js 22+.
+**Built around your hours.** Night owl? Your Loci day can end after midnight, so late work counts towards the day you started.
+
+**Help when you're stuck.** Focus sessions keep you on the task in front of you. When it stops moving, Loci notices and helps you find a way back in.
+
+**A clear head.** Drop stray thoughts into the Mind Box so they stop pulling at your attention.
+
+**Your own AI coach.** Coach knows your plan. Ask what to do next, how to shape your week or how to get unstuck, and let it break a big task into steps you can actually start.
+
+**Everywhere you work.** Sign in once and your plan follows you across devices. An Android app is coming soon.
+
+## For developers
+
+Needs Node.js 22+.
 
 ```bash
 cd web
@@ -33,13 +37,4 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173` and use **Try Demo** to look around without signing in. Optional settings are described in `web/.env.example`.
-
-| Command | What it does |
-|---|---|
-| `npm run dev` | Local dev server |
-| `npm run build` | Production build into `web/dist/` |
-| `npm test` | Unit tests (Vitest) |
-| `npm run test:e2e` | End-to-end tests (Playwright) |
-
-The Android app wraps the same web code. See [`web/android/README_ANDROID.md`](web/android/README_ANDROID.md).
+Open `http://localhost:5173` and use **Try Demo** to look around without signing in. `npm test` runs the unit tests and `npm run test:e2e` the end-to-end tests. The Android app wraps the same web code: see [`web/android/README_ANDROID.md`](web/android/README_ANDROID.md).
