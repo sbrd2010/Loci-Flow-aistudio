@@ -221,3 +221,11 @@ export const IconSquareCheck = (props) => (
     <path d="m9 12 2 2 4-4" />
   </Icon>
 );
+
+// 79: the Time pill on Add task.
+export const IconClock = (props) => (
+  <Icon {...props}>
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16 14" />
+  </Icon>
+);

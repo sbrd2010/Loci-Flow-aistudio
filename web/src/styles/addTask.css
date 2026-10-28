@@ -1,6 +1,5 @@
-/* Add task (45a phone sheet, 45k laptop dialog, 46w Dark). The horizon
-   defaults to where + was tapped; a tinted line says so and the Horizon +
-   Priority block wears a 2px ring for about 1.5s. */
+/* Add task (45a phone sheet, 45k laptop dialog, 46w Dark; 79: Task is
+   Thought's sibling page — the same lined box, then one row of pills). */
 
 .add-overlay {
   position: fixed;
@@ -66,7 +65,6 @@
   flex-direction: column;
   gap: 14px;
 }
-.add-title,
 .add-input {
   box-sizing: border-box;
   width: 100%;
@@ -76,14 +74,6 @@
   border: 1.5px solid var(--control-edge);
   border-radius: var(--radius);
 }
-.add-title {
-  min-height: 52px;
-  padding: 12px 14px;
-  font-size: 1rem;
-  line-height: 1.4;
-  resize: vertical;
-  border-color: var(--accent);
-}
 .add-input {
   min-height: 44px;
   padding: 10px 12px;
@@ -92,27 +82,7 @@
 .add-title::placeholder,
 .add-input::placeholder { color: var(--placeholder); }
 
-.add-note {
-  margin: 0;
-  padding: 10px 12px;
-  font-size: 0.8125rem;
-  line-height: 1.45;
-  color: var(--ink);
-  background: var(--accent-tint);
-  border-radius: 6px;
-}
 
-.add-block {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin: 0 -12px;
-  padding: 12px;
-  border: 2px solid transparent;
-  border-radius: var(--radius);
-  transition: border-color 0.4s;
-}
-.add-block.is-ringed { border-color: var(--accent); }
 
 .add-field {
   display: flex;
@@ -144,12 +114,6 @@
   color: var(--on-accent);
   background: var(--accent);
   border-color: var(--accent);
-}
-.add-row-select {
-  min-height: 44px;
-  font: inherit;
-  font-size: 0.875rem;
-  color: var(--ink);
 }
 /* Try-out 8/9: Other opens a typed time on its own line under the chips. */
 .estimate-other {
@@ -186,17 +150,6 @@
   color: var(--ink);
 }
 .add-row-value { font-size: 0.875rem; }
-.add-row-select {
-  max-width: 60%;
-  padding: 0 4px;
-  text-align: right;
-  text-align-last: right;
-  color: var(--ink-2);
-  background: none;
-  border: 0;
-  appearance: none;
-  cursor: pointer;
-}
 .add-more[aria-expanded="true"] svg { transform: rotate(90deg); }
 .add-more-body {
   display: flex;
@@ -208,22 +161,6 @@
   gap: 8px;
 }
 
-.add-link {
-  align-self: flex-start;
-  min-height: 44px;
-  margin-top: -8px;
-  padding: 0;
-  font: inherit;
-  font-size: 0.8125rem;
-  font-weight: 700;
-  color: var(--ink);
-  background: none;
-  border: 0;
-  cursor: pointer;
-  text-decoration: underline;
-  text-decoration-color: var(--accent);
-  text-underline-offset: 4px;
-}
 .add-suggestion {
   padding: 12px 14px;
   background: var(--accent-tint);
@@ -301,41 +238,9 @@
 }
 .add-error-line { margin: -6px 0 0; font-size: 0.8125rem; color: var(--coral); }
 
-.add-foot {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding-top: 4px;
-}
-/* Try-out 2: the sheet never runs past the window; its body scrolls and
-   "Add to …" stays in view at the bottom (the horizon chips wrap rather
-   than run off the right). */
-.add-body > .add-foot {
-  position: sticky;
-  bottom: calc(-20px - env(safe-area-inset-bottom, 0px));
-  z-index: 1;
-  margin-inline: -20px;
-  padding: 12px 20px calc(20px + env(safe-area-inset-bottom, 0px));
-  margin-bottom: calc(-20px - env(safe-area-inset-bottom, 0px));
-  background: var(--bg);
-  border-top: 1px solid var(--line);
-}
-.add-submit {
-  flex: 1;
-  min-height: 52px;
-  font: inherit;
-  font-size: 1rem;
-  font-weight: 800;
-  color: var(--on-accent);
-  background: var(--accent);
-  border: 1px solid var(--accent-edge);
-  border-radius: var(--radius);
-  cursor: pointer;
-}
 .add-saved {
-  flex: 1;
   margin: 0;
-  padding: 14px;
+  padding: 8px 14px;
   font-weight: 800;
   text-align: center;
   color: var(--ink);
@@ -344,6 +249,7 @@
 }
 .add-kbd {
   display: none;
+  margin-right: 6px;
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   color: var(--gold-label);
@@ -363,7 +269,20 @@
   box-shadow: inset 0 0 0 0.5px var(--accent);
 }
 
-/* Laptop and wide tablet: a 520px dialog, ⌘↵ shown beside the button. */
+.add-submit {
+  flex: 1;
+  min-height: 52px;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 1px solid var(--accent-edge);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+/* Laptop and wide tablet: a 520px dialog (Split, Report a bug, a key). */
 @media (min-width: 840px) {
   .add-overlay { align-items: center; }
   .add-card {
@@ -373,12 +292,25 @@
     border-radius: 12px;
   }
   .add-grabber { display: none; }
-  .add-kbd { display: inline; }
-  .add-body > .add-foot { bottom: -24px; margin: 0 -28px -24px; padding: 12px 28px 24px; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .add-block { transition: none; }
+/* 79, the Add sheet from tablet up: a dialog over the dimmed page, 26% of
+   the width (560–640px). It hangs from 12% down, never centred, so a picker
+   opening grows it downward and the writing box doesn't move. */
+@media (min-width: 840px) {
+  .add-overlay.is-add-sheet {
+    align-items: flex-start;
+    padding-top: calc(max(48px, 12vh) / var(--zoom, 1));
+  }
+  .add-card.is-add-sheet {
+    width: clamp(560px, 26vw, 640px);
+    max-height: calc((100vh - max(48px, 12vh) - 32px) / var(--zoom, 1));
+    padding: 4px 24px 20px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+  }
+  .add-kbd { display: inline; }
+  .is-add-sheet .add-head { min-height: 60px; margin-bottom: 4px; }
 }
 
 /* Q56 (64s–t): Task | Thought. The switch takes the heading's place; the
@@ -412,12 +344,97 @@
 /* 78 §8: the thought uses the Brain dump editor (thoughtEditor.css). */
 .add-thought { display: flex; flex-direction: column; gap: 12px; }
 .add-thought-editor { --te-min: 128px; --te-fs: 19px; }
-/* Try-out 12 Oct: the box stands out from the cream sheet. */
-.add-thought-editor .te-box { background: var(--field); }
-.add-thought-note { margin: 4px 0 0; font-size: 13.5px; line-height: 1.45; color: var(--ink-2); }
-@media (min-width: 840px) {
-  .add-card.is-thought { width: 560px; padding: 22px 24px; }
+/* 79: Task and Thought are one notebook — the same box: accent border,
+   surface fill, ruled lines, tools and button inside. */
+.add-card .te-box { border: 1.5px solid var(--accent); border-radius: 8px; background: var(--surface); }
+.add-task-editor { --te-min: 112px; --te-fs: 19px; }
+.te-field.add-title {
+  display: block;
+  width: 100%;
+  min-height: var(--te-min);
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+  resize: none;
 }
+.add-card textarea.add-title:focus-visible { box-shadow: none; }
+.add-foot-gap { flex: 1; }
+.te-tool.add-improve {
+  width: auto;
+  gap: 6px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+.add-improve svg { color: var(--accent); }
+
+/* The pill row: Horizon, Priority, Time, Front. One line, never wrapped;
+   the front's name gives way first. */
+.add-pills { display: flex; flex-wrap: nowrap; gap: 8px; margin-top: -4px; }
+.add-pill {
+  flex: 0 0 auto;
+  height: 36px;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px 0 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--ink);
+  background: none;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.add-pills > .add-pill:last-child { flex: 0 1 auto; }
+.add-pill svg { flex-shrink: 0; }
+.add-pill-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.add-pill.is-mono { font-family: var(--font-mono); }
+/* Time while empty: a gentle nudge — Day map and Choose for me need it. */
+.add-pill.is-empty { gap: 6px; padding: 0 14px 0 12px; color: var(--accent); background: var(--accent-tint); border: 1.5px dashed var(--accent); }
+.add-pill.is-quiet { font-weight: 600; color: var(--ink-2); border-color: var(--line); }
+.add-pill.is-open { color: var(--ink); background: var(--panel); border: 1.5px solid var(--ink); }
+.add-pill-narrow { display: none; }
+
+.add-picker { margin-top: -4px; padding: 12px; background: var(--panel); border-radius: 12px; }
+.add-picker-label {
+  margin: 0 0 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--ink-2);
+}
+.add-picker .add-chip { min-height: 40px; }
+.add-time-chips { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.add-time-chips > .add-chip { min-height: 36px; padding: 0; font-family: var(--font-mono); font-size: 13px; border-radius: 8px; }
+.add-time-chips > button:last-of-type { font-family: var(--font-sans); }
+.add-time-chips .estimate-other { grid-column: 1 / -1; }
+
+/* 360–399px phones: tighter pills, shorter words, no clock. */
+@media (max-width: 399px) {
+  .add-pills { gap: 6px; }
+  .add-pill { padding: 0 8px 0 11px; }
+  .add-pill-wide, .add-pill-clock { display: none; }
+  .add-pill-narrow { display: inline; }
+}
+/* Short phones (under 760 tall, e.g. 375×667): the times are one scrolling
+   row and More details steps aside while a picker is open, so everything
+   stays above the keyboard. */
+@media (max-width: 839px) and (max-height: 759px) {
+  .add-time-picker { padding: 10px 0 10px 12px; }
+  .add-time-picker .add-picker-label { display: none; }
+  .add-time-chips { display: flex; flex-wrap: nowrap; overflow-x: auto; }
+  .add-time-chips > .add-chip { flex: 0 0 auto; min-height: 40px; padding: 0 12px; }
+  .add-time-chips .estimate-other { flex: 0 0 auto; }
+  .add-more.is-picker-open { display: none; }
+}
+.add-thought-note { margin: 4px 0 0; font-size: 13.5px; line-height: 1.45; color: var(--ink-2); }
 @media (max-width: 839px) {
   .add-seg-btn { min-height: 48px; }
 }

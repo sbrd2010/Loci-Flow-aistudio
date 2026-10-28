@@ -172,7 +172,7 @@ test("Add to this front opens Add task on that front, and the new task lands on 
   await card(page, "Thesis").click();
 
   await page.getByRole("button", { name: "Add to this front" }).click();
-  await expect(page.locator("#task-front option:checked")).toHaveText("Thesis");
+  await expect(page.getByRole("dialog", { name: "New task" }).getByRole("button", { name: "Front: Thesis" })).toBeVisible();
   await page.getByTestId("add-task-title").fill("Draft the methods section");
   await page.getByTestId("add-task-submit").click();
 

@@ -2,8 +2,12 @@ import { test, expect } from "@playwright/test";
 import { openRung } from "./helpers/plan.js";
 import { sidewaysScrollers } from "./helpers/overflow";
 
-// Add task (45a phone sheet, 45k laptop dialog). Demo mode: nothing reaches
-// Firebase. The horizon defaults to where + was tapped, and the sheet says so.
+// Add task (45a phone sheet, 45k laptop dialog; 79 the notebook box and a row
+// of pills). Demo mode: nothing reaches Firebase. The horizon defaults to
+// where + was tapped, and the Horizon pill says so.
+
+// 79: Horizon, Priority, Time and Front are pills; a tap opens that picker.
+const openPicker = (dialog, name) => dialog.getByRole("button", { name: new RegExp(`^${name}:`) }).click();
 
 async function enterDemo(page, viewport = { width: 412, height: 892 }) {
   await page.addInitScript(() => {
@@ -42,36 +46,41 @@ async function openFromToday(page) {
   await expect(page.getByRole("dialog", { name: "New task" })).toBeVisible({ timeout: 5_000 });
 }
 
-test("opened from Today: it says so, rings the horizon block, and the button names the horizon", async ({ page }) => {
+test("opened from Today: the Horizon pill says so, and the button names the horizon", async ({ page }) => {
   await enterDemo(page);
   await openFromToday(page);
   const dialog = page.getByRole("dialog", { name: "New task" });
-  await expect(dialog.locator(".add-note")).toHaveText("Adding to Today because you opened it from Today. Change below.");
-  await expect(dialog.getByRole("button", { name: "Today", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await expect(dialog.locator(".add-block")).toHaveClass(/is-ringed/);
-  await expect(dialog.locator(".add-block")).not.toHaveClass(/is-ringed/, { timeout: 4_000 });
+  await expect(dialog.getByRole("button", { name: "Horizon: Today" })).toHaveText("Today");
   await expect(dialog.getByTestId("add-task-submit")).toHaveText("Add to Today");
+  // Nothing typed yet: the button waits; Time nudges while it's empty.
+  await expect(dialog.getByTestId("add-task-submit")).toBeDisabled();
+  await expect(dialog.getByRole("button", { name: "Time: not set" })).toHaveClass(/is-empty/);
 
-  // Changing the horizon changes the button, and the task lands there.
+  // Changing the horizon changes the pill and the button, and the task lands there.
+  await openPicker(dialog, "Horizon");
+  await expect(dialog.getByRole("button", { name: "Today", exact: true })).toHaveAttribute("aria-pressed", "true");
   await dialog.getByRole("button", { name: "Week", exact: true }).click();
+  await expect(dialog.getByRole("button", { name: "Week", exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Horizon: Week" })).toBeVisible();
   await expect(dialog.getByTestId("add-task-submit")).toHaveText("Add to This week");
   await dialog.getByTestId("add-task-title").fill("Book the Lisbon train");
+  await openPicker(dialog, "Time");
   await dialog.getByRole("button", { name: "1h", exact: true }).click();
+  await expect(dialog.getByRole("button", { name: /^Time: 1h/ })).toBeVisible();
   await dialog.getByTestId("add-task-submit").click();
   await expect(page.locator(".add-card")).toHaveCount(0, { timeout: 5_000 });
   await expect(page.getByTestId("today-tasks-list").getByText("Book the Lisbon train")).toHaveCount(0);
 });
 
-test("opened from Plan: the note names the column it came from", async ({ page }) => {
+test("opened from Plan: the Horizon pill names the column it came from", async ({ page }) => {
   await enterDemo(page);
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
   await page.getByRole("tab", { name: "Horizons" }).click();
   await openRung(page, "week");
   await page.getByRole("button", { name: "Add to This week" }).click();
   const dialog = page.getByRole("dialog", { name: "New task" });
-  await expect(dialog.locator(".add-note")).toContainText(/because you opened it from Plan · /);
-  const pressed = (await dialog.locator(".add-block [aria-pressed='true']").first().innerText()).trim();
-  expect(["Today", "Week", "Month", "Quarter", "6 mo", "Work"]).toContain(pressed);
+  const pill = (await dialog.getByRole("button", { name: /^Horizon:/ }).innerText()).trim();
+  expect(["Week", "This week"]).toContain(pill);
 });
 
 test("a phone gets a bottom sheet; Escape closes it and Tab stays inside", async ({ page }) => {
@@ -89,14 +98,21 @@ test("a phone gets a bottom sheet; Escape closes it and Tab stays inside", async
   await expect(card).toHaveCount(0);
 });
 
-test("a laptop gets a 520px dialog, and ⌘↵ adds the task", async ({ page }) => {
+// 79: 26% of the width, 560–640px, hung 12% from the top (never centred).
+test("a laptop gets a 560px dialog hung from the top, and ⌘↵ adds the task", async ({ page }) => {
   await enterDemo(page, { width: 1280, height: 800 });
   await page.keyboard.press("n");
   const dialog = page.getByRole("dialog", { name: "New task" });
   await expect(dialog).toBeVisible();
   const box = await page.locator(".add-card").boundingBox();
-  expect(Math.round(box.width)).toBe(520);
-  expect(Math.round(box.x)).toBe((1280 - 520) / 2);
+  expect(Math.round(box.width)).toBe(560);
+  expect(Math.round(box.x)).toBe((1280 - 560) / 2);
+  expect(Math.round(box.y)).toBe(96);
+  // Opening a picker grows it downward; the writing box doesn't move.
+  const field = await dialog.getByTestId("add-task-title").boundingBox();
+  await openPicker(dialog, "Time");
+  expect((await dialog.getByTestId("add-task-title").boundingBox()).y).toBe(field.y);
+  await openPicker(dialog, "Time");
   await expect(dialog.locator(".add-kbd")).toBeVisible();
   await dialog.getByTestId("add-task-title").fill("Reply to Prof. Hale about the draft");
   await page.keyboard.press("Control+Enter");
@@ -126,7 +142,10 @@ test("an AI suggestion of P4 and 45m shows P4 and opens Other at 45m", async ({ 
   await dialog.getByRole("button", { name: "Ask AI to improve this" }).click();
   await dialog.getByRole("button", { name: "Apply", exact: true }).click();
 
+  await expect(dialog.getByRole("button", { name: "Priority: P4" })).toBeVisible();
+  await openPicker(dialog, "Priority");
   await expect(dialog.getByRole("button", { name: "Priority 4" })).toHaveAttribute("aria-pressed", "true");
+  await openPicker(dialog, "Time");
   await expect(dialog.getByRole("button", { name: "45m", exact: true })).toHaveAttribute("aria-pressed", "true");
 });
 
@@ -145,6 +164,7 @@ test("a task added without choosing a time is saved with no estimate", async ({ 
   await openFromToday(page);
   const dialog = page.getByRole("dialog", { name: "New task" });
   await dialog.getByTestId("add-task-title").fill("Sort the museum receipts");
+  await openPicker(dialog, "Time");
   for (const name of ["5m", "15m", "25m", "30m", "45m", "1h", "1h30m", "2h", "3h", "Other"]) {
     await expect(dialog.getByRole("button", { name, exact: true })).toHaveAttribute("aria-pressed", "false");
   }
@@ -189,6 +209,7 @@ test("Other takes a typed time, and that time is what is saved", async ({ page }
   await openFromToday(page);
   const dialog = page.getByRole("dialog", { name: "New task" });
   await dialog.getByTestId("add-task-title").fill("Label the seed trays");
+  await openPicker(dialog, "Time");
   await dialog.getByRole("button", { name: "Other", exact: true }).click();
   const other = dialog.getByLabel("Other time");
   await expect(other).toBeFocused();
@@ -217,6 +238,7 @@ test("a chip tapped over a half-typed Other wins, and a typed chip length shows 
   await enterDemo(page, { width: 1280, height: 800 });
   await openFromToday(page);
   const dialog = page.getByRole("dialog", { name: "New task" });
+  await openPicker(dialog, "Time");
   await dialog.getByRole("button", { name: "Other", exact: true }).click();
   const other = dialog.getByLabel("Other time");
   await expect(other).toBeFocused();
@@ -287,23 +309,26 @@ test("N and + open on Task; the switch is there", async ({ page }) => {
 });
 
 // Try-out 2: the sheet never runs past the window. With More details and
-// Other open, its body scrolls and "Add to …" stays in view; nothing scrolls
-// sideways.
+// Other open, its body scrolls; nothing scrolls sideways. (79: "Add to …" is
+// in the writing box, so it is in view from the top.)
 for (const viewport of [{ width: 1280, height: 720 }, { width: 412, height: 760 }]) {
-  test(`${viewport.width}×${viewport.height}: the sheet fits the window, Add to … always in view`, async ({ page }) => {
+  test(`${viewport.width}×${viewport.height}: the sheet fits the window, Add to … in the writing box`, async ({ page }) => {
     await enterDemo(page, viewport);
     await openFromToday(page);
     const dialog = page.getByRole("dialog", { name: "New task" });
+    await openPicker(dialog, "Time");
     await dialog.getByRole("button", { name: "Other", exact: true }).click();
     await dialog.getByRole("button", { name: "More details" }).click();
     for (const where of ["top", "bottom"]) {
       await page.locator(".add-card").evaluate((el, w) => { el.scrollTop = w === "top" ? 0 : el.scrollHeight; }, where);
-      const fit = await page.evaluate(() => {
+      const fit = await page.evaluate((w) => {
         const card = document.querySelector(".add-card").getBoundingClientRect();
-        const btn = document.querySelector(".add-submit").getBoundingClientRect();
+        if (card.bottom > innerHeight + 1) return false;
+        if (w === "bottom") return true;
+        const btn = document.querySelector(".add-task-submit").getBoundingClientRect();
         const at = document.elementFromPoint((btn.left + btn.right) / 2, (btn.top + btn.bottom) / 2);
-        return card.bottom <= innerHeight + 1 && btn.bottom <= card.bottom + 1 && !!at?.closest(".add-submit");
-      });
+        return !!at?.closest(".add-task-submit");
+      }, where);
       expect(fit, where).toBe(true);
     }
     expect(await sidewaysScrollers(page)).toEqual([]);
@@ -328,6 +353,7 @@ test("Other left empty closes; an AI suggestion after a typed time is what shows
   await openFromToday(page);
   const dialog = page.getByRole("dialog", { name: "New task" });
   const other = dialog.getByRole("button", { name: "Other", exact: true });
+  await openPicker(dialog, "Time");
   await dialog.getByRole("button", { name: "30m", exact: true }).click();
   await other.click();
   await expect(other).toHaveAttribute("aria-pressed", "true");
@@ -451,6 +477,7 @@ test("⌘↵ in Other adds the task with the typed time", async ({ page }) => {
   await page.keyboard.press("n");
   const dialog = page.getByRole("dialog", { name: "New task" });
   await dialog.getByTestId("add-task-title").fill("Water the balcony plants");
+  await openPicker(dialog, "Time");
   await dialog.getByRole("button", { name: "30m", exact: true }).click();
   await dialog.getByRole("button", { name: "Other", exact: true }).click();
   await dialog.getByLabel("Other time").fill("40");
