@@ -418,8 +418,9 @@ export default function TodayWall({
             <ul className="wall-pick-list">
               {picks.map(t => (
                 <li key={t.uuid}>
-                  <button type="button" className="wall-pick-row" onClick={() => onPick?.(t)}>
+                  <button type="button" className={`wall-pick-row${t.why ? " is-loci-pick" : ""}`} onClick={() => onPick?.(t)}>
                     <span className="wall-pick-body">
+                      {t.why && <span className="wall-pick-label">Loci’s pick</span>}
                       <span className="wall-pick-title">{t.title}</span>
                       {t.why && <span className="wall-pick-why">{t.why}</span>}
                     </span>
