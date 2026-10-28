@@ -722,7 +722,7 @@ export function deleteFailedText(err) {
 }
 
 const DELETE_ALL_MESSAGE = "Delete all your Loci data?\n\n"
-  + "Your tasks, plans, Coach chats and memory, Mind Box and focus history are deleted from Loci on every device, and your Loci account is removed.\n\n"
+  + "Your tasks, plans, Coach chats and memory, Mind Box and focus history are deleted from Loci and from this device, and your Loci account is removed. Your other devices are signed out.\n\n"
   + "A copy is kept for 30 days, so we can restore your account if you email us. After that it's erased for good.\n\n"
   + "Bug reports you sent are kept for up to 12 months. Email us to have them deleted sooner.\n\n"
   + "Next, Google asks you to sign in again to confirm.";
@@ -799,7 +799,7 @@ export function DataPage({ payload, email, lastSyncLabel, onSyncNow, onResetTrac
             <div className="set-row is-static">
               <span className="set-row-text">
                 <span className="set-row-title">Delete all my data</span>
-                <span className="set-row-sub">Your tasks, Coach chats and history, on every device, and your account.</span>
+                <span className="set-row-sub">Your tasks, Coach chats, history and account. Other devices are signed out.</span>
               </span>
               <button type="button" className="set-text-danger" disabled={deleting} onClick={startDelete}>{deleting ? "Deleting…" : "Delete"}</button>
             </div>
