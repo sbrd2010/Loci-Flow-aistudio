@@ -343,8 +343,9 @@ async function emptyTheWall(page) {
   await expect(page.locator(".wall-pick")).toBeVisible({ timeout: 8_000 });
 }
 
-// 67i: with no one thing, the top three open tasks, in the list's order, are
-// one tap from being the one thing, with Undo. No Start.
+// 67i/#613: with no one thing, three open tasks are one tap from being the
+// one thing, with Undo. No Start. Loci's own pick comes first, with why, and
+// "Choose for me" makes it the one thing.
 test("mobile reliability: no one thing: pick from the top three, with Undo", async ({ page }) => {
   await emptyTheWall(page);
   await expect(page.locator(".wall-empty-title")).toHaveText("Pick what to do now");
@@ -354,13 +355,22 @@ test("mobile reliability: no one thing: pick from the top three, with Undo", asy
   const listTitles = (await page.getByTestId("today-tasks-list").locator("[data-testid='task-row']:not(.completed) .task-title-text").allInnerTexts()).map(t => t.trim());
   const picks = page.locator(".wall-pick-row");
   await expect(picks).toHaveCount(Math.min(3, listTitles.length));
-  await expect(page.locator(".wall-pick-title")).toHaveText(listTitles.slice(0, 3));
+  const pickTitles = (await page.locator(".wall-pick-title").allInnerTexts()).map(t => t.trim());
+  for (const t of pickTitles) expect(listTitles).toContain(t);
+  // Only the first pick says why.
+  await expect(page.locator(".wall-pick-why")).toHaveCount(1);
+  await expect(picks.first().locator(".wall-pick-why")).not.toBeEmpty();
   await expect(page.locator(".wall-pick-all")).toHaveText(`All ${listTitles.length} tasks`);
 
-  const second = listTitles[1];
+  const second = pickTitles[1];
   await picks.nth(1).click();
   await expect(page.locator(".wall-title")).toHaveText(second);
   await expect(page.getByRole("status").filter({ hasText: `Your now task: ${second}` })).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.locator(".wall-pick")).toBeVisible({ timeout: 8_000 });
+
+  await page.getByRole("button", { name: "Choose for me" }).click();
+  await expect(page.locator(".wall-title")).toHaveText(pickTitles[0]);
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.locator(".wall-pick")).toBeVisible({ timeout: 8_000 });
 });

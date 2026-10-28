@@ -419,12 +419,21 @@ export default function TodayWall({
               {picks.map(t => (
                 <li key={t.uuid}>
                   <button type="button" className="wall-pick-row" onClick={() => onPick?.(t)}>
-                    <span className="wall-pick-title">{t.title}</span>
+                    <span className="wall-pick-body">
+                      <span className="wall-pick-title">{t.title}</span>
+                      {t.why && <span className="wall-pick-why">{t.why}</span>}
+                    </span>
                     {t.minutes > 0 && <span className="wall-pick-dur">{t.minutes} MIN</span>}
                   </button>
                 </li>
               ))}
             </ul>
+            {/* #613: not sure which? Loci's pick (the first, with its reason) becomes the one thing. */}
+            {picks.length > 1 && (
+              <button type="button" className="wall-empty-add wall-pick-choose" onClick={() => onPick?.(picks[0])}>
+                Choose for me
+              </button>
+            )}
             {onShowAll && (
               <button type="button" className="wall-link wall-pick-all" onClick={onShowAll}>
                 All {openCount} {openCount === 1 ? "task" : "tasks"}

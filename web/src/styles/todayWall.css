@@ -542,7 +542,11 @@
 }
 .wall-pick-row:hover { background: var(--panel); }
 .wall-pick-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.wall-pick-title { flex: 1; min-width: 0; font-size: 1rem; font-weight: 700; line-height: 1.3; }
+.wall-pick-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.wall-pick-title { min-width: 0; font-size: 1rem; font-weight: 700; line-height: 1.3; }
+/* Why Loci would pick the first one (#613): quiet, under its title. */
+.wall-pick-why { font-size: 0.8125rem; line-height: 1.35; color: var(--ink-2); }
+.wall-pick-choose { align-self: flex-start; }
 .wall-pick-dur {
   flex: 0 0 auto;
   font-family: var(--font-mono);
