@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { auth, track, setAnalyticsUser } from "./firebase";
+import { auth, db, track, setAnalyticsUser } from "./firebase";
 import { getCategoryKeyForTrack } from "./utils/soundLibrary";
 import { computeUserProfile } from "./utils/userProfile";
 import { useAppScale } from "./hooks/useAppScale";
 import { scheduleAllReminders, scheduleCoachCheckin, cancelCoachCheckin, checkDailyCheckinNotifications, scheduleDailyCheckins, cancelDailyCheckins, cancelAllNativeScheduling, VISIBLE_HEARTBEAT_KEY, DAILY_CHECKIN_SLOTS } from "./utils/reminders";
 import { isNativeApp, refreshNativePermission, addNativeNotificationClickListener, NATIVE_PERMISSION_GRANTED_EVENT } from "./utils/nativeNotifs";
-import { signInWithGoogleNative } from "./utils/nativeAuth";
+import { signInWithGoogleNative, reauthenticateWithGoogleNative } from "./utils/nativeAuth";
+import { deleteAllMyData, clearLocalLociData } from "./utils/deleteAccount";
 import { isCheckinDue, buildCheckinResumeMessage, isDuplicateCheckinResume } from "./utils/coachCheckin";
 import { getFocusWindows, getLociDayStr, getLociNowMinutes, getOverallSpan } from "./utils/focusWindows";
 import { buildWallCommitmentSave } from "./utils/dailyCoachCheckins";
 import { deriveCommitmentDeadlineMove } from "./utils/deadlineCountdown";
 import { createDemoPayload } from "./utils/demoData";
-import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "firebase/auth";
+import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut, reauthenticateWithPopup, deleteUser } from "firebase/auth";
 import { useSync, CONN } from "./useSync";
 import { useFocusAudio } from "./hooks/useFocusAudio";
 import Header from "./components/Header";
@@ -392,7 +393,7 @@ export default function App() {
 
   // Load the sync payload from RTDB (skipped in demo mode — uid is null)
   const {
-    payload: rtdbPayload, loading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning: rtdbSyncWarning,
+    payload: rtdbPayload, loading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning: rtdbSyncWarning, accountDeleted,
     savePayload: rtdbSave, savePayloadAsync: rtdbSaveAsync,
     saveSubPath: rtdbSaveSub,
     saveSubPaths: rtdbSaveSubs, saveSubPathsAsync: rtdbSaveSubsAsync,
@@ -1155,6 +1156,38 @@ export default function App() {
     signOut(auth).then(() => { setUser(null); setActiveTab("today"); });
   };
 
+  // #612: once the account is deleted (here or on another device), nothing of
+  // it stays on this device. If the sign-in record survived (a refresh
+  // mid-delete), removing it is tried again: it only works after a recent
+  // sign-in, which signing in again to a deleted account is. Clearing and
+  // reloading run back to back, so no save can put the local copy back.
+  const leaveDeletedAccount = () => {
+    cancelAllNativeScheduling();
+    const leftover = auth.currentUser;
+    (leftover ? deleteUser(leftover).catch(() => {}) : Promise.resolve())
+      .then(() => signOut(auth)).catch(() => {}).finally(() => {
+      clearOpenSession();
+      dropHeldEvent();
+      clearLocalLociData();
+      window.location.reload();
+    });
+  };
+  // While this device is deleting, its own sync sees the account go: it must
+  // not sign out before the sign-in record is removed too.
+  const deletingAccountRef = useRef(false);
+  const handleDeleteAllData = () => {
+    deletingAccountRef.current = true;
+    return deleteAllMyData({
+      db,
+      user: auth.currentUser,
+      reauthenticate: (u) => (isNativeApp() ? reauthenticateWithGoogleNative(u) : reauthenticateWithPopup(u, new GoogleAuthProvider())),
+    }).then(leaveDeletedAccount, (err) => {
+      if (err?.message !== "account_left") deletingAccountRef.current = false;
+      throw err;
+    });
+  };
+  useEffect(() => { if (accountDeleted && !deletingAccountRef.current) leaveDeletedAccount(); }, [accountDeleted]);
+
   const openAddTask = (horizon = "today", from = null, frontId = null) => {
     setPreselectedHorizon(horizon);
     setPreselectedFrontId(frontId);
@@ -1673,6 +1706,8 @@ export default function App() {
             saveConfigPatch={saveConfigPatch}
             lastSyncedAt={lastSyncedAt}
             onSignOut={demoMode ? exitDemo : handleSwitchUser}
+            onDeleteAllData={demoMode ? null : handleDeleteAllData}
+            onLeaveDeletedAccount={leaveDeletedAccount}
             theme={theme}
             onThemeChange={setTheme}
             email={demoMode ? null : user?.email}

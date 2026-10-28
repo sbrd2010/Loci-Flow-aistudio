@@ -62,7 +62,7 @@ function shortDeadline(dateStr) {
   return new Date(y, m - 1, d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-export default function SettingsTab({ initialPage = null, payload, savePayload, savePayloadAsync, uid, writeActivityEvents, saveSubPath, saveConfigPatch, lastSyncedAt, onSignOut, theme, onThemeChange, email, flushNow }) {
+export default function SettingsTab({ initialPage = null, payload, savePayload, savePayloadAsync, uid, writeActivityEvents, saveSubPath, saveConfigPatch, lastSyncedAt, onSignOut, onDeleteAllData, onLeaveDeletedAccount, theme, onThemeChange, email, flushNow }) {
   const config = payload.config || {};
   const lociDay = getLociDayStr(new Date(), getFocusWindows(config));
   const [editHorizons, setEditHorizons] = useState(false);
@@ -100,8 +100,8 @@ export default function SettingsTab({ initialPage = null, payload, savePayload, 
   const activeCount = (payload.tasks || []).filter(t => !t.isDeleted && !t.isCompleted).length;
   const memoryCount = (config.coachMemory?.pinnedFacts || []).length + (config.coachMemory?.recentObservations || []).length;
   const who = coachName(config);
-  const askConfirm = ({ message, confirmLabel, onConfirm }) => setConfirm({
-    message, confirmLabel, cancelLabel: "Cancel",
+  const askConfirm = ({ message, confirmLabel, onConfirm, danger = false }) => setConfirm({
+    message, confirmLabel, cancelLabel: "Cancel", danger,
     onConfirm: () => { setConfirm(null); onConfirm(); },
     onCancel: () => setConfirm(null),
   });
@@ -191,7 +191,7 @@ export default function SettingsTab({ initialPage = null, payload, savePayload, 
     notifications: () => <NotificationsPage permission={permission} onRequest={requestPermission} onBack={back} />,
     data: () => (
       <DataPage payload={payload} email={email} lastSyncLabel={syncLabel} onSyncNow={flushNow} onResetTracking={resetTracking} onBack={back}
-        onRestore={restore} />
+        onRestore={restore} onDeleteAll={onDeleteAllData} onFinishDeleted={onLeaveDeletedAccount} onConfirm={askConfirm} />
     ),
     // Wide-only sections: the groups themselves, as a page.
     day: () => <SubPage title="The day">{dayGroup}</SubPage>,

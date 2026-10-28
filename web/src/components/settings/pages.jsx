@@ -711,8 +711,39 @@ export function NotificationsPage({ permission, onRequest, onBack }) {
 }
 
 // ── Data (44h) ─────────────────────────────────────────────────────────────
-export function DataPage({ payload, email, lastSyncLabel, onSyncNow, onResetTracking, onRestore, onBack }) {
+// #612: why a delete stopped. Every case here deleted nothing.
+export function deleteFailedText(err) {
+  const code = err?.code || "";
+  if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return "Sign-in was cancelled. Nothing was deleted.";
+  if (code === "auth/popup-blocked") return "Your browser blocked the sign-in window. Allow pop-ups for Loci and try again. Nothing was deleted.";
+  if (code === "auth/user-mismatch") return "Sign in with the same Google account you use for Loci. Nothing was deleted.";
+  return "Couldn't delete right now. Check your connection and try again. Nothing was deleted.";
+}
+
+const DELETE_ALL_MESSAGE = "Delete all your Loci data?\n\n"
+  + "Your tasks, plans, Coach chats and memory, Mind Box and focus history are deleted for good, on every device, and your Loci account is removed. This can't be undone.\n\n"
+  + "Bug reports you sent are kept for up to 12 months. Email us to have them deleted sooner.\n\n"
+  + "Next, Google asks you to sign in again to confirm.";
+
+export function DataPage({ payload, email, lastSyncLabel, onSyncNow, onResetTracking, onRestore, onDeleteAll, onFinishDeleted, onConfirm, onBack }) {
   const [exportError, setExportError] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [accountLeft, setAccountLeft] = useState(false);
+  const startDelete = () => onConfirm?.({
+    message: DELETE_ALL_MESSAGE,
+    confirmLabel: "Delete everything",
+    danger: true,
+    onConfirm: () => {
+      setDeleting(true);
+      setDeleteError("");
+      onDeleteAll().catch(err => {
+        setDeleting(false);
+        if (err?.message === "account_left") setAccountLeft(true);
+        else setDeleteError(deleteFailedText(err));
+      });
+    },
+  });
   const active = (payload.tasks || []).filter(t => !t.isDeleted && !t.isCompleted).length;
   const dropped = recentlyDropped(payload.tasks || []);
   const run = (fn) => { setExportError(""); try { fn(); } catch { setExportError("Export failed. Your tasks were not changed."); } };
@@ -752,6 +783,28 @@ export function DataPage({ payload, email, lastSyncLabel, onSyncNow, onResetTrac
           <button type="button" className="set-text-danger" onClick={onResetTracking}>Reset</button>
         </div>
       </Group>
+      {onDeleteAll && (
+        <Group label="Delete" note="Download a backup first if you want to keep a copy.">
+          {accountLeft ? (
+            <div className="set-row is-static">
+              <span className="set-row-text">
+                <span className="set-row-title">Your data is deleted</span>
+                <span className="set-row-sub">Loci couldn't remove your sign-in record. Email rohandas.iitkgp@gmail.com and we'll remove it.</span>
+              </span>
+              <button type="button" className="set-text-action" onClick={() => onFinishDeleted?.()}>Finish</button>
+            </div>
+          ) : (
+            <div className="set-row is-static">
+              <span className="set-row-text">
+                <span className="set-row-title">Delete all my data</span>
+                <span className="set-row-sub">Your tasks, Coach chats and history, on every device, and your account.</span>
+              </span>
+              <button type="button" className="set-text-danger" disabled={deleting} onClick={startDelete}>{deleting ? "Deleting…" : "Delete"}</button>
+            </div>
+          )}
+        </Group>
+      )}
+      {deleteError && <p className="set-window-hint" role="alert">{deleteError}</p>}
     </SubPage>
   );
 }

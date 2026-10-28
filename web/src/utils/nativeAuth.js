@@ -21,7 +21,7 @@
 // web/android/README_ANDROID.md's Google Sign-In setup section. Without
 // that, this rejects with a clear error rather than failing silently.
 
-import { GoogleAuthProvider, signInWithCredential } from "firebase/auth";
+import { GoogleAuthProvider, signInWithCredential, reauthenticateWithCredential } from "firebase/auth";
 import { isNativeApp } from "./nativeNotifs";
 
 async function FirebaseAuthentication() {
@@ -43,4 +43,15 @@ export async function signInWithGoogleNative(auth) {
   if (!idToken) throw new Error("no_id_token");
   const credential = GoogleAuthProvider.credential(idToken);
   return signInWithCredential(auth, credential);
+}
+
+// #612: deleting an account needs a fresh sign-in. Same native flow, but it
+// re-proves the signed-in user instead of signing in.
+export async function reauthenticateWithGoogleNative(user) {
+  if (!isNativeApp()) throw new Error("reauthenticateWithGoogleNative called outside the native app");
+  const FA = await FirebaseAuthentication();
+  const result = await FA.signInWithGoogle();
+  const idToken = result?.credential?.idToken;
+  if (!idToken) throw new Error("no_id_token");
+  return reauthenticateWithCredential(user, GoogleAuthProvider.credential(idToken));
 }

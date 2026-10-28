@@ -32,7 +32,7 @@ export default function PrivacyPolicy({ onClose }) {
           },
           {
             title: "Bug reports",
-            body: "If you send a bug report, or report a Coach reply, what's in the form is stored in Firebase with your account ID and email: what you write and, for a reply, your message and the reply, which you can see and edit before sending. Only the developer can read reports."
+            body: "If you send a bug report, or report a Coach reply, what's in the form is stored in Firebase with your account ID and email: what you write and, for a reply, your message and the reply, which you can see and edit before sending. Only the developer can read reports. Reports are kept for up to 12 months, and deleting your data does not remove them: email us and we'll delete yours sooner."
           },
           {
             title: "Analytics",
@@ -48,11 +48,11 @@ export default function PrivacyPolicy({ onClose }) {
           },
           {
             title: "Deleting your data",
-            body: "Sign out and contact us to delete your account data from Firebase. You can also delete tasks directly within the app."
+            body: "Settings › Data › Delete all my data deletes your tasks, plans, Coach chats and memory, Mind Box and focus history from Firebase and from that device, and removes your Loci account. Other devices sign out the next time they connect. Only a record of when the account was deleted is kept, so its data can't be written back. Bug reports are handled as described above."
           },
           {
             title: "Contact",
-            body: "Questions? Email rohandas.iitkgp@gmail.com or open an issue on GitHub."
+            body: "Questions? Email rohandas.iitkgp@gmail.com."
           }
         ].map(({ title, body }) => (
           <div key={title}>

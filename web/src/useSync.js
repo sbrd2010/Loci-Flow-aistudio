@@ -5,6 +5,7 @@ import { safeUUID } from "./utils/uuid";
 import { normalizePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious, configValuesEqual, mergeLocalIntoServer, clampConfigStringsForRules, sanitizeChatHistoryForRules, applyEditsSince } from "./utils/normalizePayload";
 import { createResendPolicy } from "./utils/resendPolicy";
 import { activitySnapshotPath, activityMetaPath, activityEventPath, buildTodaySnapshot } from "./utils/activityLog";
+import { tombstonePath } from "./utils/deleteAccount";
 
 // Connection phase exposed to UI: "connecting" | "connected" | "offline" | "error"
 // This lets the app show specific messages at each stage instead of just "loading".
@@ -230,6 +231,8 @@ export function useSync(uid, email) {
   // Non-null when RTDB is unreachable with cached data ("offline") or a write failed ("write-failed").
   // Cleared on every successful RTDB delivery.
   const [syncWarning, setSyncWarning] = useState(null);
+  // #612: set when this account was deleted, here or on another device.
+  const [accountDeleted, setAccountDeleted] = useState(false);
   const markWriteFailed = () => { resendRef.current.noteFailure(); setSyncWarning("write-failed"); };
 
   const dbRefPath = uid ? `sync/${uid}` : null;
@@ -491,6 +494,13 @@ export function useSync(uid, email) {
       setLastSyncedAt(Date.now());
 
       const data = snapshot.val();
+
+      // #612: an empty path can mean the account was deleted, on this device
+      // or another. The rules already refuse to write it back; this tells the
+      // app, so it signs out instead of showing a copy that can't be saved.
+      if (!data) {
+        get(ref(db, tombstonePath(uid))).then(s => { if (s.exists()) setAccountDeleted(true); }).catch(() => {});
+      }
 
       if (!timeoutRef.current) {
         if (data) {
@@ -1153,7 +1163,7 @@ export function useSync(uid, email) {
   const effectivePayload = gatePayloadToUid(payload, payloadUidRef.current, uid);
   const effectiveLoading = loading || (!!uid && payloadUidRef.current !== uid);
   return {
-    payload: effectivePayload, loading: effectiveLoading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning,
+    payload: effectivePayload, loading: effectiveLoading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning, accountDeleted,
     savePayload, savePayloadAsync,
     saveSubPath, saveSubPathAsync,
     saveSubPaths, saveSubPathsAsync,
