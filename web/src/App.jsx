@@ -1181,6 +1181,9 @@ export default function App() {
   const deletingAccountRef = useRef(false);
   const deletingUidRef = useRef(null);
   const handleDeleteAllData = () => {
+    // Send this device's waiting save now: it lands during the sign-in, so
+    // the 30-day copy read after it includes it (Codex review of #620).
+    flushNow();
     deletingAccountRef.current = true;
     deletingUidRef.current = auth.currentUser?.uid || null;
     return deleteAllMyData({
