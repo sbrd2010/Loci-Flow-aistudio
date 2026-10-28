@@ -310,7 +310,10 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
     }
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); formRef.current?.requestSubmit(); return; }
     if (e.key !== "Tab") return;
-    const items = [...(cardRef.current?.querySelectorAll('button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])') || [])];
+    // Only what is on screen: a short phone hides More details while a picker
+    // is open (Codex review of #621).
+    const items = [...(cardRef.current?.querySelectorAll('button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])') || [])]
+      .filter(el => el.getClientRects().length > 0);
     if (!items.length) return;
     const first = items[0], last = items[items.length - 1];
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
@@ -465,7 +468,7 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
           {/* 79: one row of pills; a tap opens that one picker under the row.
               The horizon comes from where the sheet was opened. */}
           <div className="add-pills" role="group" aria-label="Task settings">
-            <button type="button" className={pillClass("horizon")} aria-expanded={picker === "horizon"} aria-label={`Horizon: ${horizonPillName}`} onClick={() => togglePicker("horizon")}>
+            <button type="button" className={`${pillClass("horizon")} is-shrinkable`} aria-expanded={picker === "horizon"} aria-label={`Horizon: ${horizonPillName}`} onClick={() => togglePicker("horizon")}>
               <span className="add-pill-text">{horizonPillName}</span><IconChevronDown size={14} />
             </button>
             <button type="button" className={`${pillClass("priority")} is-mono`} aria-expanded={picker === "priority"} aria-label={`Priority: ${priority}`} onClick={() => togglePicker("priority")}>

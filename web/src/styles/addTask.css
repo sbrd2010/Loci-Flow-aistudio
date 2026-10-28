@@ -397,7 +397,9 @@
   border-radius: 999px;
   cursor: pointer;
 }
-.add-pills > .add-pill:last-child { flex: 0 1 auto; }
+/* A long custom horizon or front name gives way, so Priority and Time always fit. */
+.add-pills > .add-pill:last-child,
+.add-pill.is-shrinkable { flex: 0 1 auto; }
 .add-pill svg { flex-shrink: 0; }
 .add-pill-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .add-pill.is-mono { font-family: var(--font-mono); }
