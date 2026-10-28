@@ -1947,8 +1947,13 @@ export default function TodayTab({
         // map too, with that Undo (Codex review of #486).
         onPick={(pick) => { const t = tasks.find(x => x.uuid === pick.uuid); if (t) handleMakeOneThing(t); }}
         onShowAll={() => {
-          sheetRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
-          sheetRef.current?.querySelector("[data-testid='task-row']")?.focus({ preventScroll: true });
+          const list = sheetRef.current;
+          if (!list) return;
+          list.scrollIntoView({ block: "start", behavior: "smooth" });
+          list.querySelector("[data-testid='task-row']")?.focus({ preventScroll: true });
+          // On wide screens the list is already beside the wall, so the scroll
+          // does nothing: a brief ring shows where the tasks are.
+          list.animate?.([{ boxShadow: "0 0 0 2px var(--accent)" }, { boxShadow: "0 0 0 2px transparent" }], { duration: 1200, easing: "ease-out" });
         }}
         onAddTask={onOpenAddTask}
         weekCount={wallIsAsking ? weekTasks(tasks).length : 0}
