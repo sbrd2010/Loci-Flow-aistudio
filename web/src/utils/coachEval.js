@@ -16,6 +16,14 @@ export const EVAL_PROVIDERS = {
   gemini: { url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", model: "gemini-3.5-flash-lite", keyEnv: "GEMINI_API_KEY", gapMs: 5000, userFirst: true },
   openrouter: { url: "https://openrouter.ai/api/v1/chat/completions", model: "openrouter/free", keyEnv: "OPENROUTER_API_KEY", gapMs: 4000, reasoningObject: true },
   nvidia: { url: "https://integrate.api.nvidia.com/v1/chat/completions", model: "nvidia/nemotron-3.5-lightning-30b-a3b", keyEnv: "NVIDIA_API_KEY", gapMs: 2000, noThinking: true },
+  // Workers AI's REST twin of the relay's env.AI.run; the account comes from CLOUDFLARE_ACCOUNT_ID.
+  cloudflare: {
+    get url() { return `https://api.cloudflare.com/client/v4/accounts/${(typeof process !== "undefined" && process.env.CLOUDFLARE_ACCOUNT_ID) || "ACCOUNT_ID"}/ai/run/@cf/openai/gpt-oss-120b`; },
+    model: "@cf/openai/gpt-oss-120b", keyEnv: "CLOUDFLARE_API_TOKEN", gapMs: 3000,
+  },
+  // Z.ai as the app calls it today, and with GLM's thinking turned off.
+  zai: { url: "https://api.z.ai/api/paas/v4/chat/completions", model: "glm-4.7-flash", keyEnv: "ZAI_API_KEY", gapMs: 3000 },
+  "zai-nothink": { url: "https://api.z.ai/api/paas/v4/chat/completions", model: "glm-4.7-flash", keyEnv: "ZAI_API_KEY", gapMs: 3000, thinkingOff: true },
 };
 
 // The request body the relay would send for this turn.
@@ -36,6 +44,7 @@ export function evalRequestBody(name, { system, messages }, maxTokens, model, ef
     else body.reasoning_effort = effort;
   }
   if (p.noThinking && /nemotron/i.test(m)) body.chat_template_kwargs = { enable_thinking: false };
+  if (p.thinkingOff) body.thinking = { type: "disabled" };
   return body;
 }
 

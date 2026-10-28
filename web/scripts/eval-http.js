@@ -20,6 +20,10 @@ export function send(provider, body, dir) {
   const raw = existsSync(res) ? readFileSync(res, "utf8") : "";
   const retryAfter = Number((existsSync(hdr) ? readFileSync(hdr, "utf8") : "").match(/^retry-after:\s*([\d.]+)/im)?.[1]) || null;
   let json = null;
-  try { json = JSON.parse(raw); if (Array.isArray(json)) json = json[0]; } catch { /* not JSON */ }
+  try {
+    json = JSON.parse(raw);
+    if (Array.isArray(json)) json = json[0];
+    if (json?.result?.choices) json = json.result; // Cloudflare's REST API wraps the reply
+  } catch { /* not JSON */ }
   return { code, json, raw, retryAfter, ms: Date.now() - started };
 }
