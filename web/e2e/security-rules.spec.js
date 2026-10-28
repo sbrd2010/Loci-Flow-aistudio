@@ -12,7 +12,8 @@ test("reliability: RTDB sync data remains scoped to the signed-in uid", () => {
   const userSyncRules = rules.sync.$userId;
 
   expect(userSyncRules[".read"]).toBe("auth != null && auth.uid === $userId");
-  expect(userSyncRules[".write"]).toBe("auth != null && auth.uid === $userId");
+  // #612: once an account is deleted, its tombstone refuses every later write.
+  expect(userSyncRules[".write"]).toBe("auth != null && auth.uid === $userId && !root.child('activityLogs').child($userId).child('accountDeletedAt').exists()");
   expect(rules.$other[".read"]).toBe(false);
   expect(rules.$other[".write"]).toBe(false);
 });
@@ -49,7 +50,7 @@ test("reliability: activityLogs analytics data remains scoped to the signed-in u
   const activityLogRules = rules.activityLogs.$userId;
 
   expect(activityLogRules[".read"]).toBe("auth != null && auth.uid === $userId");
-  expect(activityLogRules[".write"]).toBe("auth != null && auth.uid === $userId");
+  expect(activityLogRules[".write"]).toBe("auth != null && auth.uid === $userId && !root.child('activityLogs').child($userId).child('accountDeletedAt').exists()");
   expect(rules.$other[".read"]).toBe(false);
   expect(rules.$other[".write"]).toBe(false);
 });

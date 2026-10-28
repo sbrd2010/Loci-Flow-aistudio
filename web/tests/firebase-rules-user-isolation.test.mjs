@@ -206,4 +206,76 @@ test("bug reports: missing or empty 'what' is rejected", async () => {
   );
 });
 
+async function patchRoot(data, idToken) {
+  return jsonFetch(dbUrl("", idToken), { method: "PATCH", body: JSON.stringify(data) });
+}
+
+test("delete all my data (#612): one update removes the data, and nothing can write it back", async () => {
+  const userA = await createAuthUser("delete-a");
+  const userB = await createAuthUser("delete-b");
+  await assertAllowed(await putJson(`sync/${userA.uid}`, validSyncPayload(userA), userA.idToken), "user A should write sync/userA");
+  await assertAllowed(await putJson(`activityLogs/${userA.uid}/events/2026-10-28/e1`, { type: "focus_started" }, userA.idToken), "user A should write an activity event");
+
+  const SERVER_TIME = { ".sv": "timestamp" };
+  const deletion = (uid, payload, deletedAt = SERVER_TIME) => ({
+    [`deletedAccounts/${uid}`]: { deletedAt, email: "kept@example.test", sync: payload },
+    [`sync/${uid}`]: null,
+    [`activityLogs/${uid}`]: { accountDeletedAt: SERVER_TIME },
+  });
+
+  await assertDenied(
+    await patchRoot(deletion(userA.uid, validSyncPayload(userA), Date.now() - 40 * 24 * 60 * 60 * 1000), userA.idToken),
+    "a back-dated copy must be refused, so it can't be purged early"
+  );
+
+  await assertDenied(
+    await patchRoot(deletion(userA.uid, validSyncPayload(userA)), userB.idToken),
+    "user B must not delete user A's data"
+  );
+  await assertDenied(
+    await putJson(`deletedAccounts/${userA.uid}`, { deletedAt: Date.now() }, userA.idToken),
+    "a 30-day copy can only be written together with the deletion"
+  );
+  await assertAllowed(
+    await patchRoot(deletion(userA.uid, validSyncPayload(userA)), userA.idToken),
+    "user A should copy and delete their own data in one update"
+  );
+  await assertDenied(
+    await getJson(`deletedAccounts/${userA.uid}`, userA.idToken),
+    "no app can read the 30-day copy"
+  );
+  await assertDenied(
+    await putJson(`deletedAccounts/${userA.uid}`, { deletedAt: 1 }, userA.idToken),
+    "the 30-day copy cannot be overwritten or back-dated"
+  );
+  await assertDenied(
+    await putJson(`deletedAccounts/${userA.uid}`, null, userA.idToken),
+    "the 30-day copy cannot be removed by the user"
+  );
+
+  const left = await getJson(`sync/${userA.uid}`, userA.idToken);
+  await assertAllowed(left, "user A can still read the empty path");
+  assert.equal(left.body, null, "sync/userA should be gone");
+  const tomb = await getJson(`activityLogs/${userA.uid}/accountDeletedAt`, userA.idToken);
+  await assertAllowed(tomb, "user A's devices can read the tombstone");
+  assert.equal(typeof tomb.body, "number");
+
+  await assertDenied(
+    await putJson(`sync/${userA.uid}`, validSyncPayload(userA), userA.idToken),
+    "a device still signed in must not write the payload back"
+  );
+  await assertDenied(
+    await putJson(`activityLogs/${userA.uid}/events/2026-10-28/e2`, { type: "focus_started" }, userA.idToken),
+    "a device still signed in must not write activity back"
+  );
+  await assertDenied(
+    await putJson(`activityLogs/${userA.uid}/accountDeletedAt`, null, userA.idToken),
+    "the tombstone cannot be removed by the user"
+  );
+  await assertAllowed(
+    await putJson(`sync/${userB.uid}`, validSyncPayload(userB), userB.idToken),
+    "another user is unaffected"
+  );
+});
+
 console.log(`Firebase rules tests ran against project ${PROJECT_ID}, database namespace ${DB_NAMESPACE}.`);

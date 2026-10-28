@@ -1,0 +1,42 @@
+name: Purge expired data (deleted accounts 30 days, bug reports 12 months)
+
+# #612: "Delete all my data" keeps a copy for 30 days so an account can be
+# restored on request. This erases each copy once it is 30 days old, as the
+# privacy policy promises, and bug reports older than 12 months. Daily,
+# about a minute.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: purge-deleted-accounts
+  cancel-in-progress: false
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Test the purge rule
+        run: node --test scripts/purge-deleted-accounts.test.mjs
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_LOCI_FLOW }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Erase expired copies and bug reports
+        run: |
+          set -euo pipefail
+          export FIREBASE_ACCESS_TOKEN="$(gcloud auth print-access-token)"
+          node scripts/purge-deleted-accounts.mjs

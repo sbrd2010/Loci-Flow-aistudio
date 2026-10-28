@@ -20,6 +20,7 @@ vi.mock("firebase/auth", () => ({
     credential: (...args) => credentialMock(...args),
   },
   signInWithCredential: (...args) => signInWithCredentialMock(...args),
+  reauthenticateWithCredential: vi.fn(),
 }));
 
 import { signInWithGoogleNative } from "./nativeAuth";

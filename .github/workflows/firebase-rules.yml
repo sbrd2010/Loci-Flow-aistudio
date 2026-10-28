@@ -25,6 +25,9 @@ jobs:
           distribution: temurin
           java-version: 21
 
+      - name: Test the 30-day purge of deleted accounts
+        run: node --test scripts/purge-deleted-accounts.test.mjs
+
       - name: Run Firebase RTDB rules emulator tests
         run: npx --yes firebase-tools@15.22.1 emulators:exec --project loci-flow --only auth,database "node web/tests/firebase-rules-user-isolation.test.mjs"
 

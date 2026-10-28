@@ -3,7 +3,7 @@
     "sync": {
       "$userId": {
         ".read":  "auth != null && auth.uid === $userId",
-        ".write": "auth != null && auth.uid === $userId",
+        ".write": "auth != null && auth.uid === $userId && !root.child('activityLogs').child($userId).child('accountDeletedAt').exists()",
         ".validate": "newData.hasChildren(['userId', 'tasks', 'config'])",
         "userId": {
           ".validate": "newData.isString() && newData.val().length <= 200"
@@ -55,8 +55,20 @@
     "activityLogs": {
       "$userId": {
         ".read":  "auth != null && auth.uid === $userId",
-        ".write": "auth != null && auth.uid === $userId",
+        ".write": "auth != null && auth.uid === $userId && !root.child('activityLogs').child($userId).child('accountDeletedAt').exists()",
         "$other": { ".validate": true }
+      }
+    },
+    "deletedAccounts": {
+      ".read": false,
+      "$userId": {
+        ".write": "auth != null && auth.uid === $userId && !data.exists() && newData.exists() && !root.child('activityLogs').child($userId).child('accountDeletedAt').exists() && newData.parent().parent().child('activityLogs').child($userId).child('accountDeletedAt').exists()",
+        ".validate": "newData.hasChildren(['deletedAt'])",
+        "deletedAt": { ".validate": "newData.isNumber() && newData.val() <= now && newData.val() > now - 60000" },
+        "email":     { ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 200)" },
+        "sync":         { ".validate": true },
+        "activityLogs": { ".validate": true },
+        "$other": { ".validate": false }
       }
     },
     "bugReports": {

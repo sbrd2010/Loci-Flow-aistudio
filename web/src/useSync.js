@@ -5,6 +5,7 @@ import { safeUUID } from "./utils/uuid";
 import { normalizePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious, configValuesEqual, mergeLocalIntoServer, clampConfigStringsForRules, sanitizeChatHistoryForRules, applyEditsSince } from "./utils/normalizePayload";
 import { createResendPolicy } from "./utils/resendPolicy";
 import { activitySnapshotPath, activityMetaPath, activityEventPath, buildTodaySnapshot } from "./utils/activityLog";
+import { tombstonePath } from "./utils/deleteAccount";
 
 // Connection phase exposed to UI: "connecting" | "connected" | "offline" | "error"
 // This lets the app show specific messages at each stage instead of just "loading".
@@ -230,6 +231,11 @@ export function useSync(uid, email) {
   // Non-null when RTDB is unreachable with cached data ("offline") or a write failed ("write-failed").
   // Cleared on every successful RTDB delivery.
   const [syncWarning, setSyncWarning] = useState(null);
+  // #612: the uid of this account once it is known to be deleted, here or
+  // on another device. The ref stops the restore and first-save writes,
+  // which the rules refuse anyway, from retrying on every empty snapshot.
+  const [accountDeleted, setAccountDeleted] = useState(null);
+  const deletedRef = useRef(false);
   const markWriteFailed = () => { resendRef.current.noteFailure(); setSyncWarning("write-failed"); };
 
   const dbRefPath = uid ? `sync/${uid}` : null;
@@ -457,6 +463,9 @@ export function useSync(uid, email) {
       }, 10000);
     }
 
+    deletedRef.current = false;
+    setAccountDeleted(null);
+
     // Monitor real connection state from Firebase SDK itself
     const connRef = ref(db, ".info/connected");
     const unsubConn = onValue(connRef, (snap) => {
@@ -492,6 +501,18 @@ export function useSync(uid, email) {
 
       const data = snapshot.val();
 
+      // #612: an empty path can mean the account was deleted, on this device
+      // or another. The rules already refuse to write it back; this tells the
+      // app, so it signs out instead of showing a copy that can't be saved.
+      if (!data) {
+        get(ref(db, tombstonePath(uid))).then(s => {
+          // A late answer for an account this hook has since left is ignored.
+          if (!s.exists() || uidRef.current !== uid) return;
+          deletedRef.current = true;
+          setAccountDeleted(uid);
+        }).catch(() => {});
+      }
+
       if (!timeoutRef.current) {
         if (data) {
           // Only apply if server data is at least as fresh as local state —
@@ -524,10 +545,12 @@ export function useSync(uid, email) {
         } else if (hasCachedData) {
           // RTDB is empty (new device or cleared DB) but we have local cache —
           // restore it to RTDB so the user's data isn't lost.
-          runTransaction(ref(db, dbRefPath), (current) => {
-            if (current !== null) return; // another device already initialized
-            return payloadRef.current;
-          }).catch(err => console.error("Cache restore to RTDB failed:", err));
+          if (!deletedRef.current) {
+            runTransaction(ref(db, dbRefPath), (current) => {
+              if (current !== null) return; // another device already initialized
+              return payloadRef.current;
+            }).catch(err => console.error("Cache restore to RTDB failed:", err));
+          }
           // payloadRef.current is already set from cache; leave payload as-is.
           // The cache is being made authoritative here, so it becomes the base:
           // nothing in it is a pending local edit any more.
@@ -615,10 +638,12 @@ export function useSync(uid, email) {
           writeCache(uid, defaultPayload, baseRef.current);
           commitBase(defaultPayload, uid);
 
-          runTransaction(ref(db, dbRefPath), (current) => {
-            if (current !== null) return;
-            return defaultPayload;
-          }).catch(err => console.error("Init transaction failed:", err));
+          if (!deletedRef.current) {
+            runTransaction(ref(db, dbRefPath), (current) => {
+              if (current !== null) return;
+              return defaultPayload;
+            }).catch(err => console.error("Init transaction failed:", err));
+          }
         }
       } else {
         if (data) {
@@ -1153,7 +1178,7 @@ export function useSync(uid, email) {
   const effectivePayload = gatePayloadToUid(payload, payloadUidRef.current, uid);
   const effectiveLoading = loading || (!!uid && payloadUidRef.current !== uid);
   return {
-    payload: effectivePayload, loading: effectiveLoading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning,
+    payload: effectivePayload, loading: effectiveLoading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning, accountDeleted,
     savePayload, savePayloadAsync,
     saveSubPath, saveSubPathAsync,
     saveSubPaths, saveSubPathsAsync,
