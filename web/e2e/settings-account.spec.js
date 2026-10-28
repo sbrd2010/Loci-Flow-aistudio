@@ -166,7 +166,9 @@ test("AI provider: Auto, Groq, Gemini, OpenRouter — no NVIDIA, Z.ai or Cerebra
   await page.getByRole("button", { name: /^AI provider/ }).click();
   const radios = page.getByRole("radiogroup", { name: "AI provider" }).getByRole("radio");
   await expect(radios).toHaveText([/Auto \(recommended\)/, /Groq/, /Gemini/, /OpenRouter/]);
-  await expect(radios.first()).toContainText("Groq → Gemini → OpenRouter → Z.ai");
+  // Z.ai is not in Auto (#594): its free tier refused most Coach requests.
+  await expect(radios.first()).toContainText("Groq → Gemini → OpenRouter");
+  await expect(radios.first()).not.toContainText("Z.ai");
   await expect(page.getByText(/NVIDIA/i)).toHaveCount(0);
   await page.getByRole("radio", { name: /^Gemini/ }).click();
   await expect(page.getByRole("radio", { name: /^Gemini/ })).toHaveAttribute("aria-checked", "true");

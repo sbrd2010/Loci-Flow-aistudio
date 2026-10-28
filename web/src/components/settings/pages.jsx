@@ -575,7 +575,7 @@ export function AiProviderPage({ onBack, backLabel }) {
   const listed = (k) => pref === k || (k !== "zai" && inAuto(k));
   const uses = [
     { value: "auto", label: "Auto (recommended)", sub: PREF_CHAINS.auto.filter(inAuto).map(k => providerEntry(k).name).join(" → ") },
-    ...PREF_CHAINS.auto.filter(listed).map(k => ({ value: k, label: providerEntry(k).name, sub: subs[k] })),
+    ...Object.keys(PREF_CHAINS).filter(k => k !== "auto" && listed(k)).map(k => ({ value: k, label: providerEntry(k).name, sub: subs[k] })),
   ];
 
   return (

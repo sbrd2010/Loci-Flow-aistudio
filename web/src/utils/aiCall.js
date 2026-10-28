@@ -847,18 +847,22 @@ export function isOnlyProviderKeyMissing() {
 }
 
 // Auto: Groq first, then Ollama Cloud, Gemini, OpenRouter, Cloudflare AI and NVIDIA.
-// Groq's allowance resets daily, so it goes first; Ollama runs the same model on a
-// large monthly allowance; Gemini gave the best answers after them in the #555 U8
-// run, OpenRouter's free router the weakest. Z.ai only
-// fits a short prompt (12k-char guard, one request at a time), so it comes after
-// the providers that take any prompt. Cerebras ended its no-card free tier, so it
-// is a last resort for someone with a key of their own. A chosen provider goes
-// first, then the others in Auto's order.
-const AUTO_ORDER = ["groq", "ollama", "gemini", "openrouter", "cloudflare", "nvidia", "zai", "cerebras"];
+// From the #594 multi-provider run (28 Oct): gpt-oss-120b answers best, so its
+// three hosts go first (Groq resets daily, Cloudflare and Ollama follow), then
+// Gemini, then NVIDIA, which claimed changes it hadn't made. OpenRouter's free
+// router picks a different model each time, so it comes near the end. Cerebras
+// ended its no-card free tier: last, for someone with a key of their own. Z.ai's
+// free tier refused most Coach requests as overloaded, so it is not in Auto; it
+// stays only for someone who chose it. A chosen provider goes first, then Auto.
+const AUTO_ORDER = ["groq", "cloudflare", "ollama", "gemini", "nvidia", "openrouter", "cerebras"];
 export const PROVIDER_ORDERS = Object.fromEntries([
   ["auto", AUTO_ORDER],
-  ...AUTO_ORDER.map(name => [name, [name, ...AUTO_ORDER.filter(n => n !== name)]]),
+  ...[...AUTO_ORDER, "zai"].map(name => [name, [name, ...AUTO_ORDER.filter(n => n !== name)]]),
 ]);
+
+// A safety classifier's verdict ("User Safety: safe …"), which OpenRouter's free
+// router sometimes answers with (#594): not a reply, so the next provider is tried.
+export const isClassifierVerdict = (reply) => /^\s*User Safety:\s*(?:safe|unsafe)\b/i.test(String(reply || ""));
 
 export function buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey, only = false, cleanOpenrouterKey = "", relay = isRelayAvailable()) {
   const available = {
@@ -951,6 +955,7 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, openrout
       // Stopped while the reply was arriving: it is not delivered.
       if (signal?.aborted) throw new Error("cancelled");
       const { reply, usage: callUsage } = result;
+      if (isClassifierVerdict(reply)) throw new Error(`${provider.name}_empty`);
       logAICallDiagnostics({ provider: provider.name, outcome: "ok", contextMode, systemPrompt, messages, usage: callUsage });
       return appendAIUsageWarning(reply, usage.warning);
     } catch (err) {
