@@ -294,10 +294,11 @@
   .add-grabber { display: none; }
 }
 
-/* 79, the Add sheet from tablet up: a dialog over the dimmed page, 26% of
-   the width (560–640px). It hangs from 12% down, never centred, so a picker
-   opening grows it downward and the writing box doesn't move. */
-@media (min-width: 840px) {
+/* 79, the Add sheet from tablet up (boards 2b–2d, an 820px tablet
+   included): a dialog over the dimmed page, 26% of the width (560–640px).
+   It hangs from 12% down, never centred, so a picker opening grows it
+   downward and the writing box doesn't move. */
+@media (min-width: 600px) {
   .add-overlay.is-add-sheet {
     align-items: flex-start;
     padding-top: calc(max(48px, 12vh) / var(--zoom, 1));
@@ -309,8 +310,12 @@
     border: 1px solid var(--line);
     border-radius: 16px;
   }
-  .add-kbd { display: inline; }
+  .is-add-sheet .add-grabber { display: none; }
   .is-add-sheet .add-head { min-height: 60px; margin-bottom: 4px; }
+}
+/* ⌘↵ beside the button where there is a keyboard to press it on. */
+@media (min-width: 1024px) {
+  .add-kbd { display: inline; }
 }
 
 /* Q56 (64s–t): Task | Thought. The switch takes the heading's place; the
@@ -426,7 +431,7 @@
 /* Short phones (under 760 tall, e.g. 375×667): the times are one scrolling
    row and More details steps aside while a picker is open, so everything
    stays above the keyboard. */
-@media (max-width: 839px) and (max-height: 759px) {
+@media (max-width: 599px) and (max-height: 759px) {
   .add-time-picker { padding: 10px 0 10px 12px; }
   .add-time-picker .add-picker-label { display: none; }
   .add-time-chips { display: flex; flex-wrap: nowrap; overflow-x: auto; }
