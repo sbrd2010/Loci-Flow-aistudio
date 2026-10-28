@@ -542,6 +542,7 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       setAuthLoading(false);
+      setSigningIn(false);
       if (firebaseUser) {
         setAnalyticsUser(firebaseUser.uid);
         track("session_start");
