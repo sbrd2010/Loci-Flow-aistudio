@@ -574,7 +574,7 @@ export function AiProviderPage({ onBack, backLabel }) {
   // choice; it is listed only while it is still someone's saved choice.
   const listed = (k) => pref === k || (k !== "zai" && inAuto(k));
   const uses = [
-    { value: "auto", label: "Auto (recommended)", sub: PREF_CHAINS.auto.filter(inAuto).map(k => providerEntry(k).name).join(" → ") },
+    { value: "auto", label: "Auto (recommended)", sub: "Picks an available free AI for you" },
     ...PREF_CHAINS.auto.filter(listed).map(k => ({ value: k, label: providerEntry(k).name, sub: subs[k] })),
   ];
 
@@ -602,20 +602,24 @@ export function AiProviderPage({ onBack, backLabel }) {
           );
         })}
       </Group>
-      <Group label="OpenRouter model" note="For your own OpenRouter key. Leave empty for Loci's list of free models, tried in turn. To pin one, paste its name from openrouter.ai/models, for example a model marked free.">
-        <label className="set-field">
-          <span className="set-label">Model name</span>
-          <input
-            className="set-input"
-            value={orModel}
-            onChange={e => setOrModel(e.target.value)}
-            onBlur={saveOrModel}
-            placeholder="openrouter/free"
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </label>
-      </Group>
+      {/* Only an own OpenRouter key goes direct and uses this; the built-in key goes
+          through the relay, which keeps its own list of free models. */}
+      {!!readStore("loci_openrouter_key") && (
+        <Group label="OpenRouter model" note="For your own OpenRouter key. Leave empty for Loci's list of free models, tried in turn. To pin one, paste its name from openrouter.ai/models, for example a model marked free.">
+          <label className="set-field">
+            <span className="set-label">Model name</span>
+            <input
+              className="set-input"
+              value={orModel}
+              onChange={e => setOrModel(e.target.value)}
+              onBlur={saveOrModel}
+              placeholder="Empty: Loci's list of free models"
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </label>
+        </Group>
+      )}
       {sheet && <KeySheet provider={sheet} onClose={() => { setSheet(null); bump(n => n + 1); }} />}
     </SubPage>
   );

@@ -160,13 +160,14 @@ test("the coach page: name, tone and notes save as they change", async ({ page }
   await expect(page.getByRole("button", { name: "Direct" })).toHaveAttribute("aria-pressed", "true");
 });
 
-test("AI provider: Auto, Groq, Gemini, OpenRouter — no NVIDIA, Z.ai or Cerebras without its key; a key is added, shown masked and removed", async ({ page }) => {
+test("AI provider: Auto, Groq, Gemini, OpenRouter — no NVIDIA, Z.ai or Cerebras without its key; a key is added, shown masked and removed; the OpenRouter model only with an own key", async ({ page }) => {
   await enterDemo(page);
   await openTab(page, "Settings");
   await page.getByRole("button", { name: /^AI provider/ }).click();
   const radios = page.getByRole("radiogroup", { name: "AI provider" }).getByRole("radio");
   await expect(radios).toHaveText([/Auto \(recommended\)/, /Groq/, /Gemini/, /OpenRouter/]);
-  await expect(radios.first()).toContainText("Groq → Gemini → OpenRouter → Z.ai");
+  // Auto says what it does, not which providers in which order.
+  await expect(radios.first()).toContainText("Picks an available free AI for you");
   await expect(page.getByText(/NVIDIA/i)).toHaveCount(0);
   await page.getByRole("radio", { name: /^Gemini/ }).click();
   await expect(page.getByRole("radio", { name: /^Gemini/ })).toHaveAttribute("aria-checked", "true");
@@ -187,10 +188,8 @@ test("AI provider: Auto, Groq, Gemini, OpenRouter — no NVIDIA, Z.ai or Cerebra
   await orSheet.getByLabel("Key").fill("sk-or-example_not_real_9c1d");
   await orSheet.getByRole("button", { name: "Save key" }).click();
   await expect(page.getByRole("button", { name: /^OpenRouter/ })).toContainText("Saved · ••••9c1d");
-  await page.getByRole("button", { name: /^OpenRouter/ }).click();
-  await page.getByRole("dialog", { name: "OpenRouter key" }).getByRole("button", { name: "Remove key" }).click();
 
-  // A model can be pinned for OpenRouter; emptied, the free router is used again.
+  // With an own OpenRouter key, a model can be pinned; emptied, Loci's free-model list is used again.
   const model = page.getByLabel("Model name");
   await model.fill("openai/gpt-oss-120b");
   await model.blur();
@@ -198,6 +197,11 @@ test("AI provider: Auto, Groq, Gemini, OpenRouter — no NVIDIA, Z.ai or Cerebra
   await model.fill("");
   await model.blur();
   expect(await page.evaluate(() => localStorage.getItem("loci_openrouter_model"))).toBeNull();
+
+  // Without an own key the box does nothing (the relay keeps its own list), so it is not shown.
+  await page.getByRole("button", { name: /^OpenRouter/ }).click();
+  await page.getByRole("dialog", { name: "OpenRouter key" }).getByRole("button", { name: "Remove key" }).click();
+  await expect(page.getByLabel("Model name")).toHaveCount(0);
 
   await page.getByRole("button", { name: /^Groq/ }).click();
   const sheet = page.getByRole("dialog", { name: "Groq key" });
