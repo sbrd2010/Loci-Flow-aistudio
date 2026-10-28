@@ -5,7 +5,7 @@ vi.mock("../firebase", () => ({
 }));
 
 import { auth } from "../firebase";
-import { buildProviderOrder, callAI, classifyAIError, describeAIError, extractJsonArray, fullPromptAllowed, geminiUrl, isAISystemReply, isClassifierVerdict, isRelayAvailable, noKeyHint, resetProviderCooldowns } from "./aiCall";
+import { buildProviderOrder, callAI, classifyAIError, describeAIError, extractJsonArray, fullPromptAllowed, geminiUrl, isAISystemReply, isClassifierVerdict, isRelayAvailable, OPENROUTER_FREE_MODELS, noKeyHint, resetProviderCooldowns } from "./aiCall";
 
 function makeStorage() {
   const store = new Map();
@@ -197,14 +197,16 @@ describe("AI call resilience", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("calls OpenRouter's free router by default, with no reasoning object it may reject", async () => {
+  it("gives OpenRouter Loci's free-model list by default, with no reasoning object it may reject (#594)", async () => {
     storage.setItem("loci_provider_pref", "openrouter");
     fetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ choices: [{ message: { content: "Router answer." }, finish_reason: "stop" }] }) });
 
     await callAI(baseRequest({ groqKey: "", openrouterKey: "or-test-key", reasoningEffort: "low" }));
 
     const body = JSON.parse(fetch.mock.calls[0][1].body);
-    expect(body.model).toBe("openrouter/free");
+    expect(body.models).toEqual(OPENROUTER_FREE_MODELS);
+    expect(OPENROUTER_FREE_MODELS.at(-1)).toBe("openrouter/free");
+    expect(body).not.toHaveProperty("model");
     expect(body).not.toHaveProperty("reasoning");
   });
 
@@ -834,15 +836,15 @@ describe("Z.ai emergency fallback", () => {
     expect(reply).toBe("Z.ai standalone reply.");
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(fetch.mock.calls[0][0]).toBe("https://api.z.ai/api/paas/v4/chat/completions");
+    // GLM's thinking can use the whole budget and leave no reply (#594).
+    expect(JSON.parse(fetch.mock.calls[0][1].body).thinking).toEqual({ type: "disabled" });
   });
 
-  // #594: Z.ai's free tier refused most Coach requests as overloaded, so Auto
-  // leaves it out even with a Z.ai key; it runs only when chosen.
-  it("auto order is Groq -> Gemini -> Cerebras, without Z.ai", async () => {
+  it("auto order is Groq -> Gemini -> Z.ai -> Cerebras", async () => {
     fetch
       .mockResolvedValueOnce(providerError(503))   // Groq fails
       .mockResolvedValueOnce(providerError(503))   // Gemini fails
-      .mockResolvedValueOnce(cerebrasOk("Cerebras picked up the slack."));
+      .mockResolvedValueOnce(zaiOk("Z.ai picked up the slack."));
 
     const reply = await callAI(baseRequest({
       cerebrasKey: "test-cerebras-key",
@@ -850,24 +852,26 @@ describe("Z.ai emergency fallback", () => {
       geminiKey: "test-gemini-key",
     }));
 
-    expect(reply).toBe("Cerebras picked up the slack.");
+    expect(reply).toBe("Z.ai picked up the slack.");
     expect(fetch).toHaveBeenCalledTimes(3);
     expect(fetch.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
     expect(String(fetch.mock.calls[1][0])).toContain("generativelanguage.googleapis.com");
-    expect(fetch.mock.calls[2][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
+    expect(fetch.mock.calls[2][0]).toBe("https://api.z.ai/api/paas/v4/chat/completions");
   });
 
-  it("in Auto, a Z.ai key is never called when Groq and Cerebras fail", async () => {
+  it("falls back to Z.ai when both Groq and Cerebras fail", async () => {
     fetch
       .mockResolvedValueOnce(providerError(429))
-      .mockResolvedValueOnce(providerError(503));
+      .mockResolvedValueOnce(providerError(503))
+      .mockResolvedValueOnce(zaiOk("Z.ai emergency reply."));
 
-    await expect(callAI(baseRequest({
+    const reply = await callAI(baseRequest({
       cerebrasKey: "test-cerebras-key",
       zaiKey: "test-zai-key",
-    }))).rejects.toThrow();
-    expect(fetch).toHaveBeenCalledTimes(2);
-    expect(fetch.mock.calls.map(([url]) => String(url)).some(u => u.includes("api.z.ai"))).toBe(false);
+    }));
+
+    expect(reply).toBe("Z.ai emergency reply.");
+    expect(fetch).toHaveBeenCalledTimes(3);
   });
 
   it("falls back to Gemini when Z.ai fails", async () => {
@@ -1079,8 +1083,9 @@ ${horizonSection("TODAY", 5, 2270)}`;
     expect(zaiCalls.length).toBe(0);
   });
 
-  it("keeps the calm all_providers_failed message when Groq, Cerebras and Gemini all fail", async () => {
+  it("keeps the calm all_providers_failed message when Groq, Cerebras, Z.ai, and Gemini all fail", async () => {
     fetch
+      .mockResolvedValueOnce(providerError(500))
       .mockResolvedValueOnce(providerError(500))
       .mockResolvedValueOnce(providerError(500))
       .mockResolvedValueOnce(providerError(500));
@@ -1090,7 +1095,7 @@ ${horizonSection("TODAY", 5, 2270)}`;
       zaiKey: "test-zai-key",
       geminiKey: "test-gemini-key",
     }))).rejects.toThrow("all_providers_failed");
-    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch).toHaveBeenCalledTimes(4);
   });
 
   it("preserves explicit NOW FOCUS / CURRENT NOW FOCUS sections during compression", async () => {
@@ -1744,37 +1749,37 @@ describe("buildProviderOrder", () => {
     expect(buildProviderOrder("nvidia", "g", "", "c", "").map(p => p.name)).toEqual(["groq", "cerebras"]);
   });
   it("an unknown preference falls back to Auto", () => {
-    expect(buildProviderOrder("retired-provider", "g", "m", "c", "z").map(p => p.name)).toEqual(["groq", "gemini", "cerebras"]);
+    expect(buildProviderOrder("retired-provider", "g", "m", "c", "z").map(p => p.name)).toEqual(["groq", "gemini", "zai", "cerebras"]);
   });
-  it("with the relay, Auto runs Groq, Cloudflare, Ollama, Gemini, NVIDIA, OpenRouter, no Z.ai (#594); a chosen provider goes first", () => {
-    expect(buildProviderOrder("auto", "g", "m", "c", "z", false, "o", true).map(p => p.name)).toEqual(["groq", "cloudflare", "ollama", "gemini", "nvidia", "openrouter", "cerebras"]);
+  it("with the relay, Auto runs Groq, Cloudflare, Ollama, Gemini, NVIDIA, OpenRouter, Z.ai (#594); a chosen provider goes first", () => {
+    expect(buildProviderOrder("auto", "g", "m", "c", "z", false, "o", true).map(p => p.name)).toEqual(["groq", "cloudflare", "ollama", "gemini", "nvidia", "openrouter", "zai", "cerebras"]);
     // No key of the user's own: Groq, Gemini and OpenRouter use the shared keys on the relay.
     const noKeys = buildProviderOrder("auto", "", "", "", "", false, "", true);
-    expect(noKeys.map(p => p.name)).toEqual(["groq", "cloudflare", "ollama", "gemini", "nvidia", "openrouter"]);
+    expect(noKeys.map(p => p.name)).toEqual(["groq", "cloudflare", "ollama", "gemini", "nvidia", "openrouter", "zai"]);
     expect(noKeys.filter(p => p.viaRelay).map(p => p.name)).toEqual(["groq", "gemini", "openrouter"]);
     // An own key goes direct.
     expect(buildProviderOrder("auto", "g", "", "", "", false, "", true).find(p => p.name === "groq")).toEqual({ name: "groq", key: "g" });
-    expect(buildProviderOrder("cloudflare", "g", "", "", "", false, "", true).map(p => p.name)).toEqual(["cloudflare", "groq", "ollama", "gemini", "nvidia", "openrouter"]);
-    expect(buildProviderOrder("nvidia", "", "", "", "", false, "", true).map(p => p.name)).toEqual(["nvidia", "groq", "cloudflare", "ollama", "gemini", "openrouter"]);
-    // Z.ai is only for someone who chose it; through the relay it keeps its own call (size guards), so it is not viaRelay.
-    expect(buildProviderOrder("zai", "", "", "", "", false, "", true).find(p => p.name === "zai")).toEqual({ name: "zai", key: "relay" });
+    expect(buildProviderOrder("cloudflare", "g", "", "", "", false, "", true).map(p => p.name)).toEqual(["cloudflare", "groq", "ollama", "gemini", "nvidia", "openrouter", "zai"]);
+    expect(buildProviderOrder("nvidia", "", "", "", "", false, "", true).map(p => p.name)).toEqual(["nvidia", "groq", "cloudflare", "ollama", "gemini", "openrouter", "zai"]);
+    // Z.ai through the relay keeps its own call (size guards), so it is not marked viaRelay.
+    expect(noKeys.find(p => p.name === "zai")).toEqual({ name: "zai", key: "relay" });
     expect(buildProviderOrder("nvidia", "g", "m", "", "", true, "", true).map(p => p.name)).toEqual(["nvidia"]);
     expect(buildProviderOrder("zai", "g", "", "", "z", false, "", true).map(p => p.name)).toEqual(["zai", "groq", "cloudflare", "ollama", "gemini", "nvidia", "openrouter"]);
   });
   it("Only my provider keeps just the chosen provider, and ignores Auto", () => {
     expect(buildProviderOrder("gemini", "g", "m", "c", "z", true).map(p => p.name)).toEqual(["gemini"]);
     expect(buildProviderOrder("gemini", "g", "", "c", "z", true)).toEqual([]);
-    expect(buildProviderOrder("auto", "g", "m", "c", "z", true).map(p => p.name)).toEqual(["groq", "gemini", "cerebras"]);
+    expect(buildProviderOrder("auto", "g", "m", "c", "z", true).map(p => p.name)).toEqual(["groq", "gemini", "zai", "cerebras"]);
   });
-  it("orders Groq, Gemini and Cerebras by the chosen chain; a Z.ai key alone doesn't put Z.ai in Auto", () => {
-    expect(buildProviderOrder("gemini", "g", "m", "c", "z").map(p => p.name)).toEqual(["gemini", "groq", "cerebras"]);
-    expect(buildProviderOrder("auto", "g", "m", "c", "z").map(p => p.name)).toEqual(["groq", "gemini", "cerebras"]);
+  it("orders Groq, Gemini, Cerebras and Z.ai by the chosen chain", () => {
+    expect(buildProviderOrder("gemini", "g", "m", "c", "z").map(p => p.name)).toEqual(["gemini", "groq", "zai", "cerebras"]);
+    expect(buildProviderOrder("auto", "g", "m", "c", "z").map(p => p.name)).toEqual(["groq", "gemini", "zai", "cerebras"]);
   });
   it("puts Gemini after Groq and before OpenRouter in Auto, OpenRouter first when chosen; Cerebras comes last", () => {
-    expect(buildProviderOrder("auto", "g", "m", "c", "z", false, "o").map(p => p.name)).toEqual(["groq", "gemini", "openrouter", "cerebras"]);
-    expect(buildProviderOrder("openrouter", "g", "m", "c", "z", false, "o").map(p => p.name)).toEqual(["openrouter", "groq", "gemini", "cerebras"]);
-    expect(buildProviderOrder("gemini", "g", "m", "c", "z", false, "o").map(p => p.name)).toEqual(["gemini", "groq", "openrouter", "cerebras"]);
-    expect(buildProviderOrder("cerebras", "g", "m", "c", "z", false, "o").map(p => p.name)).toEqual(["cerebras", "groq", "gemini", "openrouter"]);
+    expect(buildProviderOrder("auto", "g", "m", "c", "z", false, "o").map(p => p.name)).toEqual(["groq", "gemini", "openrouter", "zai", "cerebras"]);
+    expect(buildProviderOrder("openrouter", "g", "m", "c", "z", false, "o").map(p => p.name)).toEqual(["openrouter", "groq", "gemini", "zai", "cerebras"]);
+    expect(buildProviderOrder("gemini", "g", "m", "c", "z", false, "o").map(p => p.name)).toEqual(["gemini", "groq", "openrouter", "zai", "cerebras"]);
+    expect(buildProviderOrder("cerebras", "g", "m", "c", "z", false, "o").map(p => p.name)).toEqual(["cerebras", "groq", "gemini", "openrouter", "zai"]);
     expect(buildProviderOrder("openrouter", "g", "m", "c", "z", true, "o").map(p => p.name)).toEqual(["openrouter"]);
     expect(buildProviderOrder("auto", "", "", "", "", false, "o").map(p => p.name)).toEqual(["openrouter"]);
   });

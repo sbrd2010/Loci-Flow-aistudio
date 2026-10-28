@@ -575,7 +575,7 @@ export function AiProviderPage({ onBack, backLabel }) {
   const listed = (k) => pref === k || (k !== "zai" && inAuto(k));
   const uses = [
     { value: "auto", label: "Auto (recommended)", sub: PREF_CHAINS.auto.filter(inAuto).map(k => providerEntry(k).name).join(" → ") },
-    ...Object.keys(PREF_CHAINS).filter(k => k !== "auto" && listed(k)).map(k => ({ value: k, label: providerEntry(k).name, sub: subs[k] })),
+    ...PREF_CHAINS.auto.filter(listed).map(k => ({ value: k, label: providerEntry(k).name, sub: subs[k] })),
   ];
 
   return (
@@ -602,7 +602,7 @@ export function AiProviderPage({ onBack, backLabel }) {
           );
         })}
       </Group>
-      <Group label="OpenRouter model" note="For your own OpenRouter key. Leave empty to let OpenRouter pick a free model each time. To pin one, paste its name from openrouter.ai/models, for example a model marked free.">
+      <Group label="OpenRouter model" note="For your own OpenRouter key. Leave empty for Loci's list of free models, tried in turn. To pin one, paste its name from openrouter.ai/models, for example a model marked free.">
         <label className="set-field">
           <span className="set-label">Model name</span>
           <input
