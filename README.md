@@ -1,70 +1,45 @@
 # Loci
 
-A personal productivity web app for managing your day — task lists, deep focus sessions, and a visual Day Map to schedule where each task fits in your week.
+**A day planner that helps you choose the one thing to do now, and gets you started on it.**
 
-## Tech stack
+Most to-do apps help you collect tasks. Loci helps with the harder step: picking one when everything feels urgent, and starting.
 
-- **Frontend** — React 18 + Vite
-- **Backend / sync** — Firebase Realtime Database
-- **Testing** — Vitest (unit), Playwright (E2E)
+> Copyright (c) 2026 sbrd2010. All rights reserved. This is not open source: see [LICENSE](LICENSE).
+> Loci is in private testing at [loci-flow.web.app](https://loci-flow.web.app).
 
-## Run locally
+## What it does
 
-**Prerequisites:** Node.js 18+, npm
+- **One thing at a time.** Today is built around a single task you've chosen. With nothing chosen, Loci offers three, its own pick first with the reason, and **Choose for me** if you can't decide.
+- **Honest reasons.** When Loci narrows your list down, it shows its working (what's due, what won't fit in the time you have left) and states only what is true. No pep talk, no guesses.
+- **Horizons and deadlines.** Work sits at the horizon it belongs to: today, this week, month, quarter or half-year. Fronts group related work under one deadline, and your Key Deadline always shows.
+- **Day Map.** Lays today's tasks over the hours you actually have, and says plainly what won't fit.
+- **A day that fits your hours.** If you work late, your Loci day can end after midnight.
+- **Focus sessions** for the task in front of you, with gentle help when it isn't moving ("I'm stuck").
+- **Mind Box.** Somewhere to drop a stray thought so it stops pulling at you.
+- **Coach.** An AI coach that knows your plan: ask it what to do next, how to plan the week or how to get unstuck. AI can also split a big task into steps. It runs on free AI providers.
+- **Works across devices.** Sign in and your plan syncs. An Android app is on its way.
+
+## Built with
+
+React and Vite, Firebase (sign-in and sync), and a small Cloudflare Worker that relays AI requests. Tests run with Vitest and Playwright.
+
+## Running it locally
+
+For the owner and invited collaborators. Needs Node.js 22+.
 
 ```bash
-# 1. Install dependencies
 cd web
 npm install
-
-# 2. Configure environment
-cp .env.example .env
-# Edit .env — see comments inside for which keys are optional
-
-# 3. Start dev server
 npm run dev
 ```
 
-The app opens at `http://localhost:5173`. A **Try Demo** button on the landing page lets you explore without signing in or configuring Firebase.
-
-## Available scripts
+Open `http://localhost:5173` and use **Try Demo** to look around without signing in. Optional settings are described in `web/.env.example`.
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Start local dev server with hot reload |
+| `npm run dev` | Local dev server |
 | `npm run build` | Production build into `web/dist/` |
-| `npm run preview` | Serve the production build locally |
-| `npm test` | Run unit tests with Vitest |
-| `npm run test:e2e` | Run Playwright E2E tests (requires dev server running) |
+| `npm test` | Unit tests (Vitest) |
+| `npm run test:e2e` | End-to-end tests (Playwright) |
 
-## Android app
-
-The repo also contains a native **Android app** (Loci Focus) that wraps this web
-app with Capacitor. It lives entirely in [`web/android/`](web/android/README_ANDROID.md)
-and does not affect the web app — the JS/CSS codebase is untouched (all web tests
-still pass). New web PRs flow into the Android app automatically on each build:
-
-```
-merge JS PRs → CI runs npm run build + cap sync → new APK/AAB built
-```
-
-See [`web/android/README_ANDROID.md`](web/android/README_ANDROID.md) for local
-builds, signing setup, and Google Play release steps.
-
-## Environment variables
-
-Copy `web/.env.example` to `web/.env`. All variables are optional for local development — the app runs in demo mode without them.
-
-| Variable | Purpose |
-|---|---|
-| `VITE_FIREBASE_APP_ID` | Firebase web app ID (enables cloud sync) |
-| `VITE_GA_MEASUREMENT_ID` | Google Analytics (optional) |
-| `VITE_GROQ_KEY` | Groq API key, **local development only**: a key in the build is public, so the deploy workflows do not pass it; the deployed app uses the relay (`docs/ai-relay.md`) |
-| `VITE_GEMINI_KEY` | Gemini API key, **local development only** (as `VITE_GROQ_KEY`) |
-| `VITE_GEMINI_MODEL` | Gemini model override (optional, defaults to `gemini-2.5-flash-lite`). Copy the name exactly as Google AI Studio shows it; a free-tier model with a higher requests-per-day limit stretches the shared key |
-| `VITE_CEREBRAS_KEY` | Cerebras API key, **local development only** (as `VITE_GROQ_KEY`) |
-| `VITE_CEREBRAS_MODEL` | Cerebras model override (optional, defaults to `gpt-oss-120b`) |
-| `VITE_OPENROUTER_MODEL` | OpenRouter model override (optional, defaults to `openrouter/free`, OpenRouter's free router; a person can also pin a model in Settings). OpenRouter keys are added per person in Settings; do not put a key with credit in a build variable |
-| `VITE_AI_RELAY_URL` | Address of Loci's AI relay Worker (optional). When set, Cloudflare AI and NVIDIA are offered as providers and OpenRouter, Groq, Gemini and Z.ai work without a key on the device; see `docs/ai-relay.md` |
-
-Firebase config beyond the app ID (API key, project ID, etc.) is baked into the app for the hosted version. For your own Firebase project, update `web/src/firebase.js`.
+The Android app wraps the same web code. See [`web/android/README_ANDROID.md`](web/android/README_ANDROID.md).
