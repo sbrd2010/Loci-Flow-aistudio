@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-import { deletionUpdate, tombstonePath, clearLocalLociData, deleteAllMyData } from "./deleteAccount";
+import { deletionUpdate, tombstonePath, clearLocalLociData, deleteAllMyData, markWipePending, finishPendingWipe } from "./deleteAccount";
 
-vi.mock("firebase/database", () => ({ ref: vi.fn(), update: vi.fn(), get: vi.fn() }));
+vi.mock("firebase/database", () => ({ ref: vi.fn(), update: vi.fn(), get: vi.fn(), serverTimestamp: () => "SERVER_TIME" }));
 vi.mock("firebase/auth", () => ({ deleteUser: vi.fn() }));
 
 function memoryStorage(entries) {
@@ -17,12 +17,12 @@ function memoryStorage(entries) {
 describe("deletionUpdate (#612)", () => {
   it("removes the payload, leaves only the tombstone, and keeps a 30-day copy", () => {
     const copy = { email: "a@example.test", sync: { tasks: [] }, activityLogs: { events: {} } };
-    expect(deletionUpdate("u1", 123, copy)).toEqual({
-      "deletedAccounts/u1": { deletedAt: 123, email: "a@example.test", sync: { tasks: [] }, activityLogs: { events: {} } },
+    expect(deletionUpdate("u1", copy)).toEqual({
+      "deletedAccounts/u1": { deletedAt: "SERVER_TIME", email: "a@example.test", sync: { tasks: [] }, activityLogs: { events: {} } },
       "sync/u1": null,
-      "activityLogs/u1": { accountDeletedAt: 123 },
+      "activityLogs/u1": { accountDeletedAt: "SERVER_TIME" },
     });
-    expect(deletionUpdate("u1", 123)["deletedAccounts/u1"]).toEqual({ deletedAt: 123, email: null, sync: null, activityLogs: null });
+    expect(deletionUpdate("u1")["deletedAccounts/u1"]).toEqual({ deletedAt: "SERVER_TIME", email: null, sync: null, activityLogs: null });
     expect(tombstonePath("u1")).toBe("activityLogs/u1/accountDeletedAt");
   });
 
@@ -44,6 +44,28 @@ describe("clearLocalLociData", () => {
   });
 });
 
+describe("finishPendingWipe", () => {
+  const session = () => {
+    const m = new Map();
+    return { getItem: k => m.get(k) ?? null, setItem: (k, v) => m.set(k, v), removeItem: k => m.delete(k) };
+  };
+
+  it("clears loci_ keys again on the load after a delete, once", () => {
+    const local = memoryStorage({ loci_payload_v1_u1: "{}", other_app: "keep" });
+    const s = session();
+    markWipePending(s);
+    expect(finishPendingWipe(local, s)).toBe(true);
+    expect(local.keys()).toEqual(["other_app"]);
+    expect(finishPendingWipe(memoryStorage({ loci_theme: "dark" }), s)).toBe(false);
+  });
+
+  it("does nothing on an ordinary load", () => {
+    const local = memoryStorage({ loci_theme: "dark" });
+    expect(finishPendingWipe(local, session())).toBe(false);
+    expect(local.keys()).toEqual(["loci_theme"]);
+  });
+});
+
 describe("deleteAllMyData", () => {
   const user = { uid: "u1", email: "a@example.test" };
   const make = () => {
@@ -62,9 +84,9 @@ describe("deleteAllMyData", () => {
 
   it("signs in again, reads the server's data, then copies and deletes it in one update, then the account", async () => {
     const m = make();
-    await deleteAllMyData({ db: {}, user, reauthenticate: m.reauthenticate, now: 5, deps: m.deps });
+    await deleteAllMyData({ db: {}, user, reauthenticate: m.reauthenticate, deps: m.deps });
     const copy = { email: "a@example.test", sync: { from: "sync/u1" }, activityLogs: { from: "activityLogs/u1" } };
-    expect(m.calls).toEqual(["reauth", ["get", "sync/u1"], ["get", "activityLogs/u1"], ["update", "root", deletionUpdate("u1", 5, copy)], "deleteUser"]);
+    expect(m.calls).toEqual(["reauth", ["get", "sync/u1"], ["get", "activityLogs/u1"], ["update", "root", deletionUpdate("u1", copy)], "deleteUser"]);
   });
 
   it("deletes nothing when the data to keep can't be read", async () => {

@@ -1,8 +1,9 @@
-name: Purge deleted accounts after 30 days
+name: Purge expired data (deleted accounts 30 days, bug reports 12 months)
 
 # #612: "Delete all my data" keeps a copy for 30 days so an account can be
 # restored on request. This erases each copy once it is 30 days old, as the
-# privacy policy promises. Daily, about a minute.
+# privacy policy promises, and bug reports older than 12 months. Daily,
+# about a minute.
 on:
   schedule:
     - cron: "17 3 * * *"
@@ -34,7 +35,7 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
-      - name: Erase copies older than 30 days
+      - name: Erase expired copies and bug reports
         run: |
           set -euo pipefail
           export FIREBASE_ACCESS_TOKEN="$(gcloud auth print-access-token)"

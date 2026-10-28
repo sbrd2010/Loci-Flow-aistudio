@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { expiredIds, RETENTION_DAYS } from "./purge-deleted-accounts.mjs";
+import { expiredIds, RETENTION_DAYS, BUG_REPORT_DAYS } from "./purge-deleted-accounts.mjs";
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = Date.UTC(2026, 9, 28);
@@ -23,4 +23,9 @@ test("erases a copy with no valid date, so nothing is kept forever", () => {
 test("nothing to do with no copies", () => {
   assert.deepEqual(expiredIds(null, NOW), []);
   assert.deepEqual(expiredIds({}, NOW), []);
+});
+
+test("bug reports are kept 12 months", () => {
+  assert.equal(BUG_REPORT_DAYS, 365);
+  assert.deepEqual(expiredIds({ recent: NOW - 300 * DAY, old: NOW - 400 * DAY }, NOW, BUG_REPORT_DAYS), ["old"]);
 });

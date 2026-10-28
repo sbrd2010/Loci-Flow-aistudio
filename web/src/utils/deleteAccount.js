@@ -7,15 +7,18 @@
 // The same update keeps a copy in deletedAccounts/{uid}, which no app can
 // read: the owner can restore it on request for 30 days, and a daily job
 // (scripts/purge-deleted-accounts.mjs) erases it after that.
-import { ref, update, get } from "firebase/database";
+import { ref, update, get, serverTimestamp } from "firebase/database";
 import { deleteUser } from "firebase/auth";
 
 export const RETENTION_DAYS = 30;
 
 export const tombstonePath = (uid) => `activityLogs/${uid}/accountDeletedAt`;
 
-export function deletionUpdate(uid, now = Date.now(), copy = {}) {
+// Both times are the server's: a device clock that is wrong can't make the
+// copy go early or stay forever (the rules check deletedAt against it).
+export function deletionUpdate(uid, copy = {}) {
   if (!uid) throw new Error("deletionUpdate: no uid");
+  const now = serverTimestamp();
   return {
     [`deletedAccounts/${uid}`]: {
       deletedAt: now,
@@ -42,10 +45,26 @@ export function clearLocalLociData(storage = globalThis.localStorage) {
   keys.forEach(k => { try { storage.removeItem(k); } catch { /* private mode */ } });
 }
 
+// A reload is asynchronous: a timer could write a loci_ key back after the
+// clear. The flag (sessionStorage, so it survives the reload) has the next
+// load clear again before anything reads the cache.
+const WIPE_FLAG = "loci-wipe-pending";
+export function markWipePending(session = globalThis.sessionStorage) {
+  try { session?.setItem(WIPE_FLAG, "1"); } catch { /* private mode */ }
+}
+export function finishPendingWipe(local = globalThis.localStorage, session = globalThis.sessionStorage) {
+  try {
+    if (session?.getItem(WIPE_FLAG) !== "1") return false;
+    session.removeItem(WIPE_FLAG);
+  } catch { return false; }
+  clearLocalLociData(local);
+  return true;
+}
+
 // Signs in again first: Firebase only deletes an account after a recent
 // sign-in, and if that fails nothing has been deleted. If the data goes but
 // the sign-in record can't be removed, the error says so ("account_left").
-export async function deleteAllMyData({ db, user, reauthenticate, now = Date.now(), deps = { ref, update, get, deleteUser } }) {
+export async function deleteAllMyData({ db, user, reauthenticate, deps = { ref, update, get, deleteUser } }) {
   if (!user?.uid) throw new Error("not_signed_in");
   await reauthenticate(user);
   // The copy is taken from the server, not this device's cache, so it holds
@@ -55,7 +74,7 @@ export async function deleteAllMyData({ db, user, reauthenticate, now = Date.now
     deps.get(deps.ref(db, `activityLogs/${user.uid}`)),
   ]);
   const copy = { email: user.email, sync: syncSnap.val(), activityLogs: logsSnap.val() };
-  await deps.update(deps.ref(db), deletionUpdate(user.uid, now, copy));
+  await deps.update(deps.ref(db), deletionUpdate(user.uid, copy));
   try {
     await deps.deleteUser(user);
   } catch (err) {

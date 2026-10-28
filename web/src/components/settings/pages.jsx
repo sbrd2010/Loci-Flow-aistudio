@@ -714,7 +714,8 @@ export function NotificationsPage({ permission, onRequest, onBack }) {
 // #612: why a delete stopped. Every case here deleted nothing.
 export function deleteFailedText(err) {
   const code = err?.code || "";
-  if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return "Sign-in was cancelled. Nothing was deleted.";
+  // Android's native sign-in reports a cancel in its message, not as a code.
+  if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request" || /cancel/i.test(err?.message || "")) return "Sign-in was cancelled. Nothing was deleted.";
   if (code === "auth/popup-blocked") return "Your browser blocked the sign-in window. Allow pop-ups for Loci and try again. Nothing was deleted.";
   if (code === "auth/user-mismatch") return "Sign in with the same Google account you use for Loci. Nothing was deleted.";
   return "Couldn't delete right now. Check your connection and try again. Nothing was deleted.";

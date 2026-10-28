@@ -216,11 +216,17 @@ test("delete all my data (#612): one update removes the data, and nothing can wr
   await assertAllowed(await putJson(`sync/${userA.uid}`, validSyncPayload(userA), userA.idToken), "user A should write sync/userA");
   await assertAllowed(await putJson(`activityLogs/${userA.uid}/events/2026-10-28/e1`, { type: "focus_started" }, userA.idToken), "user A should write an activity event");
 
-  const deletion = (uid, payload) => ({
-    [`deletedAccounts/${uid}`]: { deletedAt: Date.now(), email: "kept@example.test", sync: payload },
+  const SERVER_TIME = { ".sv": "timestamp" };
+  const deletion = (uid, payload, deletedAt = SERVER_TIME) => ({
+    [`deletedAccounts/${uid}`]: { deletedAt, email: "kept@example.test", sync: payload },
     [`sync/${uid}`]: null,
-    [`activityLogs/${uid}`]: { accountDeletedAt: Date.now() },
+    [`activityLogs/${uid}`]: { accountDeletedAt: SERVER_TIME },
   });
+
+  await assertDenied(
+    await patchRoot(deletion(userA.uid, validSyncPayload(userA), Date.now() - 40 * 24 * 60 * 60 * 1000), userA.idToken),
+    "a back-dated copy must be refused, so it can't be purged early"
+  );
 
   await assertDenied(
     await patchRoot(deletion(userA.uid, validSyncPayload(userA)), userB.idToken),

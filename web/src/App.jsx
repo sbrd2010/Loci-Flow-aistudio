@@ -6,7 +6,7 @@ import { useAppScale } from "./hooks/useAppScale";
 import { scheduleAllReminders, scheduleCoachCheckin, cancelCoachCheckin, checkDailyCheckinNotifications, scheduleDailyCheckins, cancelDailyCheckins, cancelAllNativeScheduling, VISIBLE_HEARTBEAT_KEY, DAILY_CHECKIN_SLOTS } from "./utils/reminders";
 import { isNativeApp, refreshNativePermission, addNativeNotificationClickListener, NATIVE_PERMISSION_GRANTED_EVENT } from "./utils/nativeNotifs";
 import { signInWithGoogleNative, reauthenticateWithGoogleNative } from "./utils/nativeAuth";
-import { deleteAllMyData, clearLocalLociData } from "./utils/deleteAccount";
+import { deleteAllMyData, clearLocalLociData, markWipePending } from "./utils/deleteAccount";
 import { isCheckinDue, buildCheckinResumeMessage, isDuplicateCheckinResume } from "./utils/coachCheckin";
 import { getFocusWindows, getLociDayStr, getLociNowMinutes, getOverallSpan } from "./utils/focusWindows";
 import { buildWallCommitmentSave } from "./utils/dailyCoachCheckins";
@@ -1161,32 +1161,38 @@ export default function App() {
   // mid-delete), removing it is tried again: it only works after a recent
   // sign-in, which signing in again to a deleted account is. Clearing and
   // reloading run back to back, so no save can put the local copy back.
-  const leaveDeletedAccount = () => {
+  const leaveDeletedAccount = (deletedUid) => {
     cancelAllNativeScheduling();
     const leftover = auth.currentUser;
-    (leftover ? deleteUser(leftover).catch(() => {}) : Promise.resolve())
-      .then(() => signOut(auth)).catch(() => {}).finally(() => {
+    // Only the deleted account's own record: never an account signed in since.
+    const removeLeftover = leftover && deletedUid && leftover.uid === deletedUid
+      ? deleteUser(leftover).catch(() => {})
+      : Promise.resolve();
+    removeLeftover.then(() => signOut(auth)).catch(() => {}).finally(() => {
       clearOpenSession();
       dropHeldEvent();
       clearLocalLociData();
+      markWipePending();
       window.location.reload();
     });
   };
   // While this device is deleting, its own sync sees the account go: it must
   // not sign out before the sign-in record is removed too.
   const deletingAccountRef = useRef(false);
+  const deletingUidRef = useRef(null);
   const handleDeleteAllData = () => {
     deletingAccountRef.current = true;
+    deletingUidRef.current = auth.currentUser?.uid || null;
     return deleteAllMyData({
       db,
       user: auth.currentUser,
       reauthenticate: (u) => (isNativeApp() ? reauthenticateWithGoogleNative(u) : reauthenticateWithPopup(u, new GoogleAuthProvider())),
-    }).then(leaveDeletedAccount, (err) => {
+    }).then(() => leaveDeletedAccount(deletingUidRef.current), (err) => {
       if (err?.message !== "account_left") deletingAccountRef.current = false;
       throw err;
     });
   };
-  useEffect(() => { if (accountDeleted && !deletingAccountRef.current) leaveDeletedAccount(); }, [accountDeleted]);
+  useEffect(() => { if (accountDeleted && !deletingAccountRef.current) leaveDeletedAccount(accountDeleted); }, [accountDeleted]);
 
   const openAddTask = (horizon = "today", from = null, frontId = null) => {
     setPreselectedHorizon(horizon);
@@ -1707,7 +1713,7 @@ export default function App() {
             lastSyncedAt={lastSyncedAt}
             onSignOut={demoMode ? exitDemo : handleSwitchUser}
             onDeleteAllData={demoMode ? null : handleDeleteAllData}
-            onLeaveDeletedAccount={leaveDeletedAccount}
+            onLeaveDeletedAccount={() => leaveDeletedAccount(deletingUidRef.current)}
             theme={theme}
             onThemeChange={setTheme}
             email={demoMode ? null : user?.email}

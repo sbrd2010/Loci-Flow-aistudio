@@ -6,6 +6,7 @@ describe("deleteFailedText", () => {
   it("names a cancelled, blocked or wrong-account sign-in", () => {
     expect(deleteFailedText({ code: "auth/popup-closed-by-user" })).toMatch(/cancelled/);
     expect(deleteFailedText({ code: "auth/cancelled-popup-request" })).toMatch(/cancelled/);
+    expect(deleteFailedText(new Error("The user canceled the sign-in flow."))).toMatch(/cancelled/);
     expect(deleteFailedText({ code: "auth/popup-blocked" })).toMatch(/pop-ups/);
     expect(deleteFailedText({ code: "auth/user-mismatch" })).toMatch(/same Google account/);
   });

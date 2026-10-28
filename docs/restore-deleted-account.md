@@ -5,7 +5,7 @@
 ## When someone asks to restore
 
 1. **Find the copy.** Firebase console → Realtime Database → `deletedAccounts`. Each entry has `deletedAt` (milliseconds) and `email`. Match the email the person writes from.
-2. **They sign in again.** A new sign-in creates a new account with a **new uid**. The old uid stays blocked by its tombstone, so restore into the new one. Ask them to sign in once, then close the app.
+2. **They sign in again.** A new sign-in creates a new account with a **new uid**. The old uid stays blocked by its tombstone, so restore into the new one. Ask them to sign in once, then **sign out** in Settings. Signing out clears that device's starter tasks, which would otherwise merge into the restored data.
 3. **Find the new uid.** Firebase console → Authentication → their email → User UID.
 4. **Copy the data.** In `deletedAccounts/{oldUid}`, use ⋮ → Export JSON on `sync`. Then go to `sync/{newUid}`, use ⋮ → Import JSON, and choose that file. Do the same for `activityLogs` → `activityLogs/{newUid}` if they want their focus history back.
 5. **Tell them to reopen the app.** Their tasks come back on the next load.
