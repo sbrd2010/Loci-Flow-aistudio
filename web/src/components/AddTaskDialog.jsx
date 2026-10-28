@@ -13,11 +13,12 @@ import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
 import { BUILT_IN_HORIZONS, horizonsFromConfig } from "../utils/horizons";
 import { frontsFromConfig, sortFronts } from "../utils/fronts";
 import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
-import { IconCheck, IconChevronRight, IconPencil, IconX } from "./ui/icons";
+import { IconCheck, IconChevronDown, IconChevronRight, IconClock, IconPencil, IconSmile, IconSparkles, IconX } from "./ui/icons";
 import { THOUGHTS_MAX, addThought } from "../utils/thoughts";
 import { escapeThought, plainThought } from "../utils/thoughtFormat";
-import ThoughtEditor from "./ui/ThoughtEditor";
+import ThoughtEditor, { THOUGHT_EMOJI } from "./ui/ThoughtEditor";
 import EstimatePicker from "./EstimatePicker";
+import { formatEstimate } from "../utils/estimates";
 import "../styles/addTask.css";
 
 function defaultReminderDateTime() {
@@ -266,25 +267,58 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
     setTimeout(onClose, 900);
   };
 
-  // Where + was tapped sets the horizon (45a): one tinted line says so, and
-  // the Horizon + Priority block wears a 2px ring for about 1.5s on open.
+  // Where + was tapped sets the horizon (45a); since 79 the Horizon pill
+  // says so, and the button names it.
   const HORIZON_NAMES = { today: "Today", office: "Work", ...Object.fromEntries(planHorizons.map(h => [h.id, h.name])) };
   const horizonName = HORIZON_NAMES[horizonLevel] || "Today";
-  const [ringOn, setRingOn] = useState(true);
-  useEffect(() => {
-    if (!ringOn) return undefined;
-    const t = setTimeout(() => setRingOn(false), 1500);
-    return () => clearTimeout(t);
-  }, [ringOn]);
+  const horizonPillName = horizons.find(h => h.key === horizonLevel)?.label || horizonName;
+  const selectedFront = frontId ? fronts.find(f => f.id === frontId) : null;
+
+  // 79: one picker open at a time, under the pill row.
+  const [picker, setPicker] = useState(null);
+  const togglePicker = (id) => setPicker(p => (p === id ? null : id));
+  const pillClass = (id) => `add-pill${picker === id ? " is-open" : ""}`;
+  const [titleFocused, setTitleFocused] = useState(false);
+  const titleRef = useRef(null);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const keepFocus = (e) => e.preventDefault();
+  // An emoji goes where the caret was; the title stays one line of 1000.
+  const insertEmoji = (emoji) => {
+    const el = titleRef.current;
+    const at = el?.selectionStart ?? title.length;
+    const end = el?.selectionEnd ?? at;
+    setTitle(t => (t.slice(0, at) + emoji + t.slice(end)).slice(0, 1000));
+    setEmojiOpen(false);
+    requestAnimationFrame(() => {
+      el?.focus();
+      const pos = Math.min(at + emoji.length, 1000);
+      el?.setSelectionRange?.(pos, pos);
+    });
+  };
 
   // A dialog: Escape closes it, Tab stays inside it, ⌘↵ / Ctrl↵ submits.
   const cardRef = useRef(null);
   const formRef = useRef(null);
+  const closePicker = () => {
+    // The selected option unmounts; keep keyboard shortcuts in the dialog.
+    cardRef.current?.querySelector(".add-pill.is-open")?.focus();
+    setPicker(null);
+  };
   const onKeyDown = (e) => {
     if (e.key === "Escape") { e.stopPropagation(); onClose(); return; }
+    // 79: T puts you back in the writing box, as in Mind Box.
+    const typing = e.target.closest?.("input, textarea, select, [contenteditable='true']");
+    if (mode === "task" && !typing && (e.key === "t" || e.key === "T") && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      titleRef.current?.focus();
+      return;
+    }
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); formRef.current?.requestSubmit(); return; }
     if (e.key !== "Tab") return;
-    const items = [...(cardRef.current?.querySelectorAll('button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])') || [])];
+    // Only what is on screen: a short phone hides More details while a picker
+    // is open (Codex review of #621).
+    const items = [...(cardRef.current?.querySelectorAll('button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])') || [])]
+      .filter(el => el.getClientRects().length > 0);
     if (!items.length) return;
     const first = items[0], last = items[items.length - 1];
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
@@ -318,10 +352,10 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
   const heading = mode === "thought" ? "New thought" : "New task";
 
   return (
-    <div className="add-overlay" onClick={onClose}>
+    <div className="add-overlay is-add-sheet" onClick={onClose}>
       <div
         ref={cardRef}
-        className={`add-card${mode === "thought" ? " is-thought" : ""}`}
+        className={`add-card is-add-sheet${mode === "thought" ? " is-thought" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-task-heading"
@@ -363,23 +397,63 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
             <p className="add-warning">Evening Guard is on: adding tasks after 8 PM is blocked. Rest now.</p>
           )}
 
-          <textarea
-            className="add-title"
-            data-testid="add-task-title"
-            aria-label="Task"
-            placeholder="What do you want to do?"
-            rows={2}
-            maxLength={1000}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            required
-            autoFocus
-          />
-          {hasAnyKey && (
-            <button type="button" className="add-link" onClick={handleAiSuggest} disabled={aiLoading}>
-              {aiLoading ? "Thinking…" : "Ask AI to improve this"}
-            </button>
-          )}
+          {/* 79: the same notebook box as Thought — ruled lines, the tools
+              and the button inside it. */}
+          <div className={`te add-task-editor${titleFocused ? " is-focused" : ""}`}>
+            <div className="te-box">
+              <GrowTextarea
+                ref={titleRef}
+                className="te-field add-title"
+                data-testid="add-task-title"
+                aria-label="Task"
+                placeholder="What do you want to do?"
+                maxLength={1000}
+                maxRows={6}
+                enterKeyHint="done"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onEnter={() => formRef.current?.requestSubmit()}
+                onFocus={() => setTitleFocused(true)}
+                onBlur={() => setTitleFocused(false)}
+                autoFocus
+              />
+              <div className="te-foot">
+                <button type="button" className={`te-tool${emojiOpen ? " is-on" : ""}`} aria-label="Emoji" title="Emoji"
+                  aria-expanded={emojiOpen} onMouseDown={keepFocus} onClick={() => setEmojiOpen(o => !o)}>
+                  <IconSmile size={18} />
+                </button>
+                {hasAnyKey && (
+                  <button type="button" className="te-tool add-improve" aria-label="Ask AI to improve this"
+                    disabled={aiLoading || !title.trim()} onClick={handleAiSuggest}>
+                    <IconSparkles size={15} />
+                    <span>{aiLoading ? "Thinking…" : "Improve"}</span>
+                  </button>
+                )}
+                <span className="add-foot-gap" />
+                {saved ? (
+                  <p className="add-saved" role="status">{`Added to ${horizonName}`}</p>
+                ) : (
+                  <>
+                    <kbd className="add-kbd" aria-hidden="true">⌘↵</kbd>
+                    <button type="submit" className="te-save add-task-submit" data-testid="add-task-submit" disabled={!title.trim()}>
+                      {`Add to ${horizonName}`}
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+            {emojiOpen && (
+              <div className="te-emoji" role="group" aria-label="Emoji">
+                <div className="te-emoji-grid">
+                  {THOUGHT_EMOJI.map((emoji) => (
+                    <button key={emoji} type="button" className="te-emoji-cell" onMouseDown={keepFocus} onClick={() => insertEmoji(emoji)}>
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
           {aiError && <p className="add-error-line">{aiError}</p>}
           {aiSuggestion && (
             <div className="add-suggestion">
@@ -396,64 +470,89 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
             </div>
           )}
 
-          {openedFrom && (
-            <p className="add-note">
-              Adding to <strong>{HORIZON_NAMES[defaultHorizon] || horizonName}</strong> because you opened it from {openedFrom}. Change below.
-            </p>
-          )}
+          {/* 79: one row of pills; a tap opens that one picker under the row.
+              The horizon comes from where the sheet was opened. */}
+          <div className="add-pills" role="group" aria-label="Task settings">
+            <button type="button" className={`${pillClass("horizon")} is-shrinkable`} aria-expanded={picker === "horizon"} aria-label={`Horizon: ${horizonPillName}`} onClick={() => togglePicker("horizon")}>
+              <span className="add-pill-text">{horizonPillName}</span><IconChevronDown size={14} />
+            </button>
+            <button type="button" className={`${pillClass("priority")} is-mono`} aria-expanded={picker === "priority"} aria-label={`Priority: ${priority}`} onClick={() => togglePicker("priority")}>
+              {priority}<IconChevronDown size={14} />
+            </button>
+            <button type="button" className={`${pillClass("time")}${estimatePicked ? " is-mono" : " is-empty"}`} aria-expanded={picker === "time"}
+              aria-label={estimatePicked ? `Time: ${formatEstimate(Number(estimateMinutes))}` : "Time: not set"} onClick={() => togglePicker("time")}>
+              {!estimatePicked && <IconClock size={14} className="add-pill-clock" />}
+              {estimatePicked
+                ? <><span className="add-pill-wide">{Number(estimateMinutes) < 60 ? `${Number(estimateMinutes)} MIN` : formatEstimate(Number(estimateMinutes)).toUpperCase()}</span><span className="add-pill-narrow">{formatEstimate(Number(estimateMinutes))}</span></>
+                : <><span className="add-pill-wide">Add time</span><span className="add-pill-narrow">+ Time</span></>}
+            </button>
+            {fronts.length > 0 && (
+              <button type="button" className={`${pillClass("front")}${frontId ? "" : " is-quiet"}`} aria-expanded={picker === "front"}
+                aria-label={`Front: ${selectedFront ? selectedFront.name : "none"}`} onClick={() => togglePicker("front")}>
+                <span className="add-pill-text">
+                  {selectedFront ? selectedFront.name : <><span className="add-pill-wide">No front</span><span className="add-pill-narrow">Front</span></>}
+                </span>
+                <IconChevronDown size={14} />
+              </button>
+            )}
+          </div>
 
-          <div className={`add-block${ringOn ? " is-ringed" : ""}`}>
-            <div className="add-field" role="group" aria-labelledby="add-horizon-label">
-              <span id="add-horizon-label" className="add-label">Horizon</span>
+          {picker === "horizon" && (
+            <div className="add-picker" role="group" aria-label="Horizon">
+              <p className="add-picker-label">WHEN IS IT FOR?</p>
               <div className="add-chips">
                 {horizons.map((h) => (
-                  <button key={h.key} type="button" className={chip(horizonLevel === h.key)} aria-pressed={horizonLevel === h.key} onClick={() => setHorizonLevel(h.key)}>
+                  <button key={h.key} type="button" className={chip(horizonLevel === h.key)} aria-pressed={horizonLevel === h.key} onClick={() => { setHorizonLevel(h.key); closePicker(); }}>
                     {h.label}
                   </button>
                 ))}
               </div>
             </div>
-            <div className="add-field" role="group" aria-labelledby="add-priority-label">
-              <span id="add-priority-label" className="add-label">Priority</span>
+          )}
+          {picker === "priority" && (
+            <div className="add-picker" role="group" aria-label="Priority">
+              <p className="add-picker-label">HOW IMPORTANT?</p>
               <div className="add-chips">
                 {priorities.map((p) => (
-                  <button key={p} type="button" className={chip(priority === p)} aria-pressed={priority === p} aria-label={`Priority ${p.slice(1)}`} onClick={() => setPriority(p)}>
+                  <button key={p} type="button" className={chip(priority === p)} aria-pressed={priority === p} aria-label={`Priority ${p.slice(1)}`} onClick={() => { setPriority(p); closePicker(); }}>
                     {p}
                   </button>
                 ))}
               </div>
             </div>
-          </div>
-
-          <div className="add-field" role="group" aria-labelledby="add-time-label">
-            <span id="add-time-label" className="add-label">Time</span>
-            <div className="add-chips">
-              <EstimatePicker
-                value={estimatePicked ? Number(estimateMinutes) : null}
-                chipClass={chip}
-                inputClass="add-input add-other-input"
-                buttonClass="add-btn-outline add-other-set"
-                idPrefix="add-time"
-                onPick={(m) => { setEstimateMinutes(m); setEstimatePicked(true); }}
-              />
+          )}
+          {picker === "time" && (
+            <div className="add-picker add-time-picker" role="group" aria-label="Time">
+              <p className="add-picker-label">HOW LONG WILL IT TAKE?</p>
+              <div className="add-chips add-time-chips">
+                <EstimatePicker
+                  value={estimatePicked ? Number(estimateMinutes) : null}
+                  chipClass={chip}
+                  inputClass="add-input add-other-input"
+                  buttonClass="add-btn-outline add-other-set"
+                  idPrefix="add-time"
+                  onPick={(m) => { setEstimateMinutes(m); setEstimatePicked(true); }}
+                />
+              </div>
             </div>
-          </div>
-
-          {fronts.length > 0 && (
-            <label className="add-row" htmlFor="task-front">
-              <span className="add-row-label">Front</span>
-              <select id="task-front" className="add-row-select" value={frontId} onChange={e => setFrontId(e.target.value)}>
-                <option value="">Not on a front</option>
-                {fronts.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-              </select>
-              <IconChevronRight size={16} />
-            </label>
+          )}
+          {picker === "front" && (
+            <div className="add-picker" role="group" aria-label="Front">
+              <p className="add-picker-label">WHICH FRONT?</p>
+              <div className="add-chips">
+                <button type="button" className={chip(!frontId)} aria-pressed={!frontId} onClick={() => { setFrontId(""); closePicker(); }}>Not on a front</button>
+                {fronts.map(f => (
+                  <button key={f.id} type="button" className={chip(frontId === f.id)} aria-pressed={frontId === f.id} onClick={() => { setFrontId(f.id); closePicker(); }}>{f.name}</button>
+                ))}
+              </div>
+            </div>
           )}
 
           {/* What the design's sheet doesn't draw but the app already does —
               first step (Focus shows it), reminder, category, sub-steps —
               kept one tap away rather than dropped. */}
-          <button type="button" className="add-row add-more" aria-expanded={advancedOpen} onClick={() => setAdvancedOpen(o => !o)}>
+          {/* Blurring an empty Other time field shrinks the sheet before mouseup. */}
+          <button type="button" className={`add-row add-more${picker ? " is-picker-open" : ""}`} aria-expanded={advancedOpen} onMouseDown={keepFocus} onClick={() => setAdvancedOpen(o => !o)}>
             <span className="add-row-label">More details</span>
             <span className="add-row-value">First step, reminder, steps</span>
             <IconChevronRight size={16} />
@@ -584,18 +683,6 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
 
           {formError && <p className="add-error" role="alert">{formError}</p>}
 
-          <div className="add-foot">
-            {saved ? (
-              <p className="add-saved" role="status">{`Added to ${horizonName}`}</p>
-            ) : (
-              <>
-                <button type="submit" className="add-submit" data-testid="add-task-submit">
-                  {`Add to ${horizonName}`}
-                </button>
-                <kbd className="add-kbd" aria-hidden="true">⌘ ↵</kbd>
-              </>
-            )}
-          </div>
         </form>
         )}
       </div>
