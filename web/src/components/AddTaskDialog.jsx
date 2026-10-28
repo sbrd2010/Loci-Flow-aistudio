@@ -299,6 +299,11 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
   // A dialog: Escape closes it, Tab stays inside it, ⌘↵ / Ctrl↵ submits.
   const cardRef = useRef(null);
   const formRef = useRef(null);
+  const closePicker = () => {
+    // The selected option unmounts; keep keyboard shortcuts in the dialog.
+    cardRef.current?.querySelector(".add-pill.is-open")?.focus();
+    setPicker(null);
+  };
   const onKeyDown = (e) => {
     if (e.key === "Escape") { e.stopPropagation(); onClose(); return; }
     // 79: T puts you back in the writing box, as in Mind Box.
@@ -497,7 +502,7 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
               <p className="add-picker-label">WHEN IS IT FOR?</p>
               <div className="add-chips">
                 {horizons.map((h) => (
-                  <button key={h.key} type="button" className={chip(horizonLevel === h.key)} aria-pressed={horizonLevel === h.key} onClick={() => { setHorizonLevel(h.key); setPicker(null); }}>
+                  <button key={h.key} type="button" className={chip(horizonLevel === h.key)} aria-pressed={horizonLevel === h.key} onClick={() => { setHorizonLevel(h.key); closePicker(); }}>
                     {h.label}
                   </button>
                 ))}
@@ -509,7 +514,7 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
               <p className="add-picker-label">HOW IMPORTANT?</p>
               <div className="add-chips">
                 {priorities.map((p) => (
-                  <button key={p} type="button" className={chip(priority === p)} aria-pressed={priority === p} aria-label={`Priority ${p.slice(1)}`} onClick={() => { setPriority(p); setPicker(null); }}>
+                  <button key={p} type="button" className={chip(priority === p)} aria-pressed={priority === p} aria-label={`Priority ${p.slice(1)}`} onClick={() => { setPriority(p); closePicker(); }}>
                     {p}
                   </button>
                 ))}
@@ -535,9 +540,9 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
             <div className="add-picker" role="group" aria-label="Front">
               <p className="add-picker-label">WHICH FRONT?</p>
               <div className="add-chips">
-                <button type="button" className={chip(!frontId)} aria-pressed={!frontId} onClick={() => { setFrontId(""); setPicker(null); }}>Not on a front</button>
+                <button type="button" className={chip(!frontId)} aria-pressed={!frontId} onClick={() => { setFrontId(""); closePicker(); }}>Not on a front</button>
                 {fronts.map(f => (
-                  <button key={f.id} type="button" className={chip(frontId === f.id)} aria-pressed={frontId === f.id} onClick={() => { setFrontId(f.id); setPicker(null); }}>{f.name}</button>
+                  <button key={f.id} type="button" className={chip(frontId === f.id)} aria-pressed={frontId === f.id} onClick={() => { setFrontId(f.id); closePicker(); }}>{f.name}</button>
                 ))}
               </div>
             </div>
@@ -546,7 +551,8 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
           {/* What the design's sheet doesn't draw but the app already does —
               first step (Focus shows it), reminder, category, sub-steps —
               kept one tap away rather than dropped. */}
-          <button type="button" className={`add-row add-more${picker ? " is-picker-open" : ""}`} aria-expanded={advancedOpen} onClick={() => setAdvancedOpen(o => !o)}>
+          {/* Blurring an empty Other time field shrinks the sheet before mouseup. */}
+          <button type="button" className={`add-row add-more${picker ? " is-picker-open" : ""}`} aria-expanded={advancedOpen} onMouseDown={keepFocus} onClick={() => setAdvancedOpen(o => !o)}>
             <span className="add-row-label">More details</span>
             <span className="add-row-value">First step, reminder, steps</span>
             <IconChevronRight size={16} />

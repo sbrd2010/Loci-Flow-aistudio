@@ -83,6 +83,69 @@ test("opened from Plan: the Horizon pill names the column it came from", async (
   expect(["Week", "This week"]).toContain(pill);
 });
 
+test("picker selections return keyboard focus to their pill", async ({ page }) => {
+  await enterDemo(page);
+  for (const [name, option] of [["Horizon", "Week"], ["Priority", "Priority 2"], ["Front", "Not on a front"]]) {
+    await page.keyboard.press("n");
+    const dialog = page.getByRole("dialog", { name: "New task" });
+    const title = dialog.getByTestId("add-task-title");
+    await title.fill("File the sample notes");
+    const pill = dialog.getByRole("button", { name: new RegExp(`^${name}:`) });
+    await pill.focus();
+    await page.keyboard.press("Enter");
+    await dialog.getByRole("button", { name: option, exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await expect(pill).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(dialog.locator(":focus")).toHaveCount(1);
+    await pill.focus();
+    await page.keyboard.press("t");
+    await expect(title).toBeFocused();
+    await pill.focus();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+  }
+  await page.keyboard.press("n");
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await dialog.getByTestId("add-task-title").fill("File the sample notes");
+  await openPicker(dialog, "Priority");
+  await dialog.getByRole("button", { name: "Priority 2", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Control+Enter");
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByTestId("today-tasks-list").getByText("File the sample notes")).toBeVisible();
+});
+
+for (const width of [360, 375]) {
+  test(`${width}px: a 40-character horizon leaves the submit button inside the editor`, async ({ page }) => {
+    const horizon = "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMN";
+    await page.addInitScript((name) => {
+      localStorage.setItem("loci_groq_key", "test-key-not-a-real-key");
+      window.__LOCI_DEMO_FIXTURE__ = () => ({
+        userId: "demo", tasks: [], brainDump: [], contributions: [], timestamp: Date.now(),
+        config: { isOnboardingCompleted: true, horizons: { week: { name } } },
+      });
+    }, horizon);
+    await enterDemo(page, { width, height: 800 });
+    await page.keyboard.press("n");
+    const dialog = page.getByRole("dialog", { name: "New task" });
+    await dialog.getByTestId("add-task-title").fill("Sort the sample files");
+    await openPicker(dialog, "Horizon");
+    await dialog.getByRole("button", { name: horizon, exact: true }).click();
+    await expect(dialog.getByRole("button", { name: "Ask AI to improve this" })).toBeVisible();
+    const submit = dialog.getByTestId("add-task-submit");
+    await expect(submit).toHaveText(`Add to ${horizon}`);
+    expect(await submit.evaluate(el => {
+      const r = el.getBoundingClientRect();
+      const box = el.closest(".te-box").getBoundingClientRect();
+      return r.left >= box.left && r.right <= box.right && r.width >= 80
+        && document.elementFromPoint(r.right - 4, r.top + r.height / 2)?.closest(".add-task-submit") === el;
+    })).toBe(true);
+    await submit.click();
+    await expect(dialog).toHaveCount(0);
+  });
+}
+
 test("a phone gets a bottom sheet; Escape closes it and Tab stays inside", async ({ page }) => {
   await enterDemo(page);
   await openFromToday(page);
@@ -319,6 +382,8 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 412, height: 760 
     await openPicker(dialog, "Time");
     await dialog.getByRole("button", { name: "Other", exact: true }).click();
     await dialog.getByRole("button", { name: "More details" }).click();
+    await expect(dialog.getByLabel("Other time")).toBeVisible();
+    await expect(dialog.getByPlaceholder("The smallest start, e.g. open the doc")).toBeVisible();
     for (const where of ["top", "bottom"]) {
       await page.locator(".add-card").evaluate((el, w) => { el.scrollTop = w === "top" ? 0 : el.scrollHeight; }, where);
       const fit = await page.evaluate((w) => {

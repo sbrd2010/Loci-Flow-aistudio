@@ -364,6 +364,12 @@
 }
 .add-card textarea.add-title:focus-visible { box-shadow: none; }
 .add-foot-gap { flex: 1; }
+.te-save.add-task-submit {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .te-tool.add-improve {
   width: auto;
   gap: 6px;
