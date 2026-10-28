@@ -29,6 +29,7 @@ import { track } from "../firebase";
 import { cancelReminder } from "../utils/reminders";
 import { getLociDayStr } from "../utils/dailyAnchors";
 import { getFocusWindows } from "../utils/focusWindows";
+import { narrowDown, pickThree } from "../utils/narrowDown";
 import { buildTaskMutationEvent, buildFocusStartedEvent, buildFocusTerminalEvent, eventPatch, eventsPatch } from "../utils/activityLog";
 import { committedTaskIdsForDay, shouldShowReflection } from "../utils/dailyCoachCheckins";
 import "../styles/focusNow.css";
@@ -1934,8 +1935,12 @@ export default function TodayTab({
         onCommitProposal={() => wallProposal && handlePinTask(wallProposal)}
         onDismissProposal={() => saveConfigPatch({ wallProposalDismissedDate: todayStr })}
         commitBlocked={isEveningGuardBlocked(config)}
-        picks={wallIsAsking ? remainingTasks.filter(t => !isEventTask(t)).slice(0, 3).map(t => ({
+        // #613: with nothing chosen, Loci's own pick comes first (nearest real
+        // deadline, then priority, then the list's order), with why; "Choose for
+        // me" makes it the one thing.
+        picks={wallIsAsking ? pickThree(remainingTasks, config).map((t, i) => ({
           uuid: t.uuid, title: t.title, minutes: Number(t.timeEstimateMinutes) || 0,
+          ...(i === 0 ? { why: narrowDown(remainingTasks, config).why } : {}),
         })) : []}
         openCount={remainingTasks.length}
         // 67i: a pick is "make this the one thing": it moves to NOW on the Day
