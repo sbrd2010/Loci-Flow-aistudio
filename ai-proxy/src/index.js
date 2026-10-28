@@ -160,19 +160,24 @@ function relayGemini(params, env, fetchImpl) {
 function relayZai(params, env, fetchImpl) {
   if (!env.ZAI_API_KEY) return notSetUp("Z.ai is not set up on the relay yet (ZAI_API_KEY missing).");
   const model = env.ZAI_MODEL || DEFAULT_ZAI_MODEL;
-  return relayUpstream("Z.ai", ZAI_URL, env.ZAI_API_KEY, { model, ...forModel(params, model) }, fetchImpl);
+  // GLM thinks by default and can spend the whole budget on it, leaving no reply (#594).
+  return relayUpstream("Z.ai", ZAI_URL, env.ZAI_API_KEY, { model, ...forModel(params, model), thinking: { type: "disabled" } }, fetchImpl);
 }
 
 // Free models only, so the owner's key can never be billed through the relay,
 // even if credit is added to the account later.
 const isFreeOpenRouterModel = (model) => model === DEFAULT_OPENROUTER_MODEL || /:free$/.test(model);
+// The free router picks a different model each time, once a safety classifier
+// (#594), so OpenRouter gets a list and moves down it itself when a model is gone
+// or busy; the app keeps the same list (web/src/utils/aiCall.js). All free.
+const OPENROUTER_FREE_MODELS = ["nvidia/nemotron-3-ultra-550b-a55b:free", "google/gemma-4-31b-it:free", DEFAULT_OPENROUTER_MODEL];
 
 function relayOpenRouter(params, env, fetchImpl) {
   if (!env.OPENROUTER_API_KEY) return notSetUp("OpenRouter is not set up on the relay yet (OPENROUTER_API_KEY missing).");
-  const model = isFreeOpenRouterModel(env.OPENROUTER_MODEL || "") ? env.OPENROUTER_MODEL : DEFAULT_OPENROUTER_MODEL;
+  const pinned = isFreeOpenRouterModel(env.OPENROUTER_MODEL || "") ? env.OPENROUTER_MODEL : "";
   // OpenRouter takes a reasoning object rather than reasoning_effort.
   const { reasoning_effort: effort, ...rest } = params;
-  const payload = { model, ...rest, ...(effort && isGptOss(model) ? { reasoning: { effort } } : {}) };
+  const payload = { ...(pinned ? { model: pinned } : { models: OPENROUTER_FREE_MODELS }), ...rest, ...(effort && isGptOss(pinned) ? { reasoning: { effort } } : {}) };
   return relayUpstream("OpenRouter", OPENROUTER_URL, env.OPENROUTER_API_KEY, payload, fetchImpl);
 }
 

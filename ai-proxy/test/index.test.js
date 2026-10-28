@@ -166,12 +166,13 @@ describe("OpenRouter", () => {
   const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
   const sentTo = () => JSON.parse(fetchImpl.mock.calls.find(([url]) => url === OPENROUTER_URL)[1].body);
 
-  it("forwards to OpenRouter with the server key and its free router", async () => {
+  it("forwards to OpenRouter with the server key and Loci's list of free models (#594)", async () => {
     const res = await call("/openrouter", { token: await signer.sign(), env: { OPENROUTER_API_KEY: "sk-or-test" } });
     expect(res.status).toBe(200);
     const [, init] = fetchImpl.mock.calls.find(([url]) => url === OPENROUTER_URL);
     expect(init.headers.Authorization).toBe("Bearer sk-or-test");
-    expect(sentTo()).toMatchObject({ model: "openrouter/free", stream: false });
+    expect(sentTo()).toMatchObject({ models: ["nvidia/nemotron-3-ultra-550b-a55b:free", "google/gemma-4-31b-it:free", "openrouter/free"], stream: false });
+    expect(sentTo()).not.toHaveProperty("model");
     expect(sentTo()).not.toHaveProperty("reasoning_effort");
     expect(sentTo()).not.toHaveProperty("reasoning");
   });
@@ -183,7 +184,8 @@ describe("OpenRouter", () => {
 
   it("never uses a paid model, even if one is configured", async () => {
     await call("/openrouter", { token: await signer.sign(), env: { OPENROUTER_API_KEY: "k", OPENROUTER_MODEL: "openai/gpt-oss-120b" } });
-    expect(sentTo().model).toBe("openrouter/free");
+    expect(sentTo()).not.toHaveProperty("model");
+    expect(sentTo().models.every(m => m === "openrouter/free" || m.endsWith(":free"))).toBe(true);
   });
 
   it("says OpenRouter is not set up when the key is missing", async () => {
@@ -298,6 +300,8 @@ describe("Groq and Gemini", () => {
     const found = fetchImpl.mock.calls.find(([u]) => u === "https://api.z.ai/api/paas/v4/chat/completions");
     expect(found[1].headers.Authorization).toBe("Bearer zai-test");
     expect(JSON.parse(found[1].body).model).toBe("glm-4.7-flash");
+    // GLM's thinking can use the whole budget and leave no reply (#594).
+    expect(JSON.parse(found[1].body).thinking).toEqual({ type: "disabled" });
   });
 
   it("reads Gemini's error reason from its one-item array", async () => {

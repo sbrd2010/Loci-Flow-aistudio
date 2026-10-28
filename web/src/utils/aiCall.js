@@ -11,11 +11,14 @@ const CEREBRAS_URL   = "https://api.cerebras.ai/v1/chat/completions";
 const CEREBRAS_MODEL = import.meta.env.VITE_CEREBRAS_MODEL || "gpt-oss-120b";
 const OPENROUTER_URL   = "https://openrouter.ai/api/v1/chat/completions";
 // OpenRouter rotates its free models: "openai/gpt-oss-120b:free" was withdrawn and its
-// error says "unavailable for free". The default is therefore OpenRouter's own free
-// router, which always picks a free model that exists. A person can pin one model in
-// Settings > AI provider (stored on the device), or a deployment can set
-// VITE_OPENROUTER_MODEL.
-const OPENROUTER_MODEL = import.meta.env.VITE_OPENROUTER_MODEL || "openrouter/free";
+// error says "unavailable for free". Its own free router ("openrouter/free") picks a
+// different model each time, once a safety classifier (#594). So by default OpenRouter
+// is given a list and moves down it itself when a model is gone or busy: the free model
+// that answered best in the #594 run, then a second, then the free router. A person can
+// pin one model in Settings > AI provider (stored on the device), or a deployment can
+// set VITE_OPENROUTER_MODEL. The relay keeps the same list (ai-proxy/src/index.js).
+export const OPENROUTER_FREE_MODELS = ["nvidia/nemotron-3-ultra-550b-a55b:free", "google/gemma-4-31b-it:free", "openrouter/free"];
+const OPENROUTER_MODEL = import.meta.env.VITE_OPENROUTER_MODEL || "";
 export const OPENROUTER_MODEL_KEY = "loci_openrouter_model";
 function openrouterModel() {
   try { return (localStorage.getItem(OPENROUTER_MODEL_KEY) || "").trim() || OPENROUTER_MODEL; } catch { return OPENROUTER_MODEL; }
@@ -444,7 +447,7 @@ async function requestOpenRouter(openrouterKey, systemPrompt, messages, tokenBud
       "Authorization": `Bearer ${openrouterKey}`
     },
     body: JSON.stringify({
-      model,
+      ...(model ? { model } : { models: OPENROUTER_FREE_MODELS }),
       messages: [{ role: "system", content: systemPrompt }, ...messages],
       max_tokens: tokenBudget,
       temperature: 0.4,
@@ -804,7 +807,9 @@ async function callZai(zaiKey, systemPrompt, messages, maxTokens, limits) {
         model: ZAI_MODEL,
         messages: [{ role: "system", content: effectiveSystemPrompt }, ...effectiveMessages],
         max_tokens: maxTokens ?? 300,
-        temperature: 0.4
+        temperature: 0.4,
+        // GLM thinks by default and can spend the whole budget on it, leaving no reply (#594).
+        thinking: { type: "disabled" }
       })
     }, limits);
     if (!res.ok) {
@@ -847,18 +852,23 @@ export function isOnlyProviderKeyMissing() {
 }
 
 // Auto: Groq first, then Ollama Cloud, Gemini, OpenRouter, Cloudflare AI and NVIDIA.
-// Groq's allowance resets daily, so it goes first; Ollama runs the same model on a
-// large monthly allowance; Gemini gave the best answers after them in the #555 U8
-// run, OpenRouter's free router the weakest. Z.ai only
-// fits a short prompt (12k-char guard, one request at a time), so it comes after
-// the providers that take any prompt. Cerebras ended its no-card free tier, so it
-// is a last resort for someone with a key of their own. A chosen provider goes
-// first, then the others in Auto's order.
-const AUTO_ORDER = ["groq", "ollama", "gemini", "openrouter", "cloudflare", "nvidia", "zai", "cerebras"];
+// From the #594 multi-provider run (28 Oct): gpt-oss-120b answers best, so its
+// three hosts go first (Groq resets daily, Cloudflare and Ollama follow), then
+// Gemini, then NVIDIA, which claimed changes it hadn't made. OpenRouter's free
+// router picks a different model each time, so it comes near the end. Cerebras
+// ended its no-card free tier: last, for someone with a key of their own. Z.ai's
+// free tier refused most Coach requests as overloaded, but quickly, and it only
+// fits short prompts (12k-char guard), so it is the free last resort before
+// Cerebras. A chosen provider goes first, then Auto.
+const AUTO_ORDER = ["groq", "cloudflare", "ollama", "gemini", "nvidia", "openrouter", "zai", "cerebras"];
 export const PROVIDER_ORDERS = Object.fromEntries([
   ["auto", AUTO_ORDER],
   ...AUTO_ORDER.map(name => [name, [name, ...AUTO_ORDER.filter(n => n !== name)]]),
 ]);
+
+// A safety classifier's verdict ("User Safety: safe …"), which OpenRouter's free
+// router sometimes answers with (#594): not a reply, so the next provider is tried.
+export const isClassifierVerdict = (reply) => /^\s*User Safety:\s*(?:safe|unsafe)\b/i.test(String(reply || ""));
 
 export function buildProviderOrder(pref, cleanGroqKey, cleanGeminiKey, cleanCerebrasKey, cleanZaiKey, only = false, cleanOpenrouterKey = "", relay = isRelayAvailable()) {
   const available = {
@@ -951,6 +961,7 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, openrout
       // Stopped while the reply was arriving: it is not delivered.
       if (signal?.aborted) throw new Error("cancelled");
       const { reply, usage: callUsage } = result;
+      if (isClassifierVerdict(reply)) throw new Error(`${provider.name}_empty`);
       logAICallDiagnostics({ provider: provider.name, outcome: "ok", contextMode, systemPrompt, messages, usage: callUsage });
       return appendAIUsageWarning(reply, usage.warning);
     } catch (err) {

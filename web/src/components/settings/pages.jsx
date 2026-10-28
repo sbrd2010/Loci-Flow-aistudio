@@ -602,7 +602,7 @@ export function AiProviderPage({ onBack, backLabel }) {
           );
         })}
       </Group>
-      <Group label="OpenRouter model" note="For your own OpenRouter key. Leave empty to let OpenRouter pick a free model each time. To pin one, paste its name from openrouter.ai/models, for example a model marked free.">
+      <Group label="OpenRouter model" note="For your own OpenRouter key. Leave empty for Loci's list of free models, tried in turn. To pin one, paste its name from openrouter.ai/models, for example a model marked free.">
         <label className="set-field">
           <span className="set-label">Model name</span>
           <input

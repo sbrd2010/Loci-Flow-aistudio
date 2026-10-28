@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import fs from "fs";
-import { evalRequestBody, retryBudget, splitReply, gradeReply, summarize, toSpec, parsePlaybook, judgeMessages, parseJudge } from "./coachEval";
+import { EVAL_PROVIDERS, evalRequestBody, retryBudget, splitReply, gradeReply, summarize, toSpec, parsePlaybook, judgeMessages, parseJudge } from "./coachEval";
 
 const turn = { system: "S", messages: [{ role: "assistant", content: "Hi!" }, { role: "user", content: "What next?" }] };
 
@@ -18,6 +18,14 @@ describe("evalRequestBody: shaped as Loci's relay sends it", () => {
     expect(evalRequestBody("ollama", turn, 800, undefined, "medium").reasoning_effort).toBe("medium");
     expect(evalRequestBody("ollama", turn, 800, undefined, null)).not.toHaveProperty("reasoning_effort");
     expect(evalRequestBody("nvidia", turn, 800, undefined, "low").chat_template_kwargs).toEqual({ enable_thinking: false });
+  });
+  it("asks Cloudflare's account from the environment, and can turn Z.ai's thinking off", () => {
+    process.env.CLOUDFLARE_ACCOUNT_ID = "acct123";
+    expect(EVAL_PROVIDERS.cloudflare.url).toBe("https://api.cloudflare.com/client/v4/accounts/acct123/ai/run/@cf/openai/gpt-oss-120b");
+    delete process.env.CLOUDFLARE_ACCOUNT_ID;
+    expect(evalRequestBody("cloudflare", turn, 450)).toMatchObject({ reasoning_effort: "low" });
+    expect(evalRequestBody("zai", turn, 450)).not.toHaveProperty("thinking");
+    expect(evalRequestBody("zai-nothink", turn, 450).thinking).toEqual({ type: "disabled" });
   });
   it("gives OpenRouter a reasoning object only for a gpt-oss model", () => {
     expect(evalRequestBody("openrouter", turn, 300)).not.toHaveProperty("reasoning");
