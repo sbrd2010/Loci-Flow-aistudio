@@ -1,70 +1,40 @@
 # Loci
 
-A personal productivity web app for managing your day — task lists, deep focus sessions, and a visual Day Map to schedule where each task fits in your week.
+**Stop managing your list. Start doing the one thing that matters.**
 
-## Tech stack
+Most productivity apps help you collect tasks, and the list keeps growing. Loci helps with the hard part: deciding what to do *right now* and getting started, even on days when everything feels urgent.
 
-- **Frontend** — React 18 + Vite
-- **Backend / sync** — Firebase Realtime Database
-- **Testing** — Vitest (unit), Playwright (E2E)
+> Loci is in early access at [loci-flow.web.app](https://loci-flow.web.app), free to use while we grow.
+> Copyright (c) 2026 sbrd2010. All rights reserved. Not open source: see [LICENSE](LICENSE).
 
-## Run locally
+## Why Loci
 
-**Prerequisites:** Node.js 18+, npm
+**One thing at a time.** Your day is built around a single task you've chosen. Can't decide? Loci offers its three best picks, explains its top choice, and one tap on **Choose for me** gets you moving.
+
+**Advice you can trust.** When Loci narrows your list down, it shows its working: what's due, what won't fit in the time you have left, what can wait. No pep talks and no guesswork, just clear reasons.
+
+**See the whole picture.** Plan across today, this week, this month, this quarter and the next six months. Group related work under a shared deadline, and keep your most important deadline in view.
+
+**A realistic day.** The Day Map lays your tasks over the hours you actually have, and tells you plainly what won't fit before the day runs out.
+
+**Built around your hours.** Night owl? Your Loci day can end after midnight, so late work counts towards the day you started.
+
+**Help when you're stuck.** Focus sessions keep you on the task in front of you. When it stops moving, Loci notices and helps you find a way back in.
+
+**A clear head.** Drop stray thoughts into the Mind Box so they stop pulling at your attention.
+
+**Your own AI coach.** Coach knows your plan. Ask what to do next, how to shape your week or how to get unstuck, and let it break a big task into steps you can actually start.
+
+**Everywhere you work.** Sign in once and your plan follows you across devices. An Android app is coming soon.
+
+## For developers
+
+Needs Node.js 22+.
 
 ```bash
-# 1. Install dependencies
 cd web
 npm install
-
-# 2. Configure environment
-cp .env.example .env
-# Edit .env — see comments inside for which keys are optional
-
-# 3. Start dev server
 npm run dev
 ```
 
-The app opens at `http://localhost:5173`. A **Try Demo** button on the landing page lets you explore without signing in or configuring Firebase.
-
-## Available scripts
-
-| Command | What it does |
-|---|---|
-| `npm run dev` | Start local dev server with hot reload |
-| `npm run build` | Production build into `web/dist/` |
-| `npm run preview` | Serve the production build locally |
-| `npm test` | Run unit tests with Vitest |
-| `npm run test:e2e` | Run Playwright E2E tests (requires dev server running) |
-
-## Android app
-
-The repo also contains a native **Android app** (Loci Focus) that wraps this web
-app with Capacitor. It lives entirely in [`web/android/`](web/android/README_ANDROID.md)
-and does not affect the web app — the JS/CSS codebase is untouched (all web tests
-still pass). New web PRs flow into the Android app automatically on each build:
-
-```
-merge JS PRs → CI runs npm run build + cap sync → new APK/AAB built
-```
-
-See [`web/android/README_ANDROID.md`](web/android/README_ANDROID.md) for local
-builds, signing setup, and Google Play release steps.
-
-## Environment variables
-
-Copy `web/.env.example` to `web/.env`. All variables are optional for local development — the app runs in demo mode without them.
-
-| Variable | Purpose |
-|---|---|
-| `VITE_FIREBASE_APP_ID` | Firebase web app ID (enables cloud sync) |
-| `VITE_GA_MEASUREMENT_ID` | Google Analytics (optional) |
-| `VITE_GROQ_KEY` | Groq API key, **local development only**: a key in the build is public, so the deploy workflows do not pass it; the deployed app uses the relay (`docs/ai-relay.md`) |
-| `VITE_GEMINI_KEY` | Gemini API key, **local development only** (as `VITE_GROQ_KEY`) |
-| `VITE_GEMINI_MODEL` | Gemini model override (optional, defaults to `gemini-2.5-flash-lite`). Copy the name exactly as Google AI Studio shows it; a free-tier model with a higher requests-per-day limit stretches the shared key |
-| `VITE_CEREBRAS_KEY` | Cerebras API key, **local development only** (as `VITE_GROQ_KEY`) |
-| `VITE_CEREBRAS_MODEL` | Cerebras model override (optional, defaults to `gpt-oss-120b`) |
-| `VITE_OPENROUTER_MODEL` | OpenRouter model override (optional, defaults to `openrouter/free`, OpenRouter's free router; a person can also pin a model in Settings). OpenRouter keys are added per person in Settings; do not put a key with credit in a build variable |
-| `VITE_AI_RELAY_URL` | Address of Loci's AI relay Worker (optional). When set, Cloudflare AI and NVIDIA are offered as providers and OpenRouter, Groq, Gemini and Z.ai work without a key on the device; see `docs/ai-relay.md` |
-
-Firebase config beyond the app ID (API key, project ID, etc.) is baked into the app for the hosted version. For your own Firebase project, update `web/src/firebase.js`.
+Open `http://localhost:5173` and use **Try Demo** to look around without signing in. `npm test` runs the unit tests and `npm run test:e2e` the end-to-end tests. The Android app wraps the same web code: see [`web/android/README_ANDROID.md`](web/android/README_ANDROID.md).
