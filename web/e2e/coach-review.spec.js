@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 // Coach → Review (Q51, 73a/b): the brief, then the facts, with a Today ·
-// 7 days · 30 days switch. Mind Box no longer has Insights. Demo mode: there is no focus
+// 7 days · 14 days · 30 days switch. Mind Box no longer has Insights. Demo mode: there is no focus
 // ledger to read, so the focus figures say so instead of claiming zero.
 
 async function openReview(page, viewport = { width: 1600, height: 900 }) {
@@ -27,6 +27,10 @@ test("Review shows the facts for 7 days, and the switch changes the period", asy
   await expect(facts.getByRole("heading", { name: "The week in numbers", exact: true })).toBeVisible();
   await expect(facts.getByText(/^Today has .* planned and .* left in the day\./)).toBeVisible();
 
+  await page.getByRole("radio", { name: "14 days" }).click();
+  await expect(facts.locator(".rv-bar-col")).toHaveCount(14);
+  await expect(facts.getByRole("heading", { name: "14 days in numbers", exact: true })).toBeVisible();
+  await expect(facts.getByText("2 Jun – 15 Jun.", { exact: true })).toBeVisible();
   await page.getByRole("radio", { name: "30 days" }).click();
   await expect(facts.locator(".rv-bar-col")).toHaveCount(30);
   await expect(facts.getByRole("heading", { name: "30 days in numbers", exact: true })).toBeVisible();
@@ -62,6 +66,22 @@ test("phone: one column, the two small sections stack", async ({ page }) => {
   expect(b.y).toBeGreaterThan(a.y + a.height - 1);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
+});
+
+test("small phone: all four periods remain readable and 14 days shows the full range", async ({ page }) => {
+  await openReview(page, { width: 320, height: 812 });
+  const periods = page.getByRole("radiogroup", { name: "Period" });
+  await expect(periods.getByRole("radio")).toHaveCount(4);
+  for (const label of ["Today", "7 days", "14 days", "30 days"]) {
+    const button = periods.getByRole("radio", { name: label, exact: true });
+    await expect(button).toBeVisible();
+    await expect(button).toBeInViewport({ ratio: 1 });
+    expect(await button.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  }
+  await periods.getByRole("radio", { name: "14 days", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "14 days in numbers", exact: true })).toBeVisible();
+  await expect(page.locator(".rv-bar-col")).toHaveCount(14);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
 });
 
 test("Mind Box no longer offers Insights", async ({ page }) => {

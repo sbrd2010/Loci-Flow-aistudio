@@ -4,6 +4,7 @@ import { lociDayWindow, weekSummary, formatMinutes } from "./focusLedger";
 import { sliceContributions } from "./insightsContext";
 import { getFocusWindows } from "./focusWindows";
 import { thoughtText, newestThoughtsFirst } from "./thoughts";
+import { detectPeriodIntent } from "./coachContextMode";
 
 // Fact cards (#555): the Coach chat answers a plain factual question about the
 // user's own data from the app, with no AI call. The numbers cannot be misquoted,
@@ -37,7 +38,7 @@ const dayMonth = (dayStr) => `${parseDay(dayStr).getDate()} ${MONTHS[parseDay(da
 
 // ---- when a message is a plain question about the user's own data ----
 
-const QUESTION_START = /^(?:(?:please|pls|ok|okay|so|and|hey|can you|could you)\s+)*(?:what|what's|whats|which|who|when|how|is|are|am|do|does|did|have|has|any|anything|list|show|tell me|give me|check|total|number of)\b/;
+const QUESTION_START = /^(?:(?:please|pls|ok|okay|so|and|hey|can you|could you)\s+)*(?:what|what's|whats|which|on which day|who|when|how|is|are|am|do|does|did|have|has|any|anything|list|show|tell me|give me|check|total|number of)\b/;
 const isQuestion = (t) => /\?\s*$/.test(t) || QUESTION_START.test(t);
 const IMPERATIVE = /^(?:(?:please|pls|ok|okay|and)\s+)*(?:add|put|move|park|defer|mark|start|set|schedule|remind|delete|remove|clear|create|rename|change|make|pin|switch|finish|complete|plan|help|capture|dump|note|remember|forget)\b/;
 const FOLLOW_UP = /\b(?:he|him|his|she|her|it|its|they|them|their)\b/;
@@ -54,7 +55,7 @@ const PARKED_TOPIC = /\b(?:parked|parking lot|set aside|on hold|shelved|put asid
 const MINDBOX_TOPIC = /\b(?:mind ?box|brain ?dump)\b/;
 const FOCUS_TOPIC = /\b(?:focus(?:ed|ing)?|deep work|pomodoros?)\b/;
 const FOCUS_QUANTITY = /\b(?:how (?:long|many|much|often)|total|hours?|minutes?|sessions?|times|which day|what day|busiest|most|highest|longest|best day|enough|lately|recently)\b/;
-const FOCUS_NOT_STATS = /\bhow long (?:is|are|does|do|will|would|can)\b|\bfocus (?:task|on|mode)\b|\bmy (?:current )?focus\b|\bnow focus\b/;
+const FOCUS_NOT_STATS = /\bhow long (?:is|are|does|do|will|would|can)\b|\bfocus (?:task|on|mode)\b|\bmy (?:current )?focus\b(?!\s+time\b)|\bnow focus\b/;
 const COMPARE_CUE = /\b(?:than|vs\.?|versus|compared (?:to|with)|better|worse|improv\w*)\b/;
 const COMPARE_TOPIC = /\b(?:tasks?|done|finish\w*|complet\w*|productiv\w*|focus\w*|accomplish\w*|doing)\b/;
 const COMPARE_REF = /\b(?:last|previous|prior|past) (?:week|month)\b|\b(?:week|month) before\b/;
@@ -79,8 +80,9 @@ function namedFront(text, fronts) {
 function periodOf(t) {
   if (/\btoday\b/.test(t)) return { scope: "today" };
   if (/\byesterday\b/.test(t)) return { scope: "yesterday" };
-  const days = /\bmonth\b|\b30 days\b/.test(t) ? 30 : 7;
-  const offset = /\b(?:last|previous|prior) (?:week|month)\b|\b(?:week|month) before\b/.test(t) ? 1 : 0;
+  const period = detectPeriodIntent(t, { loose: true });
+  const days = period?.days || (/\bmonth\b|\b30 days\b/.test(t) ? 30 : 7);
+  const offset = period?.offset ?? (/\b(?:last|previous|prior) (?:week|month)\b|\b(?:week|month) before\b/.test(t) ? 1 : 0);
   return { scope: "period", days, offset };
 }
 

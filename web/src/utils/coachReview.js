@@ -11,10 +11,11 @@ import { getRemainingFocusMinutes, getLociDayStr } from "./focusWindows";
 export const REVIEW_PERIODS = [
   { key: "today", label: "Today", days: 1 },
   { key: "7d", label: "7 days", days: 7 },
+  { key: "14d", label: "14 days", days: 14 },
   { key: "30d", label: "30 days", days: 30 },
 ];
 
-const NOUN = { today: "today", "7d": "these 7 days", "30d": "these 30 days" };
+const NOUN = { today: "today", "7d": "these 7 days", "14d": "these 14 days", "30d": "these 30 days" };
 
 // The one sentence under the figure (moved from Mind Box's "The week").
 // Every branch states something true of the period's own numbers; none of it

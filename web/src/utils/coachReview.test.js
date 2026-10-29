@@ -87,6 +87,23 @@ describe("reviewFacts", () => {
     expect(facts.days.at(-1)).toEqual({ date: "2026-10-01", minutes: 22, ticks: 1 });
   });
 
+  it("shows exactly 14 days of focus, ticks, and retained completions", () => {
+    const f = reviewFacts({
+      tasks: [...tasks, { uuid: "sample-old", isCompleted: true, category: "Personal", dateCompletedString: "2026-09-18" }],
+      contributions: [...contributions, { dateString: "2026-09-18", count: 5 }, { dateString: "2026-09-17", count: 100 }],
+      focusRaw: { ...raw, "2026-09-18": { c: ev("2026-09-18", 40, "sample-old") }, "2026-09-17": { d: ev("2026-09-17", 100, "sample-before") } },
+      period: "14d", now, windows,
+    });
+    expect(f.days).toHaveLength(14);
+    expect(f.days[0].date).toBe("2026-09-18");
+    expect(f.days.at(-1).date).toBe("2026-10-01");
+    expect(f.focusedMinutes).toBe(120);
+    expect(f.completed).toBe(8);
+    expect(f.dayCount).toBe(14);
+    expect(f.byCategory.find(c => c.name === "Personal").done).toBe(2);
+    expect(text(reviewFacts({ period: "14d", focusRaw: {}, now, windows }).sentence)).toContain("these 14 days");
+  });
+
   it("splits the time by front, the largest first", () => {
     expect(facts.byFront.map(f => [f.name, f.minutes])).toEqual([["work on no front", 58], ["Front f1", 22]]);
   });

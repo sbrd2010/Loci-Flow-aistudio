@@ -105,6 +105,21 @@ describe("offline syllabus: the data each question needs reaches the model", () 
 });
 
 describe("which prompt a reworded question gets", () => {
+  it.each([true, false])("carries the exact two-week numbers with ownKey=%s", ownKey => {
+    const turn = buildTurn({ text: "hwo many tasks have I completed in the last 2 weeks?" }, { ownKey });
+    expect(turn.mode).toBe("full_task");
+    expect(turn.system).toContain("PERIOD DIGEST (the last 14 days,");
+    expect(turn.system).toContain("Finished: 18 tasks on");
+    expect(turn.system).not.toContain("PERIOD DIGEST (the last 30 days");
+  });
+
+  it("answers h-focus-3 directly from the ledger without a model", () => {
+    const turn = buildTurn({ text: "on which day was my focus time highest" });
+    expect(turn.cardKind).toBe("focus");
+    expect(turn.card).toContain("Busiest day: Sun 18 (1h30m).");
+    expect(turn.system).toBeUndefined();
+  });
+
   const reworded = QUESTIONS.filter(x => ["perf-6", "hon-4"].includes(x.id));
 
   it("gets the full prompt with the user's own key or Loci's relay (every tester; fullPromptAllowed)", () => {

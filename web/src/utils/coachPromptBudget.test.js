@@ -66,7 +66,7 @@ const focusLog = () => Object.fromEntries(Array.from({ length: 6 }, (_, i) => {
 }));
 
 // The same inputs CoachTab.jsx passes, with 10 earlier messages of 250 chars.
-function buildRequest(mode, { large = false, summaryTurn = false, carried = 0, period = false } = {}) {
+function buildRequest(mode, { large = false, summaryTurn = false, carried = 0, period = false, periodDays = 7 } = {}) {
   const { tasks, config, brainDump, contributions, summary } = fixture(large);
   const userText = "What should I work on next today?";
   // Enough earlier messages that a summary turn really has SUMMARY_UPDATE_MIN_PENDING
@@ -114,7 +114,7 @@ function buildRequest(mode, { large = false, summaryTurn = false, carried = 0, p
   });
   // CoachTab appends this for a "how was my week?" question (and only then).
   const periodBlock = period
-    ? `\n\n${buildLociPeriodContext({ tasks, contributions, config, now: NOW, days: 7, focusRaw: focusLog() })}\nAnswer how the period went from the PERIOD DIGEST: quote its numbers, say what it does not cover, and never invent days, tasks, minutes or deadlines.`
+    ? `\n\n${buildLociPeriodContext({ tasks, contributions, config, now: NOW, days: periodDays, focusRaw: focusLog() })}\nAnswer how the period went from the PERIOD DIGEST: quote its numbers, say what it does not cover, and never invent days, tasks, minutes or deadlines.`
     : "";
   const system = base + periodBlock;
   const messages = history.slice(llmHistoryStart(rawWindowStart, cursor, summaryTurn));
@@ -149,13 +149,13 @@ describe("Coach prompt budgets (#545 C8)", () => {
   // #535: a period question adds the digest (about 1.7k chars at most) and drops
   // the velocity lines it replaces. It must still fit, including on a turn that
   // also rewrites the session summary.
-  it("a typical full_task period turn fits Groq's free tier, with and without a summary rewrite", () => {
-    expect(buildRequest("full_task", { period: true }).groqTokens).toBeLessThanOrEqual(GROQ_TPM);
-    expect(buildRequest("full_task", { period: true, summaryTurn: true }).groqTokens).toBeLessThanOrEqual(GROQ_TPM);
+  it.each([7, 14, 30])("a typical full_task %i-day turn fits Groq's free tier, with and without a summary rewrite", periodDays => {
+    expect(buildRequest("full_task", { period: true, periodDays }).groqTokens).toBeLessThanOrEqual(GROQ_TPM);
+    expect(buildRequest("full_task", { period: true, periodDays, summaryTurn: true }).groqTokens).toBeLessThanOrEqual(GROQ_TPM);
   });
 
-  it("the period digest adds well under 2k chars to the prompt", () => {
-    const grown = buildRequest("full_task", { period: true }).system.length - buildRequest("full_task").system.length;
+  it.each([7, 14, 30])("the %i-day digest adds well under 2k chars to the prompt", periodDays => {
+    const grown = buildRequest("full_task", { period: true, periodDays }).system.length - buildRequest("full_task").system.length;
     expect(grown).toBeLessThan(2000);
   });
 
