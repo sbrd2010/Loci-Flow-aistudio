@@ -1,3 +1,5 @@
+import { sameThoughtContent } from "./thoughts";
+
 // Filters raw AI-provided subSteps down to {text: string} entries with non-blank
 // trimmed text, then maps to {id, text, done:false}. Returns null (rather than [])
 // when `rawSubSteps` isn't a non-empty array, so callers can tell "nothing to
@@ -192,7 +194,7 @@ export function buildOrganizedTaskSubSteps(subSteps, sourceSummary) {
 // `droppedSourceIds` (normalizeAiOrganizeSuggestions's same-named property on its
 // result) lists sources that had MORE suggestions than made it into `allSuggestions`
 // — those sources are never cleared, since "all accepted" can't be known for them.
-export function buildClearedBrainDump(brainDump, acceptedSuggestions, allSuggestions, droppedSourceIds) {
+export function buildClearedBrainDump(brainDump, acceptedSuggestions, allSuggestions, droppedSourceIds, sourceSnapshots = null) {
   const accepted = acceptedSuggestions || [];
   const all = allSuggestions || accepted;
   const dropped = droppedSourceIds || new Set();
@@ -213,7 +215,8 @@ export function buildClearedBrainDump(brainDump, acceptedSuggestions, allSuggest
     if (dropped.has(sourceId)) continue;
     if ((acceptedBySource.get(sourceId) || 0) === total) clearedIds.add(sourceId);
   }
-  return (brainDump || []).filter((d) => !clearedIds.has(d.id));
+  const sources = sourceSnapshots && new Map(sourceSnapshots.map(d => [d.id, d]));
+  return (brainDump || []).filter((d) => !clearedIds.has(d.id) || (sources && !sameThoughtContent(d, sources.get(d.id))));
 }
 
 // Pure helper for the task-completion toggle — extracted for unit-testability.

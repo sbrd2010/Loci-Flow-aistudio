@@ -42,7 +42,7 @@ test("Mind Box: Organise answers a crisis thought here, keeps it, and organises 
 
   const input = page.locator(".mbx-field").getByRole("textbox", { name: "Thought" });
   await input.fill("I want to die");
-  await input.press("Enter");
+  await input.press("Control+Enter");
   await expect(page.getByTestId("thought-row").first()).toContainText("I want to die");
 
   await page.locator(".mbx-ai:visible").first().click();

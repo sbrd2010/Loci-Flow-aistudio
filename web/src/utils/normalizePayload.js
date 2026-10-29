@@ -631,10 +631,26 @@ function mergeBrainDump(serverItems, localItems, baseItems) {
   const clean = items => arrayOrEmpty(items).filter(item => item && typeof item === "object");
   const server = clean(serverItems);
   const local = clean(localItems);
-  const baseKeys = new Set(clean(baseItems).map(keyOf).filter(k => k !== null));
+  const baseByKey = new Map(clean(baseItems).map(item => [keyOf(item), item]));
+  const baseKeys = new Set([...baseByKey.keys()].filter(k => k !== null));
+  const serverByKey = new Map(server.map(item => [keyOf(item), item]));
   const serverKeys = new Set(server.map(keyOf).filter(k => k !== null));
   const localKeys = new Set(local.map(keyOf).filter(k => k !== null));
-  const merged = local.filter(item => serverKeys.has(keyOf(item)) || !baseKeys.has(keyOf(item)));
+  const merged = local.filter(item => serverKeys.has(keyOf(item)) || !baseKeys.has(keyOf(item))).map(item => {
+    const remote = serverByKey.get(keyOf(item));
+    if (!remote) return item;
+    const base = baseByKey.get(keyOf(item));
+    const localChanged = !configValuesEqual(item, base);
+    const remoteChanged = !configValuesEqual(remote, base);
+    if (!localChanged) return remote;
+    if (!remoteChanged) return item;
+    // Whole-thought conflict contract: latest edit wins. Revision and content
+    // break equal-clock ties identically on incoming and transaction writes.
+    const time = t => finiteNumber(t.updatedAt) ?? finiteNumber(t.createdAt) ?? 0;
+    if (time(item) !== time(remote)) return time(item) > time(remote) ? item : remote;
+    const tie = t => JSON.stringify([t.revisionId || "", t.text || "", t.fmt || 0, arrayOrEmpty(t.highlights).map(h => [h?.start, h?.end, h?.color])]);
+    return tie(item) > tie(remote) ? item : remote;
+  });
   for (const item of server) {
     const key = keyOf(item);
     if (localKeys.has(key) || baseKeys.has(key)) continue;
@@ -643,8 +659,7 @@ function mergeBrainDump(serverItems, localItems, baseItems) {
   // Not trimmed to BRAIN_DUMP_LIMIT: the rules allow more, the UI blocks new
   // additions at the cap, and trimming here would delete an item the other
   // device just added when both sides added one near the cap.
-  const hasLocalContribution =
-    merged.length !== server.length || merged.some((item, i) => keyOf(item) !== keyOf(server[i]));
+  const hasLocalContribution = !configValuesEqual(merged, server);
   return { items: merged, hasLocalContribution };
 }
 
@@ -690,9 +705,16 @@ export function applyEditsSince(merged, local, written) {
   const items = list => arrayOrEmpty(list).filter(item => item && typeof item === "object");
   const localItems = items(local?.brainDump);
   const localKeys = new Set(localItems.map(itemKey));
+  const localByKey = new Map(localItems.map(item => [itemKey(item), item]));
+  const writtenByKey = new Map(items(written?.brainDump).map(item => [itemKey(item), item]));
   const writtenKeys = new Set(items(written?.brainDump).map(itemKey));
   const mergedKeys = new Set(items(merged.brainDump).map(itemKey));
-  const brainDump = items(merged.brainDump).filter(item => localKeys.has(itemKey(item)) || !writtenKeys.has(itemKey(item)));
+  const brainDump = items(merged.brainDump)
+    .filter(item => localKeys.has(itemKey(item)) || !writtenKeys.has(itemKey(item)))
+    .map(item => {
+      const here = localByKey.get(itemKey(item));
+      return here && !configValuesEqual(here, writtenByKey.get(itemKey(item))) ? here : item;
+    });
   for (const item of localItems) {
     if (!mergedKeys.has(itemKey(item)) && !writtenKeys.has(itemKey(item))) brainDump.push(item);
   }

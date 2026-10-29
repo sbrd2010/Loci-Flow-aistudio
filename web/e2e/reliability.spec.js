@@ -114,7 +114,7 @@ test("reliability: a thought survives a tab switch and stays in Mind Box", async
 
   const thought = "Test brain dump regression item";
   await field.fill(thought);
-  await field.press("Enter");
+  await field.press("Control+Enter");
   const row = page.getByTestId("thought-row").filter({ hasText: thought });
   await expect(row).toBeVisible({ timeout: 5_000 });
 
