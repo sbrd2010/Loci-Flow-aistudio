@@ -50,6 +50,9 @@ export async function signIn(page, email, { navigate = true } = {}) {
   await page.getByRole("button", { name: "Continue with Google", exact: true }).click();
   const popup = await popupPromise;
   await popup.getByText("Add new account", { exact: true }).waitFor();
+  // The emulator renders its buttons before a blocking external script and
+  // the inline handlers. Wait on the widget document, not its initial blank page.
+  await popup.waitForLoadState("domcontentloaded");
   const existing = popup.getByText(email, { exact: true });
   if (await existing.count()) {
     await existing.click();

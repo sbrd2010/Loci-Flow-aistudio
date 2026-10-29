@@ -37,6 +37,24 @@ test("successful sign-in leaves the Google button usable after later sign-outs",
   await appReady(a.page);
 });
 
+test("Google-emulator sign-in waits for the popup's UI initialization", async ({ clients }) => {
+  let delayedScripts = 0;
+  const a = await clients.open("alpha-slow-popup@example.test", {
+    setupContext: async context => {
+      // The emulator attaches its click handlers after this blocking optional
+      // styling script. Slow delivery exposes clicks made before initialization.
+      await context.route("https://unpkg.com/**/material-components-web.min.js", async route => {
+        delayedScripts += 1;
+        await new Promise(resolve => setTimeout(resolve, 1_000));
+        await route.fulfill({ contentType: "application/javascript", body: "" });
+      });
+    },
+  });
+  expect(delayedScripts).toBe(1);
+  expect(await currentUid(a.page)).toBe(a.uid);
+  await expect(row(a.page, "Sort sample notes")).toBeVisible();
+});
+
 // Both clients edit the same confirmed starting state with their network
 // disconnected. Ordered reconnection makes the stale-writer race repeatable.
 for (const order of [[0, 1], [1, 0]]) {
