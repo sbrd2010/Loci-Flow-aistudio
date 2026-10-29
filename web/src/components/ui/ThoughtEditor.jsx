@@ -85,7 +85,12 @@ function restoreFieldSelection(root, start, end) {
       if (n.nodeType === 3) {
         if (position <= offset + n.data.length) return [n, Math.max(0, position - offset)];
         offset += n.data.length;
-      } else if (n.tagName === "BR" && !n.hasAttribute("data-te-tail")) offset += 1;
+      } else if (n.tagName === "BR" && !n.hasAttribute("data-te-tail")) {
+        // A caret on an empty line belongs before its next <br>, rather than
+        // at the next text node (which may be several blank lines later).
+        if (position === offset) return [n.parentNode, [...n.parentNode.childNodes].indexOf(n)];
+        offset += 1;
+      }
     }
     return [root, Math.max(0, root.childNodes.length - (root.lastChild?.hasAttribute?.("data-te-tail") ? 1 : 0))];
   };

@@ -35,6 +35,40 @@ test("numbering continues on Enter, an empty item ends it, and Ctrl+Enter saves"
   expect(text).not.toContain("3.");
 });
 
+test("inserting a line before blank lines keeps subsequent typing on the new line", async ({ page }) => {
+  await openNotebook(page, 1280, 800, [{ id: "blank-line-sample", text: "Blue\n\nGreen", fmt: 1, createdAt: 1 }]);
+  await page.getByRole("button", { name: "Edit thought", exact: true }).click();
+  const edit = page.getByRole("region", { name: "Edit thought", exact: true });
+  const field = edit.getByRole("textbox", { name: "Thought" });
+  await field.press("Control+Home");
+  await field.press("End");
+  await field.press("Enter");
+  await field.pressSequentially("Inserted");
+  expect(await field.innerText()).toBe("Blue\nInserted\n\nGreen");
+  await edit.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(page.locator(".thought-text")).toHaveText("Blue\nInserted\n\nGreen");
+});
+
+for (const width of [840, 1280]) {
+  test(`${width}×720: small laptop keeps every formatting control reachable by scrolling`, async ({ page }) => {
+    const field = await openNotebook(page, width, 720);
+    await field.fill("Format sample");
+    await field.press("Control+a");
+    await page.locator(".mbx-field").getByRole("button", { name: "Formatting", exact: true }).click();
+    await page.locator(".mbx-dump-head").hover();
+    await page.mouse.wheel(0, 250);
+    await expect(page.getByRole("button", { name: "Remove highlight", exact: true })).toBeInViewport({ ratio: 1 });
+  });
+}
+
+test("narrow laptop keeps emoji choices reachable by scrolling", async ({ page }) => {
+  await openNotebook(page, 840, 720);
+  await page.locator(".mbx-field").getByRole("button", { name: "Emoji", exact: true }).click();
+  await page.locator(".mbx-dump-head").hover();
+  await page.mouse.wheel(0, 250);
+  await expect(page.locator(".te-emoji").getByRole("button", { name: "🚀", exact: true })).toBeInViewport({ ratio: 1 });
+});
+
 test("saved thoughts edit in place, retain their added date, and Cancel discards the draft", async ({ page }) => {
   const createdAt = new Date(2026, 9, 13, 8).getTime();
   await openNotebook(page, 1280, 800, [{ id: "sample-a", text: "Original sample", createdAt }]);

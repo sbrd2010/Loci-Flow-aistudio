@@ -37,4 +37,8 @@ describe("notebook formatting", () => {
     expect(notebookDraft(notebookNewline(notebookRuns("1. Sample\n2. "), 13, 13).runs).text).toBe("1. Sample\n");
     expect(notebookDraft(notebookNewline(notebookRuns("1. Sample"), 9, 9, false).runs).text).toBe("1. Sample\n");
   });
+  it("splits a nonempty list item when Enter is pressed immediately after its prefix", () => {
+    expect(notebookDraft(notebookNewline(notebookRuns("1. Blue"), 3, 3).runs).text).toBe("1. \n2. Blue");
+    expect(notebookDraft(notebookNewline(notebookRuns("• Blue"), 2, 2).runs).text).toBe("• \n• Blue");
+  });
 });

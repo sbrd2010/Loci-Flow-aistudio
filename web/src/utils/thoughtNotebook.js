@@ -124,7 +124,8 @@ export function notebookNewline(runs, start, end, continueList = true) {
   const first = start > 0 ? text.lastIndexOf("\n", start - 1) + 1 : 0;
   const line = text.slice(first, start);
   const match = continueList && line.match(PREFIX);
-  if (match && line.trim() === match[0].trim()) {
+  const remainingLine = text.slice(end).split("\n", 1)[0];
+  if (match && line.trim() === match[0].trim() && !remainingLine.trim()) {
     return { runs: replaceRuns(runs, first, end, ""), start: first, end: first };
   }
   const prefix = match ? /^\d/.test(match[0]) ? `${Number.parseInt(match[0], 10) + 1}. ` : "• " : "";

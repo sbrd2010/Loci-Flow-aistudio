@@ -216,10 +216,10 @@
   .mbx-field .te.is-notebook { --te-min: 240px; --te-max: 400px; }
   .mbx-field .te.is-notebook.is-expanded { --te-min: 400px; --te-max: 560px; }
 }
-/* Expanded writing and saved-thought editing must keep Save reachable. */
-.screen-content.screen-content-mindbox:has(.thought-edit, .te.is-expanded) { overflow-y: auto; }
-.mbx:has(.thought-edit, .te.is-expanded), .mbx:has(.thought-edit, .te.is-expanded) .mbx-grid { flex: none; }
-.mbx:has(.thought-edit, .te.is-expanded) .thoughts-list { max-height: 320px; overflow-y: auto; }
+/* Expanded writing and formatting tools must keep their controls reachable. */
+.screen-content.screen-content-mindbox:has(.thought-edit, .te.is-expanded, .te-format) { overflow-y: auto; }
+.mbx:has(.thought-edit, .te.is-expanded, .te-format), .mbx:has(.thought-edit, .te.is-expanded, .te-format) .mbx-grid { flex: none; }
+.mbx:has(.thought-edit, .te.is-expanded, .te-format) .thoughts-list { max-height: 320px; overflow-y: auto; }
 @media (min-width: 840px) and (max-height: 700px) {
   .screen-content.screen-content-mindbox:has(.mbx-grid) { overflow-y: auto; }
   .mbx:has(.mbx-grid) { flex: none; }
