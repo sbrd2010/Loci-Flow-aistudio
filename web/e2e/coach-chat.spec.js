@@ -577,6 +577,11 @@ test("Coach chat: 'how was my week?' carries the period digest, even right after
   await expect(page.locator(".coach-msg.is-coach")).toHaveCount(3, { timeout: 10_000 });
   expect(system(bodies[2])).toContain("PERIOD DIGEST (the last 14 days");
   expect(system(bodies[2])).not.toContain("PERIOD DIGEST (the last 30 days");
+
+  await input.fill("how was my fortnight?");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.locator(".coach-msg.is-coach")).toHaveCount(4, { timeout: 10_000 });
+  expect(system(bodies[3])).toContain("PERIOD DIGEST (the last 14 days");
 });
 
 test("Coach chat: 'how was last week?' asks for the week before this one, not this week", async ({ page }) => {

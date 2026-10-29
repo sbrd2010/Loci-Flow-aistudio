@@ -170,10 +170,11 @@ const FRESH_SCAN_RE = /\b(scan (everything|all|my list|all my tasks|my whole lis
 // cannot answer, because the week's numbers are not in them. One match sends
 // the message to full_task (and past the 10-minute downgrade), and the caller
 // adds the period digest (see detectPeriodIntent).
+const TWO_WEEK_SPAN = "(?:(?:2|two)[\\s-]+weeks?|(?:14|fourteen)[\\s-]+days?|fortnight(?:ly)?)";
 const PERIOD_RE = new RegExp([
   // "how was my week", "how did my last week go", "how is the month going", "how was yesterday",
   // "how's my week going", "how has been my week"
-  "how(?:['’]s| (?:was|is|has|did|have|were)(?: been)?) (?:my|the|this|last|our)\\s+(?:(?:last|past|this)\\s+)?(?:day|week|month)\\b",
+  `how(?:['’]s| (?:was|is|has|did|have|were)(?: been)?) (?:my|the|this|last|our)\\s+(?:(?:last|past|this)\\s+)?(?:day|week|month|${TWO_WEEK_SPAN})\\b`,
   // "how do you think my week has been", "how do you feel my month went"
   "how\\b.{0,30}\\bmy\\s+(?:(?:last|past|this)\\s+)?(?:week|month)\\s+(?:has been|has gone|is going|went|was|been)\\b",
   "how (?:was|is|has|did) yesterday\\b",
@@ -211,9 +212,9 @@ const PERIOD_RE = new RegExp([
   // Past focus/productivity by day, without needing an explicit "this week".
   "(?:on )?(?:which|what) day\\b.{0,40}\\b(?:did|was|were|had|have|has)\\b.{0,40}\\b(?:focus\\w*|productiv\\w*)\\b",
   // reviews
-  "(?:(?:2|two)[ -]weeks?|(?:14|fourteen)[ -]days?|fortnight(?:ly)?) (?:review|recap|summary)",
+  `${TWO_WEEK_SPAN}\\s+(?:review|recap|summary)`,
   "(?:weekly|monthly|week|month) (?:review|recap|summary)",
-  "(?:recap|review|summari[sz]e) (?:my|the|this|last|previous|prior)(?: (?:last|previous|prior))? (?:week|month)",
+  `(?:recap|review|summari[sz]e) (?:my|the|this|last|previous|prior)(?: (?:last|previous|prior))? (?:week|month|${TWO_WEEK_SPAN})`,
   "(?:week|month) in review",
 ].join("|"), "i");
 
@@ -226,7 +227,7 @@ const PERIOD_RE = new RegExp([
 // rule claimed, with the user's own key, so a differently worded question about a
 // stretch of time still gets its numbers.
 const LOOSE_PERIOD_RE = /\b(?:(?:this|last|past|previous|prior)\s+(?:(?:\d+|two|fourteen)\s+)?(?:days?|weeks?|months?|fortnight)|(?:\d+|a|one|two|three|four|five|six)\s+(?:days?|weeks?|months?)\s+ago|lately|recently|yesterday|this quarter|this year)\b/i;
-const TWO_WEEK_RE = /\b(?:(?:2|two)[ -]weeks?|(?:14|fourteen)[ -]days?|fortnight(?:ly)?)\b(?!\s+ago\b)/i;
+const TWO_WEEK_RE = new RegExp(`\\b${TWO_WEEK_SPAN}\\b(?!\\s+ago\\b)`, "i");
 // Other spans beyond the last week get the bounded 30-day digest.
 const FAR_BACK_RE = /\b(?:months?|monthly|30 days|this quarter|this year)\b|\b(?:[2-9]|\d{2,}|two|three|four|five|six)\s+weeks?\s+ago\b|\b(?:last|past)\s+(?:[2-9]|\d{2,})\s+weeks?\b|\b(?:last|past)\s+(?:[8-9]|\d{2,})\s+days?\b/i;
 
@@ -240,7 +241,7 @@ export function detectPeriodIntent(message, { loose = false } = {}) {
   const named = text.replace(/\bthe (?:last|past) (week|month)\b/gi, "$1");
   return {
     days: TWO_WEEK_RE.test(text) ? 14 : farBack ? 30 : 7,
-    offset: /\b(?:last|previous|prior) (?:week|month)\b/i.test(named) ? 1 : 0,
+    offset: /\b(?:last|previous|prior) (?:week|month)\b|\b(?:week|month) before\b/i.test(named) ? 1 : 0,
   };
 }
 
