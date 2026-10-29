@@ -1,0 +1,67 @@
+name: Signed-in auth and sync
+
+on:
+  pull_request:
+    branches: [main, redesign-75]
+    paths:
+      - "web/src/**"
+      - "web/auth-e2e/**"
+      - "web/playwright.auth-sync.config.js"
+      - "web/package*.json"
+      - "firebase.json"
+      - "database.rules.json"
+      - ".github/workflows/auth-sync.yml"
+  push:
+    branches: [main]
+    paths:
+      - "web/src/**"
+      - "web/auth-e2e/**"
+      - "web/playwright.auth-sync.config.js"
+      - "web/package*.json"
+      - "firebase.json"
+      - "database.rules.json"
+      - ".github/workflows/auth-sync.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auth-sync-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  auth-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci --legacy-peer-deps
+      # Match e2e.yml: unrelated Microsoft/azure apt sources have broken
+      # Chromium dependency installation on GitHub runner images.
+      - run: sudo rm -f /etc/apt/sources.list.d/azure-cli.list /etc/apt/sources.list.d/microsoft-prod.list
+      - run: npx playwright install --with-deps chromium
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-auth-sync-15.22.1-${{ runner.os }}
+      - run: npm run test:auth-sync
+        env:
+          CI: true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: auth-sync-failure
+          path: web/test-results/auth-sync/
+          retention-days: 7

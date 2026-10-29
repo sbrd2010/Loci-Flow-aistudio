@@ -23,14 +23,14 @@ const rangeDate = (ds) => { const d = parseDay(ds); return `${d.getDate()} ${d.t
 
 const DAY_NAMES = { Sun: "Sunday", Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday", Thu: "Thursday", Fri: "Friday", Sat: "Saturday" };
 const HORIZON_LABEL = { today: "Today", week: "This week", month: "This month", quarter: "This quarter", later: "Later" };
-const NUMBERS_TITLE = { today: "Today in numbers", "7d": "The week in numbers", "30d": "30 days in numbers" };
-const PERIOD_NOUN = { today: "today", "7d": "in these 7 days", "30d": "in these 30 days" };
+const NUMBERS_TITLE = { today: "Today in numbers", "7d": "The week in numbers", "14d": "14 days in numbers", "30d": "30 days in numbers" };
+const PERIOD_NOUN = { today: "today", "7d": "in these 7 days", "14d": "in these 14 days", "30d": "in these 30 days" };
 
-function DayChart({ days, period }) {
+function DayChart({ days }) {
   const peak = Math.max(1, ...days.map(d => d.minutes || 0));
   const unread = days.every(d => d.minutes == null);
   const empty = !unread && days.every(d => !d.minutes);
-  const dense = period === "30d";
+  const dense = days.length > 7;
   const last = days.length - 1;
   return (
     <div className="rv-daychart" data-dense={dense || undefined}>
@@ -128,7 +128,7 @@ export default function CoachReview({ payload = {}, uid, period = "7d", renderBr
 
         <div className="rv-sec">
           <SectionHead num="03" title={period === "today" ? "Focus today" : "Focus each day"} line={period === "today" ? "Minutes of focus today, and how many tasks you finished." : "Minutes of focus per day. Under each day, how many tasks you finished."} />
-          <div className="rv-indent"><DayChart days={days} period={period} /></div>
+          <div className="rv-indent"><DayChart days={days} /></div>
         </div>
 
         <div className="rv-sec rv-pair">

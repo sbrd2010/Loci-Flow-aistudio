@@ -56,3 +56,120 @@ jobs:
           set -euo pipefail
           export FIREBASE_ACCESS_TOKEN="$(gcloud auth print-access-token)"
           node scripts/deploy-hosting-rest.mjs
+
+  # Run this existing workflow button on codex/alpha-combined-preview. Its
+  # frontend uses the owner's separate Firebase project and a separate Worker;
+  # only the Hosting preview channel remains on the existing loci-flow site.
+  staging:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/alpha-combined-preview'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      FIREBASE_STAGING_CONFIG_FILE: ${{ github.workspace }}/.firebase-staging-config.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check required staging setup without printing credentials
+        env:
+          STAGING_CREDENTIALS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_LOCI_STAGING }}
+          HOSTING_CREDENTIALS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_LOCI_FLOW }}
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ALLOWED_TESTERS: ${{ secrets.AI_STAGING_ALLOWED_EMAILS }}
+        run: |
+          set -euo pipefail
+          missing=""
+          [ -n "$STAGING_CREDENTIALS" ] || missing="$missing FIREBASE_SERVICE_ACCOUNT_LOCI_STAGING"
+          [ -n "$HOSTING_CREDENTIALS" ] || missing="$missing FIREBASE_SERVICE_ACCOUNT_LOCI_FLOW"
+          [ -n "$CF_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -n "$CF_ACCOUNT" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          [ -n "$ALLOWED_TESTERS" ] || missing="$missing AI_STAGING_ALLOWED_EMAILS"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing GitHub Actions secrets:$missing. See docs/COMBINED_PREVIEW.md. No preview deployment was attempted."
+            exit 1
+          fi
+          jq -e '.type == "service_account" and .project_id == "gen-lang-client-0903100727" and (.private_key | type == "string" and length > 0)' <<< "$STAGING_CREDENTIALS" > /dev/null
+
+      - name: Install and check combined code
+        run: |
+          set -euo pipefail
+          (cd web && npm ci --legacy-peer-deps && npm run lint && npm test)
+          (cd ai-proxy && npm ci && npm test)
+          node scripts/prepare-staging-firebase.test.mjs
+          node scripts/staging-database-guard.test.mjs
+          node scripts/preview-deploy-guard.test.mjs
+
+      - name: Authenticate to the separate Firebase test project
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_LOCI_STAGING }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Prepare test-project web settings and rules
+        env:
+          FIREBASE_DEPLOY_TARGET: staging
+        run: |
+          set -euo pipefail
+          export FIREBASE_ACCESS_TOKEN="$(gcloud auth print-access-token)"
+          node scripts/prepare-staging-firebase.mjs
+          node scripts/deploy-database-rules-rest.mjs
+
+      - name: Deploy a separate staging AI relay and ledger
+        working-directory: ai-proxy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          AI_ALLOWED_EMAILS: ${{ secrets.AI_STAGING_ALLOWED_EMAILS }}
+          AI_NVIDIA_KEY: ${{ secrets.AI_NVIDIA_KEY }}
+          AI_OPENROUTER_KEY: ${{ secrets.AI_OPENROUTER_KEY }}
+          AI_GROQ_KEY: ${{ secrets.AI_GROQ_KEY }}
+          AI_OLLAMA_KEY: ${{ secrets.AI_OLLAMA_KEY }}
+          AI_GEMINI_KEY: ${{ secrets.AI_GEMINI_KEY }}
+          AI_ZAI_KEY: ${{ secrets.AI_ZAI_KEY }}
+          GEMINI_MODEL: ${{ secrets.VITE_GEMINI_MODEL }}
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --name loci-ai-alpha-staging --var FIREBASE_PROJECT_ID:gen-lang-client-0903100727 2>&1 | tee "$RUNNER_TEMP/staging-relay-deploy.log"
+          relay_url=$(grep -oE 'https://loci-ai-alpha-staging\.[A-Za-z0-9-]+\.workers\.dev' "$RUNNER_TEMP/staging-relay-deploy.log" | head -1)
+          test -n "$relay_url"
+          echo "VITE_AI_RELAY_URL=$relay_url" >> "$GITHUB_ENV"
+          umask 077
+          jq -n --arg allowed "$AI_ALLOWED_EMAILS" --arg n "$AI_NVIDIA_KEY" --arg o "$AI_OPENROUTER_KEY" --arg g "$AI_GROQ_KEY" --arg ol "$AI_OLLAMA_KEY" --arg m "$AI_GEMINI_KEY" --arg gm "$GEMINI_MODEL" --arg z "$AI_ZAI_KEY" \
+            '[["AI_ALLOWED_EMAILS",$allowed],["NVIDIA_API_KEY",$n],["OPENROUTER_API_KEY",$o],["GROQ_API_KEY",$g],["OLLAMA_API_KEY",$ol],["GEMINI_API_KEY",$m],["GEMINI_MODEL",$gm],["ZAI_API_KEY",$z]]
+             | map(.[1] |= gsub("^\\s+|\\s+$"; "")) | map(select(.[1] != "")) | map({(.[0]): .[1]}) | add // {}' > "$RUNNER_TEMP/staging-relay-secrets.json"
+          npx wrangler secret bulk "$RUNNER_TEMP/staging-relay-secrets.json" --name loci-ai-alpha-staging
+          rm -f "$RUNNER_TEMP/staging-relay-secrets.json"
+
+      - name: Build the isolated staging app
+        working-directory: web
+        env:
+          VITE_GA_MEASUREMENT_ID: ''
+          VITE_GEMINI_MODEL: ${{ secrets.VITE_GEMINI_MODEL }}
+        run: npm run build
+
+      - name: Authenticate for Hosting preview only
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_LOCI_FLOW }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Update only the existing preview channel
+        env:
+          HOSTING_CHANNEL_ID: redesign-75
+          HOSTING_PREVIEW_ONLY: 'true'
+        run: |
+          set -euo pipefail
+          export FIREBASE_ACCESS_TOKEN="$(gcloud auth print-access-token)"
+          node scripts/deploy-hosting-rest.mjs
+          echo "This build uses separate test data. Main and the live Hosting release were not changed." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove temporary public settings
+        if: always()
+        run: rm -f "$FIREBASE_STAGING_CONFIG_FILE"

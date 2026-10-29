@@ -1,9 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { THOUGHTS_MAX, THOUGHT_FORMAT, addPlainThought, addThought, letGoThought, newestThoughtsFirst, restoreThought, thoughtText } from "./thoughts";
+import { THOUGHTS_MAX, THOUGHT_FORMAT, addPlainThought, addThought, editThought, letGoThought, newestThoughtsFirst, restoreThought, thoughtDate, thoughtTaskDraft, thoughtText } from "./thoughts";
 import { parseThought, plainThought } from "./thoughtFormat";
 import { mergeLocalIntoServer, mergeRemotePayloadWithMeta, normalizePayload } from "./normalizePayload";
 
 describe("thoughts", () => {
+  it("keeps the complete long thought in a task note and respects the title limit", () => {
+    const item = addThought({}, `${"Blue sample ".repeat(160)}😀`, 1, { notebook: true }).item;
+    const draft = thoughtTaskDraft(item);
+    expect(draft.title.length).toBeLessThanOrEqual(1000);
+    expect(draft.note).toBe(item.text);
+    expect(thoughtTaskDraft({ text: "Short sample" })).toEqual({ title: "Short sample" });
+  });
   it("adds a trimmed thought at the end, keeping its lines", () => {
     const r = addThought({ brainDump: [{ id: "a", text: "x" }] }, "  Ask the  gym\r\n about Friday \n\n\n\nand Monday ", 5);
     expect(r.payload.brainDump).toHaveLength(2);
@@ -12,9 +19,25 @@ describe("thoughts", () => {
   it("adds nothing when empty or full", () => {
     expect(addThought({}, "   ")).toBe(null);
     expect(addThought({}, "** **")).toBe(null);
-    expect(addThought({}, "x".repeat(600)).item.text).toHaveLength(500);
+    expect(addThought({}, "x".repeat(2100)).item.text).toHaveLength(2000);
     const full = { brainDump: Array.from({ length: THOUGHTS_MAX }, (_, i) => ({ id: String(i), text: "t" })) };
     expect(addThought(full, "one more")).toBe(null);
+  });
+  it("edits in place, retaining creation date and saving highlight metadata", () => {
+    const item = { id: "sample", text: "Old sample", createdAt: 1, fmt: THOUGHT_FORMAT };
+    const result = editThought({ brainDump: [item] }, item.id, "New sample", [{ start: 0, end: 3, color: "yellow" }], 50);
+    expect(result.item).toMatchObject({ id: "sample", text: "New sample", createdAt: 1, updatedAt: 50 });
+    expect(result.item.revisionId).toBeTruthy();
+    expect(result.item.highlights).toEqual([{ start: 0, end: 3, color: "yellow" }]);
+    expect(editThought({ brainDump: [item] }, "missing", "New")).toBeNull();
+    expect(editThought({ brainDump: [item] }, item.id, " ")).toBeNull();
+    expect(editThought({ brainDump: [result.item] }, item.id, "Newest", [], 10).item.updatedAt).toBe(51);
+  });
+  it("shows short dates, including the year for older thoughts", () => {
+    const now = new Date(2026, 9, 29, 12).getTime();
+    expect(thoughtDate(new Date(2026, 9, 13, 8).getTime(), now)).toBe("13 Oct");
+    expect(thoughtDate(new Date(2025, 9, 13, 8).getTime(), now)).toBe("13 Oct 2025");
+    expect(thoughtDate(undefined, now)).toBe("");
   });
   it("lets a thought go and Undo puts it back in its place", () => {
     const p = { brainDump: [{ id: "a" }, { id: "b" }, { id: "c" }] };

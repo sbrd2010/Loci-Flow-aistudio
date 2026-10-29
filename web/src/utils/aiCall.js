@@ -234,10 +234,18 @@ function statusError(provider, status, res) {
 // statusError plus the provider's own one-line reason, so a refusal such as "No
 // endpoints found for this model" reaches the console log and, when one provider was
 // tried, the error shown to the user. Read from a copy of the body, never the key.
-async function failedResponse(provider, res) {
+async function failedResponse(provider, res, { shared = false } = {}) {
   const err = statusError(provider, res.status, res);
   try {
     const body = await res.clone().json();
+    const code = body?.error?.code;
+    if (shared && ["daily_cap", "pool_empty", "quota_unavailable"].includes(code)) {
+      err.message = code === "quota_unavailable" ? "shared_ai_unavailable" : "usage_limit";
+      err.sharedBudget = true;
+      if (code !== "quota_unavailable") err.limitMessage = code === "daily_cap"
+        ? "You've used today's free AI. It resets at 00:00 UTC, or add your own key in Settings → AI provider to keep going."
+        : "Free AI is used up for everyone today. It resets at 00:00 UTC, or add your own key in Settings → AI provider to keep going.";
+    }
     const text = String(body?.error?.message ?? body?.message ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
     if (text) err.detail = `${provider}: ${text}`;
   } catch { /* no readable body */ }
@@ -276,6 +284,7 @@ const AI_ERROR_COPY = {
   no_key_only: "Only use my provider is on, and that provider has no key. Add its key in Settings → AI provider, or turn that setting off.",
   only_provider_failed: "Your chosen AI provider couldn't answer right now. Your tasks are safe — try again in a moment, or turn off Only use my provider in Settings to let Coach try the others.",
   all_providers_failed: "The AI providers couldn't answer right now. Your tasks are safe — please try again in a moment.",
+  shared_ai_unavailable: "Shared AI is temporarily unavailable. Your tasks are safe — try again shortly, or use your own key in Settings → AI provider.",
   usage_limit: "You've reached your AI limit for now. Your tasks are safe — it resets automatically.",
   other: "Something went wrong. Your tasks are safe — please try again.",
 };
@@ -500,7 +509,7 @@ async function requestRelay(name, systemPrompt, messages, tokenBudget, reasoning
     })
   }, limits);
   if (!res.ok) {
-    const err = await failedResponse(name, res);
+    const err = await failedResponse(name, res, { shared: true });
     // The relay's 401/403 means the Loci sign-in was refused, not an AI key the
     // user could fix in Settings, so it must not read as invalid_key.
     if (res.status === 401 || res.status === 403) err.message = `${name}_auth`;
@@ -813,7 +822,7 @@ async function callZai(zaiKey, systemPrompt, messages, maxTokens, limits) {
       })
     }, limits);
     if (!res.ok) {
-      const err = await failedResponse("zai", res);
+      const err = await failedResponse("zai", res, { shared: viaRelay });
       // As for the other relay providers: the relay's 401/403 is the Loci sign-in, not a Z.ai key.
       if (viaRelay && (res.status === 401 || res.status === 403)) err.message = "zai_auth";
       throw err;
@@ -925,7 +934,10 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, openrout
   // Groq 429 (real rate-limit) + fallback Gemini 401 (unrelated/likely
   // unconfigured) must surface as rate_limit, not invalid_key.
   const attempts = [];
+  let sharedBudgetError = null;
   for (const provider of order) {
+    const shared = provider.viaRelay || RELAY_PROVIDERS.includes(provider.name) || provider.key === "relay";
+    if (sharedBudgetError && shared) continue;
     const ckey = cooldownKey(provider);
     if (Date.now() < (providerCooldownUntil.get(ckey) || 0)) {
       const cooldownErr = new Error(providerCooldownReason.get(ckey) || "503");
@@ -968,6 +980,7 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, openrout
       // The caller stopped the request: not a provider failure, and no other
       // provider should be tried.
       if (signal?.aborted) throw new Error("cancelled");
+      if (err.sharedBudget) { sharedBudgetError = err; continue; }
       attempts.push({ err, classification: classifyAIError(err), live: true });
       if (err.message === "429") {
         providerCooldownUntil.set(ckey, Date.now() + (err.retryAfterMs ?? RATE_LIMIT_COOLDOWN_MS));
@@ -993,6 +1006,8 @@ export async function callAI({ groqKey, geminiKey, cerebrasKey, zaiKey, openrout
   // a previous call, not this request — prefer live attempts for the
   // decision whenever at least one provider was actually contacted, so a
   // live invalid-key failure isn't masked by an old cooldown reason.
+  if (sharedBudgetError) throw sharedBudgetError;
+
   const liveAttempts = attempts.filter(a => a.live);
   const decisionAttempts = liveAttempts.length > 0 ? liveAttempts : attempts;
   const findAttempt = (classification) => decisionAttempts.find(a => a.classification === classification);

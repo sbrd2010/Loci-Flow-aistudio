@@ -221,6 +221,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* Sign-In Overlay Component */
+.staging-notice { flex: none; margin: 0; padding: 6px 12px; background: #fff0bf; color: #493400; font-size: 13px; line-height: 20px; text-align: center; }
+
 .signin-overlay {
   position: fixed;
   top: 0;

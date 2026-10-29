@@ -92,3 +92,15 @@
 }
 @media (min-width: 1280px) { .thought-text { font-size: 16px; } }
 @media (min-width: 1600px) { .thought-text { font-size: 16.5px; } }
+
+.thought-text { white-space: pre-wrap; }
+.thought-highlight { padding: 0; border-radius: 2px; color: inherit; }
+.thought-edit-link { flex: none; display: inline-grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 8px; background: none; color: var(--ink-2); cursor: pointer; }
+.thought-edit-link:hover { background: var(--row-hover); color: var(--accent); }
+.thought-edit-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.thought-edit-link:disabled, .thought-btn:disabled { opacity: 0.45; cursor: default; }
+.thought-age { text-transform: none; white-space: nowrap; }
+.thought-edit { flex: none; padding: 10px 0 18px; }
+.thought-edit-title { margin: 0 0 8px; font-weight: 700; }
+.thought-edit-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.thought-edit-warning { margin: 8px 0; font-size: 14px; line-height: 1.45; color: var(--ink-2); }

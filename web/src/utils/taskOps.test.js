@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { buildToggleCompletedTasks, normalizeAiOrganizeSuggestions, buildClearedBrainDump, buildOrganizedTaskSubSteps, sanitizeTaskField, byPriorityThenOrder, CATEGORY_ICONS } from "./taskOps";
 
+it("keeps a thought edited after AI read it, while clearing unchanged accepted sources", () => {
+  const sources = [{ id: "a", text: "Blue sample" }, { id: "b", text: "Green sample" }];
+  const edited = { ...sources[0], text: "New blue detail", updatedAt: 5 };
+  const accepted = [{ sourceId: "a" }, { sourceId: "b" }];
+  expect(buildClearedBrainDump([edited, sources[1]], accepted, accepted, new Set(), sources)).toEqual([edited]);
+});
+
 const T = (overrides = {}) => ({
   uuid: "task-1",
   title: "Test task",

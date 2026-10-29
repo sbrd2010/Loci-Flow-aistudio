@@ -14,6 +14,8 @@
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { firebaseCloudConfig } from "../web/src/utils/firebaseTarget.js";
+import { assertStagingDatabaseSafe } from "./staging-database-guard.mjs";
 
 const DATABASE_URL = "https://loci-flow-default-rtdb.firebaseio.com";
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -36,6 +38,12 @@ async function readSanitizedBody(response) {
 }
 
 async function main() {
+  const target = process.env.FIREBASE_DEPLOY_TARGET || "production";
+  if (!["production", "staging"].includes(target)) fail("Unknown Firebase deploy target.");
+  const stagingConfig = target === "staging"
+    ? firebaseCloudConfig({ VITE_FIREBASE_TARGET: "staging", VITE_FIREBASE_STAGING_CONFIG: await readFile(process.env.FIREBASE_STAGING_CONFIG_FILE, "utf8") })
+    : null;
+  const databaseUrl = stagingConfig?.databaseURL || DATABASE_URL;
   const accessToken = process.env.FIREBASE_ACCESS_TOKEN;
   if (!accessToken || accessToken.trim().length === 0) {
     fail("FIREBASE_ACCESS_TOKEN is not set or empty (could not obtain an access token).");
@@ -50,9 +58,10 @@ async function main() {
   if (rulesContent.trim().length === 0) {
     fail("database.rules.json is empty.");
   }
+  if (stagingConfig) await assertStagingDatabaseSafe({ config: stagingConfig, rules: JSON.parse(rulesContent), token: accessToken });
 
   console.log("Deploying Realtime Database rules via REST...");
-  const response = await fetch(`${DATABASE_URL}/.settings/rules.json`, {
+  const response = await fetch(`${databaseUrl.replace(/\/$/, "")}/.settings/rules.json`, {
     method: "PUT",
     headers: {
       Authorization: `Bearer ${accessToken}`,

@@ -58,7 +58,7 @@ const SHORTHAND_MAP = [
   // is a genuine countable noun ("what 2 errands do I have?", "I have 2
   // errands"), so treating unprefixed "2 errands" as "to errands" corrupted
   // real counts (Codex review finding).
-  [/(?<!\bat\s)(?:(?<!\bmy\s)\b2\b(?=\s*(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\b2\b(?!\s*(?:min(?:ute)?s?|hours?|hrs?|am|pm|months?|quarters?|career|work|health|personal|job|office|fitness|wellness|gym|home|family|errands?)\b))/gi, "to"],
+  [/(?<!\bat\s)(?:(?<!\bmy\s)\b2\b(?=\s*(?:career|work|health|personal|job|office|fitness|wellness|gym|home|family)\b)|\b2\b(?![\s-]*(?:min(?:ute)?s?|hours?|hrs?|am|pm|days?|weeks?|months?|quarters?|career|work|health|personal|job|office|fitness|wellness|gym|home|family|errands?)\b))/gi, "to"],
   // The category-word exclusion here is only a real "count" (not "4" meaning
   // "for") when it follows "my" ("my 4 work priorities") — without requiring
   // that, adding job/office/fitness/wellness/gym/home/family to this list
@@ -170,10 +170,11 @@ const FRESH_SCAN_RE = /\b(scan (everything|all|my list|all my tasks|my whole lis
 // cannot answer, because the week's numbers are not in them. One match sends
 // the message to full_task (and past the 10-minute downgrade), and the caller
 // adds the period digest (see detectPeriodIntent).
+const TWO_WEEK_SPAN = "(?:(?:2|two)[\\s-]+weeks?|(?:14|fourteen)[\\s-]+days?|fortnight(?:ly)?)";
 const PERIOD_RE = new RegExp([
   // "how was my week", "how did my last week go", "how is the month going", "how was yesterday",
   // "how's my week going", "how has been my week"
-  "how(?:['’]s| (?:was|is|has|did|have|were)(?: been)?) (?:my|the|this|last|our)\\s+(?:(?:last|past|this)\\s+)?(?:day|week|month)\\b",
+  `how(?:['’]s| (?:was|is|has|did|have|were)(?: been)?) (?:my|the|this|last|our)\\s+(?:(?:last|past|this)\\s+)?(?:day|week|month|${TWO_WEEK_SPAN})\\b`,
   // "how do you think my week has been", "how do you feel my month went"
   "how\\b.{0,30}\\bmy\\s+(?:(?:last|past|this)\\s+)?(?:week|month)\\s+(?:has been|has gone|is going|went|was|been)\\b",
   "how (?:was|is|has|did) yesterday\\b",
@@ -208,40 +209,39 @@ const PERIOD_RE = new RegExp([
   // "how long did I focus this week", "how many hours have I focused"
   "how (?:long|many (?:hours|minutes|hrs|mins)) (?:did|have) i (?:been )?(?:focus\\w*|spen\\w+|work\\w*)",
   "(?:my )?focus time (?:this|last) (?:week|month)",
+  // Past focus/productivity by day, without needing an explicit "this week".
+  "(?:on )?(?:which|what) day\\b.{0,40}\\b(?:did|was|were|had|have|has)\\b.{0,40}\\b(?:focus\\w*|productiv\\w*)\\b",
   // reviews
+  `${TWO_WEEK_SPAN}\\s+(?:review|recap|summary)`,
   "(?:weekly|monthly|week|month) (?:review|recap|summary)",
-  "(?:recap|review|summari[sz]e) (?:my|the|this|last|previous|prior)(?: (?:last|previous|prior))? (?:week|month)",
+  `(?:recap|review|summari[sz]e) (?:my|the|this|last|previous|prior)(?: (?:last|previous|prior))? (?:week|month|${TWO_WEEK_SPAN})`,
   "(?:week|month) in review",
 ].join("|"), "i");
 
 // Null for an ordinary message; for a period question, how many days it asks
-// about (30 when it names the month, else 7: a week, a day, "how am I doing")
+// about (14 for two weeks, 30 for a month, else 7: a week, "how am I doing")
 // and how far back it ends: 1 for "last week" / "last month" / "previous week",
 // meaning the whole period before the current one, else 0.
 // A span of time named anywhere in the message ("lately", "three weeks ago",
 // "over the last 10 days", "so far this month"). Used only for a message no other
 // rule claimed, with the user's own key, so a differently worded question about a
 // stretch of time still gets its numbers.
-const LOOSE_PERIOD_RE = /\b(?:(?:this|last|past|previous|prior)\s+(?:\d+\s+)?(?:days?|weeks?|months?)|(?:\d+|a|one|two|three|four|five|six)\s+(?:days?|weeks?|months?)\s+ago|lately|recently|yesterday|this quarter|this year)\b/i;
-// Anything beyond the last week gets the 30-day digest, which says what it does not cover.
+const LOOSE_PERIOD_RE = /\b(?:(?:this|last|past|previous|prior)\s+(?:(?:\d+|two|fourteen)\s+)?(?:days?|weeks?|months?|fortnight)|(?:\d+|a|one|two|three|four|five|six)\s+(?:days?|weeks?|months?)\s+ago|lately|recently|yesterday|this quarter|this year)\b/i;
+const TWO_WEEK_RE = new RegExp(`\\b${TWO_WEEK_SPAN}\\b(?!\\s+ago\\b)`, "i");
+// Other spans beyond the last week get the bounded 30-day digest.
 const FAR_BACK_RE = /\b(?:months?|monthly|30 days|this quarter|this year)\b|\b(?:[2-9]|\d{2,}|two|three|four|five|six)\s+weeks?\s+ago\b|\b(?:last|past)\s+(?:[2-9]|\d{2,})\s+weeks?\b|\b(?:last|past)\s+(?:[8-9]|\d{2,})\s+days?\b/i;
 
 export function detectPeriodIntent(message, { loose = false } = {}) {
   const text = normalizeForClassification(String(message || ""));
-  // Read on the raw text too: the shorthand pass turns "2 weeks" into "to weeks".
+  // Read raw text too for numeric spans the shorthand pass may rewrite.
   const farBack = FAR_BACK_RE.test(text) || FAR_BACK_RE.test(String(message || ""));
-  if (!PERIOD_RE.test(text)) {
-    if (!(loose && LOOSE_PERIOD_RE.test(text))) return null;
-    const named = text.replace(/\bthe (?:last|past) (week|month)\b/gi, "$1");
-    return { days: farBack ? 30 : 7, offset: /\b(?:last|previous|prior) (?:week|month)\b/i.test(named) ? 1 : 0 };
-  }
+  if (!PERIOD_RE.test(text) && !(loose && LOOSE_PERIOD_RE.test(text))) return null;
   // "in the last week" / "the last month" is the rolling window ending today;
   // "last week", "my last month", "previous week" is the period before this one.
   const named = text.replace(/\bthe (?:last|past) (week|month)\b/gi, "$1");
   return {
-    // "last 2 weeks", "last 30 days" need more than the week (#594).
-    days: /\b(?:month|monthly|30 days)\b/i.test(text) || farBack ? 30 : 7,
-    offset: /\b(?:last|previous|prior) (?:week|month)\b/i.test(named) ? 1 : 0,
+    days: TWO_WEEK_RE.test(text) ? 14 : farBack ? 30 : 7,
+    offset: /\b(?:last|previous|prior) (?:week|month)\b|\b(?:week|month) before\b/i.test(named) ? 1 : 0,
   };
 }
 

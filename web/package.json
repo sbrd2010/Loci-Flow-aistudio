@@ -12,6 +12,7 @@
     "coach:judge": "esbuild scripts/coach-judge.js --bundle --platform=node --format=esm --log-level=warning --outfile=coach-eval-out/coach-judge.mjs && node coach-eval-out/coach-judge.mjs",
     "task-ai:eval": "esbuild scripts/task-ai-eval.js --bundle --platform=node --format=esm --log-level=warning --outfile=coach-eval-out/task-ai-eval.mjs && node coach-eval-out/task-ai-eval.mjs",
     "test:e2e": "playwright test",
+    "test:auth-sync": "npx --yes firebase-tools@15.22.1 emulators:exec --only auth,database --project demo-loci-flow-e2e \"playwright test --config playwright.auth-sync.config.js\"",
     "test:rules-emulator": "npx --yes firebase-tools@15.22.1 emulators:exec --only database --project demo-loci-flow-rules-test \"vitest run --config vitest.rules-emulator.config.js\""
   },
   "dependencies": {

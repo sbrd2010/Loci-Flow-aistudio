@@ -96,6 +96,17 @@ horizonLevel options: "today", "week" (default), "month", "quarter", "halfyear"`
 }
 
 // Mind Box, "Organize with AI": raw thoughts become atomic tasks.
+export function selectOrganizeBatch(items, maxChars = 6000) {
+  const batch = [];
+  let size = 0;
+  for (const item of items || []) {
+    const cost = plainThought(thoughtText(item)).length + String(item.id).length + 20;
+    if (size + cost > maxChars) break;
+    batch.push(item); size += cost;
+  }
+  return batch;
+}
+
 export function buildOrganizeRequest({ items, profile = null }) {
   const profileNote = profile && profile.totalTasks >= 5
     ? `\nUser context: completion rate ${Math.round(profile.completionRate * 100)}%, dominant horizon "${profile.dominantHorizon}", avg estimate ${profile.avgEstimateMinutes}min. Weight horizon suggestions toward their patterns.`

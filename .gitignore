@@ -44,3 +44,4 @@ mcp/.dev.vars
 ai-proxy/node_modules/
 ai-proxy/.wrangler/
 ai-proxy/.dev.vars
+.firebase-staging-config.json

@@ -210,6 +210,22 @@
   .mbx-field .te { --te-min: 128px; --te-max: 272px; --te-fs: 19px; }
 }
 
+.mbx-field .te.is-notebook { --te-min: 176px; --te-max: 304px; }
+.mbx-field .te.is-notebook.is-expanded { --te-min: 304px; --te-max: 560px; }
+@media (min-width: 1600px) {
+  .mbx-field .te.is-notebook { --te-min: 240px; --te-max: 400px; }
+  .mbx-field .te.is-notebook.is-expanded { --te-min: 400px; --te-max: 560px; }
+}
+/* Expanded writing and formatting tools must keep their controls reachable. */
+.screen-content.screen-content-mindbox:has(.thought-edit, .te.is-expanded, .te-format) { overflow-y: auto; }
+.mbx:has(.thought-edit, .te.is-expanded, .te-format), .mbx:has(.thought-edit, .te.is-expanded, .te-format) .mbx-grid { flex: none; }
+.mbx:has(.thought-edit, .te.is-expanded, .te-format) .thoughts-list { max-height: 320px; overflow-y: auto; }
+@media (min-width: 840px) and (max-height: 700px) {
+  .screen-content.screen-content-mindbox:has(.mbx-grid) { overflow-y: auto; }
+  .mbx:has(.mbx-grid) { flex: none; }
+  .mbx-grid { flex: none; min-height: 520px; }
+}
+
 /* Try-out 12 Oct: Rescue, Morning ritual and Anchors are three soft-green
    cards, each headed the same way; "Rescue" is the heading and "Can't get
    started?" its line. */

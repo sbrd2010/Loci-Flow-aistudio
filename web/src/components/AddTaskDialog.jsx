@@ -14,7 +14,7 @@ import { BUILT_IN_HORIZONS, horizonsFromConfig } from "../utils/horizons";
 import { frontsFromConfig, sortFronts } from "../utils/fronts";
 import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
 import { IconCheck, IconChevronDown, IconChevronRight, IconClock, IconPencil, IconSmile, IconSparkles, IconX } from "./ui/icons";
-import { THOUGHTS_MAX, addThought } from "../utils/thoughts";
+import { THOUGHTS_MAX, addThought, sameThoughtContent, thoughtTaskDraft } from "../utils/thoughts";
 import { escapeThought, plainThought } from "../utils/thoughtFormat";
 import ThoughtEditor, { THOUGHT_EMOJI } from "./ui/ThoughtEditor";
 import EstimatePicker from "./EstimatePicker";
@@ -43,7 +43,9 @@ const DEFAULT_ESTIMATE_MINUTES = 25;
 
 export default function AddTaskDialog({ email, payload, savePayload, savePayloadAsync, userProfile, defaultHorizon, defaultFrontId = null, openedFrom = null, onClose, uid, writeActivityEvents, initialMode = "task", initialTitle = "", fromThoughtId = null, onThoughtSaved }) {
   const windows = getFocusWindows(payload.config || {});
-  const [title, setTitle] = useState(initialTitle);
+  const [sourceThought] = useState(() => fromThoughtId ? (payload.brainDump || []).find(t => t.id === fromThoughtId) : null);
+  const sourceDraft = sourceThought ? thoughtTaskDraft(sourceThought) : null;
+  const [title, setTitle] = useState(sourceDraft?.title ?? initialTitle);
   // Q56: Add opens with Task | Thought. A thought made into a task (Mind Box's
   // "Make it a task") stays a task, so it shows no switch.
   const [mode, setMode] = useState(fromThoughtId ? "task" : initialMode);
@@ -189,6 +191,7 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
     // Saved: the form stays up for a moment to say so. A second ⌘↵ (or a held
     // one) must not add the task again.
     if (saved || !title.trim()) return;
+    if (title.trim().length > 1000) { setFormError("Task titles can have up to 1,000 characters. Shorten the title, or save it as a thought."); return; }
 
     // Flush an in-progress sub-step edit that never hit its row-level ✓/Enter
     // (e.g. the user clicked this dialog's Save/Add Task button instead) so
@@ -248,6 +251,7 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
       isDeleted: false,
       lastUpdated: Date.now(),
       subSteps: effectiveSubSteps,
+      ...(sourceDraft?.note ? { note: sourceDraft.note } : {}),
     };
 
     if (reminderAt) scheduleReminder(freshTask);
@@ -258,7 +262,7 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
       ...payload,
       tasks: updatedTasks,
       // Made from a thought: the thought is done with once it's a task.
-      ...(fromThoughtId ? { brainDump: (payload.brainDump || []).filter(d => d.id !== fromThoughtId) } : {}),
+      ...(fromThoughtId ? { brainDump: (payload.brainDump || []).filter(d => d.id !== fromThoughtId || !sameThoughtContent(d, sourceThought)) } : {}),
     })
       .then(() => writeActivityEvents(eventPatch(uid, event)))
       .catch(() => {});
@@ -393,6 +397,7 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
           </div>
         ) : (
         <form ref={formRef} onSubmit={handleSubmit} className="add-body">
+          {sourceDraft?.note && <p className="add-thought-note">The complete thought will be kept in the task’s note.</p>}
           {isEveningGuardBlocked(payload.config) && (
             <p className="add-warning">Evening Guard is on: adding tasks after 8 PM is blocked. Rest now.</p>
           )}

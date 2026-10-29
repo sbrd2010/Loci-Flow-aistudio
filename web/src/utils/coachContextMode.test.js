@@ -1405,7 +1405,7 @@ describe("period questions and the other phrasings that fell through to light (#
   // #594: performance, typo and backlog-age wordings that got no numbers live.
   it.each([
     ["hwo many tasks did i finish in the past 30 days?", 30],
-    ["how many tasks have I completed over the last 2 weeks", 30],
+    ["how many tasks have I completed over the last 2 weeks", 14],
     ["How would you rate my productivity this month?", 30],
     ["what do you make of my performance over the past month", 30],
     ["how has my performance been today?", 7],
@@ -1417,6 +1417,41 @@ describe("period questions and the other phrasings that fell through to light (#
   ])("reads %s as a period question of %i days", (q, days) => {
     expect(detectPeriodIntent(q)).toEqual({ days, offset: 0 });
     expect(classifyContextMode(q, { ownKey: true })).toBe("full_task");
+  });
+
+  it.each([
+    "hwo many tasks have I completed in the last 2 weeks?",
+    "how many tasks did I finish in the past two weeks?",
+    "how many tasks did I finish in the last 14 days?",
+    "how many tasks did I finish over the past fourteen days?",
+    "how many tasks did I finish this fortnight?",
+    "fortnightly review",
+    "two-week review",
+    "14-day summary",
+    "how many tasks did I finish in the last 2   weeks?",
+    "how many tasks did I finish in the last fourteen\t days?",
+    "how was my fortnight?",
+    "review my fortnight",
+    "how were the last two weeks?",
+  ])("uses exactly 14 days for %s", q => {
+    expect(detectPeriodIntent(q)).toEqual({ days: 14, offset: 0 });
+    expect(classifyContextMode(q, paced)).toBe("full_task");
+  });
+
+  it("keeps the numeric duration during shorthand normalization", () => {
+    expect(normalizeForClassification("hwo many tasks in the last 2 weeks?")).toBe("how many tasks in the last 2 weeks?");
+    expect(detectPeriodIntent("anything notable over the past two weeks?", { loose: true })).toEqual({ days: 14, offset: 0 });
+    expect(detectPeriodIntent("What did I focus on two weeks ago?", { loose: true })).toEqual({ days: 30, offset: 0 });
+  });
+
+  it.each([
+    "on which day was my focus time highest",
+    "which day did I focus the most?",
+    "what day had the most focus time?",
+    "which day was I most productive?",
+  ])("gives %s the focus-day data, including on the lean path", q => {
+    expect(detectPeriodIntent(q)).toEqual({ days: 7, offset: 0 });
+    expect(classifyContextMode(q, paced)).toBe("full_task");
   });
 
   it("leaves feelings about performance with the support prompt", () => {
@@ -1458,6 +1493,10 @@ describe("period questions and the other phrasings that fell through to light (#
     expect(detectPeriodIntent("what did I get done in the last week")).toEqual({ days: 7, offset: 0 });
     expect(detectPeriodIntent("how was the last month")).toEqual({ days: 30, offset: 0 });
     expect(detectPeriodIntent("how many tasks did I finish this week")).toEqual({ days: 7, offset: 0 });
+  });
+
+  it.each([["week", 7], ["month", 30]])("keeps the explicit %s-before reference on the previous period", (period, days) => {
+    expect(detectPeriodIntent(`How long did I focus in the ${period} before?`)).toEqual({ days, offset: 1 });
   });
 
   it("'remember that…' and 'do you remember…' go to the mode that can keep memory", () => {

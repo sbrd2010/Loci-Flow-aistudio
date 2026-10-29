@@ -106,6 +106,9 @@ async function listFilesRecursive(dir) {
 }
 
 async function main() {
+  if (process.env.HOSTING_PREVIEW_ONLY === "true" && !CHANNEL_ID) {
+    fail("HOSTING_PREVIEW_ONLY requires a preview channel; refusing a live release.");
+  }
   if (CHANNEL_ID && (!/^[a-z0-9-]{1,36}$/.test(CHANNEL_ID) || CHANNEL_ID === "live")) {
     fail(`HOSTING_CHANNEL_ID "${CHANNEL_ID}" is not a preview channel id (lowercase letters, digits and dashes; not "live").`);
   }

@@ -6,7 +6,7 @@ import { normalizeAiOrganizeSuggestions, buildClearedBrainDump, buildOrganizedTa
 import { computeRitualSecondsLeft, nextRitualStep } from "../utils/ritualTimer";
 import { getFocusWindows } from "../utils/focusWindows";
 import { buildTaskMutationEvent, eventsPatch } from "../utils/activityLog";
-import { THOUGHTS_MAX, addThought, letGoThought, restoreThought, thoughtText } from "../utils/thoughts";
+import { THOUGHTS_MAX, addThought, editThought, letGoThought, restoreThought, sameThoughtContent, thoughtText } from "../utils/thoughts";
 import ThoughtsList, { oldestDays, oldestLabel } from "./ThoughtsList";
 import { IconChevronDown, IconSparkles } from "./ui/icons";
 import { RESCUE_STATES } from "./RescueMode";
@@ -14,7 +14,7 @@ import "../styles/mindBox.css";
 import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
 import "../styles/thoughts.css";
 import { plainThought } from "../utils/thoughtFormat";
-import { buildOrganizeRequest } from "../utils/aiTaskPrompts";
+import { buildOrganizeRequest, selectOrganizeBatch } from "../utils/aiTaskPrompts";
 import { retryUnreadable } from "../utils/aiRetry";
 import { buildLocalSafetyReply } from "../utils/crisisSafety";
 
@@ -46,6 +46,8 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
   const ritualIntervalRef = useRef(null);
   const stepEndAtRef = useRef(null);
   const [brainDumpText, setBrainDumpText] = useState("");
+  const [brainDumpHighlights, setBrainDumpHighlights] = useState([]);
+  const [editingThought, setEditingThought] = useState(null);
   const editorRef = useRef(null);
   // 78 §4: Rescue and Anchors take turns. Rescue is open on every visit
   // (owner's call, 12 Oct; the design had Anchors).
@@ -63,6 +65,8 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
   const [organizeSafety, setOrganizeSafety] = useState("");
   const [organizeExpandedIndex, setOrganizeExpandedIndex] = useState(null);
   const [organizeInvalidCount, setOrganizeInvalidCount] = useState(0);
+  const organizeSources = useRef([]);
+  const [organizeBatchInfo, setOrganizeBatchInfo] = useState("");
 
   // ── Ritual data ────────────────────────────────────────────────────────────
   const ritualSteps = [
@@ -138,7 +142,10 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
     // provider; it stays in the Mind Box. The rest are organised as usual.
     const firstName = (payload.config?.userName || "").split(" ")[0] || "friend";
     const safetyReply = allItems.map(item => buildLocalSafetyReply(plainThought(thoughtText(item)), firstName)).find(Boolean) || "";
-    const brainDumpItems = allItems.filter(item => !buildLocalSafetyReply(plainThought(thoughtText(item)), firstName));
+    const safeItems = allItems.filter(item => !buildLocalSafetyReply(plainThought(thoughtText(item)), firstName));
+    const brainDumpItems = selectOrganizeBatch(safeItems);
+    organizeSources.current = brainDumpItems;
+    setOrganizeBatchInfo(brainDumpItems.length < safeItems.length ? `Organizing ${brainDumpItems.length} of ${safeItems.length} thoughts. The rest will stay in Brain dump for the next batch.` : "");
     setOrganizeLoading(true);
     setOrganizeResults([]);
     setOrganizeDroppedSourceIds(new Set());
@@ -233,7 +240,7 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
     });
     // Pass all suggestions (not just accepted) so a split entry's source is only
     // cleared once every suggestion generated from it has been accepted.
-    const clearedDump = buildClearedBrainDump(payload.brainDump || [], toAdd, organizeResults, organizeDroppedSourceIds);
+    const clearedDump = buildClearedBrainDump(payload.brainDump || [], toAdd, organizeResults, organizeDroppedSourceIds, organizeSources.current);
     const events = newTasks.map((t) => buildTaskMutationEvent("task_created", t, { windows, source: "coach_action" }));
     savePayloadAsync({ ...payload, tasks: [...(payload.tasks || []), ...newTasks], brainDump: clearedDump })
       .then(() => writeActivityEvents(eventsPatch(uid, events)))
@@ -247,10 +254,42 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
 
   const handleBrainDumpSubmit = () => {
     if (!brainDumpText.trim()) return;
-    const added = addThought(payload, brainDumpText);
+    const added = addThought(payload, brainDumpText, Date.now(), { notebook: true, highlights: brainDumpHighlights });
     if (!added) return;
     savePayload(added.payload);
     setBrainDumpText("");
+    setBrainDumpHighlights([]);
+  };
+
+  const startEditThought = item => {
+    if (editingThought) return;
+    setEditingThought({ original: item, text: thoughtText(item), highlights: item.highlights || [] });
+  };
+  const saveEditedThought = () => {
+    if (!editingThought) return null;
+    const current = (payload.brainDump || []).find(t => t.id === editingThought.original.id);
+    if (!sameThoughtContent(current, editingThought.original)) return null;
+    const result = editThought(payload, current.id, editingThought.text, editingThought.highlights);
+    if (!result) return null;
+    savePayload(result.payload);
+    setEditingThought(null);
+    return current.id;
+  };
+  const saveThoughtCopy = () => {
+    if (!editingThought) return null;
+    const result = addThought(payload, editingThought.text, Date.now(), { notebook: true, highlights: editingThought.highlights });
+    if (!result) return null;
+    savePayload(result.payload);
+    setEditingThought(null);
+    return result.item.id;
+  };
+  const thoughtEditingProps = {
+    editing: editingThought,
+    onEdit: startEditThought,
+    onEditChange: (text, highlights) => setEditingThought(draft => draft && ({ ...draft, text, highlights })),
+    onSaveEdit: saveEditedThought,
+    onSaveCopy: saveThoughtCopy,
+    onCancelEdit: () => { const id = editingThought?.original.id; setEditingThought(null); return id; },
   };
 
   // Let go (Q56.2; 78 §6): the thought goes at once, with Undo for 6 s.
@@ -353,7 +392,7 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
   const rescueOpen = railOpen === "rescue";
   const dumpOldest = oldestLabel(oldestDays(payload.brainDump || []));
   const aiLink = (label) => (dumpCount > 0 && hasAnyKey ? (
-    <button type="button" className="mbx-ai" onClick={handleOrganizeDump} disabled={organizeLoading}>
+    <button type="button" className="mbx-ai" onClick={handleOrganizeDump} disabled={organizeLoading || !!editingThought}>
       <IconSparkles size={17} />{organizeLoading ? "Organizing…" : label}
     </button>
   ) : null);
@@ -396,6 +435,7 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
             <button className="mindbox-back-btn" onClick={() => { setToolPanel(null); setOrganizeResults([]); setOrganizeDroppedSourceIds(new Set()); setOrganizeError(""); setOrganizeSafety(""); setOrganizeInvalidCount(0); }}>← Back</button>
             <h2 className="mindbox-subview-title">Organize Dump</h2>
           </div>
+          {organizeBatchInfo && <p className="thought-edit-warning" role="status">{organizeBatchInfo}</p>}
           {organizeSafety && (
             <p role="status" className="mbx-safety" style={{ fontSize: "14px", fontWeight: "600", lineHeight: 1.5, padding: "12px 14px", margin: "12px 0", border: "1px solid var(--accent)", borderRadius: "12px" }}>
               {organizeSafety}
@@ -710,7 +750,7 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
             <span>{oldestFirst ? "Oldest first" : "Newest first"}{dumpOldest ? ` · ${dumpOldest}` : ""}</span>
             {aiLink("Organize with AI")}
           </div>
-          <ThoughtsList all thoughts={payload.brainDump || []} oldestFirst={oldestFirst} onMakeTask={t => onMakeThoughtTask?.(t)} onLetGo={handleLetGo} />
+          <ThoughtsList all thoughts={payload.brainDump || []} oldestFirst={oldestFirst} onMakeTask={t => onMakeThoughtTask?.(t)} onLetGo={handleLetGo} {...thoughtEditingProps} />
         </div>
       )}
 
@@ -728,15 +768,18 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
               </div>
               <div className="mbx-field">
                 <ThoughtEditor
+                  notebook
                   ref={editorRef}
                   value={brainDumpText}
-                  onChange={setBrainDumpText}
+                  highlights={brainDumpHighlights}
+                  onChange={(text, highlights) => { setBrainDumpText(text); setBrainDumpHighlights(highlights); }}
                   onSubmit={handleBrainDumpSubmit}
                   fullMessage={dumpCount >= THOUGHTS_MAX ? "Mind Box is full at 50. Let a few go or turn them into tasks, then keep writing." : null}
                   autoFocus={wideScreen()}
                 />
               </div>
               <ThoughtsList
+                {...thoughtEditingProps}
                 thoughts={payload.brainDump || []}
                 onMakeTask={t => onMakeThoughtTask?.(t)}
                 onLetGo={handleLetGo}

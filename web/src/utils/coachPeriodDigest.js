@@ -76,21 +76,21 @@ export function buildLociDeadlinesBlock({ tasks = [], config = {}, now = new Dat
 
 /**
  * @param {object} p
- * @param {number} [p.days]   7 (a week) or 30 (a month)
+ * @param {number} [p.days]   7 (a week), 14 (two weeks), or 30 (a month)
  * @param {number} [p.offset] 1 for the period before the current one ("last week"), else 0
  * @param {object|null} [p.focusRaw]  the focus ledger read (it must reach back `days * (offset + 1)` days), or null when it could not be read
  * @returns {string} the digest block, never empty
  */
 export function buildLociPeriodContext({ tasks = [], contributions = [], config = {}, now = new Date(), windows: given, days = 7, offset = 0, focusRaw = null, staleDays = DIGEST_STALE_DAYS }) {
   const windows = given || getFocusWindows(config);
-  const span = days === 30 ? 30 : 7;
+  const span = [7, 14, 30].includes(days) ? days : 7;
   const shift = offset === 1 ? 1 : 0;
   const all = lociDayWindow(span * (shift + 2), now, windows); // oldest first
   const end = all.length - shift * span;
   const current = all.slice(end - span, end);
   const previous = all.slice(end - 2 * span, end - span);
   const inCurrent = new Set(current);
-  const name = span === 30 ? "30 days" : "7 days";
+  const name = `${span} days`;
   const dayMonth = (dayStr) => `${parseDay(dayStr).getDate()} ${MONTHS[parseDay(dayStr).getMonth()]}`;
   const what = shift ? `the ${name} before the last ${name}` : `the last ${name}`;
   const before = shift ? `the ${name} before that` : `the ${name} before`;
@@ -121,7 +121,12 @@ export function buildLociPeriodContext({ tasks = [], contributions = [], config 
     const block = shift ? f.perDay.slice(0, span) : f.perDay;
     const minutes = block.reduce((n, d) => n + d.minutes, 0);
     if (minutes > 0) {
-      const perDay = span === 7 ? ` (${block.map(d => `${dayLabel(d.date)} ${formatMinutes(d.minutes)}`).join(", ")})` : "";
+      // Keep longer periods bounded for the free-tier prompt budget, but carry
+      // the best day so a focus-day question can still be answered exactly.
+      const best = block.reduce((top, d) => d.minutes > top.minutes ? d : top);
+      const perDay = span === 7
+        ? ` (${block.map(d => `${dayLabel(d.date)} ${formatMinutes(d.minutes)}`).join(", ")})`
+        : `; busiest day: ${dayLabel(best.date)} (${formatMinutes(best.minutes)})`;
       lines.push(`- Focus time: ${formatMinutes(minutes)} on ${plural(block.filter(d => d.moves > 0).length, "day")}${perDay}.`);
     } else {
       lines.push(`- Focus time: none logged in those ${name}.`);
