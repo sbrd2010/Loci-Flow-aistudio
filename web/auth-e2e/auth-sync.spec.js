@@ -276,18 +276,21 @@ test("separate accounts are isolated in the app and by the database rules", asyn
   expect(a.uid).not.toBe(b.uid);
   await addTask(a.page, "Only account A owns this sample");
   await expect.poll(async () => (await readServer(clients.request, a.uid)).tasks.some(t => t.title === "Only account A owns this sample")).toBe(true);
-  for (const method of ["GET", "PUT"]) {
-    const status = await b.page.evaluate(async ({ url, method }) => {
+  // Invalid data could be denied by validation even with broken ownership.
+  // Prove that the identical schema-valid payload succeeds for its owner.
+  const payload = await readServer(clients.request, b.uid);
+  for (const [method, uid, expected] of [["PUT", b.uid, 200], ["GET", a.uid, 401], ["PUT", a.uid, 401]]) {
+    const status = await b.page.evaluate(async ({ url, method, payload }) => {
       const { auth } = await import("/src/firebase.js");
       const token = await auth.currentUser.getIdToken();
       // ID tokens use RTDB's auth parameter; Bearer is the separate OAuth /
       // administrative API and is not an authenticated client-rules probe.
       const target = new URL(url);
       target.searchParams.set("auth", token);
-      const response = await fetch(target, { method, ...(method === "PUT" ? { body: JSON.stringify({ stolen: true }) } : {}) });
+      const response = await fetch(target, { method, ...(method === "PUT" ? { body: JSON.stringify(payload) } : {}) });
       return response.status;
-    }, { url: databaseUrl(`sync/${a.uid}`), method });
-    expect(status).toBe(401);
+    }, { url: databaseUrl(`sync/${uid}`), method, payload });
+    expect(status).toBe(expected);
   }
   await expect(row(b.page, "Only account A owns this sample")).toHaveCount(0);
   await signOut(a.page);
