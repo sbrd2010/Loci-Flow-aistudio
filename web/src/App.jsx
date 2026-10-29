@@ -7,6 +7,7 @@ import { scheduleAllReminders, scheduleCoachCheckin, cancelCoachCheckin, checkDa
 import { isNativeApp, refreshNativePermission, addNativeNotificationClickListener, NATIVE_PERMISSION_GRANTED_EVENT } from "./utils/nativeNotifs";
 import { signInWithGoogleNative, reauthenticateWithGoogleNative } from "./utils/nativeAuth";
 import { deleteAllMyData, clearLocalLociData, markWipePending } from "./utils/deleteAccount";
+import { clearPersonalAIKeys } from "./utils/aiKeyStorage";
 import { isCheckinDue, buildCheckinResumeMessage, isDuplicateCheckinResume } from "./utils/coachCheckin";
 import { getFocusWindows, getLociDayStr, getLociNowMinutes, getOverallSpan } from "./utils/focusWindows";
 import { buildWallCommitmentSave } from "./utils/dailyCoachCheckins";
@@ -63,6 +64,7 @@ const PLAN_COLUMN_NAMES = { today: "Today", week: "Week", month: "Month", quarte
 
 export default function App() {
   const [user, setUser] = useState(null);
+  const previousAuthUidRef = useRef(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("today");
   const [pendingCheckinSlot, setPendingCheckinSlot] = useState(null);
@@ -540,6 +542,10 @@ export default function App() {
   // Firebase auth state listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (previousAuthUidRef.current && previousAuthUidRef.current !== firebaseUser?.uid) {
+        clearPersonalAIKeys();
+      }
+      previousAuthUidRef.current = firebaseUser?.uid || null;
       setUser(firebaseUser);
       setAuthLoading(false);
       if (firebaseUser) {
@@ -1150,6 +1156,7 @@ export default function App() {
     // keep surfacing the previous account's task titles as notifications.
     flushNow();
     clearCache();
+    clearPersonalAIKeys();
     clearOpenSession();
     dropHeldEvent();
     cancelAllNativeScheduling();
@@ -1436,7 +1443,7 @@ export default function App() {
             </button>
             <button
               className="btn"
-              onClick={() => { flushNow(); clearCache(); clearOpenSession(); dropHeldEvent(); cancelAllNativeScheduling(); signOut(auth); }}
+              onClick={() => { flushNow(); clearCache(); clearPersonalAIKeys(); clearOpenSession(); dropHeldEvent(); cancelAllNativeScheduling(); signOut(auth); }}
               style={{ background: "var(--bg-secondary)", color: "var(--text-secondary)", border: "1.5px solid var(--border)", boxShadow: "none", fontSize: "13px" }}
             >
               Sign Out
