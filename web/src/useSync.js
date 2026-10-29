@@ -275,6 +275,7 @@ export function useSync(uid, email) {
   // an earlier render (before an account switch) can tell it is stale.
   const uidRef = useRef(uid);
   uidRef.current = uid;
+  const localEditSeqRef = useRef(0);
   // Counts adopted deliveries. A write captures it when it starts; if it has
   // moved by the time the write's promise resolves, a newer delivery was
   // adopted meanwhile and the (older) committed payload must not be absorbed
@@ -316,7 +317,7 @@ export function useSync(uid, email) {
 
   // What a full write needs to carry to its completion: the payload it
   // submitted and the delivery count at the time.
-  const beginWrite = (written) => ({ written, seq: deliverySeqRef.current, uid: uidRef.current, n: resendRef.current.startSave() });
+  const beginWrite = (written) => ({ written, seq: deliverySeqRef.current, edits: localEditSeqRef.current, uid: uidRef.current, n: resendRef.current.startSave() });
 
   // After this device's own write commits: `committed` is what the server now
   // holds — the submitted payload merged with whatever the other device had
@@ -812,6 +813,7 @@ export function useSync(uid, email) {
       return { blocked: true };
     }
 
+    localEditSeqRef.current += 1;
     payloadUidRef.current = uid;
     setPayload(nextPayload);
     payloadRef.current = nextPayload;
@@ -952,6 +954,7 @@ export function useSync(uid, email) {
     if (uidRef.current !== uid) return Promise.reject(new Error("saveSubPath: canceled by uid change"));
     if (!dbRefPath) return Promise.resolve();
     const value = sanitizeSubPathValue(subPath, rawValue);
+    localEditSeqRef.current += 1;
     // Mirror the update locally: update both the mutable ref and React state so
     // the UI re-renders immediately (same as savePayload, but without touching tasks).
     if (payloadRef.current) {
@@ -1001,6 +1004,7 @@ export function useSync(uid, email) {
     const patch = Object.fromEntries(
       Object.entries(rawPatch).map(([subPath, value]) => [subPath, sanitizeSubPathValue(subPath, value)])
     );
+    localEditSeqRef.current += 1;
     if (payloadRef.current) {
       const next = { ...payloadRef.current, ...patch, timestamp: Date.now() };
       payloadRef.current = next;
@@ -1069,6 +1073,7 @@ export function useSync(uid, email) {
     // Nothing actually changed — an empty patch would still bump lastUpdated
     // and timestamp, making this device look newer than it is to every merge.
     if (Object.keys(resolvedPatch).length === 0) return;
+    localEditSeqRef.current += 1;
     // Mirrors savePayload's guard: if RTDB hasn't delivered its first snapshot
     // yet, this bumps payloadRef.current.timestamp on top of (possibly stale)
     // cached data. Without this flag, the first RTDB snapshot could then look
@@ -1165,17 +1170,23 @@ export function useSync(uid, email) {
   // preempts — otherwise their promise (and whatever .then() was waiting to
   // fire an activity-ledger event) would hang forever, since this timer will
   // never fire on its own now that it's been cleared.
-  const flushNow = () => {
-    if (uidRef.current !== uid) return;
-    if (timeoutRef.current && dbRefPath && payloadRef.current) {
-      clearTimeout(timeoutRef.current);
+  // confirm:true also covers a previously failed child-path write or a save
+  // already in flight. Sign-out must confirm the whole latest recovery copy.
+  const flushNow = ({ confirm = false } = {}) => {
+    if (uidRef.current !== uid) return Promise.resolve(false);
+    if ((timeoutRef.current || confirm) && dbRefPath && payloadRef.current) {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
       const waiters = takeWaiters();
       const ctx = beginWrite(payloadRef.current);
-      writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseRef.current)
-        .then((committed) => { absorbCommitted(committed, ctx); onFullSaved(ctx); waiters.forEach(w => w.resolve()); })
-        .catch((err) => { onFullSaveFailed(err, ctx); waiters.forEach(w => w.reject(err)); });
+      return writeWithRetry(ref(db, dbRefPath), payloadRef.current, baseRef.current)
+        .then((committed) => {
+          absorbCommitted(committed, ctx); onFullSaved(ctx); waiters.forEach(w => w.resolve());
+          return uidRef.current === uid && localEditSeqRef.current === ctx.edits;
+        })
+        .catch((err) => { onFullSaveFailed(err, ctx); waiters.forEach(w => w.reject(err)); return false; });
     }
+    return Promise.resolve(true);
   };
 
   // Remove this user's localStorage cache — call on logout so stale data

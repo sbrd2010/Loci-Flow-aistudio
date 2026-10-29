@@ -63,6 +63,7 @@ const PLAN_COLUMN_NAMES = { today: "Today", week: "Week", month: "Month", quarte
 
 export default function App() {
   const [user, setUser] = useState(null);
+  const [signOutState, setSignOutState] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("today");
   const [pendingCheckinSlot, setPendingCheckinSlot] = useState(null);
@@ -1141,19 +1142,35 @@ export default function App() {
   };
   const closeDayMap = () => { setActiveTab(dayMapReturnTab); };
 
-  const handleSwitchUser = () => {
-    // Flush any pending debounced write before signing out, then wipe the
-    // local cache so the next user on this device doesn't see stale data.
+  const handleSwitchUser = async ({ discardUnsaved = false } = {}) => {
+    if (signOutState === "saving") return;
+    const forUid = auth.currentUser?.uid;
+    setSignOutState("saving");
+    // The recovery copy must stay until the server confirms it. A bounded
+    // wait leaves an offline user able to reconnect, export, or explicitly
+    // discard instead of silently losing work or waiting indefinitely.
+    if (!discardUnsaved) {
+      let timeout;
+      const saved = await Promise.race([
+        flushNow({ confirm: true }),
+        new Promise(resolve => { timeout = setTimeout(() => resolve(false), 5000); }),
+      ]);
+      clearTimeout(timeout);
+      if (auth.currentUser?.uid !== forUid) { setSignOutState(null); return; }
+      if (saved === false) { setSignOutState("failed"); return; }
+    }
     // Native task/check-in alarms are OS-persisted (unlike the in-memory
     // `scheduled` map elsewhere), so a page reload alone doesn't clear
     // them — cancel them explicitly or a shared/signed-out device could
     // keep surfacing the previous account's task titles as notifications.
-    flushNow();
     clearCache();
     clearOpenSession();
     dropHeldEvent();
     cancelAllNativeScheduling();
-    signOut(auth).then(() => { setUser(null); setActiveTab("today"); });
+    try {
+      await signOut(auth);
+      setUser(null); setActiveTab("today"); setSignOutState(null);
+    } catch { setSignOutState("failed"); }
   };
 
   // #612: once the account is deleted (here or on another device), nothing of
@@ -1436,11 +1453,13 @@ export default function App() {
             </button>
             <button
               className="btn"
-              onClick={() => { flushNow(); clearCache(); clearOpenSession(); dropHeldEvent(); cancelAllNativeScheduling(); signOut(auth); }}
+              onClick={() => handleSwitchUser()}
+              disabled={signOutState === "saving"}
               style={{ background: "var(--bg-secondary)", color: "var(--text-secondary)", border: "1.5px solid var(--border)", boxShadow: "none", fontSize: "13px" }}
             >
-              Sign Out
+              {signOutState === "saving" ? "Saving…" : "Sign Out"}
             </button>
+            {signOutState === "failed" && <p role="alert">Couldn't finish saving. Your local copy is still here. Retry the connection before signing out.</p>}
           </div>
         </div>
       </div>
@@ -1715,6 +1734,7 @@ export default function App() {
             saveConfigPatch={saveConfigPatch}
             lastSyncedAt={lastSyncedAt}
             onSignOut={demoMode ? exitDemo : handleSwitchUser}
+            signOutState={signOutState}
             onDeleteAllData={demoMode ? null : handleDeleteAllData}
             onLeaveDeletedAccount={() => leaveDeletedAccount(deletingUidRef.current)}
             theme={theme}
