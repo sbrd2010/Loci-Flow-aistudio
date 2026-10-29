@@ -350,6 +350,7 @@ export function useSync(uid, email) {
   // written back through the merging transaction (unless a debounced write
   // is already pending, which will carry them).
   const applyDelivery = (data, toApply, hasLocalContribution) => {
+    if (uidRef.current !== uid) return;
     payloadUidRef.current = uid;
     setPayload(toApply);
     payloadRef.current = toApply;
@@ -780,6 +781,9 @@ export function useSync(uid, email) {
   // drop-guard rejected the write (nothing was applied), otherwise
   // { blocked: false, nextPayload }.
   const applyPayloadLocally = (updatedPayload, { expectedRemovals = [] } = {}) => {
+    // An async caller can outlive its account (e.g. a Coach reply). Its
+    // captured save function must not mutate the next account's shared refs.
+    if (!uid || uidRef.current !== uid) return { blocked: true, reason: "account-changed" };
     // Track if savePayload fires before the first RTDB response — used in onValue
     // to distinguish a fake-fresh timestamp (from a premature mount effect) from a
     // legitimate unsaved edit (app killed before the last debounce flushed).
@@ -921,7 +925,9 @@ export function useSync(uid, email) {
   const savePayloadAsync = (updatedPayload, options) => {
     const result = applyPayloadLocally(updatedPayload, options);
     if (result.blocked) {
-      return Promise.reject(new Error("savePayloadAsync: write blocked by drop-guard"));
+      return Promise.reject(new Error(result.reason === "account-changed"
+        ? "savePayloadAsync: canceled by uid change"
+        : "savePayloadAsync: write blocked by drop-guard"));
     }
     return new Promise((resolve, reject) => {
       pendingWriteWaitersRef.current.push({ resolve, reject });
@@ -943,6 +949,7 @@ export function useSync(uid, email) {
   // local update, then writes to RTDB with retry, returning the write promise
   // (rejects on final failure — callers decide whether to swallow or await).
   const performSubPathWrite = (subPath, rawValue) => {
+    if (uidRef.current !== uid) return Promise.reject(new Error("saveSubPath: canceled by uid change"));
     if (!dbRefPath) return Promise.resolve();
     const value = sanitizeSubPathValue(subPath, rawValue);
     // Mirror the update locally: update both the mutable ref and React state so
@@ -989,6 +996,7 @@ export function useSync(uid, email) {
   // paths must change together (e.g. a task completion that also bumps
   // today's contribution count).
   const performSubPathsWrite = (rawPatch) => {
+    if (uidRef.current !== uid) return Promise.reject(new Error("saveSubPaths: canceled by uid change"));
     if (!dbRefPath) return Promise.resolve();
     const patch = Object.fromEntries(
       Object.entries(rawPatch).map(([subPath, value]) => [subPath, sanitizeSubPathValue(subPath, value)])
@@ -1039,6 +1047,7 @@ export function useSync(uid, email) {
   // list stored in config), so that derivation also uses the latest known
   // config rather than a stale caller-held snapshot.
   const saveConfigPatch = (patch) => {
+    if (uidRef.current !== uid) return;
     if (!dbRefPath) return;
     const latestConfig = payloadRef.current?.config || {};
     // Clamped before the no-op comparison so an over-long name is compared,
@@ -1157,6 +1166,7 @@ export function useSync(uid, email) {
   // fire an activity-ledger event) would hang forever, since this timer will
   // never fire on its own now that it's been cleared.
   const flushNow = () => {
+    if (uidRef.current !== uid) return;
     if (timeoutRef.current && dbRefPath && payloadRef.current) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
