@@ -855,7 +855,8 @@ export function useSync(uid, email) {
   const scheduleFlush = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
-    timeoutRef.current = setTimeout(() => {
+    const timer = setTimeout(() => {
+      if (uidRef.current !== uid) return;
       const waiters = takeWaiters();
       if (dbRefPath && payloadRef.current) {
         const ctx = beginWrite(payloadRef.current);
@@ -876,6 +877,9 @@ export function useSync(uid, email) {
             waiters.forEach(w => w.reject(err));
           })
           .finally(() => {
+            // A newer edit may have installed its own debounce while this
+            // transaction was in flight. Only clear the timer this save owns.
+            if (uidRef.current !== uid || timeoutRef.current !== timer) return;
             timeoutRef.current = null;
             if (pendingRemoteRef.current) {
               const remote = pendingRemoteRef.current;
@@ -900,6 +904,7 @@ export function useSync(uid, email) {
         waiters.forEach(w => w.reject(new Error("savePayloadAsync: no active sync target")));
       }
     }, 1500);
+    timeoutRef.current = timer;
   };
 
   const savePayload = (updatedPayload) => {
