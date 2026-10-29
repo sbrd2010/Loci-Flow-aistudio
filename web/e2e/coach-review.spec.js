@@ -68,21 +68,23 @@ test("phone: one column, the two small sections stack", async ({ page }) => {
   expect(overflow).toBeLessThanOrEqual(0);
 });
 
-test("small phone: all four periods remain readable and 14 days shows the full range", async ({ page }) => {
-  await openReview(page, { width: 320, height: 812 });
-  const periods = page.getByRole("radiogroup", { name: "Period" });
-  await expect(periods.getByRole("radio")).toHaveCount(4);
-  for (const label of ["Today", "7 days", "14 days", "30 days"]) {
-    const button = periods.getByRole("radio", { name: label, exact: true });
-    await expect(button).toBeVisible();
-    await expect(button).toBeInViewport({ ratio: 1 });
-    expect(await button.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
-  }
-  await periods.getByRole("radio", { name: "14 days", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "14 days in numbers", exact: true })).toBeVisible();
-  await expect(page.locator(".rv-bar-col")).toHaveCount(14);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
-});
+for (const width of [320, 360, 375, 412]) {
+  test(`${width}px phone: all four periods remain readable and 14 days shows the full range`, async ({ page }) => {
+    await openReview(page, { width, height: 812 });
+    const periods = page.getByRole("radiogroup", { name: "Period" });
+    await expect(periods.getByRole("radio")).toHaveCount(4);
+    for (const label of ["Today", "7 days", "14 days", "30 days"]) {
+      const button = periods.getByRole("radio", { name: label, exact: true });
+      await expect(button).toBeVisible();
+      await expect(button).toBeInViewport({ ratio: 1 });
+      expect(await button.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    }
+    await periods.getByRole("radio", { name: "14 days", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "14 days in numbers", exact: true })).toBeVisible();
+    await expect(page.locator(".rv-bar-col")).toHaveCount(14);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+  });
+}
 
 test("Mind Box no longer offers Insights", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });

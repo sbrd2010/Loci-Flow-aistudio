@@ -203,9 +203,10 @@
   .br-groups > .br-fold[open] { flex-basis: 100%; }
   .br-next { padding: 16px; gap: 10px; }
   .br-next-actions .br-run { width: 100%; }
-  .coach-page:has(#coach-panel-review) .coach-tabs { flex-wrap: wrap; gap: 0; }
-  .rv-period { width: 100%; margin-bottom: 8px; }
-  .rv-period button { flex: 1; padding: 0 12px; font-size: 13.5px; height: 36px; white-space: nowrap; }
+  /* Wrap only when all four periods cannot fit beside Chat and Review. */
+  .coach-page:has(#coach-panel-review) .coach-tabs { flex-wrap: wrap; gap: 0 8px; }
+  .rv-period { flex: 1; min-width: max-content; margin-bottom: 8px; }
+  .rv-period button { flex: 1; padding: 0 4px; font-size: 13.5px; height: 36px; white-space: nowrap; }
 }
 
 /* Try-out 41: one type scale across Coach — Review's reading text is Chat's
