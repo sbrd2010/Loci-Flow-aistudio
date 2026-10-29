@@ -265,7 +265,8 @@ export function isTaskCountDropSuspicious(nextTasks, currentTasks, threshold = 3
 // any local-newer task won a conflict or any local-only non-deleted task was appended.
 // Callers use hasLocalContribution to know whether to write the merged result back
 // to RTDB for cross-device convergence.
-function mergeTasks(remoteTasks, localTasks) {
+function mergeTasks(remoteTasks, localTasks, baseTasks) {
+  const baseByKey = new Map(sanitizeTasksForRules(baseTasks).map(t => [taskIdentity(t), t]));
   const sanitizedRemoteTasks = sanitizeTasksForRules(remoteTasks);
   const sanitizedLocalTasks = sanitizeTasksForRules(localTasks);
   // Matched on taskIdentity (uuid, or id for legacy rows that never had one)
@@ -286,6 +287,14 @@ function mergeTasks(remoteTasks, localTasks) {
     if (!localTask) return remoteTask;
     const localTs = finiteNumber(localTask.lastUpdated) ?? 0;
     const remoteTs = finiteNumber(remoteTask.lastUpdated) ?? 0;
+    const baseTask = baseByKey.get(key);
+    if (baseTask) {
+      if (taskContentsEqual(localTask, remoteTask) || taskContentsEqual(localTask, baseTask)) return remoteTask;
+      if (taskContentsEqual(remoteTask, baseTask)) {
+        hasLocalContribution = true;
+        return localTask;
+      }
+    }
     if (localTs > remoteTs) {
       hasLocalContribution = true;
       return localTask;
@@ -401,9 +410,10 @@ function mergeConfig(remoteConfig, localConfig, baseConfig) {
 // mergeConfig for why config needs it and what happens when it's absent.
 // `baseContributions` likewise for contribution rows (see mergeContributions),
 // `baseBrainDump` for brain-dump items (see mergeBrainDump) and
-// `baseChatHistory` for the chat list (see mergeChatHistory); without them the
+// `baseChatHistory` for the chat list (see mergeChatHistory), and `baseTasks`
+// for task content; without them the
 // remote rows/items/list are taken wholesale, as before they existed.
-export function mergeRemotePayloadWithMeta(remote, local, baseConfig, baseContributions, baseBrainDump, baseChatHistory) {
+export function mergeRemotePayloadWithMeta(remote, local, baseConfig, baseContributions, baseBrainDump, baseChatHistory, baseTasks) {
   const normalized = normalizePayload(remote);
   if (!remote || typeof remote !== "object") return { merged: normalized, hasLocalContribution: false };
 
@@ -423,7 +433,7 @@ export function mergeRemotePayloadWithMeta(remote, local, baseConfig, baseContri
     }
   }
 
-  const { tasks, hasLocalContribution: tasksContribution } = mergeTasks(normalized.tasks, local?.tasks);
+  const { tasks, hasLocalContribution: tasksContribution } = mergeTasks(normalized.tasks, local?.tasks, baseTasks);
   // Each side has one pin, but a task-by-task merge can keep both.
   normalized.tasks = keepOneThing(tasks);
 
@@ -486,9 +496,25 @@ function taskIdentity(task) {
   return task?.id != null ? `id:${task.id}` : null;
 }
 
+// A task clock is ordering metadata, not an edit. Comparing content against the
+// last server task lets a later edit survive a clock moving backwards without
+// re-stamping unchanged cached rows. Concurrent edits retain the timestamp rule.
+function taskContentsEqual(a, b) {
+  if (!a || !b) return a === b;
+  const { lastUpdated: _a, ...left } = a;
+  const { lastUpdated: _b, ...right } = b;
+  return configValuesEqual(left, right);
+}
+
+function afterTaskClock(task, previous) {
+  const next = Math.max(finiteNumber(task.lastUpdated) ?? 0, (finiteNumber(previous.lastUpdated) ?? 0) + 1);
+  return next === task.lastUpdated ? task : { ...task, lastUpdated: next };
+}
+
 // Per-task by identity. Tasks only the server has are kept — including its
 // tombstones, so a delete made elsewhere is not resurrected.
-function mergeTasksForWrite(serverTasks, localTasks) {
+function mergeTasksForWrite(serverTasks, localTasks, baseTasks) {
+  const baseByKey = new Map(sanitizeTasksForRules(baseTasks).map(t => [taskIdentity(t), t]));
   const server = sanitizeTasksForRules(serverTasks);
   const local = sanitizeTasksForRules(localTasks);
   const serverByKey = new Map(server.filter(taskIdentity).map(t => [taskIdentity(t), t]));
@@ -496,6 +522,11 @@ function mergeTasksForWrite(serverTasks, localTasks) {
     const key = taskIdentity(localTask);
     const serverTask = key ? serverByKey.get(key) : undefined;
     if (!serverTask) return localTask;
+    const baseTask = baseByKey.get(key);
+    if (baseTask) {
+      if (taskContentsEqual(localTask, serverTask) || taskContentsEqual(localTask, baseTask)) return serverTask;
+      if (taskContentsEqual(serverTask, baseTask)) return afterTaskClock(localTask, serverTask);
+    }
     const serverTs = finiteNumber(serverTask.lastUpdated) ?? 0;
     const localTs = finiteNumber(localTask.lastUpdated) ?? 0;
     return serverTs > localTs ? serverTask : localTask;
@@ -654,9 +685,18 @@ function mergeBrainDump(serverItems, localItems, baseItems) {
 // carries, so they win even where the standard per-key conflict rule would
 // prefer the committed value; a debounce is already pending to write them
 // (or, for chat, the sub-path write already landed).
-// Tasks need no overlay: a post-submit edit has a newer lastUpdated and wins
-// in the merge already.
+// Task edits also need an overlay: a committed task may have advanced its
+// logical clock beyond the wall-clock timestamp of an edit made during save.
 export function applyEditsSince(merged, local, written) {
+  const writtenTasks = new Map(arrayOrEmpty(written?.tasks).map(t => [taskIdentity(t), t]));
+  const localTasks = new Map(arrayOrEmpty(local?.tasks).map(t => [taskIdentity(t), t]));
+  const tasks = arrayOrEmpty(merged.tasks).map(t => {
+    const key = taskIdentity(t);
+    const current = localTasks.get(key);
+    const submitted = writtenTasks.get(key);
+    return current && submitted && !taskContentsEqual(current, submitted)
+      ? afterTaskClock(current, t) : t;
+  });
   const localConfig = objectOrEmpty(local?.config);
   const writtenConfig = objectOrEmpty(written?.config);
   const config = { ...objectOrEmpty(merged.config) };
@@ -697,7 +737,7 @@ export function applyEditsSince(merged, local, written) {
     if (!mergedKeys.has(itemKey(item)) && !writtenKeys.has(itemKey(item))) brainDump.push(item);
   }
 
-  const result = { ...merged, config, contributions, brainDump };
+  const result = { ...merged, tasks, config, contributions, brainDump };
   // A chat change made here since submit went through the sub-path writer and
   // is already on the server; the commit's older copy must not replace it.
   const chatCanon = list => JSON.stringify(sanitizeChatHistoryForRules(arrayOrEmpty(list)));
@@ -733,7 +773,7 @@ export function mergeLocalIntoServer(server, local, base) {
   return {
     ...normalizedLocal,
     ...(chatMerge ? { chatHistory: chatMerge.chatHistory } : {}),
-    tasks: keepOneThing(mergeTasksForWrite(normalizedServer.tasks, normalizedLocal.tasks)),
+    tasks: keepOneThing(mergeTasksForWrite(normalizedServer.tasks, normalizedLocal.tasks, base?.tasks)),
     config: mergeConfigForWrite(normalizedServer.config, normalizedLocal.config, base ? base.config : null),
     contributions: mergeContributions(normalizedServer.contributions, normalizedLocal.contributions, base ? arrayOrEmpty(base.contributions) : null).contributions,
     brainDump: brainDumpMerge ? brainDumpMerge.items : (serverBrainDumpIsNewer ? normalizedServer.brainDump : normalizedLocal.brainDump),
