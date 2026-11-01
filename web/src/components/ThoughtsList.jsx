@@ -7,7 +7,8 @@ import ThoughtEditor from "./ui/ThoughtEditor";
 // Thoughts in Mind Box › Brain dump (78 §6): newest first, each with its
 // age. Hover, keyboard focus or a tap tints the row and swaps the age for
 // "Make it a task" (Enter) and "Let go" (Del/Backspace); ↑/↓ move between
-// rows. A phone shows 3 and "All N thoughts →" (78 §7).
+// rows. A phone shows 3 and "All N thoughts →" (78 §7). Each thought shows
+// one line until a tap, click or Space opens it in full.
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 export const PHONE_SHOWS = 3;
@@ -70,6 +71,9 @@ export default function ThoughtsList({
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       rows[at + (e.key === "ArrowDown" ? 1 : -1)]?.focus();
+    } else if (e.key === " ") {
+      e.preventDefault();
+      setPicked(p => (p === t.id ? null : t.id)); // opens or closes the full thought
     } else if (e.key === "Enter") {
       e.preventDefault();
       if (editing?.original.id === t.id) return;

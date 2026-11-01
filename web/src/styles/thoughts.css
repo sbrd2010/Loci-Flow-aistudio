@@ -94,6 +94,10 @@
 @media (min-width: 1600px) { .thought-text { font-size: 16.5px; } }
 
 .thought-text { white-space: pre-wrap; }
+/* Each thought shows one line until it is opened (a tap, a click or Space),
+   so a long note doesn't push the rest of the list down. */
+.thought-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; line-clamp: 1; overflow: hidden; }
+.thought-row.is-picked .thought-text { display: block; -webkit-line-clamp: unset; line-clamp: none; overflow: visible; }
 .thought-highlight { padding: 0; border-radius: 2px; color: inherit; }
 .thought-edit-link { flex: none; display: inline-grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 8px; background: none; color: var(--ink-2); cursor: pointer; }
 .thought-edit-link:hover { background: var(--row-hover); color: var(--accent); }
