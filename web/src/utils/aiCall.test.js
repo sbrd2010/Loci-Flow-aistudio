@@ -1991,6 +1991,28 @@ describe("Cloudflare AI and NVIDIA through Loci's relay", () => {
     expect(fetch.mock.calls[0][1].headers.Authorization).toBe("Bearer sk-or-own");
   });
 
+  for (const code of ["daily_cap", "pool_empty", "quota_unavailable"]) {
+    it(`stops shared fallbacks for ${code} and shows the right message`, async () => {
+      const res = relayError(code === "quota_unavailable" ? 503 : 429, "Shared budget response");
+      res.json = async () => ({ error: { code, message: "Shared budget response" } });
+      fetch.mockResolvedValue(res);
+      const err = await callAI(baseRequest({ groqKey: "", geminiKey: "", cerebrasKey: "", zaiKey: "", openrouterKey: "" })).catch(e => e);
+      expect(err.message).toBe(code === "quota_unavailable" ? "shared_ai_unavailable" : "usage_limit");
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(describeAIError(err)).toMatch(code === "pool_empty" ? /everyone/ : code === "daily_cap" ? /today's free AI/ : /temporarily unavailable/);
+    });
+  }
+
+  it("can still use a personal key after shared AI is used up", async () => {
+    const res = relayError(429, "Budget exhausted");
+    res.json = async () => ({ error: { code: "daily_cap" } });
+    fetch.mockResolvedValueOnce(res).mockResolvedValueOnce(cerebrasOk("Personal provider reply."));
+    const reply = await callAI(baseRequest({ groqKey: "", geminiKey: "", cerebrasKey: "personal-cerebras", zaiKey: "", openrouterKey: "" }));
+    expect(reply).toBe("Personal provider reply.");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[1][0]).toBe("https://api.cerebras.ai/v1/chat/completions");
+  });
+
   it("is left out of the chain when signed out, so nothing is sent to the relay", async () => {
     auth.currentUser = null;
     storage.setItem("loci_provider_pref", "cloudflare");
