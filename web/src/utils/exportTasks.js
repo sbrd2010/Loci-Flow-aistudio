@@ -27,7 +27,10 @@ function buildCsvFields(tasks) {
 
 function escapeCsvCell(value) {
   if (value === null || value === undefined) return "";
-  const str = typeof value === "object" ? JSON.stringify(value) : String(value);
+  const raw = typeof value === "object" ? JSON.stringify(value) : String(value);
+  // CSV quoting alone does not stop Excel/Sheets interpreting task text as
+  // a formula. Prefix untrusted formula-like strings, leaving numbers intact.
+  const str = typeof value === "string" && /^\s*[=+@-]/.test(raw) ? `'${raw}` : raw;
   if (str.includes('"') || str.includes(",") || str.includes("\n") || str.includes("\r")) {
     return '"' + str.replace(/"/g, '""') + '"';
   }

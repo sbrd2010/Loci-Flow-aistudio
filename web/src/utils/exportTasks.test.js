@@ -1,5 +1,29 @@
-import { describe, it, expect } from "vitest";
-import { buildPayloadBackupData } from "./exportTasks";
+import { describe, it, expect, vi } from "vitest";
+import { buildPayloadBackupData, exportTasksAsCsv } from "./exportTasks";
+
+describe("CSV exported to a spreadsheet", () => {
+  it("keeps untrusted task text from becoming a spreadsheet formula while preserving numeric values", async () => {
+    let exported;
+    vi.stubGlobal("URL", {
+      createObjectURL: blob => { exported = blob; return "blob:synthetic"; },
+      revokeObjectURL() {},
+    });
+    vi.stubGlobal("document", { createElement: () => ({ click() {} }), body: { appendChild() {}, removeChild() {} } });
+    try {
+      exportTasksAsCsv([
+        { title: "=1+1", timeEstimateMinutes: -5 },
+        { title: "+1+1" }, { title: "-1+1" }, { title: "@SUM(1)" },
+        { title: "\t=1+1" }, { title: 'Ordinary, "quoted" task' },
+      ]);
+      const csv = await exported.text();
+      for (const formula of ["=1+1", "+1+1", "-1+1", "@SUM(1)", "\t=1+1"]) {
+        expect(csv).toContain(`,'${formula},`);
+      }
+      expect(csv).toContain(",-5,");
+      expect(csv).toContain('"Ordinary, ""quoted"" task"');
+    } finally { vi.unstubAllGlobals(); }
+  });
+});
 
 const TASK = { uuid: "abc", title: "Test task", isCompleted: false, lastUpdated: 1000 };
 
