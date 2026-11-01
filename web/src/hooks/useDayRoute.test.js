@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getEstimate, joinRoute, listFollowsRoute, oneThingToNow, restoreRoute, routeFollowsList, routeIsContiguous } from "./useDayRoute";
+import { getEstimate, joinRoute, listFollowsRoute, oneThingToNow, restoreRoute, routeCut, routeFollowsList, routeIsContiguous } from "./useDayRoute";
 
 const DAY = "2026-09-29";
 const stop = (uuid, order, minutes, extra = {}) => ({
@@ -233,5 +233,55 @@ describe("joinRoute (Q59: every open Today task is on the route)", () => {
       today("w", 5, { horizonLevel: "week" }),
     ];
     expect(joinRoute(tasks, DAY)).toBeNull();
+  });
+});
+
+// R7: Move N / Park N leave must-dos and today's confirmed minimum day on
+// today; what won't fit is still counted in full.
+describe("routeCut keeps must-dos and the confirmed minimum day out of the bulk move", () => {
+  const T = (id, extra = {}) => ({ uuid: id, timeEstimateMinutes: 30, routeEndMinutes: 0, ...extra });
+  const fits = T("fits", { routeEndMinutes: 22 * 60 });
+  const now = T("now", { isNowFocus: true });
+  const must = T("must", { isMVD: true });
+  const min = T("min");
+  const plain = T("plain", { timeEstimateMinutes: 45 });
+  const routeTasks = [fits, now, must, min, plain];
+  const plan = { overIndex: 1, dayEnd: 24 * 60, dayLeft: 3 * 60, wontFit: [now, must, min, plain] };
+  const ids = (list) => list.map(t => t.uuid);
+  const confirmed = (date, list) => ({ minimumDay: { date, ids: list } });
+
+  it("a MUST task is kept, not movable", () => {
+    const cut = routeCut(routeTasks, plan);
+    expect(ids(cut.movable)).toEqual(["min", "plain"]);
+    expect(ids(cut.kept)).toEqual(["must"]);
+  });
+
+  it("a task in today's confirmed minimum day is kept", () => {
+    const cut = routeCut(routeTasks, plan, { config: confirmed("2026-11-01", ["min"]), todayStr: "2026-11-01" });
+    expect(ids(cut.movable)).toEqual(["plain"]);
+    expect(ids(cut.kept)).toEqual(["must", "min"]);
+  });
+
+  it("a minimum day confirmed on another day protects nothing", () => {
+    const cut = routeCut(routeTasks, plan, { config: confirmed("2026-10-31", ["min"]), todayStr: "2026-11-01" });
+    expect(ids(cut.movable)).toEqual(["min", "plain"]);
+  });
+
+  it("with no confirmed minimum day (only a suggestion), MIN tasks stay movable", () => {
+    const cut = routeCut(routeTasks, plan, { config: {}, todayStr: "2026-11-01" });
+    expect(ids(cut.movable)).toEqual(["min", "plain"]);
+  });
+
+  it("the one thing is in neither list, even when it is a must-do", () => {
+    const nowMust = T("now", { isNowFocus: true, isMVD: true });
+    const cut = routeCut([fits, nowMust], { ...plan, wontFit: [nowMust] });
+    expect(cut.movable).toEqual([]);
+    expect(cut.kept).toEqual([]);
+  });
+
+  it("what won't fit is still counted in full, kept tasks included", () => {
+    const cut = routeCut(routeTasks, plan, { config: confirmed("2026-11-01", ["min"]), todayStr: "2026-11-01" });
+    expect(cut.wontFitMinutes).toBe(30 + 30 + 30 + 45);
+    expect([...cut.overIds]).toEqual(["now", "must", "min", "plain"]);
   });
 });

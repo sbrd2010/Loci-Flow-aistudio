@@ -354,6 +354,9 @@
 .dm-dayend-label::after { content: ""; flex: 1; border-top: 2px solid var(--coral); }
 .dm-wontfit { padding: 4px 0 2px; }
 .dm-tomorrow-note { margin: 10px 0 0; font-size: 0.8125rem; color: var(--ink-2); }
+/* R7: why must-dos and the minimum day are not in Move N / Park N. */
+.dm-kept-note { margin: 10px 0 0; font-size: 0.8125rem; line-height: 1.4; color: var(--ink-2); }
+.dm-side .dm-kept-note { margin: 0; }
 .dm-help { display: block; }
 
 /* ── The side: Move N to tomorrow ── */
@@ -387,11 +390,14 @@
 .dm-side:empty { display: none; }
 /* Room under the route for the action above the nav. */
 .day-map-page:has(.dm-side:not(:empty)) { padding-bottom: 120px; }
+/* The kept note under the phone's Move button: room for two more lines. */
+.day-map-page:has(.dm-side .dm-kept-note) { padding-bottom: 160px; }
 /* With a session on, the focus bar (59e) sits above the nav: the action
    stack goes above the bar, never under it (Codex review of #434). */
 @media (max-width: 1023px) {
   body:has(.focus-bar) .dm-side { bottom: calc(var(--dm-nav-h, 64px) + 80px + env(safe-area-inset-bottom, 0px)); }
   body:has(.focus-bar) .day-map-page:has(.dm-side:not(:empty)) { padding-bottom: 200px; }
+  body:has(.focus-bar) .day-map-page:has(.dm-side .dm-kept-note) { padding-bottom: 240px; }
 }
 /* A sheet's scrim (Fixed time on a phone). */
 .dm-sheet-scrim { position: fixed; inset: 0; z-index: 149; background: var(--scrim); }
