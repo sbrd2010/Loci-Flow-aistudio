@@ -16,3 +16,10 @@ Use `LOCI_REVIEW_CHROMIUM=/path/to/chromium` for an existing Chromium binary.
 The suite starts Vite on port 5173 or reuses an existing server on that port.
 Tests may instrument promise timing or expose the real hook to create precise
 unsaved states; production source and merge results are not replaced.
+
+The complete review adds Coach/account/content/time invariants to the focused
+save regressions: 17 Chromium checks, plus two bundled Node logic checks.
+The separate relay replay at `ai-proxy/alpha-review/relay.test.mjs` requires the
+server-budget implementation in PR 632; its core accounting coverage runs in
+that PR's Worker unit suite. Run that replay manually after integrating 632.
+See `docs/ALPHA_SECURITY_REVIEW.md` for original reproductions and limits.
