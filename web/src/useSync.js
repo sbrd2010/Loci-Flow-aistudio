@@ -625,7 +625,10 @@ export function useSync(uid, email) {
               reminderNagIntervalMinutes: 15,
               intentionMessage: "Start tiny. One action. Right now.",
               isOnboardingCompleted: false,
-              eveningGuardWindowActive: true,
+              // Off for new accounts: on by default it refused every new task
+              // after 20:00, so someone trying Loci in the evening could add
+              // nothing. It stays a choice in Settings › The day.
+              eveningGuardWindowActive: false,
               roadmapStyle: "compact",
               lastUpdated: now
             },
