@@ -19,6 +19,9 @@ test(`a later edit survives a five-minute clock difference${reload ? " after rel
     if (reload) {
       await normal.reload();
       await expect.poll(() => normal.evaluate(() => window.review?.payload?.tasks?.[0]?.title)).toBe("Earlier edit from ahead clock");
+      // That title can come from the local cache first; a save before the
+      // database answers is cancelled by design, so wait for the answer.
+      await expect.poll(() => normal.evaluate(() => window.review?.isSyncingFromCache)).toBe(false);
     }
     await edit(normal, "Later edit from correct clock");
     expect((await (await database(u, `sync/${u.uid}`)).json()).tasks[0].title).toBe("Later edit from correct clock");
