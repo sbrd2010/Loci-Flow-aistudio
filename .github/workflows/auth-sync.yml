@@ -3,6 +3,9 @@ name: Signed-in auth and sync
 on:
   pull_request:
     branches: [main, redesign-75]
+    # Drafts can't be merged, so these suites wait for "Ready for review":
+    # every PR still passes them before merge, without a run per draft push.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "web/src/**"
       - "web/auth-e2e/**"
@@ -31,6 +34,7 @@ concurrency:
 
 jobs:
   auth-sync:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:

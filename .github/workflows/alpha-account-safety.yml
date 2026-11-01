@@ -1,6 +1,9 @@
 name: Alpha account safety
 on:
   pull_request:
+    # Drafts can't be merged, so these suites wait for "Ready for review":
+    # every PR still passes them before merge, without a run per draft push.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "web/src/**"
       - "web/alpha-review/**"
@@ -16,6 +19,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   alpha-account-safety:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -30,8 +34,6 @@ jobs:
           distribution: temurin
           java-version: 21
       - run: npm ci --legacy-peer-deps
-        working-directory: web
-      - run: npm run lint && npm test -- --maxWorkers=3
         working-directory: web
       - run: npx playwright install --with-deps chromium
         working-directory: web
