@@ -256,7 +256,9 @@ test("an old account's delayed write response cannot leak into a newly signed-in
     await addTask(a.page, "A pending response sample");
     await expect.poll(async () => (await readServer(clients.request, a.uid)).tasks.some(t => t.title === "A pending response sample")).toBe(true);
     await expect.poll(() => barrier.count()).toBeGreaterThan(0);
-    await signOut(a.page);
+    // The held response means the save is never confirmed, so sign-out
+    // refuses to drop it silently (#626); the user discards on purpose.
+    await signOut(a.page, { discardUnsaved: true });
     expect(await signIn(a.page, b.email, { navigate: false })).toBe(b.uid);
   } finally { barrier.release(); }
   await appReady(a.page);
