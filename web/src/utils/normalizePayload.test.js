@@ -1059,6 +1059,50 @@ describe("mergeLocalIntoServer - outgoing write safety (full-payload save must n
     expect(applyEditsSince(merged, written, written).chatHistory).toEqual(written.chatHistory);
   });
 
+  it("brainDump: edits to different thoughts survive both incoming and outgoing merges", () => {
+    const a = { id: "a", text: "Blue sample", createdAt: 1 };
+    const b = { id: "b", text: "Green sample", createdAt: 2 };
+    const base = { config: {}, contributions: [], brainDump: [a, b] };
+    const local = { ...base, userId: "u", tasks: [], brainDump: [{ ...a, text: "Edited blue", updatedAt: 100, revisionId: "r-a" }, b] };
+    const server = { ...base, userId: "u", tasks: [], brainDump: [a, { ...b, text: "Edited green", updatedAt: 200, revisionId: "r-b" }] };
+    for (const [remote, here] of [[server, local], [local, server]]) {
+      expect(mergeLocalIntoServer(remote, here, base).brainDump.map(t => t.text)).toEqual(["Edited blue", "Edited green"]);
+      const incoming = mergeRemotePayloadWithMeta(remote, here, base.config, base.contributions, base.brainDump);
+      expect(incoming.merged.brainDump.map(t => t.text)).toEqual(["Edited blue", "Edited green"]);
+      expect(incoming.hasLocalContribution).toBe(true);
+    }
+  });
+
+  it("brainDump: a remote edit replaces an unchanged cached thought without write-back", () => {
+    const item = { id: "a", text: "Original sample", createdAt: 1 };
+    const base = { config: {}, contributions: [], brainDump: [item] };
+    const local = { ...base, tasks: [], userId: "u", timestamp: 10 };
+    const server = { ...local, brainDump: [{ ...item, text: "Remote sample", updatedAt: 100, revisionId: "r" }], timestamp: 100 };
+    const incoming = mergeRemotePayloadWithMeta(server, local, base.config, base.contributions, base.brainDump);
+    expect(incoming.merged.brainDump).toEqual(server.brainDump);
+    expect(incoming.hasLocalContribution).toBe(false);
+  });
+
+  it("brainDump: same-thought edits converge by timestamp and a deterministic revision tie-break", () => {
+    const item = { id: "a", text: "Original sample", createdAt: 1 };
+    const base = { config: {}, contributions: [], brainDump: [item] };
+    const old = { ...base, userId: "u", tasks: [], brainDump: [{ ...item, text: "Blue revision", updatedAt: 100, revisionId: "z" }] };
+    const recent = { ...old, brainDump: [{ ...item, text: "Green revision", updatedAt: 200, revisionId: "b" }] };
+    for (const [server, local] of [[old, recent], [recent, old]]) expect(mergeLocalIntoServer(server, local, base).brainDump).toEqual(recent.brainDump);
+    const equal = { ...old, brainDump: [{ ...item, text: "Equal-time revision", updatedAt: 200, revisionId: "a" }] };
+    for (const [server, local] of [[equal, recent], [recent, equal]]) expect(mergeLocalIntoServer(server, local, base).brainDump).toEqual(recent.brainDump);
+  });
+
+  it("applyEditsSince: an in-flight acknowledgement keeps a later thought edit and highlight", () => {
+    const item = { id: "a", text: "Sample text", createdAt: 1 };
+    const written = { config: {}, contributions: [], brainDump: [item] };
+    const edited = { ...item, text: "Later sample text", updatedAt: 200, revisionId: "later", highlights: [{ start: 0, end: 5, color: "yellow" }] };
+    const local = { ...written, brainDump: [edited] };
+    const merged = { ...written, brainDump: [item, { id: "b", text: "Other device", createdAt: 2 }] };
+    expect(applyEditsSince(merged, local, written).brainDump).toEqual([edited, merged.brainDump[1]]);
+    expect(applyEditsSince({ ...merged, brainDump: [] }, local, written).brainDump).toEqual([]);
+  });
+
   it("brainDump: with a base, items are merged per item — an item added on each device survives, one deleted elsewhere stays deleted", () => {
     const item = (id, text) => ({ id, text, createdAt: 1 });
     const base = { config: { userId: "u" }, contributions: [], brainDump: [item("a", "old"), item("gone", "deleted there")] };

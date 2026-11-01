@@ -1,10 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { buildSplitRequest, buildBreakdownRequest, buildAskAIRequest, buildOrganizeRequest } from "./aiTaskPrompts";
+import { buildSplitRequest, buildBreakdownRequest, buildAskAIRequest, buildOrganizeRequest, selectOrganizeBatch } from "./aiTaskPrompts";
 
 // #603: the four task-writing prompts, moved out of their screens and then fixed
 // from the live evaluation. These pin what each screen sends, so a prompt change
 // is a visible, deliberate one.
 describe("AI task-writing requests", () => {
+  it("organizes bounded batches of complete notebook entries without truncation", () => {
+    const items = ["Blue", "Green", "Pink"].map(id => ({ id, text: `${id} ${"x".repeat(1990)}`, fmt: 1 }));
+    const selected = selectOrganizeBatch(items);
+    expect(selected).toEqual(items.slice(0, 2));
+    const request = buildOrganizeRequest({ items: selected });
+    expect(request.messages[0].content).toContain(items[1].text);
+    expect(request.messages[0].content).not.toContain("[id:Pink]");
+    expect(request.messages[0].content.length).toBeLessThan(12000);
+  });
   it("Split sends only the title, 2-4 stand-alone steps of 45 minutes or less", () => {
     const r = buildSplitRequest({ title: "Plan the team offsite", timeEstimateMinutes: 90 });
     expect(r).toMatchObject({ maxTokens: 800, reasoningEffort: "low" });

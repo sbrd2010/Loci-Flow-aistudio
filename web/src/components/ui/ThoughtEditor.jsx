@@ -1,10 +1,13 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import { IconBold, IconSmile, IconUnderline } from "./icons";
 import { parseThought, plainThought, serializeRuns } from "../../utils/thoughtFormat";
+import { THOUGHT_MAX_CHARS } from "../../utils/thoughts";
+import { highlightFromPaint, highlightNotebookSelection, highlightPaint, notebookDraft, notebookNewline, notebookRuns, notebookText, normalizeHighlights, THOUGHT_HIGHLIGHTS, toggleNotebookList } from "../../utils/thoughtNotebook";
 import "../../styles/thoughtEditor.css";
 
 // 78 §5: the Brain dump editor, shared by Mind Box and Today's Add › Thought.
-// Ruled lines; Enter saves, Shift+Enter makes a new line; B and U (and
+// Ruled lines; quick capture uses Enter to save, notebook mode uses Ctrl/⌘+Enter;
+// Enter continues notebook lists and Shift+Enter makes a plain new line. B and U (and
 // Ctrl/⌘ B, U) toggle the selection or what you type next; an emoji picker
 // opens below the footer. The text is stored with **bold** / __underline__
 // markers and shown without them.
@@ -22,12 +25,12 @@ const isOn = (cmd) => {
 // The field's DOM → runs of text with their style.
 function readRuns(root) {
   const runs = [];
-  const push = (text, s) => runs.push({ text, b: s.b, u: s.u });
+  const push = (text, s) => runs.push({ text, b: s.b, u: s.u, ...(s.h ? { h: s.h } : {}) });
   const walk = (node, s) => {
     if (node.nodeType === 3) { if (node.data) push(node.data.replace(/\u00a0/g, " "), s); return; }
     if (node.nodeType !== 1) return;
     const tag = node.tagName;
-    if (tag === "BR") { push("\n", s); return; }
+    if (tag === "BR") { if (!node.hasAttribute("data-te-tail")) push("\n", s); return; }
     const block = tag === "DIV" || tag === "P";
     const text = runs.map(r => r.text).join("");
     if (block && text && !text.endsWith("\n")) push("\n", s);
@@ -35,6 +38,7 @@ function readRuns(root) {
     const next = {
       b: s.b || tag === "B" || tag === "STRONG" || st.fontWeight === "bold" || Number(st.fontWeight) >= 600,
       u: s.u || tag === "U" || /underline/.test(st.textDecoration || st.textDecorationLine || ""),
+      h: st.backgroundColor ? highlightFromPaint(st.backgroundColor) : s.h,
     };
     node.childNodes.forEach(c => walk(c, next));
   };
@@ -43,11 +47,12 @@ function readRuns(root) {
 }
 
 // Stored text → the field's DOM (no innerHTML: the text is the person's own).
-function writeRuns(root, text) {
+function writeRuns(root, text, highlights = []) {
   root.replaceChildren();
-  const runs = parseThought(text);
+  const runs = notebookRuns(text, highlights);
   runs.forEach(r => {
     let host = root;
+    if (r.h) { const mark = document.createElement("mark"); mark.style.backgroundColor = highlightPaint(r.h); mark.style.color = "inherit"; host.appendChild(mark); host = mark; }
     if (r.b) { const b = document.createElement("b"); host.appendChild(b); host = b; }
     if (r.u) { const u = document.createElement("u"); host.appendChild(u); host = u; }
     r.text.split("\n").forEach((part, i) => {
@@ -56,7 +61,44 @@ function writeRuns(root, text) {
     });
   });
   // A last line break needs a second <br> to show its empty line.
-  if (text.endsWith("\n")) root.appendChild(document.createElement("br"));
+  if (notebookText(text).endsWith("\n")) { const tail = document.createElement("br"); tail.setAttribute("data-te-tail", ""); root.appendChild(tail); }
+}
+
+function fieldSelection(root) {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount || !root.contains(selection.anchorNode) || !root.contains(selection.focusNode)) return { start: 0, end: 0 };
+  const range = selection.getRangeAt(0);
+  const offset = (node, at) => {
+    const before = document.createRange();
+    before.selectNodeContents(root);
+    before.setEnd(node, at);
+    return readRuns(before.cloneContents()).reduce((n, r) => n + r.text.length, 0);
+  };
+  return { start: offset(range.startContainer, range.startOffset), end: offset(range.endContainer, range.endOffset) };
+}
+
+function restoreFieldSelection(root, start, end) {
+  const point = position => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+    let n; let offset = 0;
+    while ((n = walker.nextNode())) {
+      if (n.nodeType === 3) {
+        if (position <= offset + n.data.length) return [n, Math.max(0, position - offset)];
+        offset += n.data.length;
+      } else if (n.tagName === "BR" && !n.hasAttribute("data-te-tail")) {
+        // A caret on an empty line belongs before its next <br>, rather than
+        // at the next text node (which may be several blank lines later).
+        if (position === offset) return [n.parentNode, [...n.parentNode.childNodes].indexOf(n)];
+        offset += 1;
+      }
+    }
+    return [root, Math.max(0, root.childNodes.length - (root.lastChild?.hasAttribute?.("data-te-tail") ? 1 : 0))];
+  };
+  const range = document.createRange();
+  range.setStart(...point(start));
+  range.setEnd(...point(end));
+  const selection = window.getSelection();
+  selection.removeAllRanges(); selection.addRange(range);
 }
 
 const plainLength = (text) => parseThought(text).reduce((n, r) => n + r.text.length, 0);
@@ -70,7 +112,10 @@ const ThoughtEditor = forwardRef(function ThoughtEditor({
   placeholder = "What\u2019s on your mind?",
   hint = <>ENTER SAVES<span className="te-hint-more"> · SHIFT+ENTER NEW LINE</span></>,
   saveLabel = "Save thought",
-  maxLength = 500,
+  saveDisabled = false,
+  maxLength = THOUGHT_MAX_CHARS,
+  notebook = false,
+  highlights = [],
   disabled = false,
   // 78 §6: at 50 the field gives way to this line; what was typed is kept.
   fullMessage = null,
@@ -80,11 +125,17 @@ const ThoughtEditor = forwardRef(function ThoughtEditor({
 }, ref) {
   const fieldRef = useRef(null);
   const emitted = useRef(null);
+  const emittedHighlights = useRef("");
   const savedRange = useRef(null);
   const [focused, setFocused] = useState(false);
   const [marks, setMarks] = useState({ b: false, u: false });
   const [emojiAt, setEmojiAt] = useState(-1); // -1: closed
   const emojiRefs = useRef([]);
+  const [formatOpen, setFormatOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const formatRef = useRef(null);
+  const newlineRef = useRef(null);
+  const highlightKey = JSON.stringify(normalizeHighlights(highlights, notebookText(value)));
   // Visible text only: bold spaces ("** **") are still empty.
   const empty = !plainThought(value);
   const off = disabled || !!fullMessage;
@@ -92,19 +143,23 @@ const ThoughtEditor = forwardRef(function ThoughtEditor({
   // Show a value that came from outside (cleared after Save, a prefill).
   useLayoutEffect(() => {
     const el = fieldRef.current;
-    if (!el || value === emitted.current) return;
-    writeRuns(el, String(value || ""));
+    if (!el || (value === emitted.current && highlightKey === emittedHighlights.current)) return;
+    writeRuns(el, String(value || ""), JSON.parse(highlightKey));
     emitted.current = value;
-  }, [value]);
+    emittedHighlights.current = highlightKey;
+  }, [value, highlightKey]);
 
   const emit = useCallback(() => {
     const el = fieldRef.current;
     if (!el) return;
-    const next = serializeRuns(readRuns(el));
-    if (next === emitted.current) return;
+    const draft = notebookDraft(readRuns(el));
+    const next = notebook ? draft.text : serializeRuns(readRuns(el));
+    const paint = JSON.stringify(draft.highlights);
+    if (next === emitted.current && (!notebook || paint === emittedHighlights.current)) return;
     emitted.current = next;
-    onChange?.(next);
-  }, [onChange]);
+    emittedHighlights.current = paint;
+    if (notebook) onChange?.(next, draft.highlights); else onChange?.(next);
+  }, [onChange, notebook]);
 
   const refreshMarks = useCallback(() => {
     if (document.activeElement !== fieldRef.current) return;
@@ -136,7 +191,7 @@ const ThoughtEditor = forwardRef(function ThoughtEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const submit = () => { if (!off && !empty) onSubmit?.(); };
+  const submit = () => { if (!off && !empty && !saveDisabled && plainLength(value) <= maxLength) onSubmit?.(); };
   const submitRef = useRef(submit);
   submitRef.current = submit;
 
@@ -146,17 +201,17 @@ const ThoughtEditor = forwardRef(function ThoughtEditor({
     const el = fieldRef.current;
     if (!el) return undefined;
     const onBefore = (e) => {
-      if (e.inputType === "insertParagraph") { e.preventDefault(); submitRef.current(); return; }
+      if (e.inputType === "insertParagraph" && !e.isComposing) { e.preventDefault(); if (notebook) newlineRef.current?.(true); else submitRef.current(); return; }
       if (!e.inputType?.startsWith("insert")) return;
       const sel = window.getSelection?.();
       const replaced = sel && !sel.isCollapsed ? sel.toString().length : 0;
       const added = (e.data ?? e.dataTransfer?.getData("text/plain") ?? "x").length;
-      // A composition can't be cancelled; Save trims it (trimThought).
+      // A composition can't always be cancelled; Save stays disabled above the cap.
       if (plainLength(emitted.current || "") - replaced + added > maxLength && e.cancelable) e.preventDefault();
     };
     el.addEventListener("beforeinput", onBefore);
     return () => el.removeEventListener("beforeinput", onBefore);
-  }, [maxLength]);
+  }, [maxLength, notebook]);
   useEffect(() => {
     if (!focused) return undefined;
     document.addEventListener("selectionchange", refreshMarks);
@@ -175,7 +230,9 @@ const ThoughtEditor = forwardRef(function ThoughtEditor({
     onKeyDown?.(e);
     if (e.defaultPrevented) return;
     const mod = e.metaKey || e.ctrlKey;
+    if (notebook && e.key === "Enter" && mod && !e.altKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); return; }
     if (e.key === "Enter" && !e.nativeEvent.isComposing && !mod && !e.altKey) {
+      if (notebook) { e.preventDefault(); newlineRef.current?.(!e.shiftKey); return; }
       if (e.shiftKey) return;
       e.preventDefault();
       submit();
@@ -204,6 +261,7 @@ const ThoughtEditor = forwardRef(function ThoughtEditor({
   // Emoji: remember the caret, move into the grid, put the caret back.
   const openEmoji = () => {
     if (off) return;
+    setFormatOpen(false);
     if (emojiAt >= 0) { closeEmoji(); return; }
     const sel = window.getSelection?.();
     if (sel?.rangeCount && fieldRef.current?.contains(sel.anchorNode)) savedRange.current = sel.getRangeAt(0).cloneRange();
@@ -223,6 +281,48 @@ const ThoughtEditor = forwardRef(function ThoughtEditor({
     backToField();
     insertPlain(emoji);
   };
+  const applyNotebookEdit = result => {
+    const field = fieldRef.current;
+    const draft = notebookDraft(result.runs);
+    if (!field || notebookText(draft.text).length > maxLength) return;
+    const box = document.createElement("div");
+    writeRuns(box, draft.text, draft.highlights);
+    field.focus();
+    const range = document.createRange(); range.selectNodeContents(field);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    // HTML is generated solely from text nodes and our allowlisted marks.
+    // Using the browser command keeps list/newline changes in native Undo.
+    if (!exec("insertHTML", box.innerHTML)) writeRuns(field, draft.text, draft.highlights);
+    restoreFieldSelection(field, result.start, result.end);
+    savedRange.current = null;
+    emit(); refreshMarks();
+  };
+  newlineRef.current = continueList => {
+    const field = fieldRef.current;
+    if (!field) return;
+    const { start, end } = fieldSelection(field);
+    applyNotebookEdit(notebookNewline(readRuns(field), start, end, continueList));
+  };
+  const openFormat = () => {
+    if (formatOpen) { setFormatOpen(false); backToField(); return; }
+    const sel = window.getSelection();
+    savedRange.current = sel?.rangeCount && fieldRef.current?.contains(sel.anchorNode) ? sel.getRangeAt(0).cloneRange() : null;
+    setEmojiAt(-1); setFormatOpen(true);
+  };
+  useEffect(() => { if (formatOpen) formatRef.current?.querySelector("button")?.focus(); }, [formatOpen]);
+  const formatAction = action => {
+    backToField(); setFormatOpen(false); action();
+  };
+  const makeList = kind => formatAction(() => {
+    const field = fieldRef.current;
+    const { start, end } = fieldSelection(field);
+    applyNotebookEdit(toggleNotebookList(readRuns(field), start, end, kind));
+  });
+  const paintSelection = color => formatAction(() => {
+    const field = fieldRef.current;
+    const { start, end } = fieldSelection(field);
+    applyNotebookEdit(highlightNotebookSelection(readRuns(field), start, end, color));
+  });
   const emojiKeys = (e) => {
     const n = THOUGHT_EMOJI.length;
     const move = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: EMOJI_COLS, ArrowUp: -EMOJI_COLS }[e.key];
@@ -239,7 +339,7 @@ const ThoughtEditor = forwardRef(function ThoughtEditor({
   const keepFocus = (e) => e.preventDefault();
 
   return (
-    <div className={`te${focused ? " is-focused" : ""}${off ? " is-disabled" : ""}${fullMessage ? " is-full" : ""} ${className}`.trim()}>
+    <div className={`te${notebook ? " is-notebook" : ""}${expanded ? " is-expanded" : ""}${focused ? " is-focused" : ""}${off ? " is-disabled" : ""}${fullMessage ? " is-full" : ""} ${className}`.trim()}>
       <div className="te-box">
         {fullMessage && <p className="te-full">{fullMessage}</p>}
         <div
@@ -253,7 +353,7 @@ const ThoughtEditor = forwardRef(function ThoughtEditor({
           data-placeholder={placeholder}
           contentEditable={!off}
           suppressContentEditableWarning
-          enterKeyHint="done"
+          enterKeyHint={notebook ? "enter" : "done"}
           spellCheck
           tabIndex={off ? -1 : 0}
           onInput={() => { emit(); refreshMarks(); }}
@@ -266,22 +366,44 @@ const ThoughtEditor = forwardRef(function ThoughtEditor({
           onDrop={(e) => e.preventDefault()}
         />
         <div className="te-foot">
-          <button type="button" className={`te-tool${marks.b && focused ? " is-on" : ""}`} aria-label="Bold" title="Bold (Ctrl+B)"
+          <button type="button" className={`te-tool te-basic${marks.b && focused ? " is-on" : ""}`} aria-label="Bold" title="Bold (Ctrl+B)"
             aria-pressed={marks.b && focused} disabled={off} onMouseDown={keepFocus} onClick={() => toggle("bold")}>
             <IconBold size={18} />
           </button>
-          <button type="button" className={`te-tool${marks.u && focused ? " is-on" : ""}`} aria-label="Underline" title="Underline (Ctrl+U)"
+          <button type="button" className={`te-tool te-basic${marks.u && focused ? " is-on" : ""}`} aria-label="Underline" title="Underline (Ctrl+U)"
             aria-pressed={marks.u && focused} disabled={off} onMouseDown={keepFocus} onClick={() => toggle("underline")}>
             <IconUnderline size={18} />
           </button>
+          {notebook && <button type="button" className="te-tool" aria-label="Formatting" title="Lists and highlights" aria-expanded={formatOpen} disabled={off} onMouseDown={keepFocus} onClick={openFormat}>Aa</button>}
           <button type="button" className={`te-tool${emojiAt >= 0 ? " is-on" : ""}`} aria-label="Emoji" title="Emoji"
             aria-expanded={emojiAt >= 0} aria-haspopup="true" disabled={off} onMouseDown={keepFocus} onClick={openEmoji}>
             <IconSmile size={18} />
           </button>
-          <span className="te-hint" aria-hidden="true">{hint}</span>
-          <button type="button" className="te-save" disabled={off || empty} onMouseDown={keepFocus} onClick={submit}>{saveLabel}</button>
+          {notebook && <button type="button" className="te-tool" aria-label={expanded ? "Reduce writing area" : "Expand writing area"} aria-expanded={expanded} disabled={off} onMouseDown={keepFocus} onClick={() => setExpanded(v => !v)}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d={expanded ? "M8 3v5H3M16 3v5h5M8 21v-5H3M16 21v-5h5" : "M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5"} /></svg>
+          </button>}
+          <span className="te-hint" aria-hidden="true">{notebook ? "CTRL/⌘+ENTER SAVES" : hint}</span>
+          <button type="button" className="te-save" disabled={off || empty || saveDisabled || plainLength(value) > maxLength} onMouseDown={keepFocus} onClick={submit}>{saveLabel}</button>
         </div>
       </div>
+      {notebook && !fullMessage && <div className="te-count" aria-live="off">{plainLength(value)} / {maxLength} characters</div>}
+      {formatOpen && (
+        <div ref={formatRef} className="te-format" role="group" aria-label="Thought formatting"
+          onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) setFormatOpen(false); }}
+          onKeyDown={e => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setFormatOpen(false); backToField(); } }}>
+          <div className="te-format-actions">
+            <button type="button" onMouseDown={keepFocus} onClick={() => formatAction(() => toggle("bold"))}>Bold</button>
+            <button type="button" onMouseDown={keepFocus} onClick={() => formatAction(() => toggle("underline"))}>Underline</button>
+            <button type="button" onMouseDown={keepFocus} onClick={() => makeList("bullet")}>Bulleted list</button>
+            <button type="button" onMouseDown={keepFocus} onClick={() => makeList("number")}>Numbered list</button>
+          </div>
+          <div className="te-highlight-colors" role="group" aria-label="Highlight colour">
+            {THOUGHT_HIGHLIGHTS.map(h => <button key={h.color} type="button" style={{ backgroundColor: h.paint }} disabled={!savedRange.current || savedRange.current.collapsed} onMouseDown={keepFocus} onClick={() => paintSelection(h.color)}>{h.label} highlight</button>)}
+            <button type="button" disabled={!savedRange.current || savedRange.current.collapsed} onMouseDown={keepFocus} onClick={() => paintSelection(null)}>Remove highlight</button>
+          </div>
+          <p className="te-count">Select text to highlight it.</p>
+        </div>
+      )}
       {emojiAt >= 0 && (
         <div className="te-emoji" role="group" aria-label="Emoji" onKeyDown={emojiKeys}
           onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setEmojiAt(-1); }}>
