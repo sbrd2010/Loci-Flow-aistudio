@@ -94,10 +94,17 @@ export async function renameTask(page, from, to) {
   await expect(row(page, to)).toBeVisible();
 }
 
-export async function signOut(page) {
+// discardUnsaved: a save the server never confirmed makes sign-out stop at
+// "Couldn't finish saving" after 5 s; the user then has to discard on purpose.
+export async function signOut(page, { discardUnsaved = false } = {}) {
   await page.getByRole("banner").getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: /^Sign out(?: of Loci)?$/ }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Sign out", exact: true }).click();
+  if (discardUnsaved) {
+    await expect(page.getByRole("alert").filter({ hasText: "Couldn't finish saving" })).toBeVisible();
+    await page.getByRole("button", { name: "Sign out without saving", exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Discard and sign out", exact: true }).click();
+  }
   await expect(page.getByRole("button", { name: "Continue with Google", exact: true })).toBeVisible();
   expect(await currentUid(page)).toBeNull();
 }
