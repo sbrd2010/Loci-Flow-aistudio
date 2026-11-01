@@ -550,6 +550,7 @@ export default function App() {
       previousAuthUidRef.current = firebaseUser?.uid || null;
       setUser(firebaseUser);
       setAuthLoading(false);
+      setSigningIn(false);
       if (firebaseUser) {
         setAnalyticsUser(firebaseUser.uid);
         track("session_start");
