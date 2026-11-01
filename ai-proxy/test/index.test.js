@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { makeLedger } from "./ledgerHarness.js";
 import worker, { cleanParams } from "../src/index.js";
 import { resetKeyCache } from "../src/auth.js";
 import { PROJECT, JWKS_URL, makeSigner, jwksResponse } from "./helpers.js";
@@ -8,6 +9,7 @@ const BODY = { messages: [{ role: "system", content: "You are a coach." }, { rol
 const OK_REPLY = { choices: [{ message: { role: "assistant", content: "Hello" }, finish_reason: "stop" }], usage: { total_tokens: 12 } };
 
 let signer;
+let ledger;
 let upstream; // NVIDIA's answer for the next call
 let fetchImpl;
 
@@ -15,12 +17,13 @@ function call(path, { token, body = BODY, method = "POST", env = {} } = {}) {
   const headers = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
   const request = new Request(`https://loci-ai.example.workers.dev${path}`, { method, headers, body: method === "POST" ? (typeof body === "string" ? body : JSON.stringify(body)) : undefined });
-  return worker.fetch(request, { FIREBASE_PROJECT_ID: PROJECT, NVIDIA_API_KEY: "nvapi-test", ...env }, {}, { fetchImpl });
+  return worker.fetch(request, { FIREBASE_PROJECT_ID: PROJECT, AI_ALLOWED_EMAILS: "tester@example.test", AI_TOKEN_LEDGER: ledger, NVIDIA_API_KEY: "nvapi-test", ...env }, {}, { fetchImpl });
 }
 
 beforeEach(async () => {
   resetKeyCache();
   signer = await makeSigner();
+  ledger = makeLedger();
   upstream = () => new Response(JSON.stringify(OK_REPLY), { status: 200 });
   fetchImpl = vi.fn(async (url) => (url === JWKS_URL ? jwksResponse(signer.jwk) : upstream()));
 });
@@ -31,7 +34,7 @@ describe("routing and CORS", () => {
     expect(res.status).toBe(204);
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
     expect(res.headers.get("Access-Control-Allow-Headers")).toMatch(/Authorization/);
-    expect(res.headers.get("Access-Control-Expose-Headers")).toBe("Retry-After");
+    expect(res.headers.get("Access-Control-Expose-Headers")).toBe("Retry-After, X-Loci-Remaining-Tokens");
   });
 
   it("refuses unknown paths and other methods", async () => {

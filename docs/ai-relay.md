@@ -48,7 +48,7 @@ If the deploy fails with a permission error about AI, edit the Cloudflare token 
 
 ## Stay on the free Cloudflare plan
 
-On the **free** Workers plan, Cloudflare AI simply stops for the day when the 10,000-neuron allowance is used up. On the **paid** Workers plan, use beyond the allowance is **billed with no cap**. Anyone with a Google account can sign in to Loci, and there is no per-person limit until PR 9 (#570), so do not move this Cloudflare account to the paid plan before PR 9. NVIDIA's trial and OpenRouter's free models cannot charge you.
+On the **free** Workers plan, Cloudflare AI simply stops for the day when the 10,000-neuron allowance is used up. On the **paid** Workers plan, use beyond the allowance is **billed with no cap**. Keep this alpha on the free plan. The relay now requires a verified Google email on the private allowlist and enforces per-person and shared daily token budgets; these app limits do not change the Cloudflare billing plan. NVIDIA's trial and OpenRouter's free models cannot charge you.
 
 ## Changing models
 
@@ -61,8 +61,53 @@ The defaults are set in `ai-proxy/src/index.js`. To use another model without a 
 
 ## If someone hammers it
 
-The address is in the app's code, but every request needs a valid Loci sign-in, so a stranger is refused before any AI is called. Anyone who signs in to Loci can use the shared free allowance until PR 9 adds a per-person limit (#570). If a burst of refused requests ever used up the Worker's free request allowance, AI through the relay would stop until 00:00 UTC; the rest of the app is unaffected.
+The address is in the app's code, but every request needs a valid Loci sign-in, so a stranger is refused before any AI is called. Only verified emails on AI_ALLOWED_EMAILS can use shared AI. The Durable Object ledger reserves budget atomically across providers before forwarding each request. If a burst of refused requests ever used up the Worker's free request allowance, AI through the relay would stop until 00:00 UTC; the rest of the app is unaffected.
 
 ## Working on it
 
 `cd ai-proxy && npm test`. For a local run: `npx wrangler dev` (the AI binding needs a Cloudflare login).
+
+## Required before deploying the alpha budget
+
+Add the repository secret **AI_ALLOWED_EMAILS**: the owner and invited tester
+emails, separated by commas or newlines. Enter it in GitHub Settings → Secrets
+and variables → Actions, never in a committed file or chat. This restricts shared
+AI access; it does not restrict app sign-in or replace Firebase database rules.
+The deploy button refuses to run without it. An unconfigured Worker refuses
+shared AI requests rather than running without a budget. Personal provider keys
+continue to call their providers directly.
+
+The default budgets in `ai-proxy/wrangler.jsonc` are **60,000 tokens per person
+per UTC day** and **200,000 across everyone per UTC day**. The pool is deliberately
+conservative for the first five testers; free-provider availability can run out
+before this app-level budget. Increasing the pool does not increase providers'
+free allowances. Change these variables in the file for a reviewed change.
+
+All seven relay providers use one SQLite-backed Durable Object. Requests reserve
+an estimate (message characters / 4.2 + maximum output tokens), then successful
+responses replace it with actual provider usage. Missing usage retains the
+estimate; failures refund it. Concurrent requests count outstanding reservations.
+Estimates can differ from actual tokenization, so an in-flight response may take
+a counter over the cap; subsequent requests stop. This limits shared use without
+claiming an exact hard ceiling on provider consumption. A stopped/crashed request
+may retain its reservation until the UTC day ends. Settlement retries are
+idempotent. A ledger outage refuses new shared AI calls.
+
+Responses distinguish `daily_cap` (one person), `pool_empty` (everyone), and
+`quota_unavailable` (ledger outage). `X-Loci-Remaining-Tokens` reports the smaller
+of the remaining personal and pool allowances. Deploy the app's matching error
+handling before enabling the budget so it stops trying other shared providers.
+Provider-level rate limits still fall through normally. Personal keys remain
+usable when shared allowance is exhausted.
+
+The ledger stores only a project-scoped hash of the verified email, UTC day,
+token counters and random
+reservation identifiers/status; never raw emails, prompts or replies. A stable
+identity hash prevents deleting/recreating a Firebase account to reset the cap. Rows older
+than seven days are pruned on the next request. Do not rename the ledger object
+or remove its migration during an ordinary deploy: that would reset accounting.
+
+First verify on a separate staging Worker and Firebase project with synthetic
+accounts. Cloudflare's actual binding/migration, account plan, real Google OAuth
+and provider usage formats need that staging check; unit tests and a dry-run
+bundle do not establish a successful cloud deployment.

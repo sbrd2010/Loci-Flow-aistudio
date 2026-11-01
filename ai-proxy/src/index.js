@@ -16,6 +16,7 @@
 // All answer in the OpenAI chat-completions shape the app already reads.
 
 import { verifyFirebaseToken } from "./auth.js";
+export { AITokenLedger } from "./tokenLedger.js";
 
 const NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
 // NVIDIA retired openai/gpt-oss-120b on 2026-09-03.
@@ -49,7 +50,7 @@ const CORS = {
   "Access-Control-Allow-Headers": "Authorization, Content-Type",
   "Access-Control-Max-Age": "86400",
   // Lets the app read how long to wait after a 429.
-  "Access-Control-Expose-Headers": "Retry-After",
+  "Access-Control-Expose-Headers": "Retry-After, X-Loci-Remaining-Tokens",
 };
 
 const isGptOss = (model) => /(^|\/)gpt-oss/i.test(model);
@@ -224,12 +225,19 @@ async function handle(request, env, fetchImpl) {
   if (!env.FIREBASE_PROJECT_ID) return notSetUp("The relay is not set up yet (FIREBASE_PROJECT_ID missing).");
 
   const token = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+  let claims;
   try {
-    await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID, { fetchImpl });
+    claims = await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID, { fetchImpl });
   } catch (err) {
     // Google's key list unreachable is an outage, not a bad sign-in.
     if (/^Google key request failed/.test(err?.message)) return fail(503, "The relay could not check your sign-in right now.");
     return fail(401, "Sign in to Loci to use this provider.");
+  }
+
+  const allowed = String(env.AI_ALLOWED_EMAILS || "").split(/[\s,;]+/).filter(Boolean).map(email => email.toLowerCase());
+  if (!allowed.length || !env.AI_TOKEN_LEDGER) return notSetUp("The alpha AI allowlist and token ledger must be configured.");
+  if (claims.email_verified !== true || typeof claims.email !== "string" || !allowed.includes(claims.email.toLowerCase())) {
+    return fail(403, "This account is not invited to the shared alpha AI yet.");
   }
 
   const raw = await request.text();
@@ -239,13 +247,61 @@ async function handle(request, env, fetchImpl) {
   const params = cleanParams(body);
   if (!params) return fail(400, "messages must be a non-empty list of { role, content }.");
 
-  if (provider === "nvidia") return relayNvidia(params, env, fetchImpl);
-  if (provider === "openrouter") return relayOpenRouter(params, env, fetchImpl);
-  if (provider === "groq") return relayGroq(params, env, fetchImpl);
-  if (provider === "ollama") return relayOllama(params, env, fetchImpl);
-  if (provider === "gemini") return relayGemini(params, env, fetchImpl);
-  if (provider === "zai") return relayZai(params, env, fetchImpl);
-  return runCloudflare(params, env);
+  const ledger = env.AI_TOKEN_LEDGER.get(env.AI_TOKEN_LEDGER.idFromName("daily-budget-v1"));
+  // Same estimate as #570; actual provider usage replaces it on settlement.
+  const tokens = Math.ceil(JSON.stringify(params.messages).length / 4.2) + params.max_tokens;
+  // A verified email is stable across deleting/recreating a Firebase account.
+  // Store only its project-scoped hash, not the email itself or a resettable UID.
+  const identityBytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify([env.FIREBASE_PROJECT_ID, claims.email.toLowerCase()])));
+  const budgetId = Array.from(new Uint8Array(identityBytes), byte => byte.toString(16).padStart(2, "0")).join("");
+  let reservation;
+  try {
+    const reserved = await ledger.fetch("https://ledger/reserve", { method: "POST", body: JSON.stringify({ uid: budgetId, tokens }) });
+    reservation = await reserved.json();
+    if (reserved.status === 429 && ["daily_cap", "pool_empty"].includes(reservation.code)) {
+      return json(429, { error: { code: reservation.code, message: reservation.code === "daily_cap" ? "Your free AI allowance is used up for today." : "Free AI is used up for everyone today." } }, {
+        "Retry-After": secondsUntilUtcMidnight(), "X-Loci-Remaining-Tokens": String(reservation.remaining),
+      });
+    }
+    if (!reserved.ok || !reservation.id) throw new Error("Reservation failed");
+  } catch {
+    return json(503, { error: { code: "quota_unavailable", message: "The shared AI allowance could not be checked. Please try again shortly." } });
+  }
+
+  let response;
+  try {
+    if (provider === "nvidia") response = await relayNvidia(params, env, fetchImpl);
+    else if (provider === "openrouter") response = await relayOpenRouter(params, env, fetchImpl);
+    else if (provider === "groq") response = await relayGroq(params, env, fetchImpl);
+    else if (provider === "ollama") response = await relayOllama(params, env, fetchImpl);
+    else if (provider === "gemini") response = await relayGemini(params, env, fetchImpl);
+    else if (provider === "zai") response = await relayZai(params, env, fetchImpl);
+    else response = await runCloudflare(params, env);
+  } catch {
+    response = fail(502, "The relay could not finish the provider response.");
+  }
+  let actual = response.ok ? null : 0;
+  if (response.ok) {
+    try {
+      const out = await response.clone().json();
+      const used = out?.usage?.total_tokens ?? out?.usageMetadata?.totalTokenCount;
+      if (Number.isSafeInteger(used) && used >= 0) actual = used;
+    } catch { /* Keep the reserved estimate when usage is unavailable. */ }
+  }
+  let settled;
+  // Settling is idempotent, including when the first response is lost.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await ledger.fetch("https://ledger/settle", { method: "POST", body: JSON.stringify({ id: reservation.id, actual }) });
+      if (!res.ok) throw new Error("Settlement failed");
+      settled = await res.json();
+      break;
+    } catch { /* One retry; an unconfirmed reservation remains charged. */ }
+  }
+  if (!settled) return json(503, { error: { code: "quota_unavailable", message: "The shared AI allowance could not be confirmed. Please try again shortly." } });
+  const headers = new Headers(response.headers);
+  headers.set("X-Loci-Remaining-Tokens", String(settled.remaining));
+  return new Response(response.body, { status: response.status, headers });
 }
 
 export default {

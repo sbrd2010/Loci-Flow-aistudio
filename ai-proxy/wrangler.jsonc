@@ -5,12 +5,16 @@
   // Cloudflare's own models (Workers AI), billed against the account's free
   // daily allowance; no key needed.
   "ai": { "binding": "AI" },
+  "durable_objects": { "bindings": [{ "name": "AI_TOKEN_LEDGER", "class_name": "AITokenLedger" }] },
+  "migrations": [{ "tag": "v1-token-budget", "new_sqlite_classes": ["AITokenLedger"] }],
   "vars": {
     // Public: the same id is in web/src/firebase.js. Sign-in tokens must be
     // issued for this project.
-    "FIREBASE_PROJECT_ID": "loci-flow"
+    "FIREBASE_PROJECT_ID": "loci-flow",
+    "AI_USER_DAILY_TOKENS": "60000",
+    "AI_POOL_DAILY_TOKENS": "200000"
   }
   // The provider keys (NVIDIA, OpenRouter, Groq, Gemini, Z.ai) and GEMINI_MODEL are
-  // secrets, stored by the deploy workflow: see docs/ai-relay.md.
+  // secrets, along with AI_ALLOWED_EMAILS, stored by the deploy workflow: see docs/ai-relay.md.
   // NVIDIA_MODEL and CLOUDFLARE_MODEL may be added as vars to swap models.
 }
