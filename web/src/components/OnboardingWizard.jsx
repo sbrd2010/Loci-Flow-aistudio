@@ -10,9 +10,9 @@ const TOUR_SLIDES = [
   },
   {
     icon: "🗺",
-    tab: "Roadmap",
+    tab: "Plan",
     color: "#10b981",
-    title: "Roadmap — everything in its horizon",
+    title: "Plan — everything in its horizon",
     desc: "Place tasks where they actually belong — this week, this month, this quarter. Pull them forward to Today when you're ready to act. No more cluttered lists."
   },
   {
@@ -20,7 +20,7 @@ const TOUR_SLIDES = [
     tab: "Mind Box",
     color: "#8b5cf6",
     title: "Mind Box — capture, organise, reset",
-    desc: "Dump anything on your mind, then use AI to sort your thoughts into a structured plan. Use the Morning Ritual to start well. Tap Get Unstuck when you're stuck."
+    desc: "Dump anything on your mind, then use AI to sort your thoughts into a structured plan. Use the Morning Ritual to start well. Open Rescue when you can't get started."
   },
   {
     icon: "🤖",
@@ -81,7 +81,7 @@ export default function OnboardingWizard({ payload, savePayload }) {
         isOnboardingCompleted: true,
         pomodoroDurationMinutes: config.pomodoroDurationMinutes || 25,
         reminderNagIntervalMinutes: config.reminderNagIntervalMinutes || 15,
-        eveningGuardWindowActive: config.eveningGuardWindowActive !== undefined ? config.eveningGuardWindowActive : true,
+        eveningGuardWindowActive: config.eveningGuardWindowActive !== undefined ? config.eveningGuardWindowActive : false,
         lastUpdated: Date.now()
       }
     });

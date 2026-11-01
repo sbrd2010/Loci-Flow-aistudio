@@ -27,7 +27,7 @@ export default function DayBar({ bar, now, doneMinutes, plannedMinutes, overBy, 
       </div>
       <ul className="dm-daybar-legend" aria-hidden="true">
         {doneMinutes != null && <li><span className="dm-key is-done" />done {formatSpan(doneMinutes)}</li>}
-        <li><span className="dm-key is-planned" />planned {formatSpan(plannedMinutes)}</li>
+        <li><span className="dm-key is-planned" />to finish {formatSpan(plannedMinutes)}</li>
         {bar.over && <li><span className="dm-key is-past" />{wontFitMinutes != null ? `won’t fit ${formatSpan(wontFitMinutes)}` : `past your day end ${formatSpan(overBy)}`}</li>}
       </ul>
     </div>
