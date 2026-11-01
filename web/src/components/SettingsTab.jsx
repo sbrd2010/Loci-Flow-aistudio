@@ -62,7 +62,7 @@ function shortDeadline(dateStr) {
   return new Date(y, m - 1, d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-export default function SettingsTab({ initialPage = null, payload, savePayload, savePayloadAsync, uid, writeActivityEvents, saveSubPath, saveConfigPatch, lastSyncedAt, onSignOut, onDeleteAllData, onLeaveDeletedAccount, theme, onThemeChange, email, flushNow }) {
+export default function SettingsTab({ initialPage = null, payload, savePayload, savePayloadAsync, uid, writeActivityEvents, saveSubPath, saveConfigPatch, lastSyncedAt, onSignOut, signOutState = null, onDeleteAllData, onLeaveDeletedAccount, theme, onThemeChange, email, flushNow }) {
   const config = payload.config || {};
   const lociDay = getLociDayStr(new Date(), getFocusWindows(config));
   const [editHorizons, setEditHorizons] = useState(false);
@@ -106,6 +106,16 @@ export default function SettingsTab({ initialPage = null, payload, savePayload, 
     onCancel: () => setConfirm(null),
   });
   const signOut = () => askConfirm({ message: "Sign out? Your data stays saved.", confirmLabel: "Sign out", onConfirm: () => onSignOut?.() });
+  const signOutFeedback = signOutState === "failed" ? (
+    <div role="alert">
+      <p>Couldn't finish saving. Your local copy is still here. Reconnect and try again, or download a backup from Data.</p>
+      <button type="button" onClick={() => askConfirm({
+        message: "Discard unsaved changes and sign out? Changes that haven't synced will be lost on this device. Download a backup first if you want to keep them.",
+        confirmLabel: "Discard and sign out", danger: true,
+        onConfirm: () => onSignOut?.({ discardUnsaved: true }),
+      })}>Sign out without saving</button>
+    </div>
+  ) : null;
   const resetTracking = () => askConfirm({
     message: "Reset 7-day tracking?\n\nThis clears the completed-task history in Coach › Review. Tasks stay. It can't be undone.",
     confirmLabel: "Reset",
@@ -222,7 +232,8 @@ export default function SettingsTab({ initialPage = null, payload, savePayload, 
               {label}
             </button>
           ))}
-          <button type="button" className="set-nav-signout" onClick={signOut}>Sign out</button>
+          <button type="button" className="set-nav-signout" onClick={signOut} disabled={signOutState === "saving"}>{signOutState === "saving" ? "Saving…" : "Sign out"}</button>
+          {signOutFeedback}
         </nav>
         <div className="set-pane" key={current}>{pages[current]()}</div>
         {modals}
@@ -269,7 +280,8 @@ export default function SettingsTab({ initialPage = null, payload, savePayload, 
         <Row title="Backup" sub="Download JSON or CSV" onClick={() => open("data")} />
       </Group>
       <Group label="Support">{supportRows}</Group>
-      <button type="button" className="set-signout" onClick={signOut}>Sign out of Loci</button>
+      <button type="button" className="set-signout" onClick={signOut} disabled={signOutState === "saving"}>{signOutState === "saving" ? "Saving…" : "Sign out of Loci"}</button>
+      {signOutFeedback}
       {modals}
     </div>
   );
