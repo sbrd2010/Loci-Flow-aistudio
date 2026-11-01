@@ -1,30 +1,9 @@
 name: Alpha account safety
 on:
   pull_request:
-    paths:
-      # Sign-in, sync, save, timer and day-boundary code only: other UI
-      # changes are covered on the merge to main below, not on every PR push.
-      - "web/src/App.jsx"
-      - "web/src/main.jsx"
-      - "web/src/firebase.js"
-      - "web/src/useSync.js"
-      - "web/src/hooks/useFocusTimer.js"
-      - "web/src/components/SettingsTab.jsx"
-      - "web/src/utils/normalizePayload.js"
-      - "web/src/utils/resendPolicy.js"
-      - "web/src/utils/nativeAuth.js"
-      - "web/src/utils/deleteAccount.js"
-      - "web/src/utils/aiKeyStorage.js"
-      - "web/src/utils/openFocusSession.js"
-      - "web/src/utils/focusWindows.js"
-      - "web/src/utils/*Clock.js"
-      - "web/alpha-review/**"
-      - "web/package*.json"
-      - "firebase.json"
-      - "database.rules.json"
-      - ".github/workflows/alpha-account-safety.yml"
-  push:
-    branches: [main]
+    # Drafts can't be merged, so these suites wait for "Ready for review":
+    # every PR still passes them before merge, without a run per draft push.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "web/src/**"
       - "web/alpha-review/**"
@@ -40,6 +19,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   alpha-account-safety:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
