@@ -758,7 +758,7 @@ export function DataPage({ payload, email, lastSyncLabel, onSyncNow, onResetTrac
         <Row title="Sync now" onClick={() => onSyncNow?.()} />
       </Group>
       <Group label="Backup" note="A backup only saves a file. It never changes your tasks.">
-        <Row title="Download JSON" sub="Every field, a full copy of your data" onClick={() => run(() => exportPayloadAsJson(payload))} />
+        <Row title="Download JSON" sub="Tasks, thoughts, settings and Coach chats. Not focus history." onClick={() => run(() => exportPayloadAsJson(payload))} />
         <Row title="Download CSV" sub="Opens in Excel or Sheets" onClick={() => run(() => exportTasksAsCsv(payload.tasks || []))} />
       </Group>
       {exportError && <p className="set-window-hint" role="alert">{exportError}</p>}
