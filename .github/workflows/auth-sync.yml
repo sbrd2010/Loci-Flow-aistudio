@@ -4,7 +4,22 @@ on:
   pull_request:
     branches: [main, redesign-75]
     paths:
-      - "web/src/**"
+      # Sign-in, sync, save, timer and day-boundary code only: other UI
+      # changes are covered on the merge to main below, not on every PR push.
+      - "web/src/App.jsx"
+      - "web/src/main.jsx"
+      - "web/src/firebase.js"
+      - "web/src/useSync.js"
+      - "web/src/hooks/useFocusTimer.js"
+      - "web/src/components/SettingsTab.jsx"
+      - "web/src/utils/normalizePayload.js"
+      - "web/src/utils/resendPolicy.js"
+      - "web/src/utils/nativeAuth.js"
+      - "web/src/utils/deleteAccount.js"
+      - "web/src/utils/aiKeyStorage.js"
+      - "web/src/utils/openFocusSession.js"
+      - "web/src/utils/focusWindows.js"
+      - "web/src/utils/*Clock.js"
       - "web/auth-e2e/**"
       - "web/playwright.auth-sync.config.js"
       - "web/package*.json"

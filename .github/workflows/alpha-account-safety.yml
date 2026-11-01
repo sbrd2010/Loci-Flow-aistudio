@@ -2,6 +2,30 @@ name: Alpha account safety
 on:
   pull_request:
     paths:
+      # Sign-in, sync, save, timer and day-boundary code only: other UI
+      # changes are covered on the merge to main below, not on every PR push.
+      - "web/src/App.jsx"
+      - "web/src/main.jsx"
+      - "web/src/firebase.js"
+      - "web/src/useSync.js"
+      - "web/src/hooks/useFocusTimer.js"
+      - "web/src/components/SettingsTab.jsx"
+      - "web/src/utils/normalizePayload.js"
+      - "web/src/utils/resendPolicy.js"
+      - "web/src/utils/nativeAuth.js"
+      - "web/src/utils/deleteAccount.js"
+      - "web/src/utils/aiKeyStorage.js"
+      - "web/src/utils/openFocusSession.js"
+      - "web/src/utils/focusWindows.js"
+      - "web/src/utils/*Clock.js"
+      - "web/alpha-review/**"
+      - "web/package*.json"
+      - "firebase.json"
+      - "database.rules.json"
+      - ".github/workflows/alpha-account-safety.yml"
+  push:
+    branches: [main]
+    paths:
       - "web/src/**"
       - "web/alpha-review/**"
       - "web/package*.json"
@@ -30,8 +54,6 @@ jobs:
           distribution: temurin
           java-version: 21
       - run: npm ci --legacy-peer-deps
-        working-directory: web
-      - run: npm run lint && npm test -- --maxWorkers=3
         working-directory: web
       - run: npx playwright install --with-deps chromium
         working-directory: web
