@@ -8,6 +8,38 @@ const open = (title, over = {}) => ({ uuid: title, title, isCompleted: false, is
 const tick = (dateString, count) => ({ dateString, count });
 
 describe("buildLociPeriodContext", () => {
+  it("counts exactly 14 days, compares the preceding 14, and includes the busiest focus day", () => {
+    const contributions = [tick("2026-10-24", 2), tick("2026-10-11", 3), tick("2026-10-10", 7), tick("2026-09-27", 11), tick("2026-09-26", 100)];
+    const event = (date, minutes) => ({ type: "focus_completed", taskId: "sample", lociDateString: date, focusElapsedSeconds: minutes * 60 });
+    const focusRaw = {
+      "2026-10-24": { a: event("2026-10-24", 20) },
+      "2026-10-11": { b: event("2026-10-11", 40) },
+      "2026-10-10": { c: event("2026-10-10", 90) },
+    };
+    const out = buildLociPeriodContext({ now: NOW, days: 14, contributions, focusRaw, tasks: [done("Sample boundary win", "2026-10-11"), done("Earlier sample", "2026-10-10")] });
+    expect(out).toContain("PERIOD DIGEST (the last 14 days, 11 Oct to 24 Oct,");
+    expect(out).toContain("Finished: 5 tasks on 2 days (the 14 days before: 18).");
+    expect(out).toContain("'Sample boundary win' (Sun 11)");
+    expect(out).not.toContain("Earlier sample");
+    expect(out).toContain("Focus time: 1h on 2 days; busiest day: Sun 11 (40m).");
+    expect(out).not.toContain("1h30m");
+  });
+
+  it("keeps a 14-day window on the Loci day after midnight across a DST change", () => {
+    const previous = process.env.TZ;
+    process.env.TZ = "Europe/Luxembourg";
+    try {
+      const now = new Date(2026, 9, 26, 0, 30); // Clocks went back on the 25th; still that Loci day.
+      const config = { focusWindows: [{ start: "09:00", end: "02:00" }] };
+      const contributions = [tick("2026-10-12", 2), tick("2026-10-25", 3), tick("2026-10-11", 7), tick("2026-10-26", 100)];
+      const out = buildLociPeriodContext({ now, config, days: 14, contributions });
+      expect(out).toContain("the last 14 days, 12 Oct to 25 Oct,");
+      expect(out).toContain("Finished: 5 tasks on 2 days (the 14 days before: 7).");
+    } finally {
+      if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous;
+    }
+  });
+
   it("is never empty: an empty week says so plainly", () => {
     const out = buildLociPeriodContext({ now: NOW });
     expect(out).toContain("PERIOD DIGEST (the last 7 days");

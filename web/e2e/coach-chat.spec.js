@@ -571,6 +571,17 @@ test("Coach chat: 'how was my week?' carries the period digest, even right after
   expect(asked).toContain("not available in this message; do not guess it"); // demo has no focus log
   expect(asked).not.toContain("COMPLETION VELOCITY"); // the digest replaces it
   expect(asked).not.toContain("Loci context issue");
+
+  await input.fill("hwo many tasks have I completed in the last 2 weeks?");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.locator(".coach-msg.is-coach")).toHaveCount(3, { timeout: 10_000 });
+  expect(system(bodies[2])).toContain("PERIOD DIGEST (the last 14 days");
+  expect(system(bodies[2])).not.toContain("PERIOD DIGEST (the last 30 days");
+
+  await input.fill("how was my fortnight?");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.locator(".coach-msg.is-coach")).toHaveCount(4, { timeout: 10_000 });
+  expect(system(bodies[3])).toContain("PERIOD DIGEST (the last 14 days");
 });
 
 test("Coach chat: 'how was last week?' asks for the week before this one, not this week", async ({ page }) => {

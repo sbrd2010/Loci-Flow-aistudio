@@ -28,6 +28,7 @@ describe("which questions a card answers", () => {
     ["How many focus sessions did I do this week?", "focus"],
     ["How long did I focus this week?", "focus"],
     ["Which day did I focus the most?", "focus"],
+    ["on which day was my focus time highest", "focus"],
     ["Total focus time last week?", "focus"],
     ["have I been focusing enough lately", "focus"],
     ["how much did I focus yesterday", "focus"],
@@ -161,6 +162,43 @@ describe("parked and Mind Box cards", () => {
 });
 
 describe("focus card", () => {
+  it.each([["week", 7, 40], ["month", 30, 80]])("preserves the %s-before focus window when using shared period detection", (period, days, minutes) => {
+    const event = (date, minutes) => ({ type: "focus_completed", taskId: "sample", lociDateString: date, focusElapsedSeconds: minutes * 60 });
+    const focusRaw = {
+      "2026-10-21": { a: event("2026-10-21", 20) },
+      "2026-10-10": { b: event("2026-10-10", 40) },
+      "2026-09-20": { c: event("2026-09-20", 80) },
+    };
+    const question = `How long did I focus in the ${period} before?`;
+    const intent = detectFactIntent(question);
+    expect(intent.period).toEqual({ scope: "period", days, offset: 1 });
+    expect(intent.focusDays).toBe(days * 2);
+    const { text } = ask(question, { focusRaw });
+    expect(text).toContain(`Focus in the ${days} days before the last ${days} days`);
+    expect(text).toContain(minutes === 80 ? "**1h20m**" : "**40m**");
+  });
+
+  it("answers the highest-focus-day holdout from recorded minutes", () => {
+    const { text, kind } = ask("on which day was my focus time highest");
+    expect(kind).toBe("focus");
+    expect(text).toContain("Busiest day: Sun 18 (1h30m).");
+  });
+
+  it.each(["last 2 weeks", "past two weeks", "last 14 days", "last fortnight"])("reads 14 days of focus for %s", period => {
+    const event = (date, minutes) => ({ type: "focus_completed", taskId: "sample", lociDateString: date, focusElapsedSeconds: minutes * 60 });
+    const focusRaw = {
+      "2026-10-21": { a: event("2026-10-21", 20) },
+      "2026-10-08": { b: event("2026-10-08", 40) },
+      "2026-10-07": { c: event("2026-10-07", 90) },
+    };
+    const question = `How long did I focus over the ${period}?`;
+    const { text } = ask(question, { focusRaw });
+    expect(detectFactIntent(question).focusDays).toBe(14);
+    expect(text).toContain("Focus in the last 14 days (8 Oct to 21 Oct): **1h** in 2 sessions on 2 days.");
+    expect(text).toContain("Busiest day: Thu 8 (40m).");
+    expect(text).not.toContain("1h30m");
+  });
+
   it("gives minutes, sessions, days, the busiest day and the days one by one", () => {
     const { text } = ask("How many focus sessions did I do this week?");
     expect(text).toContain("**4h10m** in 6 sessions on 5 days");
