@@ -131,3 +131,38 @@ From the repo's history (Aug–Oct 2026): about a third of Coach/AI commits were
 - **Day boundaries:** a Loci day can end after midnight. Use the existing helpers (`getLociDayStr`, `lociDaysBack`, `lociDayEndsAt` in `focusWindows.js`); don't do new date maths. Check 00:30 inside a late window, a DST change, and "today" vs "this week" vs "last week".
 - **Saved state and sync:** a page refresh mid-action, offline then reconnect, and two devices editing the same thing. Never let an older save overwrite a newer one (`resendPolicy.js`).
 - **UI/CSS-only changes** rarely needed fixes. A quick check on a phone-width and a desktop screenshot is enough.
+
+## 10. Dual review (Claude Code × ChatGPT) for large/risky changes — before any code
+
+Use it for **large/risky** work only (§6: sync, saved state, data model, anything that could lose data), never for small PRs. It runs **before the solution is written**. Trialled on #643 → PR #644: it caught two design flaws before code, and the spike and `loopcheck` caught three more bugs before merge.
+
+1. **Issue first.** The GitHub issue is the shared space. Claude investigates and posts an assessment:
+   - root cause and proposed design;
+   - alternatives considered;
+   - test plan;
+   - risks.
+
+   Claims are labelled FACT — CODE / INFERENCE / OPINION / CANNOT VERIFY. No code yet.
+2. **ChatGPT reviews on the issue.** The owner prompts it, and it posts there itself. Claude answers point by point with evidence (code lines, tests), agreeing or pushing back. **Max 3 rounds.** Don't change the design just because both AIs agree; change it when the evidence says so.
+3. **Spike when the design hinges on how a library or Firebase behaves.** With the owner's OK, run a small test-only experiment (emulator, two clients, real rules), post the results, and stop.
+4. **Final comment:** "DUAL REVIEW — FINAL RECOMMENDATION", with:
+   - the agreed cause;
+   - the approach;
+   - the rejected alternatives;
+   - the files involved;
+   - the tests;
+   - the risks;
+   - Claude's recommendation;
+   - ChatGPT's position;
+   - and, last, "Awaiting owner approval".
+5. **Code only after the owner approves**, in one focused draft PR:
+   - permanent tests for the agreed scenarios;
+   - a `loopcheck` and Codex while it is a draft;
+   - ChatGPT may review the PR once more.
+   - The PR states what was not verified, and the owner's manual device check comes after merge.
+
+Boundaries:
+- No user data, tokens or secrets on GitHub.
+- No production change during the discussion.
+- No scope growth or new infrastructure without the owner's approval.
+- Stop at the round limit and hand the decision to the owner.
