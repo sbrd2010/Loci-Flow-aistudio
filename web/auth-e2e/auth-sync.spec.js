@@ -313,3 +313,73 @@ test("separate laptop and phone sessions receive a task through Firebase", async
   await expect(row(b.page, "Check the sample timetable")).toBeVisible();
   expect(await currentUid(b.page)).toBe(a.uid);
 });
+
+// #643: horizon reviews change only through commands decided on the server's
+// copy. Two weekly leftovers are seeded with the week's review last dealt with
+// three weeks ago, so the open devices detect it (at the same time).
+async function seedWeekReview(clients, a) {
+  const now = Date.now();
+  const week = (uuid, title, id) => ({
+    id, uuid, title, userId: a.email, concreteStep: "Open the sample folder",
+    horizonLevel: "week", priority: "P2", category: "Personal", timeEstimateMinutes: 25,
+    isCompleted: false, isDeleted: false, isParked: false, isNowFocus: false,
+    orderIndex: id, lastUpdated: now - 30_000,
+  });
+  const through = new Date(now - 21 * 86_400_000).toISOString().slice(0, 10);
+  const patched = await clients.request.patch(databaseUrl(`sync/${a.uid}`), {
+    headers: { Authorization: "Bearer owner" }, // Emulator-only administrative credential.
+    data: {
+      "tasks/2": week("wk-a", "Return the sample books", 3),
+      "tasks/3": week("wk-b", "Label the sample boxes", 4),
+      "config/horizonReviews": { week: { through } },
+      timestamp: now,
+    },
+  });
+  expect(patched.ok()).toBe(true);
+}
+const weekReview = async (request, uid) => (await readServer(request, uid)).config.horizonReviews?.week || {};
+const horizonOf = async (request, uid, uuid) => (await readServer(request, uid)).tasks.find(t => t.uuid === uuid)?.horizonLevel;
+
+test("a horizon review done on the laptop closes on the phone and stays done after a reload", async ({ clients }) => {
+  const a = await clients.open();
+  await seedWeekReview(clients, a);
+  const reviewA = a.page.getByRole("dialog", { name: /ended$/ });
+  await expect(reviewA).toBeVisible();
+  const b = await clients.open(a.email, { phone: true });
+  const reviewB = b.page.getByRole("dialog", { name: /ended$/ });
+  await expect(reviewB).toBeVisible();
+  await expect.poll(async () => (await weekReview(clients.request, a.uid)).pending?.uuids?.slice().sort()).toEqual(["wk-a", "wk-b"]);
+
+  await reviewA.getByRole("radiogroup", { name: "Where Label the sample boxes goes" }).getByRole("radio", { name: "Today" }).click();
+  await reviewA.getByRole("button", { name: "Done" }).click();
+  await expect(reviewA).toHaveCount(0);
+  await expect(a.page.locator(".undo-toast")).toContainText("Reviewed:");
+  // The phone's open dialog goes by itself once the laptop's Done arrives.
+  await expect(reviewB).toHaveCount(0);
+  const done = await weekReview(clients.request, a.uid);
+  expect(done.pending ?? null).toBe(null);
+  expect(done.last).toMatchObject({ today: 1, kept: 1, dropped: 0 });
+  expect(done.last.op).toBeTruthy();
+  expect(await horizonOf(clients.request, a.uid, "wk-b")).toBe("today");
+
+  // The phone reloading from its cache doesn't bring the finished review back.
+  await b.page.reload();
+  await appReady(b.page);
+  await expect(row(b.page, "Label the sample boxes")).toBeVisible();
+  await expect(reviewB).toHaveCount(0);
+  expect((await weekReview(clients.request, a.uid)).last.op).toBe(done.last.op);
+});
+
+test("Undo of a horizon review restores the review and the moved task on the server", async ({ clients }) => {
+  const a = await clients.open();
+  await seedWeekReview(clients, a);
+  const review = a.page.getByRole("dialog", { name: /ended$/ });
+  await expect(review).toBeVisible();
+  await review.getByRole("radiogroup", { name: "Where Return the sample books goes" }).getByRole("radio", { name: "Today" }).click();
+  await review.getByRole("button", { name: "Done" }).click();
+  await expect.poll(() => horizonOf(clients.request, a.uid, "wk-a")).toBe("today");
+  await a.page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
+  await expect(a.page.locator(".undo-toast")).toContainText("Review undone.");
+  await expect.poll(async () => (await weekReview(clients.request, a.uid)).pending?.uuids?.slice().sort()).toEqual(["wk-a", "wk-b"]);
+  expect(await horizonOf(clients.request, a.uid, "wk-a")).toBe("week");
+});

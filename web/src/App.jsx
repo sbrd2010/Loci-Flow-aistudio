@@ -45,6 +45,8 @@ import FocusWelcomeBack from "./components/FocusWelcomeBack";
 import { OPEN_SESSION_SAVE_MS, saveOpenSession, clearOpenSession, loadOpenSession, savedSessionAsEnded, saveHeldEvent, loadHeldEvent, clearHeldEvent, dropHeldEvent, thisTabId, ownedByOtherLiveTab, holdSessionLock, dropSessionLock, claimSessionLock } from "./utils/openFocusSession";
 import { letGoThought, thoughtText } from "./utils/thoughts";
 import { applyReview, detectReviews, pendingReviews, undoReviewOrSort } from "./utils/horizonReview";
+import { doneCommand, undoCommand } from "./utils/reviewCommands";
+import { safeUUID } from "./utils/uuid";
 import { endLeftReviewMarks } from "./utils/normalizePayload";
 import CloseTheDay from "./components/CloseTheDay";
 import { applyClose, closeLineDue, isDayClosed, leftovers, pinFirstThing, reopenDay, undoClose } from "./utils/closeDay";
@@ -396,7 +398,7 @@ export default function App() {
 
   // Load the sync payload from RTDB (skipped in demo mode — uid is null)
   const {
-    payload: rtdbPayload, loading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning: rtdbSyncWarning, accountDeleted,
+    payload: rtdbPayload, loading, error, connPhase, online, isSyncingFromCache, lastSyncedAt, syncWarning: rtdbSyncWarning, accountDeleted,
     savePayload: rtdbSave, savePayloadAsync: rtdbSaveAsync,
     saveSubPath: rtdbSaveSub,
     saveSubPaths: rtdbSaveSubs, saveSubPathsAsync: rtdbSaveSubsAsync,
@@ -404,6 +406,7 @@ export default function App() {
     writeActivityEvents: rtdbWriteActivityEvents, writeActivityEventIfNewer: rtdbWriteActivityEventIfNewer,
     captureTodaySnapshotIfNeeded: rtdbCaptureTodaySnapshot,
     flushNow: rtdbFlushNow, clearCache: rtdbClearCache, retrySync: rtdbRetrySync, syncRetrying: rtdbSyncRetrying,
+    runReviewCommand,
   } = useSync(demoMode ? null : (user?.uid || null), demoMode ? null : (user?.email || null));
 
   const payload = demoMode ? demoPayload : rtdbPayload;
@@ -1278,14 +1281,23 @@ export default function App() {
   // for a review — opened once on its own (never over a focus session,
   // Q44.1), then from Today's line or Plan until done. Undo 10 s (57b.11).
   const planDay = useLociDayStr(getFocusWindows(payload?.config || {}));
+  // #643: signed in, the review record changes only through review commands,
+  // decided against the server's copy, so a device waking with a stale copy
+  // can't reopen a review another device finished. Demo mode stays local.
+  const detectingRef = useRef(false);
   useEffect(() => {
     // Not from a stale cache (a real account's data is still arriving).
     if (!payload?.config || (!demoMode && isSyncingFromCache)) return;
     const next = detectReviews(payload.config, payload.tasks || [], planDay);
-    if (next) saveConfigPatch({ horizonReviews: next });
+    if (!next) return;
+    if (demoMode) { saveConfigPatch({ horizonReviews: next }); return; }
+    // Offline it waits: `online` is a dependency, so it runs on reconnect.
+    if (!online || detectingRef.current) return;
+    detectingRef.current = true;
+    runReviewCommand({ kind: "detect", day: planDay, now: Date.now() }).finally(() => { detectingRef.current = false; });
     // Every config change (the data arriving included); a no-op unless a
     // horizon is new or a period has ended.
-  }, [planDay, payload?.config, isSyncingFromCache]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [planDay, payload?.config, isSyncingFromCache, online]); // eslint-disable-line react-hooks/exhaustive-deps
   const reviews = useMemo(
     () => pendingReviews(payload?.config || {}, payload?.tasks || [], planDay),
     [payload?.config, payload?.tasks, planDay],
@@ -1303,16 +1315,64 @@ export default function App() {
     if (keys.some(k => !reviewShown.includes(k)) && !busyFocusing && !showAddTask) { setReviewOpen(true); setReviewShown([...new Set([...reviewShown, ...keys])]); }
   }, [reviewKey, reviewShown, busyFocusing, showAddTask]);
   const openReview = () => setReviewOpen(true);
-  const finishReview = (review, choices) => {
-    const before = payloadRef.current;
+  // #643: Done and Undo say only what the server confirmed. While one waits
+  // they can't be pressed again; after 10 s it says it isn't saved yet.
+  const [reviewSaving, setReviewSaving] = useState(null); // null | "saving" | "slow"
+  const [reviewNotice, setReviewNotice] = useState("");
+  const [reviewToast, setReviewToast] = useState(null);
+  const reviewCommand = async (cmd) => {
+    setReviewSaving("saving");
+    const slow = setTimeout(() => setReviewSaving(s => (s ? "slow" : s)), 10000);
+    try { return await runReviewCommand(cmd); } finally { clearTimeout(slow); setReviewSaving(null); }
+  };
+  const finishReview = async (review, choices) => {
     // Drops are named for the sync's drop guard (three at once would write
     // nothing); a dropped task a session runs on ends that session first.
     const drops = review.tasks.filter(t => choices[t.uuid] === "drop").map(t => t.uuid);
-    if (focusTimer.focusSessionActive && drops.includes(focusTimer.activeTask?.uuid)) handleEndFocusSession();
-    if (reviews.length <= 1) setReviewOpen(false);
-    savePayloadAsync(applyReview(before, review, choices, planDay), { expectedRemovals: drops })
-      .then(() => setReviewUndo({ before, uuids: review.tasks.map(t => t.uuid), id: review.id, text: `Reviewed: ${review.title}`, at: Date.now() }))
-      .catch(() => {});
+    const endsSession = focusTimer.focusSessionActive && drops.includes(focusTimer.activeTask?.uuid);
+    const closes = reviews.length <= 1;
+    if (demoMode) {
+      const before = payloadRef.current;
+      if (endsSession) handleEndFocusSession();
+      if (closes) setReviewOpen(false);
+      savePayloadAsync(applyReview(before, review, choices, planDay), { expectedRemovals: drops })
+        .then(() => setReviewUndo({ before, uuids: review.tasks.map(t => t.uuid), id: review.id, text: `Reviewed: ${review.title}`, at: Date.now() }))
+        .catch(() => {});
+      return;
+    }
+    if (reviewSaving) return;
+    setReviewNotice("");
+    const done = doneCommand(review, choices, planDay, Date.now(), safeUUID());
+    const r = await reviewCommand(done);
+    if (r.outcome === "accepted") {
+      if (endsSession) handleEndFocusSession();
+      if (closes) setReviewOpen(false);
+      // Confirmed only after a dropped connection: no Undo (what it would restore isn't known).
+      if (r.confirmedLate) setReviewToast({ text: `Reviewed: ${review.title}`, at: Date.now() });
+      else setReviewUndo({ undo: undoCommand(done, r.before, r.after), text: `Reviewed: ${review.title}`, at: Date.now() });
+    } else if (r.outcome === "conflict" && r.reason === "already-reviewed") {
+      setReviewToast({ text: "Already reviewed on another device.", at: Date.now() });
+    } else if (r.outcome !== "busy") {
+      setReviewNotice({
+        offline: "You're offline. Reviews need a connection, so nothing changed.",
+        unknown: "The connection dropped, so Loci couldn't confirm the review. Check it when you're back online.",
+        conflict: r.reason === "stale-period"
+          ? "A newer period has ended. Check the list, then tap Done again."
+          : "These tasks changed on another device. Check them, then tap Done again.",
+      }[r.outcome] || "Couldn't save the review. Nothing changed. Try again.");
+    }
+  };
+  const undoReview = async (u) => {
+    setReviewUndo(null);
+    if (demoMode) { savePayload(undoReviewOrSort(payloadRef.current, u.before, u.uuids, u.id)); return; }
+    const r = await reviewCommand({ ...u.undo, now: Date.now() });
+    const text = {
+      accepted: "Review undone.",
+      offline: "You're offline. Undo needs a connection, so nothing was undone.",
+      conflict: "Couldn't undo: those tasks changed since. Nothing was undone.",
+      unknown: "The connection dropped, so Loci couldn't confirm the Undo. Check the tasks when you're back online.",
+    }[r.outcome] || "Couldn't undo. Nothing changed.";
+    if (r.outcome !== "busy") setReviewToast({ text, at: Date.now() });
   };
   // Close the day (55d–e, Q47): from the Day map's header, or Today's line
   // from 30 minutes before the day ends. Undo 10 s. The next day, the first
@@ -1817,10 +1877,12 @@ export default function App() {
       )}
       {reviewOpen && reviews[0] && (
         <HorizonReview
-          key={reviews[0].id}
+          key={`${reviews[0].id}:${reviews[0].end}`}
           review={reviews[0]}
+          saving={reviewSaving}
+          notice={reviewNotice}
           onDone={choices => finishReview(reviews[0], choices)}
-          onClose={() => setReviewOpen(false)}
+          onClose={() => { setReviewOpen(false); setReviewNotice(""); }}
         />
       )}
       <UndoAnnouncer message={reviewUndo?.text || ""} />
@@ -1829,9 +1891,17 @@ export default function App() {
           key={reviewUndo.at}
           ms={10000}
           message={reviewUndo.text}
-          onUndo={() => { savePayload(undoReviewOrSort(payloadRef.current, reviewUndo.before, reviewUndo.uuids, reviewUndo.id)); setReviewUndo(null); }}
+          onUndo={() => undoReview(reviewUndo)}
           onClose={() => setReviewUndo(null)}
         />
+      )}
+      {/* #643: what a review command ended with, when the dialog isn't there to say it. */}
+      <span className="sr-only" role="status" aria-live="polite">{reviewToast?.text || (reviewSaving === "slow" && !reviewOpen ? "Waiting for connection. Not confirmed yet." : "")}</span>
+      {reviewSaving === "slow" && !reviewOpen && (
+        <UndoToast key="review-slow" ms={60000} message="Waiting for connection. Not confirmed yet." onClose={() => {}} />
+      )}
+      {reviewToast && (
+        <UndoToast key={reviewToast.at} ms={6000} message={reviewToast.text} onClose={() => setReviewToast(null)} />
       )}
       <UndoAnnouncer message={thoughtSaved ? "Saved to Mind Box" : ""} />
       {thoughtSaved && (

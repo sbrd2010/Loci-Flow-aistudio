@@ -29,7 +29,8 @@ function useStackPlace() {
   return Math.max(0, all.indexOf(id.current));
 }
 
-// ms: how long it stays (Drop asks for 10 s, 57b.11).
+// ms: how long it stays (Drop asks for 10 s, 57b.11). Without onUndo it is
+// a plain notice (#643: what a review's Done or Undo ended with).
 export default function UndoToast({ message, onUndo, onClose, ms = UNDO_MS }) {
   const place = useStackPlace();
   // Held while the pointer is over it OR focus is inside it — tracked apart,
@@ -61,10 +62,12 @@ export default function UndoToast({ message, onUndo, onClose, ms = UNDO_MS }) {
       onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false); }}
     >
       <span className="undo-toast-text">{message}</span>
-      <button type="button" className="undo-toast-btn" onClick={onUndo}>
-        <IconUndo size={17} strokeWidth={2.2} />
-        Undo
-      </button>
+      {onUndo && (
+        <button type="button" className="undo-toast-btn" onClick={onUndo}>
+          <IconUndo size={17} strokeWidth={2.2} />
+          Undo
+        </button>
+      )}
       {!held && (
         <span
           key={barKey}

@@ -319,6 +319,11 @@ function mergeTasks(remoteTasks, localTasks, baseTasks) {
 // so the same logical "unset" arrives as `undefined` from the server but may sit
 // as `null` in a local object, and treating that round-trip as a change would
 // make every device look like it had edited the field.
+// Config keys only their own commands write (#643: useSync runReviewCommand).
+// Every merge and overlay keeps the server's value for them, so a device's
+// stale copy is never written back over a newer one.
+export const COMMAND_OWNED_CONFIG_KEYS = new Set(["horizonReviews"]);
+
 export function configValuesEqual(a, b) {
   if (a === b) return true;
   if (a == null || b == null) return a == null && b == null;
@@ -381,6 +386,7 @@ function mergeConfig(remoteConfig, localConfig, baseConfig) {
     // Bookkeeping, not user data — it tracks *when* config changed, so it can
     // never itself count as an edit worth preserving. Recomputed below.
     if (key === "lastUpdated") continue;
+    if (COMMAND_OWNED_CONFIG_KEYS.has(key)) continue;
     // Unchanged locally since base: nothing of this device's to preserve.
     if (configValuesEqual(local[key], base[key])) continue;
     // Changed on both sides since base — remote wins, per mergeTasks's convention.
@@ -551,7 +557,7 @@ function mergeConfigForWrite(serverConfig, localConfig, baseConfig) {
   if (baseConfig) {
     const base = objectOrEmpty(baseConfig);
     for (const key of Object.keys(local)) {
-      if (key === "lastUpdated") continue;
+      if (key === "lastUpdated" || COMMAND_OWNED_CONFIG_KEYS.has(key)) continue;
       if (configValuesEqual(local[key], base[key])) continue;
       merged[key] = local[key];
     }
@@ -716,7 +722,7 @@ export function applyEditsSince(merged, local, written) {
   const writtenConfig = objectOrEmpty(written?.config);
   const config = { ...objectOrEmpty(merged.config) };
   for (const key of Object.keys(localConfig)) {
-    if (key === "lastUpdated") continue;
+    if (key === "lastUpdated" || COMMAND_OWNED_CONFIG_KEYS.has(key)) continue;
     if (!configValuesEqual(localConfig[key], writtenConfig[key])) config[key] = localConfig[key];
   }
 

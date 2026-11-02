@@ -1317,3 +1317,28 @@ describe("keepOneThing — at most one open task is the one thing", () => {
     expect(pins(out.tasks)).toEqual(["a"]);
   });
 });
+
+// #643: the review record is written only by review commands. Every generic
+// merge and overlay keeps the server's copy, so a stale device can't write
+// its older copy back (a finished review reopened, a Done undone).
+describe("horizonReviews belongs to review commands", () => {
+  const pending = { week: { through: "2026-11-01", pending: { end: "2026-11-01", periods: 1, uuids: ["a"] } } };
+  const finished = { week: { through: "2026-11-01", pending: null, last: { end: "2026-11-01", kept: 1, today: 0, dropped: 0, at: 9, op: "op-1" } } };
+  const payload = (horizonReviews, extra = {}) => ({ timestamp: 1, tasks: [], contributions: [], brainDump: [], config: { lastUpdated: 1, horizonReviews, ...extra } });
+
+  it("an outgoing save keeps the server's record, even when local changed it since base", () => {
+    const out = mergeLocalIntoServer(payload(finished), payload(pending, { theme: "dark" }), { config: { horizonReviews: {} } });
+    expect(out.config.horizonReviews).toEqual(finished);
+    expect(out.config.theme).toBe("dark"); // other config edits still win
+  });
+  it("an incoming delivery takes the server's record over a local change", () => {
+    // Unchanged on the server since base, changed here: any other key would be re-applied and written back.
+    const { merged, hasLocalContribution } = mergeRemotePayloadWithMeta(payload(finished), payload(pending), { horizonReviews: finished });
+    expect(merged.config.horizonReviews).toEqual(finished);
+    expect(hasLocalContribution).toBe(false);
+  });
+  it("the post-save overlay never puts back a local copy", () => {
+    const out = applyEditsSince(payload(finished), payload(pending), payload({}));
+    expect(out.config.horizonReviews).toEqual(finished);
+  });
+});
