@@ -10,10 +10,10 @@
 // cmd:
 //   { kind: "detect", day, now }
 //   { kind: "done", id, end, day, now, op, choices, shown }   shown: uuid → lastUpdated, as the dialog showed them
-//   { kind: "undo", id, op, through, now, beforeRecord, beforeTasks, after }   after: uuid → lastUpdated, as the Done left them
+//   { kind: "undo", id, op, through, now, beforeRecord, beforeTasks, after }   after: uuid → task, as the Done left it
 import { child, onValue, ref, runTransaction } from "firebase/database";
 import { applyReview, detectReviews, pendingReviews } from "./horizonReview";
-import { normalizePayload } from "./normalizePayload";
+import { configValuesEqual, normalizePayload } from "./normalizePayload";
 
 const num = (v) => (Number.isFinite(v) ? v : 0);
 const reviewsOf = (config) => (config?.horizonReviews && typeof config.horizonReviews === "object" ? config.horizonReviews : {});
@@ -38,7 +38,10 @@ export function decideReviewCommand(server, cmd) {
   if (cmd.kind === "done") {
     if (!rec.pending) return { action: "conflict", reason: "already-reviewed" };
     if (rec.pending.end !== cmd.end) return { action: "conflict", reason: "stale-period" };
-    // The tasks waiting now must be exactly the ones shown, unchanged since.
+    // The tasks waiting now must be the ones shown, none edited since (by its
+    // lastUpdated: an edit that didn't bump it goes unnoticed here, which is
+    // harmless — the choices are applied to the server's own copy below, so
+    // nothing stale is written; this only makes sure the list was current).
     const review = pendingReviews(config, tasks, cmd.day).find(r => r.id === cmd.id);
     const now = new Map((review?.tasks || []).map(t => [t.uuid, t.lastUpdated]));
     const shown = Object.entries(cmd.shown || {});
@@ -52,11 +55,13 @@ export function decideReviewCommand(server, cmd) {
 
   if (cmd.kind === "undo") {
     // All or nothing: the Done must still be the latest thing that happened to
-    // this review and to every task it moved.
+    // this review, and every task it moved exactly as it left it (whole
+    // contents, not just lastUpdated: Undo writes back older copies, so any
+    // edit since, stamped or not, must stop it).
     const byUuid = new Map(tasks.map(t => [t.uuid, t]));
     const touched = Object.entries(cmd.after || {});
     const unchanged = rec.last?.op === cmd.op && rec.through === cmd.through && !rec.pending
-      && touched.every(([uuid, lu]) => byUuid.has(uuid) && byUuid.get(uuid).lastUpdated === lu);
+      && touched.every(([uuid, task]) => byUuid.has(uuid) && configValuesEqual(byUuid.get(uuid), task));
     if (!unchanged) return { action: "conflict", reason: "changed-since" };
     const before = new Map((cmd.beforeTasks || []).map(t => [t.uuid, t]));
     return {
@@ -177,6 +182,6 @@ export function undoCommand(done, before, after) {
     through: reviewsOf(after.config)[done.id]?.through,
     beforeRecord: reviewsOf(before.config)[done.id],
     beforeTasks: (before.tasks || []).filter(t => changed.includes(t.uuid)),
-    after: Object.fromEntries(changed.filter(uuid => afterTasks.has(uuid)).map(uuid => [uuid, afterTasks.get(uuid).lastUpdated])),
+    after: Object.fromEntries(changed.filter(uuid => afterTasks.has(uuid)).map(uuid => [uuid, afterTasks.get(uuid)])),
   };
 }

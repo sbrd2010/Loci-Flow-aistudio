@@ -93,6 +93,11 @@ describe("undo", () => {
     const changed = { ...after, tasks: after.tasks.map(t => (t.uuid === "a" ? { ...t, lastUpdated: 777 } : t)) };
     expect(decideReviewCommand(changed, undo)).toEqual({ action: "conflict", reason: "changed-since" });
   });
+  it("an edit since the Done that didn't bump lastUpdated still stops it", () => {
+    const { after, undo } = setup({ a: "today" });
+    const renamed = { ...after, tasks: after.tasks.map(t => (t.uuid === "a" ? { ...t, title: "Renamed elsewhere" } : t)) };
+    expect(decideReviewCommand(renamed, undo)).toEqual({ action: "conflict", reason: "changed-since" });
+  });
   it("conflicts when another Done or a newer period came after", () => {
     const { after, undo } = setup({ a: "today" });
     const newer = write(after, { kind: "detect", day: NEXT_MON, now: 600 });
@@ -139,5 +144,20 @@ describe("reviewLanded: after a dropped connection, the server's record says whe
     const undo = { ...undoCommand(cmd, before, after), now: 500 };
     expect(reviewLanded(rec(after), undo)).toBe(false);
     expect(reviewLanded(rec(write(after, undo)), undo)).toBe(true);
+  });
+});
+
+describe("reviewLanded after a later Done (ChatGPT review of #644, finding 2)", () => {
+  it("an Undo that committed, then was followed by another Done, still reads as landed — it did happen", () => {
+    const before = detected();
+    const first = done(before, { a: "today" });
+    const afterFirst = write(before, first);
+    const undo = { ...undoCommand(first, before, afterFirst), now: 500 };
+    const undone = write(afterFirst, undo);
+    const second = { ...doneCommand(review(undone), { b: "drop" }, MON, 600, "op-2") };
+    const redone = write(undone, second);
+    // Only this Undo writes undoneOp: op-1, so a true here can't be a false success.
+    expect(reviewLanded(redone.config.horizonReviews.week, undo)).toBe(true);
+    expect(reviewLanded(redone.config.horizonReviews.week, { ...undo, op: "op-never-undone" })).toBe(false);
   });
 });

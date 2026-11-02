@@ -151,6 +151,39 @@ describe("#643 S2–S6, S8: commands decided on the server's copy", () => {
 // its op is there, and anything else with nothing of it written.
 const agrees = (r, f, op) => (r.outcome === "accepted") === (f.config.horizonReviews.week.last?.op === op);
 
+describe("#643 S11: ordinary saves around a Done (ChatGPT review of #644)", () => {
+  it("full saves from this device's stale copy and from another device, during Done, and a failed save resent after: nothing lost", async () => {
+    const s = await seedDetected();
+    const a = client(); const b = client(); const offA = await listen(a); const offB = await listen(b);
+    // A's edit to an unrelated task whose save failed: still only on A.
+    const extra = task("c", { horizonLevel: "today", title: "Sample unsent edit", lastUpdated: 30 });
+    const aLocal = { ...s, tasks: [...s.tasks, extra] };
+    const cmd = done(s, { a: "today", b: "drop" });
+    const pending = run(a, cmd);
+    // During the Done: A's ordinary save of its stale copy (still showing the
+    // review pending and the tasks unmoved), and B's save of its own edit.
+    const saveA = runTransaction(ref(a, path), cur => mergeLocalIntoServer(cur, aLocal, s), { applyLocally: false });
+    const bEdit = { ...s, config: { ...s.config, theme: "dark" } };
+    const saveB = runTransaction(ref(b, path), cur => mergeLocalIntoServer(cur, bEdit, s), { applyLocally: false });
+    const [r] = await Promise.all([pending, saveA.catch(e => e), saveB.catch(e => e)]);
+    // Then the failed save is sent again, still from the stale copy and base.
+    await runTransaction(ref(a, path), cur => mergeLocalIntoServer(cur, aLocal, s), { applyLocally: false });
+    offA(); offB();
+    const f = await serverNow();
+    console.log("S11 outcome:", r.outcome, r.reason || "");
+    expect(agrees(r, f, "op-1")).toBe(true);
+    expect(f.tasks.find(t => t.uuid === "c")?.title).toBe("Sample unsent edit");
+    expect(f.config.theme).toBe("dark");
+    if (r.outcome === "accepted") {
+      expect(f.config.horizonReviews.week.pending ?? null).toBe(null);
+      expect(f.tasks.find(t => t.uuid === "a").horizonLevel).toBe("today");
+      expect(f.tasks.find(t => t.uuid === "b").isDeleted).toBe(true);
+    } else {
+      expect(f.config.horizonReviews.week.pending.end).toBe(SUN);
+    }
+  }, 60_000);
+});
+
 describe("#643 S7, S10: connection lost around a command", () => {
   it("S7: offline command + child update + another device saves: never a false success, no data lost", async () => {
     const s = await seedDetected();
