@@ -132,6 +132,10 @@ jobs:
           name: loci-focus-debug-apk
           path: web/android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+          # Each debug APK is ~23 MB. Kept for GitHub's default 90 days, a
+          # private repo's free storage filled up and every PR's build went
+          # red at this step (#639, 2 Nov 2026). A week is enough to test one.
+          retention-days: 7
 
       - name: Upload signed release AAB
         # Gated on both signing AND google-services config (Codex finding): a
