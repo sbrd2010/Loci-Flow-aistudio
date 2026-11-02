@@ -1519,3 +1519,47 @@ describe("withoutChangeClaims (#592): a reply that changed nothing does not say 
     expect(buildActionReplyText(cleanText, results, lastUserMessage, { proposed: true })).toBe(NOTHING_CHANGED_NOTE);
   });
 });
+
+// #646: a reply's button state can lose a two-device chat race and show
+// "proposed" again after its change landed (the chat merge keeps the server's
+// list). A second tap goes through applyCoachActions with the offered task's
+// id, as handleCoachAction does. What it does for each type:
+describe("a reverted 'proposed' button tapped again (#646)", () => {
+  const T = (uuid, extra = {}) => ({ id: uuid, uuid, title: `Sample ${uuid}`, horizonLevel: "today", isCompleted: false, isDeleted: false, isParked: false, isNowFocus: false, orderIndex: 0, lastUpdated: 1, ...extra });
+  const tap = (tasks, type, task) => applyCoachActions(
+    { tasks, config: {}, contributions: [] },
+    [{ type, title: task.title, taskUuid: task.uuid }],
+    { lociDateStr: "2026-11-03", now: 100, skipIntentCheck: true },
+  );
+
+  it("Mark done / Park: the task is no longer active, so nothing changes", () => {
+    const done = [T("x", { isCompleted: true }), T("y")];
+    expect(tap(done, "COMPLETE_TASK", done[0]).results[0].matched).toBe(false);
+    const parked = [T("x", { isParked: true }), T("y")];
+    expect(tap(parked, "PARK_TASK", parked[0]).results[0].matched).toBe(false);
+  });
+  it("Add: the task already exists by title, so no duplicate is added", () => {
+    const tasks = [T("x"), T("y")];
+    const r = applyCoachActions({ tasks, config: {}, contributions: [] }, [{ type: "ADD_TASK", title: "Sample x" }], { lociDateStr: "2026-11-03", now: 100, skipIntentCheck: true });
+    expect(r.results[0].matched).toBe(false);
+    expect(r.payload.tasks).toHaveLength(2);
+  });
+  it("Set now focus / Start focus: re-applies what the button says, nothing more", () => {
+    // Still the Now task: tapping again changes no task's pin.
+    const same = [T("x", { isNowFocus: true }), T("y")];
+    for (const type of ["SET_NOW_FOCUS", "START_FOCUS"]) {
+      const r = tap(same, type, same[0]);
+      expect(r.results[0].matched).toBe(true);
+      expect(r.payload.tasks.filter(t => t.isNowFocus).map(t => t.uuid)).toEqual(["x"]);
+    }
+    // Another task was chosen since: the tap makes x the Now task again (one
+    // pin, y unpinned) — the button's own action, taken on a tap, as for any
+    // offered button; never a second pinned task or a new task.
+    const later = [T("x"), T("y", { isNowFocus: true })];
+    for (const type of ["SET_NOW_FOCUS", "START_FOCUS"]) {
+      const r = tap(later, type, later[0]);
+      expect(r.payload.tasks.filter(t => t.isNowFocus).map(t => t.uuid)).toEqual(["x"]);
+      expect(r.payload.tasks).toHaveLength(2);
+    }
+  });
+});

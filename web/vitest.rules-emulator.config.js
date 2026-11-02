@@ -10,6 +10,6 @@ import { defineConfig } from "vite";
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["emulator-tests/security-rules.emulator.test.js", "emulator-tests/notebook-sync.emulator.test.js", "emulator-tests/horizon-review.emulator.test.js"],
+    include: ["emulator-tests/security-rules.emulator.test.js", "emulator-tests/notebook-sync.emulator.test.js", "emulator-tests/horizon-review.emulator.test.js", "emulator-tests/coach-sync.emulator.test.js"],
   },
 });
