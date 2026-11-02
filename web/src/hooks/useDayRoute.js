@@ -7,6 +7,7 @@ import { isDeferred, isOnToday } from "../utils/deferral";
 import { commitmentKickerFront, frontForCommitment, frontsFromConfig } from "../utils/fronts";
 import { useLociDayStr } from "./useTodayStr";
 import { ESTIMATE_MAX, ESTIMATE_MIN } from "../utils/estimates";
+import { confirmedMinimumDay } from "../utils/minimumDay";
 
 // Today's route, as the Day map page (50e–f) and Today's Day map column
 // (50k–l) both read it: which tasks are on it, from when, and where the day
@@ -119,17 +120,26 @@ export function routeIsContiguous(route, breaks = []) {
 // last stop that fits, what won't fit and its minutes, and which of those
 // can be moved or parked (never the one thing: a session on it is Today's
 // to end).
-export function routeCut(routeTasks, plan) {
+// R7: a must-do (MUST) or a task in today's confirmed minimum day is kept
+// out of Move N / Park N too. The Day map asks for "at least these", so its
+// bulk buttons must not send them away; `kept` lists them for the line that
+// says so. They still count in what won't fit, and each can still be moved
+// on its own. A suggested (unconfirmed) minimum day protects nothing.
+export function routeCut(routeTasks, plan, { config = null, todayStr = null } = {}) {
   const fitting = plan.overIndex === -1 ? routeTasks : routeTasks.slice(0, plan.overIndex);
   const last = fitting[fitting.length - 1];
   // From the later of the last stop's end and the route's start: a fixed
   // stop the day has passed ends before now (Codex review of #421).
   const spare = last ? plan.dayEnd - Math.max(last.routeEndMinutes, plan.dayEnd - plan.dayLeft) : 0;
+  const minimumIds = new Set(confirmedMinimumDay(config, todayStr) || []);
+  const isKept = (t) => !!t.isMVD || minimumIds.has(getTaskId(t));
+  const candidates = plan.wontFit.filter(t => !t.isNowFocus);
   return {
     spare,
     wontFitMinutes: plan.wontFit.reduce((sum, t) => sum + getEstimate(t), 0),
     overIds: new Set(plan.wontFit.map(getTaskId)),
-    movable: plan.wontFit.filter(t => !t.isNowFocus),
+    movable: candidates.filter(t => !isKept(t)),
+    kept: candidates.filter(isKept),
   };
 }
 

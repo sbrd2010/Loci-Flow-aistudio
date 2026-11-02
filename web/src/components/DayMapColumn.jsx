@@ -24,7 +24,7 @@ export default function DayMapColumn({ route, onOpenDayMap, onOpenTask, onDone, 
 
   const nowMins = currentDayMinutes(windows);
   const overIndex = plan.overIndex;
-  const { spare, wontFitMinutes, movable } = routeCut(routeTasks, plan);
+  const { spare, wontFitMinutes, movable, kept } = routeCut(routeTasks, plan, { config: route.config, todayStr });
   const routeIndex = new Map(routeTasks.map((t, i) => [getTaskId(t), i]));
   const firstOnTime = rows.find(r => r.kind === "stop" && !r.late);
   // The line falls before the first row of the first stop that won't fit,
@@ -137,6 +137,9 @@ export default function DayMapColumn({ route, onOpenDayMap, onOpenTask, onDone, 
                   )}
                 </div>
               )}
+              {/* R7: must-dos and today's confirmed minimum day stay out of
+                  the bulk buttons; say so, so the count isn't a puzzle. */}
+              {kept.length > 0 && <p className="dm-kept-note">{"Must-dos and your confirmed minimum day stay on today."}</p>}
             </section>
           )}
         </>

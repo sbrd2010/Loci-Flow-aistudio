@@ -223,7 +223,9 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
 
   // The pinned task is what you are doing now, and may have a focus session
   // open that only Today can close properly — so it is never moved from here.
-  const movable = plan.wontFit.filter(t => !t.isNowFocus);
+  // R7: nor a must-do or a task in today's confirmed minimum day (routeCut,
+  // the same rule as Today's Day map panel).
+  const { movable, kept } = routeCut(routeTasks, plan, { config: routeConfig, todayStr });
   const moveOverToTomorrow = () => {
     const ids = movable.map(getTaskId);
     if (!ids.length) return;
@@ -858,11 +860,14 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
               )}
               {/* 75f/75g: each panel section opens with a section heading — a
                   short rule (red for a warning), the heading, one line. */}
-              {movable.length > 0 && drawerViewport && (
+              {/* Shown whenever something won't fit (R7: even when all of it is
+                  kept); the button only when something can move. */}
+              {wontFitCount > 0 && drawerViewport && (
                 <section className="dm-sec is-warn dm-over" aria-labelledby="dm-sec-over">
                   <h2 id="dm-sec-over" className="dm-sec-title">{wontFitCount <= 10 ? NUMBER_WORDS[wontFitCount] : wontFitCount} {wontFitCount === 1 ? "task won’t" : "tasks won’t"} fit</h2>
                   <p className="dm-sec-line">{formatSpan(wontFit.minutes)} of it falls after your day ends at {dayEndLabel}.</p>
-                  <button type="button" className="dm-btn-outline" onClick={moveOverToTomorrow}>Move {movable.length} to tomorrow</button>
+                  {movable.length > 0 && <button type="button" className="dm-btn-outline" onClick={moveOverToTomorrow}>Move {movable.length} to tomorrow</button>}
+                  {kept.length > 0 && <p className="dm-kept-note">{"Must-dos and your confirmed minimum day stay on today."}</p>}
                 </section>
               )}
               {drawerViewport && (
@@ -873,6 +878,11 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
               )}
               {movable.length > 0 && !drawerViewport && (
                 <button type="button" className="dm-move" onClick={moveOverToTomorrow}>Move {movable.length} to tomorrow</button>
+              )}
+              {/* On the phone too, whenever something is kept (with or without
+                  a Move button), as Today's drawer and the laptop say it. */}
+              {kept.length > 0 && !drawerViewport && (
+                <p className="dm-kept-note">{"Must-dos and your confirmed minimum day stay on today."}</p>
               )}
             </div>
           </div>

@@ -88,6 +88,11 @@ test("a split stop that ends past the day end is under the line, in time order",
 test("Settings › Focus windows: a window added at an earlier time moves above once its row is left", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/");
+  // A fixed clock, as the other tests here. At the real time these failed on
+  // CI just after midnight going into a Monday (#639, 2 Nov 00:38 UTC): a
+  // sheet listing leftover tasks covered Settings. Reproduced at Mon 00:30;
+  // Sun 00:30 and Mon 10:00 pass.
+  await page.clock.setFixedTime(new Date("2024-06-15T11:35:00"));
   await page.getByTestId("demo-btn").click();
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
   await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
@@ -112,6 +117,11 @@ test("Settings › Focus windows: a window added at an earlier time moves above 
 test("Settings › Focus windows: switching to another window does not re-order the rows", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/");
+  // A fixed clock, as the other tests here. At the real time these failed on
+  // CI just after midnight going into a Monday (#639, 2 Nov 00:38 UTC): a
+  // sheet listing leftover tasks covered Settings. Reproduced at Mon 00:30;
+  // Sun 00:30 and Mon 10:00 pass.
+  await page.clock.setFixedTime(new Date("2024-06-15T11:35:00"));
   await page.getByTestId("demo-btn").click();
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
   await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
@@ -139,6 +149,11 @@ test("Settings › Focus windows: switching to another window does not re-order 
 test("Settings › Focus windows: going from an edited row into another row edits and removes the one you chose", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/");
+  // A fixed clock, as the other tests here. At the real time these failed on
+  // CI just after midnight going into a Monday (#639, 2 Nov 00:38 UTC): a
+  // sheet listing leftover tasks covered Settings. Reproduced at Mon 00:30;
+  // Sun 00:30 and Mon 10:00 pass.
+  await page.clock.setFixedTime(new Date("2024-06-15T11:35:00"));
   await page.getByTestId("demo-btn").click();
   await expect(page.locator(".app-container")).toBeVisible({ timeout: 10_000 });
   await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
