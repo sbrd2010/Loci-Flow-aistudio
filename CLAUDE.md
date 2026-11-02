@@ -69,14 +69,14 @@ Before writing new code, check whether the codebase, the platform or an installe
 
 ## 5. PR Loophole Check ("loopcheck")
 
-When the user types `loopcheck` (optionally with a PR number, e.g. "loopcheck PR 280"), run a single independent bug hunt on that PR before merge:
+When the user types `loopcheck` (optionally with a PR number, e.g. "loopcheck PR 280"), run a single independent bug hunt on that PR while it is still a draft (before it's marked ready):
 
 1. If no PR number is given, use the most recently pushed/open PR in this repo.
 2. Fetch that PR's full diff (GitHub MCP tools, e.g. `pull_request_read` with `get_diff`).
 3. Spawn exactly **one** `general-purpose` Agent call. Hand it the diff verbatim plus enough surrounding context to understand scope (file paths, what the PR claims to do). Ask it to independently hunt for P0/P1/P2 bugs/loopholes/future risks — fresh eyes, no memory of how or why the code was written — and report back ranked findings with file/line, concrete failure scenario, and severity, plus an overall merge verdict.
 4. For each finding: fix it now if it's small and you're confident, otherwise surface it to the user and ask before changing anything.
 
-This is intentionally **one agent spawn only** — not the heavier multi-agent `code-review` skill — to keep cost low for routine per-PR use on a metered plan. Recommended cadence: once per PR, right before merge.
+This is intentionally **one agent spawn only** — not the heavier multi-agent `code-review` skill — to keep cost low for routine per-PR use on a metered plan. Recommended cadence: once per PR, in draft, before the owner marks it ready.
 
 ## 6. Codex review rounds — ask from round 2
 
@@ -89,7 +89,7 @@ Codex (`chatgpt-codex-connector[bot]`) re-reviews every push, so fixing its find
 - Never post `@codex review` yourself — not after opening a PR, not after a push. The owner triggers Codex by hand. When a PR goes up, say in one line how big it is and whether a review is worth it:
   - **Small** (copy, CSS, a one-function fix, tests only): no Codex needed.
   - **Medium** (one feature or flow, a few files): Codex recommended.
-  - **Large / risky** (sync, data model, many files, anything that could lose data): Codex recommended, plus a `loopcheck` before merge.
+  - **Large / risky** (sync, data model, many files, anything that could lose data): Codex recommended, plus a `loopcheck`, both while the PR is a draft.
 
 ## 7. Budget: the owner is on a Claude Pro plan
 
@@ -97,7 +97,7 @@ This repo is past 500 PRs and building it uses most of the plan's message quota.
 
 **Tests.** GitHub CI runs lint, unit tests and the full Playwright e2e suite (about 18 minutes) when the owner marks a PR **ready for review**, on every push after that, and on every merge to main. That is the full check — don't duplicate it.
 - **Robot-minute budget:** the repo is private on GitHub Free (2,000 Actions minutes and 500 MB storage a month), and the owner won't pay for more; going public is the fallback. So CI skips e2e on **draft** pushes, a newer push cancels a PR's running e2e, changes that only touch Markdown, docs, other workflows, `ai-proxy/` or `mcp/` skip e2e, and the Android build runs only on demand (Actions → Android Build → Run workflow). Don't add CI jobs that run on every push without asking.
-- So while a PR is a **draft**, the checks are yours: before pushing, run `npm run lint` and `npx vitest run` (in `web/`), plus the e2e specs that cover what you changed (and any you edited). Do the `loopcheck` in draft when it applies; the owner marks the PR ready once it's clean, and that runs the full e2e.
+- So while a PR is a **draft**, the checks are yours: before pushing, run `npm run lint` and `npx vitest run` (in `web/`), plus the e2e specs that cover what you changed (and any you edited). The `loopcheck` and Codex reviews also happen in draft (the owner triggers Codex). The owner marks the PR ready once they're clean, and that runs the full e2e.
 - Don't run the full e2e suite locally. Run single e2e specs only when needed: the ones covering your change in draft, to see a UI change actually work, or to reproduce a CI failure before fixing it (read the failing test's name and error in the CI log first, then run just that spec).
 - When a change breaks an existing e2e expectation on purpose, update that test in the same push.
 - After pushing, don't poll CI. Wait for the PR's events; fix any CI failure on a PR you opened without being asked.
