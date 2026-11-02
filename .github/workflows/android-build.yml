@@ -14,15 +14,14 @@ name: Android Build
 # Until ALL four are set, the release AAB is built unsigned and is NOT uploaded
 # (so it can't be mistaken for a Play-ready bundle). The debug APK is always built.
 
+# On demand only (Nov 2026): no Android app is released yet, and building one
+# on every PR and merge cost ~5 robot-minutes and a ~23 MB file each time in a
+# private repo's free allowance. Run it by hand when an Android build is
+# wanted: Actions → Android Build → Run workflow. A version tag (v1.2.0)
+# still builds one, as a release is a deliberate act.
 on:
   push:
-    branches: [ main, master ]
     tags: [ 'v*' ]
-  pull_request:
-    branches: [ main, master ]
-    paths:
-      - 'web/**'
-      - '.github/workflows/android-build.yml'
   workflow_dispatch:
     inputs:
       versionName:
@@ -132,6 +131,10 @@ jobs:
           name: loci-focus-debug-apk
           path: web/android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+          # Each debug APK is ~23 MB. Kept for GitHub's default 90 days, a
+          # private repo's free storage filled up and every PR's build went
+          # red at this step (#639, 2 Nov 2026). A week is enough to test one.
+          retention-days: 7
 
       - name: Upload signed release AAB
         # Gated on both signing AND google-services config (Codex finding): a
