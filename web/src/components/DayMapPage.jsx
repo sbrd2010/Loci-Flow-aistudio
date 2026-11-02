@@ -867,7 +867,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
                   <h2 id="dm-sec-over" className="dm-sec-title">{wontFitCount <= 10 ? NUMBER_WORDS[wontFitCount] : wontFitCount} {wontFitCount === 1 ? "task won’t" : "tasks won’t"} fit</h2>
                   <p className="dm-sec-line">{formatSpan(wontFit.minutes)} of it falls after your day ends at {dayEndLabel}.</p>
                   {movable.length > 0 && <button type="button" className="dm-btn-outline" onClick={moveOverToTomorrow}>Move {movable.length} to tomorrow</button>}
-                  {kept.length > 0 && <p className="dm-kept-note">{"MUST and MIN tasks stay on today. Move them one at a time if you need to."}</p>}
+                  {kept.length > 0 && <p className="dm-kept-note">{"Must-dos and your confirmed minimum day stay on today."}</p>}
                 </section>
               )}
               {drawerViewport && (
@@ -879,10 +879,10 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
               {movable.length > 0 && !drawerViewport && (
                 <button type="button" className="dm-move" onClick={moveOverToTomorrow}>Move {movable.length} to tomorrow</button>
               )}
-              {/* On the phone the note rides with the button: with nothing to
-                  move, the page's own line already says what won't fit. */}
-              {movable.length > 0 && kept.length > 0 && !drawerViewport && (
-                <p className="dm-kept-note">{"MUST and MIN tasks stay on today. Move them one at a time if you need to."}</p>
+              {/* On the phone too, whenever something is kept (with or without
+                  a Move button), as Today's drawer and the laptop say it. */}
+              {kept.length > 0 && !drawerViewport && (
+                <p className="dm-kept-note">{"Must-dos and your confirmed minimum day stay on today."}</p>
               )}
             </div>
           </div>

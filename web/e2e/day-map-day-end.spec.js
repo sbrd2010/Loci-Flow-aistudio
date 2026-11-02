@@ -218,12 +218,11 @@ async function confirmMinimum(page, title) {
   await min.getByRole("button", { name: "Confirm" }).click();
 }
 const stopTitle = async (stop) => (await stop.locator(".dm-title").innerText()).split("\n")[0].trim();
-const KEPT_NOTE = "MUST and MIN tasks stay on today. Move them one at a time if you need to.";
+const KEPT_NOTE = "Must-dos and your confirmed minimum day stay on today.";
 
-test("phone: a confirmed minimum-day task is not in Move N to tomorrow, and stays on today", async ({ page }) => {
-  await openDayMapAt(page, "2024-06-15T21:00:00");
-  // 21:00–00:00, then 00:05–02:05 and 02:10–04:10: both 2h stops end past
-  // the 02:00 line, so two won't fit.
+// 21:00–00:00, then 00:05–02:05 and 02:10–04:10: both 2h stops end past the
+// 02:00 line, so two won't fit.
+async function overfillTwo(page) {
   const sheet = page.getByTestId("task-detail");
   for (const [i, length] of [[0, "3h"], [1, "2h"], [2, "2h"]]) {
     await page.locator(".dm-stop .dm-main").nth(i).click();
@@ -232,6 +231,11 @@ test("phone: a confirmed minimum-day task is not in Move N to tomorrow, and stay
     await sheet.getByRole("button", { name: "Close", exact: true }).click();
     await expect(sheet).toHaveCount(0);
   }
+}
+
+test("phone: a confirmed minimum-day task is not in Move N to tomorrow, and stays on today", async ({ page }) => {
+  await openDayMapAt(page, "2024-06-15T21:00:00");
+  await overfillTwo(page);
   const over = page.locator(".dm-stop.is-over");
   await expect(over).toHaveCount(2);
   await expect(page.getByRole("button", { name: "Move 2 to tomorrow" })).toBeVisible();
@@ -258,4 +262,23 @@ test("laptop: when everything that won't fit is kept, the warning stays and ther
   await expect(section.locator(".dm-kept-note")).toHaveText(KEPT_NOTE);
   await expect(page.getByRole("button", { name: /Move \d+ to tomorrow/ })).toHaveCount(0);
   await expect(page.locator(".dm-stop")).toHaveCount(3);
+});
+
+test("Today's Day map view: Move N and Park N leave the confirmed minimum-day task on today", async ({ page }) => {
+  await openDayMapAt(page, "2024-06-15T21:00:00");
+  await overfillTwo(page);
+  const keep = await stopTitle(page.locator(".dm-stop.is-over").last());
+  await confirmMinimum(page, keep);
+  await page.locator(".dm-back").click();
+
+  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Day map", exact: true }).click();
+  const column = page.getByRole("region", { name: "Day map" });
+  await expect(column.getByRole("heading", { name: /Won’t fit today/ })).toContainText("2 ·");
+  await expect(column.locator(".dm-kept-note")).toHaveText(KEPT_NOTE);
+  await expect(column.getByRole("button", { name: "Move 1 to tomorrow" })).toBeVisible();
+  await column.getByRole("button", { name: "Park 1" }).click();
+  await expect(page.locator(".undo-toast")).toBeVisible();
+  // The kept task is still on today's route; the other one is parked.
+  await expect(column.locator(".tdm-title", { hasText: keep })).toHaveCount(1);
+  await expect(column.getByRole("button", { name: /^Park \d/ })).toHaveCount(0);
 });

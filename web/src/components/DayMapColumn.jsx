@@ -139,7 +139,7 @@ export default function DayMapColumn({ route, onOpenDayMap, onOpenTask, onDone, 
               )}
               {/* R7: must-dos and today's confirmed minimum day stay out of
                   the bulk buttons; say so, so the count isn't a puzzle. */}
-              {kept.length > 0 && <p className="dm-kept-note">{"MUST and MIN tasks stay on today. Move them one at a time if you need to."}</p>}
+              {kept.length > 0 && <p className="dm-kept-note">{"Must-dos and your confirmed minimum day stay on today."}</p>}
             </section>
           )}
         </>
