@@ -95,9 +95,10 @@ Codex (`chatgpt-codex-connector[bot]`) re-reviews every push, so fixing its find
 
 This repo is past 500 PRs and building it uses most of the plan's message quota. Work so each message and token counts, without lowering the bar on correctness.
 
-**Tests.** GitHub CI runs lint, unit tests and the full Playwright e2e suite (about 9–10 minutes) on every push to a PR. That is the full check — don't duplicate it.
-- Before pushing, run locally only what is fast: `npm run lint` and `npx vitest run` (in `web/`).
-- Don't run the full e2e suite locally. Run single e2e specs only when needed: to see a UI change actually work, or to reproduce a CI failure before fixing it (read the failing test's name and error in the CI log first, then run just that spec).
+**Tests.** GitHub CI runs lint, unit tests and the full Playwright e2e suite (about 18 minutes) when the owner marks a PR **ready for review**, on every push after that, and on every merge to main. That is the full check — don't duplicate it.
+- **Robot-minute budget:** the repo is private on GitHub Free (2,000 Actions minutes and 500 MB storage a month), and the owner won't pay for more; going public is the fallback. So CI skips e2e on **draft** pushes, a newer push cancels a PR's running e2e, changes that only touch Markdown, docs, other workflows, `ai-proxy/` or `mcp/` skip e2e, and the Android build runs only on demand (Actions → Android Build → Run workflow). Don't add CI jobs that run on every push without asking.
+- So while a PR is a **draft**, the checks are yours: before pushing, run `npm run lint` and `npx vitest run` (in `web/`), plus the e2e specs that cover what you changed (and any you edited). Do the `loopcheck` in draft when it applies; the owner marks the PR ready once it's clean, and that runs the full e2e.
+- Don't run the full e2e suite locally. Run single e2e specs only when needed: the ones covering your change in draft, to see a UI change actually work, or to reproduce a CI failure before fixing it (read the failing test's name and error in the CI log first, then run just that spec).
 - When a change breaks an existing e2e expectation on purpose, update that test in the same push.
 - After pushing, don't poll CI. Wait for the PR's events; fix any CI failure on a PR you opened without being asked.
 

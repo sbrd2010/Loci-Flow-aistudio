@@ -1,14 +1,44 @@
 name: E2E Tests
 
+# Robot-minute budget (Nov 2026, private repo on GitHub Free: 2,000 min/month;
+# this job is ~18 min): it runs when a PR is marked ready for review (and on
+# each push after that), and on every merge to main. Draft pushes skip it:
+# the loopcheck and local lint/unit/targeted e2e cover drafts. A newer push
+# cancels a PR's still-running run, and changes that cannot affect the web app
+# (Markdown, docs, other workflows, ai-proxy, mcp) skip it.
 on:
   push:
     branches: [main]
+    paths:
+      - '**'
+      - '!**/*.md'
+      - '!docs/**'
+      - '!web/docs/**'
+      - '!ai-proxy/**'
+      - '!mcp/**'
+      - '!.github/workflows/**'
+      - '.github/workflows/e2e.yml'
   # redesign-75 collects this round's PRs (73–76) before one merge to main.
   pull_request:
     branches: [main, redesign-75]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - '**'
+      - '!**/*.md'
+      - '!docs/**'
+      - '!web/docs/**'
+      - '!ai-proxy/**'
+      - '!mcp/**'
+      - '!.github/workflows/**'
+      - '.github/workflows/e2e.yml'
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   e2e:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     defaults:
       run:
