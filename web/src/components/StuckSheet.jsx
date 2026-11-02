@@ -6,10 +6,20 @@ import "../styles/focusMode.css";
 // top of Today) · Talk it through with Coach (task and step attached). "Back
 // to the timer" resumes. An option is left out when there is nothing for it
 // to do (no next task, say).
-export default function StuckSheet({ step, onSmaller, onSplit, onSwitch, nextTitle, onCoach, onBack }) {
+// With no step yet there is nothing to make smaller: the same box asks for a
+// first one ("Write a first step"); with every step done, for the next one.
+export function stuckStepLabels(step, hasSteps) {
+  if (step) return { button: "Make the step smaller", field: "A smaller step" };
+  return hasSteps
+    ? { button: "Write the next step", field: "The next step" }
+    : { button: "Write a first step", field: "A first step" };
+}
+
+export default function StuckSheet({ step, hasSteps = false, onSmaller, onSplit, onSwitch, nextTitle, onCoach, onBack }) {
   const [smaller, setSmaller] = useState(false);
   const [text, setText] = useState("");
   const save = () => { if (text.trim()) onSmaller(text); };
+  const labels = stuckStepLabels(step, hasSteps);
   return (
     <div className="fm-end-scrim" onClick={onBack}>
       <div
@@ -26,7 +36,7 @@ export default function StuckSheet({ step, onSmaller, onSplit, onSwitch, nextTit
         <p className="fm-end-text">The timer is paused. Pick one way forward.</p>
         {smaller ? (
           <label className="fm-end-field">
-            <span>A smaller step{step ? <span className="fm-end-optional"> · now “{step}”</span> : null}</span>
+            <span>{labels.field}{step ? <span className="fm-end-optional"> · now “{step}”</span> : null}</span>
             {/* Stored as concreteStep, which the database caps at 300. */}
             <input
               autoFocus
@@ -44,7 +54,7 @@ export default function StuckSheet({ step, onSmaller, onSplit, onSwitch, nextTit
               Make it the next step <kbd className="focus-mode-kbd">Enter</kbd>
             </button>
           ) : (
-            <button type="button" className="focus-mode-ctrl-btn" autoFocus onClick={() => setSmaller(true)}>Make the step smaller</button>
+            <button type="button" className="focus-mode-ctrl-btn" autoFocus onClick={() => setSmaller(true)}>{labels.button}</button>
           )}
           {onSplit && <button type="button" className="focus-mode-ctrl-btn" onClick={onSplit}>Split the task</button>}
           {onSwitch && (
