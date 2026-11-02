@@ -159,7 +159,8 @@ Use it for **large/risky** work only (§6: sync, saved state, data model, anythi
    - permanent tests for the agreed scenarios;
    - a `loopcheck` and Codex while it is a draft;
    - ChatGPT may review the PR once more.
-   - The PR states what was not verified, and the owner's manual device check comes after merge.
+   - The PR states what was not verified.
+   - Where possible, test it on a safe preview before merging, then smoke-test it after deployment.
 
 Boundaries:
 - No user data, tokens or secrets on GitHub.
