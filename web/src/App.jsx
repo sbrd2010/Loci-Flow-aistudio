@@ -1320,10 +1320,22 @@ export default function App() {
   const [reviewSaving, setReviewSaving] = useState(null); // null | "saving" | "slow"
   const [reviewNotice, setReviewNotice] = useState("");
   const [reviewToast, setReviewToast] = useState(null);
+  // One at a time here too: a second tap while one waits changes nothing
+  // (its Undo toast stays), and never clears the first one's "Saving…".
+  const reviewBusyRef = useRef(false);
+  useEffect(() => { reviewBusyRef.current = false; setReviewSaving(null); }, [user?.uid]);
+  // Where an outcome is said: in the dialog if it's open, else in a notice.
+  const reviewOpenRef = useRef(false);
+  reviewOpenRef.current = reviewOpen;
+  const tellReview = (text) => {
+    if (reviewOpenRef.current) setReviewNotice(text);
+    else setReviewToast({ text, at: Date.now() });
+  };
   const reviewCommand = async (cmd) => {
+    reviewBusyRef.current = true;
     setReviewSaving("saving");
     const slow = setTimeout(() => setReviewSaving(s => (s ? "slow" : s)), 10000);
-    try { return await runReviewCommand(cmd); } finally { clearTimeout(slow); setReviewSaving(null); }
+    try { return await runReviewCommand(cmd); } finally { clearTimeout(slow); setReviewSaving(null); reviewBusyRef.current = false; }
   };
   const finishReview = async (review, choices) => {
     // Drops are named for the sync's drop guard (three at once would write
@@ -1340,7 +1352,7 @@ export default function App() {
         .catch(() => {});
       return;
     }
-    if (reviewSaving) return;
+    if (reviewBusyRef.current) return;
     setReviewNotice("");
     const done = doneCommand(review, choices, planDay, Date.now(), safeUUID());
     const r = await reviewCommand(done);
@@ -1353,7 +1365,7 @@ export default function App() {
     } else if (r.outcome === "conflict" && r.reason === "already-reviewed") {
       setReviewToast({ text: "Already reviewed on another device.", at: Date.now() });
     } else if (r.outcome !== "busy") {
-      setReviewNotice({
+      tellReview({
         offline: "You're offline. Reviews need a connection, so nothing changed.",
         unknown: "The connection dropped, so Loci couldn't confirm the review. Check it when you're back online.",
         conflict: r.reason === "stale-period"
@@ -1363,8 +1375,9 @@ export default function App() {
     }
   };
   const undoReview = async (u) => {
+    if (demoMode) { setReviewUndo(null); savePayload(undoReviewOrSort(payloadRef.current, u.before, u.uuids, u.id)); return; }
+    if (reviewBusyRef.current) return;
     setReviewUndo(null);
-    if (demoMode) { savePayload(undoReviewOrSort(payloadRef.current, u.before, u.uuids, u.id)); return; }
     const r = await reviewCommand({ ...u.undo, now: Date.now() });
     const text = {
       accepted: "Review undone.",

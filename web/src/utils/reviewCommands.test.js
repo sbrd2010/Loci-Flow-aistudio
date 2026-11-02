@@ -1,6 +1,14 @@
-import { describe, expect, it } from "vitest";
-import { decideReviewCommand, doneCommand, reviewLanded, reviewOutcome, undoCommand } from "./reviewCommands";
+import { describe, expect, it, vi } from "vitest";
+
+const runTransactionMock = vi.fn();
+vi.mock("firebase/database", () => ({
+  runTransaction: (...args) => runTransactionMock(...args),
+  child: vi.fn(), onValue: vi.fn(), ref: vi.fn(),
+}));
+
+import { decideReviewCommand, doneCommand, reviewLanded, reviewOutcome, runReviewTransaction, undoCommand } from "./reviewCommands";
 import { pendingReviews } from "./horizonReview";
+import { joinRoute } from "../hooks/useDayRoute";
 
 // #643: review commands decided against the server's copy.
 const MON = "2026-11-02", SUN = "2026-11-01", NEXT_MON = "2026-11-09";
@@ -159,5 +167,38 @@ describe("reviewLanded after a later Done (ChatGPT review of #644, finding 2)", 
     // Only this Undo writes undoneOp: op-1, so a true here can't be a false success.
     expect(reviewLanded(redone.config.horizonReviews.week, undo)).toBe(true);
     expect(reviewLanded(redone.config.horizonReviews.week, { ...undo, op: "op-never-undone" })).toBe(false);
+  });
+});
+
+describe("loopcheck of #644", () => {
+  it("Undo still works after Today's route took the task in (unstamped dayMap fields, new orderIndex)", () => {
+    const before = detected();
+    const cmd = done(before, { a: "today" });
+    const after = write(before, cmd);
+    const undo = { ...undoCommand(cmd, before, after), now: 500 };
+    const routed = { ...after, tasks: joinRoute(after.tasks, MON, { stamp: false }) || after.tasks };
+    expect(routed.tasks.find(t => t.uuid === "a").dayMapDate).toBe(MON);
+    const back = write(routed, undo);
+    expect(back.tasks.find(t => t.uuid === "a")).toMatchObject({ horizonLevel: "week" });
+    expect(back.tasks.find(t => t.uuid === "a").dayMapDate).toBeUndefined();
+  });
+  it("Done stamps a moved task newer than the server's copy even when this clock is behind", () => {
+    const s = detected();
+    const next = write(s, doneCommand(review(s), { a: "drop" }, MON, 1, "op-1"));
+    expect(next.tasks.find(t => t.uuid === "a").lastUpdated).toBe(11);
+    expect(next.tasks.find(t => t.uuid === "b").lastUpdated).toBe(10); // kept: untouched
+  });
+  it("a command aborted by another write (\"set\") runs once more; a second abort fails as not written", async () => {
+    const s = detected();
+    const committed = { committed: true, snapshot: { val: () => write(s, done(s)) } };
+    runTransactionMock.mockReset();
+    runTransactionMock.mockImplementationOnce(async (_ref, fn) => { fn(s); throw new Error("set"); })
+      .mockImplementationOnce(async (_ref, fn) => { fn(s); return committed; });
+    const whenOnline = vi.fn();
+    expect((await runReviewTransaction({}, done(s), { whenOnline })).outcome).toBe("accepted");
+    runTransactionMock.mockReset();
+    runTransactionMock.mockImplementation(async () => { throw new Error("set"); });
+    await expect(runReviewTransaction({}, done(s), { whenOnline })).rejects.toThrow("set");
+    expect(whenOnline).not.toHaveBeenCalled();
   });
 });

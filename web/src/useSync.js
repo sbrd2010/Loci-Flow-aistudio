@@ -420,6 +420,7 @@ export function useSync(uid, email) {
     rtdbConnectedRef.current = false;
     infoConnectedRef.current = false;
     setOnline(false);
+    reviewCommandRef.current = false;
     hasReceivedFirstRtdbRef.current = false;
     localWriteBeforeFirstRtdbRef.current = false;
     // The base is restored below together with the payload cache it belongs
