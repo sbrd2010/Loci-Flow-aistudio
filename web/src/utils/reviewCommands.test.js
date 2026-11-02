@@ -9,10 +9,11 @@ vi.mock("firebase/database", () => ({
 import { decideReviewCommand, doneCommand, reviewLanded, reviewOutcome, runReviewTransaction, undoCommand } from "./reviewCommands";
 import { pendingReviews } from "./horizonReview";
 import { joinRoute } from "../hooks/useDayRoute";
+import { mergeLocalIntoServer, normalizePayload } from "./normalizePayload";
 
 // #643: review commands decided against the server's copy.
 const MON = "2026-11-02", SUN = "2026-11-01", NEXT_MON = "2026-11-09";
-const task = (uuid, extra = {}) => ({ uuid, title: `Sample ${uuid}`, horizonLevel: "week", isCompleted: false, isDeleted: false, isParked: false, lastUpdated: 10, ...extra });
+const task = (uuid, extra = {}) => ({ id: uuid, uuid, userId: "s@example.test", title: `Sample ${uuid}`, horizonLevel: "week", isCompleted: false, isDeleted: false, isParked: false, lastUpdated: 10, ...extra });
 const server = (extra = {}) => ({
   timestamp: 5,
   config: { lastUpdated: 5, horizonReviews: { week: { through: "2026-10-25" } } },
@@ -98,7 +99,7 @@ describe("undo", () => {
   });
   it("is all or nothing: a moved task changed since → conflict, nothing written", () => {
     const { after, undo } = setup({ a: "today", b: "drop" });
-    const changed = { ...after, tasks: after.tasks.map(t => (t.uuid === "a" ? { ...t, lastUpdated: 777 } : t)) };
+    const changed = { ...after, tasks: after.tasks.map(t => (t.uuid === "a" ? { ...t, horizonLevel: "month", lastUpdated: 777 } : t)) };
     expect(decideReviewCommand(changed, undo)).toEqual({ action: "conflict", reason: "changed-since" });
   });
   it("an edit since the Done that didn't bump lastUpdated still stops it", () => {
@@ -176,8 +177,12 @@ describe("loopcheck of #644", () => {
     const cmd = done(before, { a: "today" });
     const after = write(before, cmd);
     const undo = { ...undoCommand(cmd, before, after), now: 500 };
-    const routed = { ...after, tasks: joinRoute(after.tasks, MON, { stamp: false }) || after.tasks };
+    // As the app does it: the route takes it in locally, and the save merges
+    // that into the server's copy, which moves the task's clock (CI on #644).
+    const local = { ...after, tasks: joinRoute(after.tasks, MON, { stamp: false }) || after.tasks };
+    const routed = normalizePayload(mergeLocalIntoServer(after, local, after));
     expect(routed.tasks.find(t => t.uuid === "a").dayMapDate).toBe(MON);
+    expect(routed.tasks.find(t => t.uuid === "a").lastUpdated).toBeGreaterThan(after.tasks.find(t => t.uuid === "a").lastUpdated);
     const back = write(routed, undo);
     expect(back.tasks.find(t => t.uuid === "a")).toMatchObject({ horizonLevel: "week" });
     expect(back.tasks.find(t => t.uuid === "a").dayMapDate).toBeUndefined();

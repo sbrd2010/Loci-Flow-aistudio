@@ -18,10 +18,13 @@ import { configValuesEqual, normalizePayload } from "./normalizePayload";
 const num = (v) => (Number.isFinite(v) ? v : 0);
 const reviewsOf = (config) => (config?.horizonReviews && typeof config.horizonReviews === "object" ? config.horizonReviews : {});
 
-// Today's route takes a task in on its own (useDayRoute joinRoute: dayMap*
-// fields, a new orderIndex, not stamped). That isn't an edit, so Undo ignores
-// it, and the copy Undo writes back leaves the route, as undoPullFromWeek does.
-const withoutRoute = (task) => Object.fromEntries(Object.entries(task || {}).filter(([k]) => !k.startsWith("dayMap") && k !== "orderIndex"));
+// Today's route takes a task in on its own (useDayRoute joinRoute/reflow:
+// dayMap* fields and orderIndex), and the save that carries it moves the
+// task's clock (mergeTasksForWrite). Neither is an edit, so Undo compares
+// what's left; the copy Undo writes back leaves the route, as
+// undoPullFromWeek does. Any other change, stamped or not, stops it.
+const ignoredByUndo = (k) => k.startsWith("dayMap") || k === "orderIndex" || k === "lastUpdated";
+const editedFields = (task) => Object.fromEntries(Object.entries(task || {}).filter(([k]) => !ignoredByUndo(k)));
 
 // What `server` (a normalized payload) should become:
 // { action: "write", next } | { action: "noop" } | { action: "conflict", reason }.
@@ -71,7 +74,7 @@ export function decideReviewCommand(server, cmd) {
     const byUuid = new Map(tasks.map(t => [t.uuid, t]));
     const touched = Object.entries(cmd.after || {});
     const unchanged = rec.last?.op === cmd.op && rec.through === cmd.through && !rec.pending
-      && touched.every(([uuid, task]) => byUuid.has(uuid) && configValuesEqual(withoutRoute(byUuid.get(uuid)), withoutRoute(task)));
+      && touched.every(([uuid, task]) => byUuid.has(uuid) && configValuesEqual(editedFields(byUuid.get(uuid)), editedFields(task)));
     if (!unchanged) return { action: "conflict", reason: "changed-since" };
     const before = new Map((cmd.beforeTasks || []).map(t => [t.uuid, t]));
     return {

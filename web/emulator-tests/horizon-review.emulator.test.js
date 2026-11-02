@@ -7,6 +7,7 @@ import { initializeTestEnvironment } from "@firebase/rules-unit-testing";
 import { get, goOffline, goOnline, onValue, ref, runTransaction, set, update } from "firebase/database";
 import { mergeLocalIntoServer } from "../src/utils/normalizePayload";
 import { pendingReviews } from "../src/utils/horizonReview";
+import { joinRoute } from "../src/hooks/useDayRoute";
 import { doneCommand, runReviewTransaction, undoCommand, whenConnected } from "../src/utils/reviewCommands";
 
 let env;
@@ -119,16 +120,33 @@ describe("#643 S2–S6, S8: commands decided on the server's copy", () => {
     const cmd = done(s, { a: "today" });
     const r = await run(a, cmd);
     const undo = { ...undoCommand(cmd, r.before, r.after), now: 600 };
-    const doneLu = r.after.tasks.find(t => t.uuid === "a").lastUpdated;
-    await update(ref(a), { [`${path}/tasks/0/lastUpdated`]: 777 }); // another device touched it
+    const doneTitle = r.after.tasks.find(t => t.uuid === "a").title;
+    await update(ref(a), { [`${path}/tasks/0/title`]: "Renamed elsewhere" }); // another device edited it
     const r1 = await run(a, undo);
     const mid = await serverNow();
-    await update(ref(a), { [`${path}/tasks/0/lastUpdated`]: doneLu });
+    await update(ref(a), { [`${path}/tasks/0/title`]: doneTitle });
     const r2 = await run(a, undo);
     offA();
     expect([r1.outcome, r1.reason]).toEqual(["conflict", "changed-since"]);
     expect(mid.config.horizonReviews.week.pending).toBeFalsy();
     expect(r2.outcome).toBe("accepted");
+    const f = await serverNow();
+    expect(f.config.horizonReviews.week.pending.end).toBe(SUN);
+    expect(f.tasks.find(t => t.uuid === "a").horizonLevel).toBe("week");
+  });
+  it("S12: Undo after Today's route took the task in, through a real save (CI on #644)", async () => {
+    const s = await seedDetected();
+    const a = client(); const offA = await listen(a);
+    const cmd = done(s, { a: "today" });
+    const r = await run(a, cmd);
+    // The Today screen adds the task to the route and saves it.
+    const local = { ...r.after, tasks: joinRoute(r.after.tasks, MON, { stamp: false }) || r.after.tasks };
+    await runTransaction(ref(a, path), cur => mergeLocalIntoServer(cur, local, r.after), { applyLocally: false });
+    const routed = (await serverNow()).tasks.find(t => t.uuid === "a");
+    expect(routed.dayMapDate).toBe(MON);
+    const u = await run(a, { ...undoCommand(cmd, r.before, r.after), now: 700 });
+    offA();
+    expect(u.outcome).toBe("accepted");
     const f = await serverNow();
     expect(f.config.horizonReviews.week.pending.end).toBe(SUN);
     expect(f.tasks.find(t => t.uuid === "a").horizonLevel).toBe("week");
