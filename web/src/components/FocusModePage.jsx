@@ -698,6 +698,7 @@ export default function FocusModePage({
       {stuck && (
         <StuckSheet
           step={nextStep?.text}
+          hasSteps={steps.some(st => st.text)}
           onSmaller={(text) => { onSmallerStep?.(text); backToTimer(); }}
           onSplit={onSplit && (() => { setStuck(false); onSplit(); })}
           onSwitch={onSwitchNext && (() => { setStuck(false); onSwitchNext(); })}
