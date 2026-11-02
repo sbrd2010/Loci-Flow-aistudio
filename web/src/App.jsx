@@ -1342,6 +1342,9 @@ export default function App() {
     // nothing); a dropped task a session runs on ends that session first.
     const drops = review.tasks.filter(t => choices[t.uuid] === "drop").map(t => t.uuid);
     const endsSession = focusTimer.focusSessionActive && drops.includes(focusTimer.activeTask?.uuid);
+    // The session to end once the server confirms: by then it may have ended
+    // and another started, which must not be stopped (Codex review of #644).
+    const sessionId = focusTimer.focusSessionId;
     const closes = reviews.length <= 1;
     if (demoMode) {
       const before = payloadRef.current;
@@ -1357,7 +1360,8 @@ export default function App() {
     const done = doneCommand(review, choices, planDay, Date.now(), safeUUID());
     const r = await reviewCommand(done);
     if (r.outcome === "accepted") {
-      if (endsSession) handleEndFocusSession();
+      const t = focusTimerRef.current;
+      if (endsSession && t.focusSessionActive && t.focusSessionId === sessionId) handleEndFocusSession();
       if (closes) setReviewOpen(false);
       // Confirmed only after a dropped connection: no Undo (what it would restore isn't known).
       if (r.confirmedLate) setReviewToast({ text: `Reviewed: ${review.title}`, at: Date.now() });
