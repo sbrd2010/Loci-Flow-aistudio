@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { ref, onValue, set, update, runTransaction, get, goOffline, goOnline } from "firebase/database";
 import { db } from "./firebase";
 import { safeUUID } from "./utils/uuid";
-import { normalizePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious, configValuesEqual, mergeLocalIntoServer, clampConfigStringsForRules, sanitizeChatHistoryForRules, applyEditsSince } from "./utils/normalizePayload";
+import { normalizePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious, configValuesEqual, mergeLocalIntoServer, clampConfigStringsForRules, sanitizeChatHistoryForRules, applyEditsSince, COMMAND_OWNED_CONFIG_KEYS } from "./utils/normalizePayload";
+import { runReviewTransaction, whenConnected } from "./utils/reviewCommands";
 import { createResendPolicy } from "./utils/resendPolicy";
 import { activitySnapshotPath, activityMetaPath, activityEventPath, buildTodaySnapshot } from "./utils/activityLog";
 import { tombstonePath } from "./utils/deleteAccount";
@@ -250,6 +251,13 @@ export function useSync(uid, email) {
   const payloadUidRef = useRef(null);
   // Track if RTDB is physically connected (via .info/connected)
   const rtdbConnectedRef = useRef(false);
+  // The live .info/connected value. rtdbConnectedRef above stays true once
+  // connected, and connPhase also turns CONNECTED on a local event while
+  // offline, so neither says "connected now" (#643).
+  const infoConnectedRef = useRef(false);
+  const [online, setOnline] = useState(false);
+  // A review Done or Undo in flight (#643).
+  const reviewCommandRef = useRef(false);
   // A save failed because the connection dropped: send the latest payload again
   // when the connection comes back (#524). resendRef holds the rules for when
   // (utils/resendPolicy), resaveRef the function that sends.
@@ -410,6 +418,9 @@ export function useSync(uid, email) {
     if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
     rejectStaleWriteWaiters();
     rtdbConnectedRef.current = false;
+    infoConnectedRef.current = false;
+    setOnline(false);
+    reviewCommandRef.current = false;
     hasReceivedFirstRtdbRef.current = false;
     localWriteBeforeFirstRtdbRef.current = false;
     // The base is restored below together with the payload cache it belongs
@@ -473,6 +484,8 @@ export function useSync(uid, email) {
     const connRef = ref(db, ".info/connected");
     const unsubConn = onValue(connRef, (snap) => {
       const resendIn = resendRef.current.connection(snap.val() === true);
+      infoConnectedRef.current = snap.val() === true;
+      setOnline(snap.val() === true);
       if (snap.val() === true) {
         rtdbConnectedRef.current = true;
         setConnPhase(CONN.CONNECTED);
@@ -1071,6 +1084,8 @@ export function useSync(uid, email) {
     const resolvedPatch = {};
     const patchEntries = requestedPatch && typeof requestedPatch === "object" ? Object.entries(requestedPatch) : [];
     for (const [key, value] of patchEntries) {
+      // Written only by their own commands (runReviewCommand), never patched.
+      if (COMMAND_OWNED_CONFIG_KEYS.has(key)) continue;
       if (configValuesEqual(latestConfig[key], value)) continue;
       resolvedPatch[key] = value;
     }
@@ -1193,6 +1208,46 @@ export function useSync(uid, email) {
     return Promise.resolve(true);
   };
 
+  // #643: a horizon-review command (utils/reviewCommands), decided against
+  // what the server holds inside the root transaction, so a stale device can't
+  // recreate a finished review or overwrite another device's Done or Undo.
+  // Nothing is applied locally until the server commits it. Resolves (never
+  // rejects) with { outcome: "accepted" | "noop" | "conflict" | "offline" |
+  // "busy" | "unknown" | "failed", reason?, before?, after? } — before/after:
+  // the server state the command was decided on, and what it committed.
+  // Not cancellable, and a dropped connection waits for the next one to read
+  // what landed: the caller shows "not confirmed yet" while it waits, never a
+  // made-up outcome.
+  const runReviewCommand = async (cmd) => {
+    if (uidRef.current !== uid || !dbRefPath) return { outcome: "failed", reason: "no-account" };
+    // The listener has delivered, so the transaction starts from the server's
+    // data rather than null (an abort on null would then be a false failure).
+    if (!hasReceivedFirstRtdbRef.current) return { outcome: "failed", reason: "not-ready" };
+    if (!infoConnectedRef.current) return { outcome: "offline" };
+    // Done and Undo one at a time, so a retry can't race the first attempt.
+    // Detect is idempotent and may run alongside.
+    const exclusive = cmd.kind !== "detect";
+    if (exclusive && reviewCommandRef.current) return { outcome: "busy" };
+    if (exclusive) reviewCommandRef.current = true;
+    try {
+      // Edits still waiting in the debounce go first, so the command sees them.
+      if (timeoutRef.current) await flushNow();
+      if (uidRef.current !== uid) return { outcome: "failed", reason: "no-account" };
+      const ctx = { written: payloadRef.current, seq: deliverySeqRef.current, uid };
+      let result;
+      try {
+        result = await runReviewTransaction(ref(db, dbRefPath), cmd, { whenOnline: () => whenConnected(db) });
+      } catch (err) {
+        console.error(`Review command (${cmd.kind}) failed:`, err);
+        return { outcome: "failed", reason: String(err?.message || err) };
+      }
+      if (result.outcome === "accepted") absorbCommitted(result.after, ctx);
+      return result;
+    } finally {
+      if (exclusive) reviewCommandRef.current = false;
+    }
+  };
+
   // Remove this user's localStorage cache — call on logout so stale data
   // can't be loaded by the next person who opens the app on this device.
   const clearCache = () => {
@@ -1208,7 +1263,7 @@ export function useSync(uid, email) {
   const effectivePayload = gatePayloadToUid(payload, payloadUidRef.current, uid);
   const effectiveLoading = loading || (!!uid && payloadUidRef.current !== uid);
   return {
-    payload: effectivePayload, loading: effectiveLoading, error, connPhase, isSyncingFromCache, lastSyncedAt, syncWarning, accountDeleted,
+    payload: effectivePayload, loading: effectiveLoading, error, connPhase, online, isSyncingFromCache, lastSyncedAt, syncWarning, accountDeleted,
     savePayload, savePayloadAsync,
     saveSubPath, saveSubPathAsync,
     saveSubPaths, saveSubPathsAsync,
@@ -1218,6 +1273,6 @@ export function useSync(uid, email) {
     writeActivityEvents: (pathsToValues, retries) => writeActivityEvents(uid, pathsToValues, retries),
     writeActivityEventIfNewer: (event) => writeActivityEventIfNewer(uid, event),
     captureTodaySnapshotIfNeeded: (tasks, windows) => captureTodaySnapshotIfNeeded(uid, tasks, windows),
-    flushNow, clearCache,
+    flushNow, clearCache, runReviewCommand,
   };
 }

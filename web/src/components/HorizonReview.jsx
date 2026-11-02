@@ -9,7 +9,9 @@ import { IconX } from "./ui/icons";
 //   period (default) · Today · Drop.
 // sort: { tasks, horizons } — each old Work task: a horizon (default This
 //   week) or Drop, in a compact picker.
-export default function HorizonReview({ review = null, sort = null, onDone, onClose }) {
+// saving (review only, #643): null, "saving", or "slow" (still unconfirmed
+// after 10 s) — Done waits for the server; notice: why the last Done didn't save.
+export default function HorizonReview({ review = null, sort = null, saving = null, notice = "", onDone, onClose }) {
   const tasks = (review || sort).tasks;
   const first = review ? "keep" : (sort.horizons.some(h => h.id === "week") ? "week" : sort.horizons[0]?.id);
   const [choices, setChoices] = useState(() => Object.fromEntries(tasks.map(t => [t.uuid, first])));
@@ -25,6 +27,8 @@ export default function HorizonReview({ review = null, sort = null, onDone, onCl
   }, [onClose]);
 
   const set = (uuid, to) => setChoices(c => ({ ...c, [uuid]: to }));
+  // A task that joined the list after it opened (another device) starts at the default.
+  const choiceOf = (uuid) => choices[uuid] ?? first;
   const title = review ? review.title : "Work · older";
   const sub = review
     ? `${tasks.length} ${tasks.length === 1 ? "task" : "tasks"} left. Keep each for the new period, move it to Today, or drop it.`
@@ -46,13 +50,13 @@ export default function HorizonReview({ review = null, sort = null, onDone, onCl
               {review ? (
                 <span className="eh-seg" role="radiogroup" aria-label={`Where ${t.title} goes`}>
                   {options.map(o => (
-                    <button key={o.to} type="button" role="radio" className="eh-seg-opt" aria-checked={choices[t.uuid] === o.to} onClick={() => set(t.uuid, o.to)}>
+                    <button key={o.to} type="button" role="radio" className="eh-seg-opt" aria-checked={choiceOf(t.uuid) === o.to} onClick={() => set(t.uuid, o.to)}>
                       {o.label}
                     </button>
                   ))}
                 </span>
               ) : (
-                <select className="eh-input rv-pick" aria-label={`Where ${t.title} goes`} value={choices[t.uuid]} onChange={e => set(t.uuid, e.target.value)}>
+                <select className="eh-input rv-pick" aria-label={`Where ${t.title} goes`} value={choiceOf(t.uuid)} onChange={e => set(t.uuid, e.target.value)}>
                   {sort.horizons.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
                   <option value="drop">Drop</option>
                 </select>
@@ -60,8 +64,15 @@ export default function HorizonReview({ review = null, sort = null, onDone, onCl
             </li>
           ))}
         </ul>
+        {review && (
+          <p className="eh-note rv-status" role="status" aria-live="polite">
+            {saving === "slow" ? "Waiting for connection. Not confirmed yet." : notice}
+          </p>
+        )}
         <div className="eh-actions">
-          <button type="button" className="eh-btn is-primary" onClick={() => onDone(choices)}>Done</button>
+          <button type="button" className="eh-btn is-primary" disabled={!!saving} onClick={() => onDone(Object.fromEntries(tasks.map(t => [t.uuid, choiceOf(t.uuid)])))}>
+            {saving ? "Saving…" : "Done"}
+          </button>
           <button type="button" className="eh-btn" onClick={onClose}>Later</button>
         </div>
       </div>
