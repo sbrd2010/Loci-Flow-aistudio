@@ -56,6 +56,16 @@ describe("#646 Coach changes through the merging save", () => {
     expect(byId(f, "c").horizonLevel).toBe("week");
   });
 
+  it("R1, negative control: the old blind tasks update() from the sleeping laptop loses the completion", async () => {
+    const { a, b, base, off } = await twoDevices();
+    goOffline(b);
+    await save(a, { ...base, tasks: base.tasks.map(t => (t.uuid === "a" ? { ...t, isCompleted: true, lastUpdated: 50 } : t)), timestamp: 50 }, base);
+    const moved = moveTaskToHorizon(base.tasks, "c", "week", 60);
+    const pending = update(ref(b), { [`${path}/tasks`]: moved.tasks, [`${path}/timestamp`]: 60 }); // CoachTab before #646
+    goOnline(b); await pending; off();
+    expect(byId(await server(), "a").isCompleted).toBe(false);
+  });
+
   it("Move + quick Undo in one save, while another device completes a task", async () => {
     const { a, b, base, off } = await twoDevices();
     await save(b, { ...base, tasks: base.tasks.map(t => (t.uuid === "a" ? { ...t, isCompleted: true, lastUpdated: 50 } : t)), timestamp: 50 }, base);
@@ -96,9 +106,18 @@ describe("#646 Coach changes through the merging save", () => {
     const thought = { id: "t-1", text: "A sample thought", createdAt: 70 };
     await save(b, { ...afterMove, brainDump: [thought], brainDumpUpdatedAt: 70, timestamp: 70 }, afterMove);
     const latest = await server();
-    // The laptop's Undo, built from its latest payload (saveCoachChanges reads refs).
     const back = latest.tasks.map(t => (t.uuid === "c" ? { ...t, horizonLevel: "today", orderIndex: 0, lastUpdated: 80 } : t));
-    await save(a, { ...latest, tasks: back, timestamp: 80 }, latest); off();
+    // The old shape: the Undo closure's render-time payload (from the tap,
+    // before the thought), sent with the laptop's current base (which holds
+    // it): the merge reads the missing thought as deleted here.
+    await save(a, { ...afterMove, tasks: back, timestamp: 80 }, latest);
+    expect((await server()).brainDump || []).toEqual([]);
+    // Put the thought back, then the fixed shape: the latest payload
+    // (saveCoachChanges reads payloadRef) keeps it.
+    const reset = await server();
+    await save(b, { ...reset, brainDump: [thought], brainDumpUpdatedAt: 90, timestamp: 90 }, reset);
+    const now = await server();
+    await save(a, { ...now, tasks: now.tasks.map(t => (t.uuid === "c" ? { ...t, horizonLevel: "today", lastUpdated: 95 } : t)), timestamp: 95 }, now); off();
     const f = await server();
     expect(byId(f, "c").horizonLevel).toBe("today");
     expect((f.brainDump || []).map(i => i.id)).toEqual(["t-1"]);
