@@ -87,6 +87,23 @@ describe("#646 Coach changes through the merging save", () => {
     expect(byId(f, "a").title).toBe("Renamed elsewhere");
   });
 
+  it("an Undo made minutes after its tap keeps a Mind Box thought another device added meanwhile (loopcheck of #646)", async () => {
+    const { a, b, base, off } = await twoDevices();
+    const moved = moveTaskToHorizon(base.tasks, "c", "week", 60);
+    await save(a, { ...base, tasks: moved.tasks, timestamp: 60 }, base);
+    const afterMove = await server();
+    // The phone adds a thought; the laptop receives it (its local copy and base hold it).
+    const thought = { id: "t-1", text: "A sample thought", createdAt: 70 };
+    await save(b, { ...afterMove, brainDump: [thought], brainDumpUpdatedAt: 70, timestamp: 70 }, afterMove);
+    const latest = await server();
+    // The laptop's Undo, built from its latest payload (saveCoachChanges reads refs).
+    const back = latest.tasks.map(t => (t.uuid === "c" ? { ...t, horizonLevel: "today", orderIndex: 0, lastUpdated: 80 } : t));
+    await save(a, { ...latest, tasks: back, timestamp: 80 }, latest); off();
+    const f = await server();
+    expect(byId(f, "c").horizonLevel).toBe("today");
+    expect((f.brainDump || []).map(i => i.id)).toEqual(["t-1"]);
+  });
+
   it("an action alongside another device's chat message: the task change and the message are both kept", async () => {
     const { a, b, base, off } = await twoDevices();
     await update(ref(b), { [`${path}/chatHistory`]: [...base.chatHistory, { text: "Another sample question", isUser: true, at: 9 }] });
@@ -95,9 +112,10 @@ describe("#646 Coach changes through the merging save", () => {
     const f = await server();
     expect(byId(f, "c").horizonLevel).toBe("week");
     expect(f.chatHistory.some(m => m.text === "Another sample question")).toBe(true);
-    // Known, accepted (#646): both chat lists changed, so the server's list
-    // wins and the button reads "proposed" again; a second tap is safe
-    // (coachActions.test.js, "a reverted 'proposed' button").
-    expect(f.chatHistory.find(m => m.actions).actions[0].state).toBe("proposed");
+    // Not asserted: the button's state. Today both chat lists changed, so the
+    // server's list wins and it reads "proposed" again — accepted in #646, as
+    // a second tap is safe (coachActions.test.js, "a reverted 'proposed'
+    // button"). A later chat-merge fix may keep "applied"; both are fine here.
+    expect(["proposed", "applied"]).toContain(f.chatHistory.find(m => m.actions).actions[0].state);
   });
 });

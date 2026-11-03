@@ -243,10 +243,16 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
   // #646: a Coach change to tasks goes through the merging full save
   // (savePayloadAsync → writeWithRetry), as every other task edit does. A
   // whole-array child write from a device that went stale after syncing put
-  // back other devices' changes. `changes` (tasks, contributions, the reply's
-  // button state) ride on the latest local payload, so nothing newer is lost.
+  // back other devices' changes to other tasks. `changes` (tasks,
+  // contributions, the reply's button state) ride on the latest local
+  // payload, read through refs: an Undo can run minutes after the tap that
+  // made it, and a payload from that render would put back, say, the Mind
+  // Box as it was then. A change to the same task on two devices still
+  // follows the merge's usual rule (the newer task wins).
+  const payloadRef = useRef(payload);
+  payloadRef.current = payload;
   const saveCoachChanges = (changes, options) => savePayloadAsync({
-    ...payload,
+    ...payloadRef.current,
     tasks: tasksRef.current,
     config: configRef.current,
     contributions: contributionsRef.current,
