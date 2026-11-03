@@ -112,6 +112,11 @@ describe("sign-out safety wiring (#650)", () => {
     expect(body).toMatch(/rtdbFlushNowDetailed\(\{ confirm: true \}\)/);
     expect(body).toMatch(/catch \(err\) \{\s*setSignOutReason\(\{ reason: `auth-signout:\$\{safeErrorCode\(err\)\}`/);
   });
+  it("a late outcome is applied only to its own attempt, never a retry's", () => {
+    expect(body).toMatch(/const attempt = \+\+signOutAttemptRef\.current;/);
+    expect(body).toMatch(/prev\?\.attempt === attempt && prev\.reason\?\.startsWith\("timeout-"\)/);
+    expect(body).toMatch(/const detail = \{ attempt, reason: saved\.reason/);
+  });
   it("flushNow still resolves a plain boolean for its other callers", () => {
     expect(sync).toMatch(/const flushNow = \(options\) => flushNowDetailed\(options\)\.then\(r => r\.ok\);/);
   });

@@ -74,6 +74,9 @@ export default function App() {
   // late?, lateMs? } (late: how a timed-out save settled afterwards).
   const [signOutReason, setSignOutReason] = useState(null);
   const onlineRef = useRef(false);
+  // Each sign-out attempt's number: a late outcome is shown only on its own
+  // attempt, never on a retry's (Codex review of #651).
+  const signOutAttemptRef = useRef(0);
   const [authLoading, setAuthLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("today");
   const [pendingCheckinSlot, setPendingCheckinSlot] = useState(null);
@@ -1168,6 +1171,7 @@ export default function App() {
     // wait leaves an offline user able to reconnect, export, or explicitly
     // discard instead of silently losing work or waiting indefinitely.
     setSignOutReason(null);
+    const attempt = ++signOutAttemptRef.current;
     if (!discardUnsaved) {
       // Demo mode has nothing on a server to confirm; a signed-in account
       // without the save is never treated as saved.
@@ -1176,14 +1180,14 @@ export default function App() {
         : rtdbFlushNowDetailed ? rtdbFlushNowDetailed({ confirm: true }) : Promise.resolve({ ok: false, reason: "unavailable" })), {
         onLate: (late) => {
           console.warn(`[Loci sign-out] the timed-out save then ended: ${late.reason} after ${late.ms} ms`);
-          setSignOutReason(prev => (prev?.reason?.startsWith("timeout-") ? { ...prev, late: late.reason, lateMs: late.ms } : prev));
+          setSignOutReason(prev => (prev?.attempt === attempt && prev.reason?.startsWith("timeout-") ? { ...prev, late: late.reason, lateMs: late.ms } : prev));
         },
       });
       if (auth.currentUser?.uid !== forUid) { setSignOutState(null); return; }
       if (!saved.ok) {
         // Shown under the failure (a short code, no personal data), so a
         // failure on a phone can be read off the screen (#650).
-        const detail = { reason: saved.reason, ms: saved.ms, online: onlineRef.current };
+        const detail = { attempt, reason: saved.reason, ms: saved.ms, online: onlineRef.current };
         console.warn(`[Loci sign-out] not confirmed: ${detail.reason} after ${detail.ms} ms, ${detail.online ? "online" : "offline"}`);
         setSignOutReason(detail);
         setSignOutState("failed");
