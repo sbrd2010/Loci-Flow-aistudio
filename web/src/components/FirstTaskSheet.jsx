@@ -1,0 +1,94 @@
+import React, { useEffect, useRef, useState } from "react";
+import { isEveningGuardBlocked } from "../utils/eveningGuard";
+import { safeUUID } from "../utils/uuid";
+import { getFocusWindows } from "../utils/focusWindows";
+import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
+import "../styles/firstRun.css";
+
+// #653: the guided first task, one question per screen: the task, then its
+// smallest first step (optional: "already small" or "not sure yet"). It saves
+// a Today task in the same shape and the same way as AddTaskDialog does.
+export default function FirstTaskSheet({ email, payload, savePayloadAsync, uid, writeActivityEvents, onAdded, onSkip }) {
+  const [phase, setPhase] = useState("title");
+  const [title, setTitle] = useState("");
+  const [step, setStep] = useState("");
+  const [error, setError] = useState("");
+  const inputRef = useRef(null);
+  useEffect(() => { inputRef.current?.focus(); }, [phase]);
+
+  const add = (concreteStep) => {
+    if (isEveningGuardBlocked(payload.config, new Date())) {
+      setError("Evening Guard is on: no new tasks at or after 8 PM. Rest now.");
+      return;
+    }
+    const now = Date.now();
+    const task = {
+      id: now,
+      userId: email,
+      uuid: safeUUID(),
+      title: title.trim(),
+      ...(concreteStep ? { concreteStep } : {}),
+      horizonLevel: "today",
+      priority: "P3",
+      category: "Personal",
+      frontId: null,
+      deadlineTimestamp: null,
+      reminderAt: null,
+      isCompleted: false,
+      isParked: false,
+      isNowFocus: false,
+      orderIndex: (payload.tasks || []).filter(t => t.horizonLevel === "today" && !t.isDeleted).length,
+      dateCompletedString: null,
+      isDeleted: false,
+      lastUpdated: now,
+      subSteps: [],
+    };
+    const event = buildTaskMutationEvent("task_created", task, { windows: getFocusWindows(payload.config || {}) });
+    savePayloadAsync({ ...payload, tasks: [...(payload.tasks || []), task] })
+      .then(() => writeActivityEvents?.(eventPatch(uid, event)))
+      .catch(() => {});
+    onAdded(task.uuid);
+  };
+
+  const onKeyDown = (e) => {
+    if (e.key === "Escape") { e.stopPropagation(); onSkip(); }
+  };
+
+  return (
+    <div className="frs-backdrop">
+      <section className="frs" role="dialog" aria-modal="true" aria-labelledby="frs-title" onKeyDown={onKeyDown}>
+        <span className="frs-kicker">{phase === "title" ? "YOUR FIRST TASK · 1 OF 3" : "YOUR FIRST TASK · 2 OF 3"}</span>
+        {phase === "title" ? (
+          <form className="frs-body" onSubmit={e => { e.preventDefault(); if (title.trim()) setPhase("step"); }}>
+            <h2 id="frs-title" className="frs-title">Write down one real thing</h2>
+            <label className="frw-label" htmlFor="frs-task">What do you want to do?</label>
+            <input id="frs-task" ref={inputRef} className="frw-input" value={title} maxLength={1000}
+              placeholder="e.g. Reply to the landlord" onChange={e => setTitle(e.target.value)} />
+            <p className="frs-hint">Your words. Something you’d like to get done soon.</p>
+            <div className="frs-actions">
+              <button type="button" className="frw-link" onClick={onSkip}>Skip guide</button>
+              <button type="submit" className="frw-primary" disabled={!title.trim()}>Next</button>
+            </div>
+          </form>
+        ) : (
+          <form className="frs-body" onSubmit={e => { e.preventDefault(); if (step.trim()) add(step.trim()); }}>
+            <h2 id="frs-title" className="frs-title">What’s the smallest thing you could do first?</h2>
+            <p className="frs-for">For: <strong>{title.trim()}</strong></p>
+            <label className="frw-label" htmlFor="frs-step">First step</label>
+            <input id="frs-step" ref={inputRef} className="frw-input" value={step} maxLength={300}
+              placeholder="e.g. Open the lease email" onChange={e => setStep(e.target.value)} />
+            <div className="frs-chips">
+              <button type="button" className="frs-chip" onClick={() => add("")}>This is already small</button>
+              <button type="button" className="frs-chip" onClick={() => add("")}>Not sure yet</button>
+            </div>
+            {error && <p className="frs-error" role="alert">{error}</p>}
+            <div className="frs-actions">
+              <button type="button" className="frw-link" onClick={() => setPhase("title")}>Back</button>
+              <button type="submit" className="frw-primary" disabled={!step.trim()}>Add task</button>
+            </div>
+          </form>
+        )}
+      </section>
+    </div>
+  );
+}

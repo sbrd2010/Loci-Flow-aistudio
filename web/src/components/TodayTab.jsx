@@ -1979,6 +1979,7 @@ export default function TodayTab({
            rather than leaving the screen empty. */}
       <section
         ref={sheetRef}
+        data-guide-id="upnext"
         className={`tasks-section today-list${pinnedFocusTask ? " is-sheet" : ""}${sheetFull ? " is-full" : ""}`}
         aria-label={`Today's list, ${listOpenRows} ${listOpenRows === 1 ? "task" : "tasks"}`}
         // Conditional INLINE, not via a class: an inline display beats any
@@ -2026,7 +2027,7 @@ export default function TodayTab({
               </button>
             )}
             {/* Q59: List | Day map, two views of one plan. */}
-            <span className="today-view-switch" role="group" aria-label="View">
+            <span className="today-view-switch" data-guide-id="switch" role="group" aria-label="View">
               <button type="button" className="today-view-opt" aria-pressed={listView === "list"} onClick={() => setListView("list")}>List</button>
               <button type="button" className="today-view-opt" aria-pressed={listView === "daymap"} onClick={() => setListView("daymap")}>Day map</button>
             </span>

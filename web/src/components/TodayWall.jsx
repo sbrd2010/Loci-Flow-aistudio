@@ -113,6 +113,7 @@ function StartButton({ task, blockMinutes, startChoice, onChooseStart, onStartFo
       <button
         type="button"
         className="wall-primary"
+        data-guide-id="start"
         onClick={onStartFocus}
         onKeyDown={resuming ? undefined : (e) => { if (e.key === "ArrowDown") { e.preventDefault(); setOpen(true); } }}
       >
@@ -413,7 +414,7 @@ export default function TodayWall({
             {links}
           </div>
         ) : picks.length > 0 ? (
-          <div className="wall-empty wall-pick">
+          <div className="wall-empty wall-pick" data-guide-id="pick">
             <h2 className="wall-empty-title">Pick what to do now</h2>
             <ul className="wall-pick-list">
               {picks.map(t => (
@@ -480,7 +481,7 @@ export default function TodayWall({
     <section className={`today-wall${peekOpen ? " is-open" : ""}${quiet ? " has-quiet" : ""}`}>
       {top}
 
-      <div className="wall-hero">
+      <div className="wall-hero" data-guide-id="now">
         {/* 75a, 75c: the mantra, above the kicker. */}
         <p className="wall-mantra" data-flip="mantra">ONE task at a time.</p>
         <div className="wall-kicker-row" data-flip="kicker">
@@ -629,6 +630,7 @@ export default function TodayWall({
           <button
             type="button"
             className="wall-peek"
+            data-guide-id="upnext"
             onClick={onTogglePeek}
             aria-expanded={peekOpen}
           >

@@ -21,6 +21,7 @@ export default function Header({ activeTab, onTabSelect, onGoHome, dayClock, onD
               key={id}
               type="button"
               className={`shell-tab${isActive ? " is-active" : ""}`}
+              data-guide-id={`nav-${id}`}
               onClick={() => onTabSelect(id)}
               aria-current={isActive ? "page" : undefined}
             >

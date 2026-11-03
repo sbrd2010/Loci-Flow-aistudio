@@ -1821,7 +1821,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
   }, [coachTab]);
 
   return (
-    <div className="coach-page" ref={pageRef}>
+    <div className="coach-page" data-guide-id="coach" ref={pageRef}>
       {confirmDialog && <ConfirmDialog {...confirmDialog} />}
 
       {/* Q51: Coach is two tabs, Chat (first) and Review. */}

@@ -1,0 +1,233 @@
+/* #653: first-run welcome, first-task sheet and the guide card. App tokens
+   only (app.css), so light, dark and system themes all follow. */
+
+/* — Welcome and question: full screen, not a card on a scrim — */
+.frw {
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--ink);
+  display: flex;
+  justify-content: center;
+  padding: 0 24px;
+  box-sizing: border-box;
+}
+.frw-inner {
+  width: 100%;
+  max-width: 560px;
+  padding: clamp(56px, 12vh, 112px) 0 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.frw-brand { font-family: var(--font-serif); font-size: 24px; font-weight: 600; color: var(--accent); }
+.frw-kicker, .frs-kicker, .frg-kicker {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--gold-label);
+}
+.frw-title { margin: 0; font-family: var(--font-serif); font-weight: 500; font-size: clamp(32px, 5vw, 44px); line-height: 1.12; }
+.frw-title-q { font-size: clamp(26px, 4vw, 34px); line-height: 1.2; }
+.frw-lead { margin: 0 0 8px; font-size: 17px; line-height: 1.55; color: var(--ink-2); }
+.frw-label { font-size: 14px; font-weight: 700; color: var(--ink-2); }
+.frw-optional { font-weight: 500; }
+.frw-input {
+  min-height: 50px;
+  padding: 0 14px;
+  border: 1px solid var(--btn-line);
+  border-radius: 12px;
+  background: var(--field);
+  color: var(--ink);
+  font: 500 16px var(--font-sans);
+  box-sizing: border-box;
+  width: 100%;
+}
+.frw-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.frw-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: 16px; }
+.frw-primary {
+  min-height: 52px;
+  padding: 0 28px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font: 700 16px var(--font-sans);
+  cursor: pointer;
+}
+.frw-primary:disabled { opacity: 0.45; cursor: default; }
+.frw-link {
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font: 600 15px var(--font-sans);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.frw-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.frw-option {
+  min-height: 56px;
+  padding: 0 16px;
+  text-align: left;
+  border: 1px solid var(--btn-line);
+  border-radius: 14px;
+  background: var(--field);
+  color: var(--ink);
+  font: 600 15px var(--font-sans);
+  cursor: pointer;
+}
+.frw-option.is-on { border: 1.5px solid var(--accent); background: var(--accent-tint); color: var(--accent); }
+.frw-echo { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--accent-tint); font-size: 15px; line-height: 1.5; }
+
+/* — First-task sheet: bottom sheet on phones, a dialog on wide screens — */
+.frs-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 149;
+  background: rgba(15, 31, 22, 0.24);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.frs {
+  width: 100%;
+  max-width: 540px;
+  box-sizing: border-box;
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 22px 22px 0 0;
+  padding: 22px 20px max(24px, env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+@media (min-width: 840px) {
+  .frs-backdrop { align-items: flex-start; padding-top: 12vh; }
+  .frs { border-radius: 20px; padding: 28px; }
+}
+.frs-body { display: flex; flex-direction: column; gap: 10px; }
+.frs-title { margin: 0 0 4px; font-family: var(--font-serif); font-weight: 500; font-size: 26px; line-height: 1.25; }
+.frs-hint, .frs-for { margin: 0; font-size: 14px; color: var(--ink-2); }
+.frs-for strong { color: var(--ink); }
+.frs-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.frs-chip {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--btn-line);
+  border-radius: 22px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font: 600 14px var(--font-sans);
+  cursor: pointer;
+}
+.frs-error { margin: 0; color: var(--coral); font-size: 14px; }
+.frs-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+
+/* — The guide card — */
+.frg {
+  position: fixed;
+  z-index: 140;
+  left: 10px;
+  right: 10px;
+  bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  max-height: 60vh;
+  overflow-y: auto;
+  box-sizing: border-box;
+  background: var(--gold-band);
+  color: var(--ink);
+  border: 1px solid var(--gold-track);
+  border-radius: 16px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 6px 20px rgba(15, 31, 22, 0.10);
+}
+@media (min-width: 1024px) {
+  .frg { left: auto; right: 24px; bottom: 24px; width: 400px; }
+}
+/* An Undo toast (e.g. after Do this now) takes the same spot: the card moves
+   up while it shows, so neither covers the other. */
+body:has(.undo-toast) .frg { bottom: calc(140px + env(safe-area-inset-bottom, 0px)); }
+@media (min-width: 1024px) {
+  body:has(.undo-toast) .frg { bottom: 92px; }
+}
+.frg-head, .frg-actions { display: flex; align-items: center; gap: 8px; }
+.frg-head { justify-content: space-between; }
+.frg-spacer { flex: 1; }
+.frg-title { font-size: 16px; }
+.frg-text, .frg-ok { margin: 4px 0 0; font-size: 14px; line-height: 1.45; }
+.frg-ok { font-weight: 700; }
+.frg-skip, .frg-link {
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--gold-label);
+  font: 600 13px var(--font-sans);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.frg-back, .frg-next {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 12px;
+  font: 700 14px var(--font-sans);
+  cursor: pointer;
+}
+.frg-back { border: 1px solid var(--gold-label); background: transparent; color: var(--ink); }
+.frg-next { border: 1px solid transparent; background: var(--ink); color: var(--bg); }
+.frg-coach { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.frg-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.frg-chip {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--gold-label);
+  border-radius: 18px;
+  background: transparent;
+  color: var(--ink);
+  font: 600 13px var(--font-sans);
+  cursor: pointer;
+}
+.frg-chip.is-on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.frg-example { margin: 0; padding: 10px; border-radius: 12px; background: var(--surface); display: flex; flex-direction: column; gap: 8px; }
+.frg-example-cap { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: var(--gold-label); }
+.frg-bubble { margin: 0; padding: 8px 10px; border-radius: 12px; font-size: 14px; line-height: 1.45; max-width: 90%; }
+.frg-bubble.is-you { align-self: flex-end; background: var(--accent-tint); }
+.frg-bubble.is-coach { background: var(--bg); }
+.frg-example-action { margin: 0; font-size: 13px; color: var(--ink-2); }
+.frg-note { flex-direction: row; align-items: center; background: var(--surface); border-color: var(--line); }
+.frg-note-text { margin: 0; flex: 1; font-size: 14px; color: var(--ink-2); }
+.frg-close {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+/* — The ring on the real control the card names (data-guide-id) — */
+body[data-guide~="now"] [data-guide-id="now"],
+body[data-guide~="start"] [data-guide-id="start"],
+body[data-guide~="upnext"] [data-guide-id="upnext"],
+body[data-guide~="switch"] [data-guide-id="switch"],
+body[data-guide~="pick"] [data-guide-id="pick"],
+body[data-guide~="donow"] [data-guide-id="donow"],
+body[data-guide~="braindump"] [data-guide-id="braindump"],
+body[data-guide~="plan"] [data-guide-id="plan"],
+body[data-guide~="coach"] [data-guide-id="coach"],
+body[data-guide~="nav-today"] [data-guide-id="nav-today"],
+body[data-guide~="nav-roadmap"] [data-guide-id="nav-roadmap"],
+body[data-guide~="nav-mindbox"] [data-guide-id="nav-mindbox"],
+body[data-guide~="nav-coach"] [data-guide-id="nav-coach"] {
+  outline: 2px solid var(--gold);
+  outline-offset: 4px;
+  border-radius: 14px;
+}
