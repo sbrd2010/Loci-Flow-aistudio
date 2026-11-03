@@ -8,6 +8,32 @@ import { createResendPolicy } from "./utils/resendPolicy";
 import { activitySnapshotPath, activityMetaPath, activityEventPath, buildTodaySnapshot } from "./utils/activityLog";
 import { tombstonePath } from "./utils/deleteAccount";
 
+// A brand-new account's three starter tasks (fields beyond the defaults set at
+// creation). Their steps name the app's own buttons, word for word (#645):
+// "Do this now" makes a task the Now task; "Pin to top" is something else.
+export const STARTER_TASKS = [
+  {
+    title: "Write down the one thing that matters most today",
+    concreteStep: "Add it as a task, then open it and tap 'Do this now'.",
+    priority: "P1",
+    category: "Personal",
+    timeEstimateMinutes: 10,
+  },
+  {
+    title: "Try one 25-minute focus session",
+    concreteStep: "Tap 'Start focus' on your Now task.",
+    priority: "P2",
+    category: "Work",
+    timeEstimateMinutes: 25,
+  },
+  {
+    title: "Take a short walk to reset",
+    concreteStep: "Put on shoes and walk 10 minutes",
+    priority: "P4",
+    category: "Health",
+  },
+];
+
 // Connection phase exposed to UI: "connecting" | "connected" | "offline" | "error"
 // This lets the app show specific messages at each stage instead of just "loading".
 // Pure helper: returns payload only if it belongs to the current uid.
@@ -608,26 +634,7 @@ export function useSync(uid, email) {
           const defaultPayload = {
             userId: email,
             tasks: [
-              starterTask(0, {
-                title: "Write down the one thing that matters most today",
-                concreteStep: "Add it as a task, then pin it",
-                priority: "P1",
-                category: "Personal",
-                timeEstimateMinutes: 10,
-              }),
-              starterTask(1, {
-                title: "Try one 25-minute focus session",
-                concreteStep: "Pin a task and start the timer",
-                priority: "P2",
-                category: "Work",
-                timeEstimateMinutes: 25,
-              }),
-              starterTask(2, {
-                title: "Take a short walk to reset",
-                concreteStep: "Put on shoes and walk 10 minutes",
-                priority: "P4",
-                category: "Health",
-              }),
+              ...STARTER_TASKS.map((fields, index) => starterTask(index, fields)),
             ],
             config: {
               userId: email,

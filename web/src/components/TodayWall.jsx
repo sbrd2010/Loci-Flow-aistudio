@@ -556,7 +556,7 @@ export default function TodayWall({
           )}
           {timerLabel && live && !live.blockEnd?.phase && (
             <button type="button" className="wall-action" onClick={live.onPauseResume}>
-              {live.running ? "Pause" : "Resume"}
+              {live.running ? "Pause" : "Resume timer"}
             </button>
           )}
           <button type="button" className="wall-action" onClick={onMarkDone}>

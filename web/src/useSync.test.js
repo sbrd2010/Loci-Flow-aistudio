@@ -21,7 +21,7 @@ vi.mock("./firebase", () => ({
   auth: { currentUser: null },
 }));
 
-import { gatePayloadToUid, writeActivityEvents, writeActivityEventIfNewer, captureTodaySnapshotIfNeeded, writeWithRetry, readCache, writeCache } from "./useSync";
+import { gatePayloadToUid, writeActivityEvents, writeActivityEventIfNewer, captureTodaySnapshotIfNeeded, writeWithRetry, readCache, writeCache, STARTER_TASKS } from "./useSync";
 
 // Tests for the uid-isolation gate that prevents a previous user's payload from
 // being visible to App-level effects during the render cycle that follows a uid change.
@@ -487,5 +487,24 @@ describe("writeActivityEventIfNewer", () => {
     const result = await writeActivityEventIfNewer("uid1", ev(1500));
     expect(result.ok).toBe(false);
     expect(result.reason).toBe("write-failed");
+  });
+});
+
+// #645: a new account's starter steps name the app's own buttons. "Pin" was
+// wrong: no Today button says it, and "Pin to top" does something else.
+describe("STARTER_TASKS", () => {
+  it("tells a new user exactly which buttons to tap", async () => {
+    expect(STARTER_TASKS.map(t => t.concreteStep)).toEqual([
+      "Add it as a task, then open it and tap 'Do this now'.",
+      "Tap 'Start focus' on your Now task.",
+      "Put on shoes and walk 10 minutes",
+    ]);
+    expect(STARTER_TASKS.some(t => /\bpin\b/i.test(t.concreteStep))).toBe(false);
+  });
+  it("names buttons that exist", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = (f) => readFileSync(new URL(f, import.meta.url), "utf8");
+    expect(src("./components/TaskDetail.jsx")).toContain("Do this now");
+    expect(src("./components/TodayWall.jsx")).toContain("Start focus");
   });
 });
