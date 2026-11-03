@@ -428,3 +428,7 @@
   .set-wide { grid-template-columns: 320px minmax(0, 1fr); }
   .set-pane { padding: 8px 0 48px 56px; }
 }
+
+/* #650: why a sign-out's save didn't confirm — quiet, readable on a phone. */
+.signout-reason { margin: 6px 0 0; font-size: 0.8125rem; color: var(--text-muted); line-height: 1.4; }
+.signout-reason-code { font-family: var(--font-mono, monospace); font-size: 0.75rem; overflow-wrap: anywhere; }

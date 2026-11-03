@@ -50,6 +50,9 @@ for (const discard of [false, true]) {
     };
     await signOut();
     await expect(page.getByRole("alert").filter({ hasText: "Couldn't finish saving" })).toBeVisible();
+    // #650: the reason is named (offline, so the save can't confirm in 5 s).
+    await expect(page.getByTestId("signout-reason")).toContainText("timeout-5s");
+    await expect(page.getByTestId("signout-reason")).toContainText("offline");
     expect(await page.evaluate(() => window.reviewSync.payload.tasks.some(t => t.uuid === "unsynced-task"))).toBe(true);
     expect(await page.evaluate(() => Object.keys(localStorage).some(k => k.startsWith("loci_payload") && localStorage.getItem(k)?.includes("unsynced-task")))).toBe(true);
     if (discard) {

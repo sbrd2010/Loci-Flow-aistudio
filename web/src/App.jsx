@@ -46,6 +46,8 @@ import { OPEN_SESSION_SAVE_MS, saveOpenSession, clearOpenSession, loadOpenSessio
 import { letGoThought, thoughtText } from "./utils/thoughts";
 import { applyReview, detectReviews, pendingReviews, undoReviewOrSort } from "./utils/horizonReview";
 import { doneCommand, undoCommand } from "./utils/reviewCommands";
+import { confirmBeforeSignOut } from "./utils/signOutFlush";
+import SignOutReason from "./components/SignOutReason";
 import { safeUUID } from "./utils/uuid";
 import { endLeftReviewMarks } from "./utils/normalizePayload";
 import CloseTheDay from "./components/CloseTheDay";
@@ -68,6 +70,8 @@ export default function App() {
   const [user, setUser] = useState(null);
   const previousAuthUidRef = useRef(null);
   const [signOutState, setSignOutState] = useState(null);
+  // #650: why the last sign-out's save didn't confirm: { reason, ms, online }.
+  const [signOutReason, setSignOutReason] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("today");
   const [pendingCheckinSlot, setPendingCheckinSlot] = useState(null);
@@ -405,7 +409,7 @@ export default function App() {
     saveConfigPatch: rtdbSaveConfigPatch,
     writeActivityEvents: rtdbWriteActivityEvents, writeActivityEventIfNewer: rtdbWriteActivityEventIfNewer,
     captureTodaySnapshotIfNeeded: rtdbCaptureTodaySnapshot,
-    flushNow: rtdbFlushNow, clearCache: rtdbClearCache, retrySync: rtdbRetrySync, syncRetrying: rtdbSyncRetrying,
+    flushNow: rtdbFlushNow, flushNowDetailed: rtdbFlushNowDetailed, clearCache: rtdbClearCache, retrySync: rtdbRetrySync, syncRetrying: rtdbSyncRetrying,
     runReviewCommand,
   } = useSync(demoMode ? null : (user?.uid || null), demoMode ? null : (user?.email || null));
 
@@ -1160,15 +1164,23 @@ export default function App() {
     // The recovery copy must stay until the server confirms it. A bounded
     // wait leaves an offline user able to reconnect, export, or explicitly
     // discard instead of silently losing work or waiting indefinitely.
+    setSignOutReason(null);
     if (!discardUnsaved) {
-      let timeout;
-      const saved = await Promise.race([
-        flushNow({ confirm: true }),
-        new Promise(resolve => { timeout = setTimeout(() => resolve(false), 5000); }),
-      ]);
-      clearTimeout(timeout);
+      // Demo mode has nothing on a server to confirm; a signed-in account
+      // without the save is never treated as saved.
+      const saved = await confirmBeforeSignOut(() => (demoMode
+        ? Promise.resolve({ ok: true, reason: "confirmed" })
+        : rtdbFlushNowDetailed ? rtdbFlushNowDetailed({ confirm: true }) : Promise.resolve({ ok: false, reason: "unavailable" })));
       if (auth.currentUser?.uid !== forUid) { setSignOutState(null); return; }
-      if (saved === false) { setSignOutState("failed"); return; }
+      if (!saved.ok) {
+        // Shown under the failure (a short code, no personal data), so a
+        // failure on a phone can be read off the screen (#650).
+        const detail = { reason: saved.reason, ms: saved.ms, online: !!online };
+        console.warn(`[Loci sign-out] not confirmed: ${detail.reason} after ${detail.ms} ms, ${detail.online ? "online" : "offline"}`);
+        setSignOutReason(detail);
+        setSignOutState("failed");
+        return;
+      }
     }
     // Native task/check-in alarms are OS-persisted (unlike the in-memory
     // `scheduled` map elsewhere), so a page reload alone doesn't clear
@@ -1546,6 +1558,7 @@ export default function App() {
               {signOutState === "saving" ? "Saving…" : "Sign Out"}
             </button>
             {signOutState === "failed" && <p role="alert">Couldn't finish saving. Your local copy is still here. Retry the connection before signing out.</p>}
+            {signOutState === "failed" && signOutReason && <SignOutReason detail={signOutReason} />}
           </div>
         </div>
       </div>
@@ -1821,6 +1834,7 @@ export default function App() {
             lastSyncedAt={lastSyncedAt}
             onSignOut={demoMode ? exitDemo : handleSwitchUser}
             signOutState={signOutState}
+            signOutReason={signOutReason}
             onDeleteAllData={demoMode ? null : handleDeleteAllData}
             onLeaveDeletedAccount={() => leaveDeletedAccount(deletingUidRef.current)}
             theme={theme}
