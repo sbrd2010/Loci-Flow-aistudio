@@ -240,6 +240,25 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
   tasksRef.current = tasks;
   const contributionsRef = useRef(contributions);
   contributionsRef.current = contributions;
+  // #646: a Coach change to tasks goes through the merging full save
+  // (savePayloadAsync → writeWithRetry), as every other task edit does. A
+  // whole-array child write from a device that went stale after syncing put
+  // back other devices' changes to other tasks. `changes` (tasks,
+  // contributions, the reply's button state) ride on the latest local
+  // payload, read through refs: an Undo can run minutes after the tap that
+  // made it, and a payload from that render would put back, say, the Mind
+  // Box as it was then. A change to the same task on two devices still
+  // follows the merge's usual rule (the newer task wins).
+  const payloadRef = useRef(payload);
+  payloadRef.current = payload;
+  const saveCoachChanges = (changes, options) => savePayloadAsync({
+    ...payloadRef.current,
+    tasks: tasksRef.current,
+    config: configRef.current,
+    contributions: contributionsRef.current,
+    chatHistory: chatHistoryRef.current,
+    ...changes,
+  }, options);
   // The chat-action block below runs after `await callAI(...)`, which can
   // take several real seconds — by then the `focusTimer` this closure
   // captured at send-time is stale (isTimerRunning/activeTask/timerSecondsLeft
@@ -433,7 +452,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
       }
 
       const startFocus = results.find(r => r.type === "START_FOCUS" && r.matched);
-      // Captured so the saveSubPathsAsync(patch) rejection handler below
+      // Captured so the saveCoachChanges(patch) rejection handler below
       // can undo this exact session if the core pin write never confirms.
       let startedFocusSession = null;
       if (startFocus) {
@@ -454,7 +473,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
             // being replaced by the full-screen Focus overlay), auto-closing
             // whatever session was previously open the same way Day Map's
             // "Start Focus" does. Collected into `events` below and written
-            // only once the core pin write (saveSubPathsAsync(patch))
+            // only once the core pin write (saveCoachChanges(patch))
             // actually confirms, instead of immediately.
             const session = focusTimerRef.current.startFocusSession(startFocus.task, { enterFocusMode: false, plannedSeconds: mins * 60 });
             startedFocusSession = session;
@@ -476,7 +495,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
         }
       }
 
-      saveSubPathsAsync(patch)
+      saveCoachChanges(patch)
         .then(() => { if (events.length > 0) writeActivityEvents(eventsPatch(uid, events)); })
         .catch(() => {
           // The core pin write never confirmed — undo the optimistic
@@ -512,9 +531,8 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
       : { ...m, actions: m.actions.map(a => (wholeReply || a.id === actionId ? update(a) : a)) }
   ));
   const handleCoachAction = (actionId) => {
-    // Not until the cloud has answered once: a tap writes whole task lists,
-    // and from an unconfirmed cache that could overwrite newer changes made
-    // on another device.
+    // Not until the cloud has answered once: a tap acts on the tasks shown,
+    // and an unconfirmed cache may not show what another device changed.
     if (cloudSyncUnconfirmed || !actionId) return;
     const history = chatHistoryRef.current;
     const a = history.flatMap(m => (m.isUser ? [] : m.actions || [])).find(x => x.id === actionId);
@@ -545,7 +563,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
   const handleUndoCoachAction = (actionId) => {
     const key = actionId;
     const rec = actionUndo[key];
-    // Undo writes whole lists too: the same wait for the cloud as a tap.
+    // The same wait for the cloud as a tap.
     if (!rec || cloudSyncUnconfirmed) return;
     setActionUndo(u => { const next = { ...u }; delete next[key]; return next; });
     const next = undoCoachAction({ ...payload, tasks: tasksRef.current, contributions: contributionsRef.current }, rec);
@@ -564,7 +582,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     if (next.contributions !== contributionsRef.current) patch.contributions = next.contributions;
     const task = next.tasks.find(t => t.uuid === rec.taskUuid);
     const eventType = { COMPLETE_TASK: "task_reopened", ADD_TASK: "task_deleted", PARK_TASK: "task_unparked" }[rec.type];
-    saveSubPathsAsync(patch)
+    saveCoachChanges(patch)
       .then(() => { if (eventType && task) writeActivityEvents(eventPatch(uid, buildTaskMutationEvent(eventType, task, { windows, source: "coach_action" }))); })
       .catch(() => {});
   };
@@ -1650,10 +1668,10 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
       if (ended) writeActivityEvents(eventsPatch(uid, [buildFocusTerminalEvent("focus_abandoned", ended.task, ended.focusSessionId, { ...ended, windows })]));
     }
     const event = buildTaskMutationEvent("task_moved", task, { fromState: { horizonLevel: task.horizonLevel }, toState: { horizonLevel: to }, windows, source: "coach_action" });
-    saveSubPathsAsync({ tasks: moved.tasks }).then(() => writeActivityEvents(eventPatch(uid, event))).catch(() => {});
+    saveCoachChanges({ tasks: moved.tasks }).then(() => writeActivityEvents(eventPatch(uid, event))).catch(() => {});
     return () => {
       const back = undoMoveTask(tasksRef.current, uuid, moved);
-      if (back) saveSubPathsAsync({ tasks: back }).catch(() => {});
+      if (back) saveCoachChanges({ tasks: back }).catch(() => {});
     };
   };
   const handleBriefOneThing = (uuid) => {
@@ -1668,7 +1686,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     const rec = { type: "SET_NOW_FOCUS", taskUuid: uuid, prevPinnedUuid, appliedLastUpdated: pinned.lastUpdated };
     return () => {
       const back = undoCoachAction({ ...payload, tasks: tasksRef.current, contributions: contributionsRef.current }, rec);
-      if (back) saveSubPathsAsync({ tasks: back.tasks }).catch(() => {});
+      if (back) saveCoachChanges({ tasks: back.tasks }).catch(() => {});
     };
   };
   // Split it: the same sheet as Today's; the brief line shows the result.
@@ -1699,9 +1717,12 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
       buildTaskMutationEvent("task_deleted", original, { windows, now: actionAt }),
       ...created.map(t => buildTaskMutationEvent("task_created", t, { windows, now: actionAt })),
     );
-    saveSubPathsAsync({ tasks: nextTasks }).then(() => writeActivityEvents(eventsPatch(uid, events))).catch(() => {});
+    saveCoachChanges({ tasks: nextTasks }).then(() => writeActivityEvents(eventsPatch(uid, events))).catch(() => {});
     target.markDone(`Split into ${created.length}`, () => {
-      saveSubPathsAsync({ tasks: undoSplit(tasksRef.current, original, created.map(t => t.uuid)) }).catch(() => {});
+      // The pieces are deleted together: named, so the drop guard (three or
+      // more at once) lets this deliberate Undo through.
+      const pieces = created.map(t => t.uuid);
+      saveCoachChanges({ tasks: undoSplit(tasksRef.current, original, pieces) }, { expectedRemovals: pieces }).catch(() => {});
     });
   };
 
