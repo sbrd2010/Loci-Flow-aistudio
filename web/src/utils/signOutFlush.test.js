@@ -1,21 +1,37 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { confirmBeforeSignOut, describeSignOutReason, flushOutcome, safeErrorCode } from "./signOutFlush";
+import { confirmBeforeSignOut, describeSignOutReason, flushOutcome, safeErrorCode, unknownRootKeyCount } from "./signOutFlush";
 
 // #650: sign-out names why its save didn't confirm; it never signs out on an
 // unconfirmed save.
-describe("safeErrorCode: a short code, never personal data", () => {
+describe("safeErrorCode: a code from a fixed list, never personal data", () => {
   it("uses the error's code, else the first word of its message", () => {
-    expect(safeErrorCode({ code: "PERMISSION_DENIED" })).toBe("PERMISSION_DENIED");
+    expect(safeErrorCode({ code: "PERMISSION_DENIED" })).toBe("permission_denied");
+    expect(safeErrorCode({ code: "auth/network-request-failed" })).toBe("auth/network-request-failed");
+    expect(safeErrorCode(new Error("set"))).toBe("set");
     expect(safeErrorCode(new Error("permission_denied at /sync/uid-123: Client doesn't have permission"))).toBe("permission_denied");
     expect(safeErrorCode(new Error("maxretry"))).toBe("maxretry");
     expect(safeErrorCode(new Error("disconnect"))).toBe("disconnect");
   });
+  it("anything not on the list is 'other': an email, a token, a task word", () => {
+    expect(safeErrorCode(new Error("someone@example.test could not save"))).toBe("other");
+    expect(safeErrorCode({ code: "eyJhbGciOiJSUzI1NiJ9.sample.token" })).toBe("other");
+    expect(safeErrorCode(new Error("Dentist appointment failed"))).toBe("other");
+    expect(safeErrorCode({ code: "auth/someone@example.test" })).toBe("other");
+  });
   it("drops paths, ids, emails and anything after the first word", () => {
     const code = safeErrorCode(new Error("transaction not committed for someone@example.test at /sync/abc"));
     expect(code).toBe("not-committed");
-    expect(safeErrorCode({ message: "/sync/uid-123 failed" })).not.toMatch(/uid|sync/);
+    expect(safeErrorCode({ message: "/sync/uid-123 failed" })).toBe("other");
     expect(safeErrorCode(null)).toBe("unknown");
+  });
+});
+
+describe("unknownRootKeyCount: tells a rules refusal from a sign-in refusal", () => {
+  it("counts only top-level keys the rules don't allow", () => {
+    expect(unknownRootKeyCount({ userId: "u", tasks: [], config: {}, chatHistory: [], contributions: [], brainDump: [], brainDumpUpdatedAt: 1, timestamp: 1 })).toBe(0);
+    expect(unknownRootKeyCount({ userId: "u", tasks: [], config: {}, legacyThing: 1, other: {} })).toBe(2);
+    expect(unknownRootKeyCount(null)).toBe(0);
   });
 });
 
@@ -52,6 +68,17 @@ describe("confirmBeforeSignOut", () => {
     expect(result.ok).toBe(false);
     expect(flush).toHaveBeenCalledTimes(1); // no second save started
   });
+  it("a timed-out save that settles later is reported through onLate", async () => {
+    vi.useFakeTimers();
+    let fail;
+    const onLate = vi.fn();
+    const pending = confirmBeforeSignOut(() => new Promise((_, rej) => { fail = rej; }), { onLate, now: () => Date.now() });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect((await pending).reason).toBe("timeout-5s");
+    fail(new Error("permission_denied at /sync/x"));
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(onLate).toHaveBeenCalledWith(expect.objectContaining({ ok: false, reason: "write-error:permission_denied" }));
+  });
   it("anything without ok: true is not confirmed", async () => {
     expect((await confirmBeforeSignOut(async () => undefined)).ok).toBe(false);
     expect((await confirmBeforeSignOut(async () => ({ ok: "yes" }))).ok).toBe(false);
@@ -64,6 +91,7 @@ describe("describeSignOutReason", () => {
     expect(describeSignOutReason("newer-edit-during-save")).toMatch(/newer change/);
     expect(describeSignOutReason("write-error:permission_denied")).toMatch(/didn't accept.*permission_denied/);
     expect(describeSignOutReason("account-changed")).toMatch(/account changed/);
+    expect(describeSignOutReason("auth-signout:auth/network-request-failed")).toMatch(/Saved, but signing out.*failed/);
     expect(describeSignOutReason("something-else")).toMatch(/wasn't confirmed/);
   });
 });
@@ -79,6 +107,10 @@ describe("sign-out safety wiring (#650)", () => {
     expect(body.indexOf("return;", stop)).toBeLessThan(body.indexOf("clearCache()"));
     expect(body.indexOf("clearCache()")).toBeLessThan(body.indexOf("await signOut(auth)"));
     expect(body).toMatch(/if \(!discardUnsaved\) \{/);
+  });
+  it("sign-out asks for a confirmed save, and names a failed sign-out step", () => {
+    expect(body).toMatch(/rtdbFlushNowDetailed\(\{ confirm: true \}\)/);
+    expect(body).toMatch(/catch \(err\) \{\s*setSignOutReason\(\{ reason: `auth-signout:\$\{safeErrorCode\(err\)\}`/);
   });
   it("flushNow still resolves a plain boolean for its other callers", () => {
     expect(sync).toMatch(/const flushNow = \(options\) => flushNowDetailed\(options\)\.then\(r => r\.ok\);/);

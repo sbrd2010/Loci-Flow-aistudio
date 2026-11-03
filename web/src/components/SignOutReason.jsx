@@ -8,7 +8,9 @@ export default function SignOutReason({ detail }) {
   return (
     <p className="signout-reason" data-testid="signout-reason">
       {describeSignOutReason(detail.reason)}{" "}
-      <span className="signout-reason-code">({detail.reason} · {detail.ms} ms · {detail.online ? "online" : "offline"})</span>
+      <span className="signout-reason-code">
+        ({detail.reason} · {detail.ms} ms · {detail.online ? "online" : "offline"}{detail.late ? ` · then ${detail.late} at ${detail.lateMs} ms` : ""})
+      </span>
     </p>
   );
 }

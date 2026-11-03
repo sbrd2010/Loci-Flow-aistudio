@@ -4,7 +4,7 @@ import { db } from "./firebase";
 import { safeUUID } from "./utils/uuid";
 import { normalizePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious, configValuesEqual, mergeLocalIntoServer, clampConfigStringsForRules, sanitizeChatHistoryForRules, applyEditsSince, COMMAND_OWNED_CONFIG_KEYS } from "./utils/normalizePayload";
 import { runReviewTransaction, whenConnected } from "./utils/reviewCommands";
-import { flushOutcome, safeErrorCode } from "./utils/signOutFlush";
+import { flushOutcome, safeErrorCode, unknownRootKeyCount } from "./utils/signOutFlush";
 import { createResendPolicy } from "./utils/resendPolicy";
 import { activitySnapshotPath, activityMetaPath, activityEventPath, buildTodaySnapshot } from "./utils/activityLog";
 import { tombstonePath } from "./utils/deleteAccount";
@@ -706,12 +706,14 @@ export function useSync(uid, email) {
       console.error("Error reading RTDB payload:", err);
       setIsSyncingFromCache(false); // unblock effects that wait for RTDB
       pendingRemoteRef.current = null;
-      // Firebase calls this only when the rules refuse the read (#650): not for
-      // a slow or lost connection, which the connection checks above handle.
+      // Firebase cancels the listener when the server stops the read (#650):
+      // the rules refuse it, the sign-in was revoked or not yet attached, or
+      // the server is unavailable or the data too big. Not for a slow or lost
+      // connection, which the connection checks above handle.
       const code = safeErrorCode(err);
       console.warn(`[Loci sync] read refused: ${code}`);
       if (!hasCachedData) {
-        setError(`Loci couldn't read your saved data: the server refused (${code}). Tap Retry Connection. If it keeps happening, sign out and sign in again.`);
+        setError(`The server stopped Loci reading your saved data (${code}). Tap Retry Connection. If it keeps happening, sign out and sign in again.`);
         setConnPhase(CONN.ERROR);
         setLoading(false);
       } else {
@@ -1221,7 +1223,10 @@ export function useSync(uid, email) {
         })
         .catch((err) => {
           onFullSaveFailed(err, ctx); waiters.forEach(w => w.reject(err));
-          return { ok: false, reason: `write-error:${safeErrorCode(err)}` };
+          // A rules refusal and a sign-in refusal share permission_denied: say
+          // how many top-level keys the rules don't allow (a count, no data).
+          const extra = unknownRootKeyCount(ctx.written);
+          return { ok: false, reason: `write-error:${safeErrorCode(err)}${extra ? `+unknown-keys:${extra}` : ""}` };
         });
     }
     return Promise.resolve({ ok: true, reason: "nothing-pending" });

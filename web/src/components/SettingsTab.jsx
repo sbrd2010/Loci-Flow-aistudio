@@ -109,7 +109,10 @@ export default function SettingsTab({ initialPage = null, payload, savePayload, 
   const signOut = () => askConfirm({ message: "Sign out? Your data stays saved.", confirmLabel: "Sign out", onConfirm: () => onSignOut?.() });
   const signOutFeedback = signOutState === "failed" ? (
     <div role="alert">
-      <p>Couldn't finish saving. Your local copy is still here. Reconnect and try again, or download a backup from Data.</p>
+      {/* The save was confirmed and only the sign-out itself failed (#650). */}
+      {signOutReason?.reason?.startsWith("auth-signout:")
+        ? <p>Your data is saved, but signing out didn't finish. Try Sign out again.</p>
+        : <p>Couldn't finish saving. Your local copy is still here. Reconnect and try again, or download a backup from Data.</p>}
       {signOutReason && <SignOutReason detail={signOutReason} />}
       <button type="button" onClick={() => askConfirm({
         message: "Discard unsaved changes and sign out? Changes that haven't synced will be lost on this device. Download a backup first if you want to keep them.",
