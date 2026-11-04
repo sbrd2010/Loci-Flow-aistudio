@@ -79,17 +79,21 @@ const toStop = (state, stop) => ({ ...state, step: "tour", stop, tourPending: tr
 export function guideReducer(state, action) {
   if (action.type === "start") return startGuide();
   if (action.type === "replay") {
-    // Never creates a task: with one pinned it tours from the top, with any
-    // open task it asks for Do this now, with none it offers the first-task sheet.
-    const base = { ...startGuide(), taskUuid: action.pinnedUuid || null };
-    if (action.pinnedUuid) return toStop(base, 0);
-    return { ...base, step: action.hasTask ? "pin" : "task" };
+    // Replay is the tour, always: it never asks for a task or creates one.
+    // With nothing in Now, the first stop says where the one thing will show.
+    return toStop({ ...startGuide(), taskUuid: action.pinnedUuid || null }, 0);
   }
   if (!state) return state;
   switch (action.type) {
     case "taskAdded": return { ...state, step: "pin", taskUuid: action.uuid };
     case "taskGone": return { ...state, step: "task", taskUuid: null, tourPending: false };
     case "pinned": return { ...state, step: "ready", taskUuid: action.uuid || state.taskUuid, tourPending: true };
+    // The task left Now before the tour (done, parked, unpinned or deleted):
+    // back to "Do this now" on a task; never a new task, never a pin for them.
+    case "unpinned": return { ...state, step: "pin", tourPending: false, afterTour: false, resume: false };
+    // It left Now while the tour ran: there is nothing to start, so the guide
+    // ends quietly instead of ringing Start focus.
+    case "targetGone": return finished(state, "done");
     case "startTour": return toStop(state, 0);
     case "resumeTour": return toStop(state, state.tourStarted ? state.stop : 0);
     case "next": return state.stop >= LAST_STOP ? guideReducer(state, { type: "finish" }) : toStop(state, state.stop + 1);
@@ -97,7 +101,9 @@ export function guideReducer(state, action) {
     case "finish":
       // The tour ends at the person's own first focus: back to Ready, with
       // Start focus lit, unless they have already focused.
-      return state.focused ? finished(state, "done") : { ...state, step: "ready", tourPending: false, afterTour: true, resume: false, note: null };
+      return state.focused || !state.taskUuid
+        ? finished(state, "done")
+        : { ...state, step: "ready", tourPending: false, afterTour: true, resume: false, note: null };
     case "focusStarted": return { ...state, focused: true, resume: false };
     case "focusEnded":
       if (state.afterTour) return finished(state, "done");
@@ -134,20 +140,26 @@ export async function saveFirstTask(savePayloadAsync, nextPayload) {
 
 // What the saved tasks say should happen next, or null. Pure, so a reload or
 // a second device editing the task moves the guide the same way.
-export function reconcileGuide(state, tasks = []) {
-  if (!state || !["pin", "ready", "tour"].includes(state.step)) return null;
+// `trusted` is false while the app shows cached data the server has not yet
+// confirmed: a task missing from that cache is not taken as gone, so a reload
+// never rewinds the guide on stale data (ChatGPT review of #654). A pin seen
+// in the cache still counts, so the guide also moves on offline.
+export function reconcileGuide(state, tasks = [], { trusted = true } = {}) {
+  if (!state || !["pin", "ready", "tour"].includes(state.step) || state.resume) return null;
   const live = tasks.filter(t => t && !t.isDeleted);
   const own = state.taskUuid ? live.find(t => t.uuid === state.taskUuid) : null;
   if (state.step === "pin") {
     // Pinning any open task counts: the person did the real action, even if
     // they chose a different task than the one they just wrote.
-    const pinned = own?.isNowFocus ? own : live.find(t => t.isNowFocus && !t.isCompleted);
+    const pinned = own?.isNowFocus && !own.isCompleted ? own : live.find(t => t.isNowFocus && !t.isCompleted && !t.isParked);
     if (pinned) return { type: "pinned", uuid: pinned.uuid };
-    if (state.taskUuid && !own) return { type: "taskGone" };
+    if (trusted && state.taskUuid && !own) return { type: "taskGone" };
     return null;
   }
-  if (state.step === "ready" && state.taskUuid && !own) return { type: "taskGone" };
-  return null;
+  if (state.step !== "ready" || !state.taskUuid) return null;
+  const inNow = !!own && own.isNowFocus && !own.isCompleted && !own.isParked;
+  if (inNow || (!own && !trusted)) return null;
+  return { type: state.afterTour ? "targetGone" : "unpinned" };
 }
 
 // The card's words and which parts of the app it rings.
@@ -179,10 +191,14 @@ export function guideCard(state, { taskTitle = "", tap = "Tap" } = {}) {
   }
   if (state.step === "tour") {
     const stop = TOUR_STOPS[state.stop];
-    const text = stop.id === "now"
-      ? `This is your one thing${taskTitle ? `: “${taskTitle}”` : ""}. When you start, the rest of the day stays out of your way.`
-      : stop.text;
-    return { kicker: `TOUR · ${state.stop + 1} OF ${TOUR_STOPS.length}`, title: stop.title, text, targets: stop.targets, tab: stop.tab, stopId: stop.id,
+    const nothingInNow = stop.id === "now" && !state.taskUuid;
+    const text = stop.id !== "now" ? stop.text
+      : nothingInNow ? `Your one thing shows here once you ${tap.toLowerCase()} Do this now on a task. When you start, the rest of the day stays out of your way.`
+      : `This is your one thing${taskTitle ? `: “${taskTitle}”` : ""}. When you start, the rest of the day stays out of your way.`;
+    return { kicker: `TOUR · ${state.stop + 1} OF ${TOUR_STOPS.length}`, title: stop.title, text, stopId: stop.id, tab: stop.tab,
+      targets: nothingInNow ? ["pick", "upnext", "nav-today"] : stop.targets,
+      // Day map is opened, not only named: an optional step onto the real page.
+      extra: stop.id === "upnext" ? { label: "Open Day map", action: "openDayMap" } : null,
       primary: { label: state.stop === LAST_STOP ? "Finish" : "Next", action: "next" },
       back: state.stop > 0 ? { label: "Back", action: "back" } : null,
       skip: { label: "Skip tour", action: "skip" } };

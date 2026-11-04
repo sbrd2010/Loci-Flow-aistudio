@@ -1374,9 +1374,10 @@ export default function App() {
   const guideDataReady = demoMode || (!loading && !!payload);
   useEffect(() => {
     if (!guideDataReady || guideBox.uid !== guideUid) return;
-    const action = reconcileGuide(guideBox.state, payload?.tasks || []);
+    // Cached data the server hasn't confirmed can't prove a task is gone.
+    const action = reconcileGuide(guideBox.state, payload?.tasks || [], { trusted: demoMode || !isSyncingFromCache });
     if (action) dispatchGuide(action);
-  }, [guideBox, guideUid, guideDataReady, payload?.tasks, dispatchGuide]);
+  }, [guideBox, guideUid, guideDataReady, payload?.tasks, dispatchGuide, demoMode, isSyncingFromCache]);
   const wasFocusingRef = useRef(false);
   useEffect(() => {
     if (busyFocusing && !wasFocusingRef.current) dispatchGuide({ type: "focusStarted" });
@@ -1384,13 +1385,14 @@ export default function App() {
     wasFocusingRef.current = busyFocusing;
   }, [busyFocusing, dispatchGuide]);
   const guideAction = (type) => {
+    // An optional step onto the real Day map page; the tour stays where it is.
+    if (type === "openDayMap") { openDayMap(); return; }
     const next = dispatchGuide({ type });
     const card = guideCard(next);
     if (card?.tab && card.tab !== activeTab && ["next", "back", "startTour", "resumeTour"].includes(type)) handleTabSelect(card.tab);
   };
   const replayGuide = () => {
-    const open = (payload?.tasks || []).filter(t => !t.isDeleted && !t.isCompleted && !t.isParked);
-    dispatchGuide({ type: "replay", pinnedUuid: commitmentPinnedUuid, hasTask: open.some(t => isOnToday(t, commitmentDayStr)) });
+    dispatchGuide({ type: "replay", pinnedUuid: commitmentPinnedUuid });
     setActiveTab("today");
   };
   const guideTaskTitle = guide?.taskUuid ? ((payload?.tasks || []).find(t => t.uuid === guide.taskUuid)?.title || "") : "";

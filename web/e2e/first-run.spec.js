@@ -57,10 +57,23 @@ for (const [label, width, height, tasks] of [["phone", 390, 844, []], ["small ph
     await expect(guide(page)).toContainText("TOUR · 1 OF 5");
     await guide(page).getByRole("button", { name: "Next" }).click();
     await expect(guide(page)).toContainText("Up next and Day map");
+    // Day map is opened, not only named: the real page, then on with the tour.
+    await guide(page).getByRole("button", { name: "Open Day map" }).click();
+    await expect(page.locator(".day-map-page")).toBeVisible();
+    await expect(guide(page)).toContainText("Up next and Day map");
     await guide(page).getByRole("button", { name: "Next" }).click();
 
     await expect(page.getByRole("heading", { name: "Brain dump", exact: true })).toBeVisible();
-    await guide(page).getByRole("button", { name: "Later" }).click();
+    if (label === "phone") {
+      // A thought really saved: acknowledged, and the tour carries on.
+      const field = page.locator(".mbx-field").getByRole("textbox", { name: "Thought" });
+      await field.fill("Call the plumber about the tap");
+      await field.press("Control+Enter");
+      await expect(guide(page)).toContainText("Added to Mind Box.");
+      await guide(page).getByRole("button", { name: "Next" }).click();
+    } else {
+      await guide(page).getByRole("button", { name: "Later" }).click();
+    }
     await expect(guide(page)).toContainText("TOUR · 4 OF 5");
     await guide(page).getByRole("button", { name: "Next" }).click();
 
@@ -107,6 +120,36 @@ test("phone: at Ready the guide card leaves the Now card's buttons clear", async
   const card = await guide(page).boundingBox();
   const hero = await page.locator('[data-guide-id="now"]').boundingBox();
   expect(hero.y + hero.height).toBeLessThanOrEqual(card.y);
+});
+
+test("Replay the tour with nothing on Today is the tour, not a new-task step, and ends without Start focus", async ({ page }) => {
+  await newAccount(page, 390, 844);
+  await page.getByRole("button", { name: "Skip setup, show me the app" }).click();
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: /Replay the tour/ }).click();
+  await expect(guide(page)).toContainText("TOUR · 1 OF 5");
+  await expect(guide(page)).toContainText("shows here once you");
+  await expect(page.getByRole("dialog", { name: "Write down one real thing" })).toHaveCount(0);
+  for (const name of ["Next", "Next", "Later", "Next", "Finish"]) await guide(page).getByRole("button", { name, exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Tour done." })).toBeVisible();
+  await expect(page.locator('[data-guide-id="start"]')).toHaveCount(0);
+});
+
+test("finishing the guided task during the tour ends it quietly, without ringing Start focus", async ({ page }) => {
+  await newAccount(page, 390, 844);
+  await page.getByRole("button", { name: "Let’s begin" }).click();
+  await page.getByRole("button", { name: "Skip this question" }).click();
+  await page.getByLabel("What do you want to do?").fill("Book the dentist");
+  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: "This is already small" }).click();
+  await page.locator('[data-guide-id="upnext"] [data-guide-own]').click();
+  await page.getByRole("button", { name: /Do this now/ }).click();
+  await guide(page).getByRole("button", { name: "Show me around · 90 s" }).click();
+  // Done on the wall's own control, mid-tour (as another device could).
+  await page.locator(".wall-quiet-link:visible", { hasText: /^Done$/ }).click();
+  for (const name of ["Next", "Next", "Later", "Next", "Finish"]) await guide(page).getByRole("button", { name, exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Tour done." })).toBeVisible();
+  await expect(guide(page)).toHaveCount(0);
 });
 
 test("Skip setup opens the app with no guide", async ({ page }) => {

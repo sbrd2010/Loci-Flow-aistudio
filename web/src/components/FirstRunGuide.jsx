@@ -157,6 +157,7 @@ export default function FirstRunGuide({ state, onAction, onTab, taskTitle, thoug
       <div className="frg-actions">
         {card.targets.length > 0 && <button type="button" className="frg-link" onClick={showMe}>Can’t see it? Show me</button>}
         <span className="frg-spacer" />
+        {card.extra && <button type="button" className="frg-back" onClick={() => onAction(card.extra.action)}>{card.extra.label}</button>}
         {card.back && <button type="button" className="frg-back" onClick={() => onAction(card.back.action)}>{card.back.label}</button>}
         {card.primary && <button type="button" className="frg-next" onClick={() => onAction(card.primary.action)}>{primaryLabel}</button>}
       </div>
