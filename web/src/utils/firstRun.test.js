@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { startGuide, guideReducer, reconcileGuide, guideCard, loadGuide, saveGuide, exampleForNeed, LAST_STOP } from "./firstRun";
+import { startGuide, guideReducer, reconcileGuide, guideCard, loadGuide, saveGuide, exampleForNeed, boxReducer, saveFirstTask, LAST_STOP } from "./firstRun";
 
 const run = (state, ...actions) => actions.reduce((s, a) => guideReducer(s, typeof a === "string" ? { type: a } : a), state);
 const memory = () => { const m = new Map(); return { getItem: k => m.get(k) ?? null, setItem: (k, v) => m.set(k, v), removeItem: k => m.delete(k) }; };
@@ -75,5 +75,37 @@ describe("first-run guide", () => {
   it("opens the Coach example that fits the answer", () => {
     expect(exampleForNeed("overwhelmed")).toBe(1);
     expect(exampleForNeed(undefined)).toBe(2);
+  });
+
+  it("never saves the closing note, so a reload does not show it again", () => {
+    const store = memory();
+    const skipped = run(startGuide(), { type: "taskAdded", uuid: "t1" }, "skip");
+    expect(skipped.note).toBe("skipped");
+    saveGuide("a", skipped, store);
+    expect(loadGuide("a", store)).toMatchObject({ step: "done", note: null });
+  });
+
+  it("an action for one account never lands on another account's guide (A → B → A)", () => {
+    const a = { uid: "A", state: run(startGuide(), { type: "taskAdded", uuid: "a1" }) };
+    const b = { uid: "B", state: run(startGuide(), { type: "taskAdded", uuid: "b1" }) };
+    // A's tasks are gone from view while B loads: computed against A, sent while B is current.
+    const stale = reconcileGuide(a.state, []);
+    expect(stale).toEqual({ type: "taskGone" });
+    expect(boxReducer(b, "A", stale)).toBe(b);
+    expect(boxReducer(b, "B", { type: "pinned", uuid: "b1" }).state.step).toBe("ready");
+    // Back on A, its own guide is intact.
+    expect(boxReducer(a, "A", { type: "pinned", uuid: "a1" })).toMatchObject({ uid: "A", state: { step: "ready", taskUuid: "a1" } });
+  });
+
+  it("rings only the person's own task at the pin step, never the starter tasks", () => {
+    const s = run(startGuide(), { type: "taskAdded", uuid: "t1" });
+    expect(guideCard(s, { taskTitle: "Reply to the landlord" })).toMatchObject({ targets: ["own", "donow", "nav-today"] });
+    expect(guideCard(guideReducer(null, { type: "replay", hasTask: true })).targets).toContain("upnext");
+  });
+
+  it("tells a refused first-task save apart from one still on its way", async () => {
+    expect((await saveFirstTask(() => Promise.reject(new Error("write blocked by drop-guard")), {})).result).toBe("blocked");
+    expect((await saveFirstTask(() => Promise.resolve(), {})).result).toBe("saved");
+    expect((await saveFirstTask(() => new Promise(() => {}), {})).result).toBe("pending");
   });
 });

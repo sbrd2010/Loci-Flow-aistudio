@@ -64,9 +64,11 @@ export function loadGuide(uid, storage = globalThis.localStorage) {
   }
 }
 
+// The closing note ("Guide closed…") is for this visit only: it is never
+// saved, so a reload does not bring it back.
 export function saveGuide(uid, state, storage = globalThis.localStorage) {
   try {
-    if (state) storage?.setItem(keyFor(uid), JSON.stringify(state));
+    if (state) storage?.setItem(keyFor(uid), JSON.stringify({ ...state, note: null }));
     else storage?.removeItem(keyFor(uid));
   } catch { /* storage blocked: the guide just won't survive a reload */ }
 }
@@ -108,6 +110,28 @@ export function guideReducer(state, action) {
   }
 }
 
+// The guide held with the account it belongs to. An action meant for one
+// account never lands on another's guide, whatever order the account switch
+// and the effects run in (ChatGPT review of #654).
+export function boxReducer(box, uid, action) {
+  if (!box || !uid || box.uid !== uid) return box;
+  const state = guideReducer(box.state, action);
+  return state === box.state ? box : { uid, state };
+}
+
+// Saves the first task. savePayloadAsync applies it locally at once and only
+// later confirms with the server; a write it refuses (the drop guard, an
+// account change) is already rejected when it returns. So: "blocked" when
+// refused at once, else "saved" or "pending". The guide moves on for both,
+// without waiting on the server; a later failure shows the app's own sync
+// warning, as for any task.
+export async function saveFirstTask(savePayloadAsync, nextPayload) {
+  const write = savePayloadAsync(nextPayload);
+  const outcome = write.then(() => "saved", () => "blocked");
+  const settledNow = await Promise.race([outcome, new Promise(resolve => setTimeout(() => resolve("pending"), 0))]);
+  return { result: settledNow, write };
+}
+
 // What the saved tasks say should happen next, or null. Pure, so a reload or
 // a second device editing the task moves the guide the same way.
 export function reconcileGuide(state, tasks = []) {
@@ -138,10 +162,13 @@ export function guideCard(state, { taskTitle = "", tap = "Tap" } = {}) {
           targets: [], primary: { label: "Show me around", action: "resumeTour" }, skip: { label: "Later", action: "later" } };
   }
   if (state.step === "pin") {
-    const which = taskTitle ? `“${taskTitle}”` : "a task";
-    return { kicker: "YOUR FIRST TASK · 3 OF 3", title: "Make it your one thing",
-      text: `Open ${which} in Up next and ${tap.toLowerCase()} Do this now. It moves to Now, and everything else can wait.`,
-      targets: ["upnext", "pick", "donow", "nav-today"], tab: "today", skip: { label: "Skip guide", action: "skip" } };
+    // Only the person's own task is ringed ("own"), never the starter tasks
+    // around it (owner decision on #654: keep the starters).
+    const text = taskTitle
+      ? `Find “${taskTitle}” (outlined), open it and ${tap.toLowerCase()} Do this now. It moves to Now, and everything else can wait.`
+      : `Open any task in Up next and ${tap.toLowerCase()} Do this now. It moves to Now, and everything else can wait.`;
+    return { kicker: "YOUR FIRST TASK · 3 OF 3", title: "Make it your one thing", text,
+      targets: [...(state.taskUuid ? ["own"] : ["upnext"]), "donow", "nav-today"], tab: "today", skip: { label: "Skip guide", action: "skip" } };
   }
   if (state.step === "ready") {
     return state.afterTour

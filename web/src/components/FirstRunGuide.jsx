@@ -21,6 +21,23 @@ export default function FirstRunGuide({ state, onAction, onTab, taskTitle, thoug
     return () => { delete document.body.dataset.guide; };
   }, [targets]);
 
+  // The person's own task, wherever it is listed (Up next, the wall's picks),
+  // is ringed by its uuid; the starter tasks around it are not.
+  const ownUuid = card && card.targets.includes("own") ? state.taskUuid : null;
+  useEffect(() => {
+    if (!ownUuid) return undefined;
+    const mark = () => document.querySelectorAll(`[data-task-uuid="${ownUuid}"]`).forEach(el => {
+      if (!el.hasAttribute("data-guide-own")) el.setAttribute("data-guide-own", "");
+    });
+    mark();
+    const observer = new MutationObserver(mark);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      document.querySelectorAll("[data-guide-own]").forEach(el => el.removeAttribute("data-guide-own"));
+    };
+  }, [ownUuid]);
+
   // Coach's own chat stays out of reach at its stop: onboarding makes no AI
   // request. The written examples in this card stand in for it.
   useEffect(() => {
@@ -67,6 +84,25 @@ export default function FirstRunGuide({ state, onAction, onTab, taskTitle, thoug
     observer.observe(document.body, { childList: true, subtree: true });
     return () => observer.disconnect();
   }, [pinStep]);
+  // On phones the page gets room at the bottom the card's height, so the card
+  // never sits over a control the person may need (ChatGPT review of #654).
+  const cardRef = useRef(null);
+  const showCard = !!card && !taskOpen;
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!showCard || !el) return undefined;
+    const root = document.documentElement;
+    const apply = () => root.style.setProperty("--guide-h", `${Math.ceil(el.getBoundingClientRect().height)}px`);
+    apply();
+    document.body.dataset.guideCard = "";
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(apply) : null;
+    observer?.observe(el);
+    return () => {
+      observer?.disconnect();
+      delete document.body.dataset.guideCard;
+      root.style.removeProperty("--guide-h");
+    };
+  }, [showCard, stopId, state?.step]);
   if (card && taskOpen) return null;
 
   if (!card) {
@@ -85,7 +121,7 @@ export default function FirstRunGuide({ state, onAction, onTab, taskTitle, thoug
     if (card.tab) onTab(card.tab);
     requestAnimationFrame(() => {
       const el = card.targets.filter(t => !t.startsWith("nav-"))
-        .map(t => document.querySelector(`[data-guide-id="${t}"]`)).find(Boolean);
+        .map(t => document.querySelector(t === "own" ? `[data-task-uuid="${state.taskUuid}"]` : `[data-guide-id="${t}"]`)).find(Boolean);
       el?.scrollIntoView?.({ block: "center" });
     });
   };
@@ -93,7 +129,7 @@ export default function FirstRunGuide({ state, onAction, onTab, taskTitle, thoug
   const ex = COACH_EXAMPLES[example];
 
   return (
-    <aside className="frg" aria-label="Guide">
+    <aside className="frg" aria-label="Guide" ref={cardRef}>
       <div className="frg-head">
         <span className="frg-kicker">{card.kicker}</span>
         <button type="button" className="frg-skip" onClick={() => onAction(card.skip.action)}>{card.skip.label}</button>

@@ -177,6 +177,7 @@ body:has(.undo-toast) .frg { bottom: calc(140px + env(safe-area-inset-bottom, 0p
   font: 700 14px var(--font-sans);
   cursor: pointer;
 }
+.frg-back, .frg-next, .frg-link { white-space: nowrap; }
 .frg-back { border: 1px solid var(--gold-label); background: transparent; color: var(--ink); }
 .frg-next { border: 1px solid transparent; background: var(--ink); color: var(--bg); }
 .frg-coach { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
@@ -226,8 +227,17 @@ body[data-guide~="coach"] [data-guide-id="coach"],
 body[data-guide~="nav-today"] [data-guide-id="nav-today"],
 body[data-guide~="nav-roadmap"] [data-guide-id="nav-roadmap"],
 body[data-guide~="nav-mindbox"] [data-guide-id="nav-mindbox"],
-body[data-guide~="nav-coach"] [data-guide-id="nav-coach"] {
+body[data-guide~="nav-coach"] [data-guide-id="nav-coach"],
+[data-guide-own] {
   outline: 2px solid var(--gold);
   outline-offset: 4px;
   border-radius: 14px;
+}
+
+/* Phones and tablets: room at the bottom the card's height (set by
+   FirstRunGuide), so the page scrolls clear of it and no control stays under it. */
+@media (max-width: 1023px) {
+  body[data-guide-card] .screen-content {
+    padding-bottom: calc(var(--guide-h, 0px) + 100px + env(safe-area-inset-bottom, 0px));
+  }
 }

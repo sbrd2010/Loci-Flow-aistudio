@@ -32,7 +32,7 @@ import AddTaskDialog from "./components/AddTaskDialog";
 import FirstRunWelcome from "./components/FirstRunWelcome";
 import FirstRunGuide from "./components/FirstRunGuide";
 import FirstTaskSheet from "./components/FirstTaskSheet";
-import { loadGuide, saveGuide, guideReducer, reconcileGuide, guideCard } from "./utils/firstRun";
+import { loadGuide, saveGuide, boxReducer, reconcileGuide, guideCard } from "./utils/firstRun";
 import PrivacyPolicy from "./components/PrivacyPolicy";
 import DayMapPage from "./components/DayMapPage";
 import FocusBar from "./components/FocusBar";
@@ -1349,26 +1349,34 @@ export default function App() {
   // #653: the first-run guide. Progress is kept on this device, one key per
   // account (utils/firstRun.js); the saved tasks move it on, and it never
   // presses Start focus or calls an AI provider.
+  // The guide is held with the account it belongs to ({ uid, state }): an
+  // action for one account can never change or save another's (A → B → A).
   const guideUid = demoMode ? "demo" : (user?.uid || null);
-  const [guide, setGuide] = useState(null);
-  const guideRef = useRef(null);
+  const [guideBox, setGuideBox] = useState({ uid: null, state: null });
+  const guideBoxRef = useRef(guideBox);
   useEffect(() => {
-    const loaded = guideUid ? loadGuide(guideUid) : null;
-    guideRef.current = loaded;
-    setGuide(loaded);
+    const box = { uid: guideUid, state: guideUid ? loadGuide(guideUid) : null };
+    guideBoxRef.current = box;
+    setGuideBox(box);
   }, [guideUid]);
   const dispatchGuide = useCallback((action) => {
-    const next = guideReducer(guideRef.current, action);
-    if (next === guideRef.current) return next;
-    guideRef.current = next;
-    setGuide(next);
-    if (guideUid) saveGuide(guideUid, next);
-    return next;
+    const box = guideBoxRef.current;
+    const next = boxReducer(box, guideUid, action);
+    if (next === box) return box.uid === guideUid ? box.state : null;
+    guideBoxRef.current = next;
+    setGuideBox(next);
+    saveGuide(next.uid, next.state);
+    return next.state;
   }, [guideUid]);
+  const guide = guideBox.uid === guideUid ? guideBox.state : null;
+  // Only once this account's own data has loaded, so a switch or a loading
+  // gap never reads one account's tasks against another's guide.
+  const guideDataReady = demoMode || (!loading && !!payload);
   useEffect(() => {
-    const action = reconcileGuide(guide, payload?.tasks || []);
+    if (!guideDataReady || guideBox.uid !== guideUid) return;
+    const action = reconcileGuide(guideBox.state, payload?.tasks || []);
     if (action) dispatchGuide(action);
-  }, [guide, payload?.tasks, dispatchGuide]);
+  }, [guideBox, guideUid, guideDataReady, payload?.tasks, dispatchGuide]);
   const wasFocusingRef = useRef(false);
   useEffect(() => {
     if (busyFocusing && !wasFocusingRef.current) dispatchGuide({ type: "focusStarted" });
