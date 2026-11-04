@@ -90,7 +90,10 @@ export function guideReducer(state, action) {
     case "pinned": return { ...state, step: "ready", taskUuid: action.uuid || state.taskUuid, tourPending: true };
     // The task left Now before the tour (done, parked, unpinned or deleted):
     // back to "Do this now" on a task; never a new task, never a pin for them.
-    case "unpinned": return { ...state, step: "pin", tourPending: false, afterTour: false, resume: false };
+    // `keep` is false when the task is done, parked or deleted: the guide then
+    // drops it and asks for Do this now on any open task, rather than pointing
+    // at one that is no longer listed (ChatGPT review of #654).
+    case "unpinned": return { ...state, step: "pin", taskUuid: action.keep ? state.taskUuid : null, tourPending: false, afterTour: false, resume: false };
     // It left Now while the tour ran: there is nothing to start, so the guide
     // ends quietly instead of ringing Start focus.
     case "targetGone": return finished(state, "done");
@@ -144,6 +147,13 @@ export async function saveFirstTask(savePayloadAsync, nextPayload) {
 // confirmed: a task missing from that cache is not taken as gone, so a reload
 // never rewinds the guide on stale data (ChatGPT review of #654). A pin seen
 // in the cache still counts, so the guide also moves on offline.
+// Whether the tasks on screen came from the server. The cache flag also
+// clears after useSync's 15 s timeout with no server reply, which then shows
+// the "offline" warning: that is not trusted either.
+export function isTrustedLoad({ demoMode = false, isSyncingFromCache = false, syncWarning = null } = {}) {
+  return demoMode || (!isSyncingFromCache && syncWarning !== "offline");
+}
+
 export function reconcileGuide(state, tasks = [], { trusted = true } = {}) {
   if (!state || !["pin", "ready", "tour"].includes(state.step) || state.resume) return null;
   const live = tasks.filter(t => t && !t.isDeleted);
@@ -159,7 +169,8 @@ export function reconcileGuide(state, tasks = [], { trusted = true } = {}) {
   if (state.step !== "ready" || !state.taskUuid) return null;
   const inNow = !!own && own.isNowFocus && !own.isCompleted && !own.isParked;
   if (inNow || (!own && !trusted)) return null;
-  return { type: state.afterTour ? "targetGone" : "unpinned" };
+  if (state.afterTour) return { type: "targetGone" };
+  return { type: "unpinned", keep: !!own && !own.isCompleted && !own.isParked };
 }
 
 // The card's words and which parts of the app it rings.

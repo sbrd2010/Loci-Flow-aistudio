@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { startGuide, guideReducer, reconcileGuide, guideCard, loadGuide, saveGuide, exampleForNeed, boxReducer, saveFirstTask, LAST_STOP } from "./firstRun";
+import { startGuide, guideReducer, reconcileGuide, guideCard, loadGuide, saveGuide, exampleForNeed, boxReducer, saveFirstTask, isTrustedLoad, LAST_STOP } from "./firstRun";
 
 const run = (state, ...actions) => actions.reduce((s, a) => guideReducer(s, typeof a === "string" ? { type: a } : a), state);
 const memory = () => { const m = new Map(); return { getItem: k => m.get(k) ?? null, setItem: (k, v) => m.set(k, v), removeItem: k => m.delete(k) }; };
@@ -60,7 +60,7 @@ describe("first-run guide", () => {
     // Pinning a different open task still counts as doing the step.
     expect(reconcileGuide(s, [{ uuid: "t1" }, { uuid: "t2", isNowFocus: true }])).toEqual({ type: "pinned", uuid: "t2" });
     expect(reconcileGuide(s, [{ uuid: "t1", isDeleted: true }])).toEqual({ type: "taskGone" });
-    expect(reconcileGuide(run(s, { type: "pinned", uuid: "t1" }), [])).toEqual({ type: "unpinned" });
+    expect(reconcileGuide(run(s, { type: "pinned", uuid: "t1" }), [])).toEqual({ type: "unpinned", keep: false });
     expect(reconcileGuide(run(s, "skip"), [])).toBeNull();
   });
 
@@ -126,10 +126,19 @@ describe("first-run guide", () => {
   it("a guided task that leaves Now ends the tour quietly, or goes back to Do this now; it never pins another", () => {
     const ready = run(startGuide(), { type: "taskAdded", uuid: "t1" }, { type: "pinned", uuid: "t1" });
     // Before the tour: done elsewhere, parked or unpinned → back to Do this now on a task.
-    for (const t of [{ uuid: "t1", isCompleted: true, isNowFocus: true }, { uuid: "t1", isParked: true, isNowFocus: true }, { uuid: "t1" }]) {
-      expect(reconcileGuide(ready, [t])).toEqual({ type: "unpinned" });
+    // Still open, only unpinned: keep pointing at it.
+    expect(reconcileGuide(ready, [{ uuid: "t1" }])).toEqual({ type: "unpinned", keep: true });
+    expect(guideReducer(ready, { type: "unpinned", keep: true })).toMatchObject({ step: "pin", taskUuid: "t1" });
+    // Done, parked or deleted: drop it and ask for any open task, never a new one.
+    for (const tasks of [[{ uuid: "t1", isCompleted: true, isNowFocus: true }], [{ uuid: "t1", isParked: true, isNowFocus: true }], []]) {
+      const action = reconcileGuide(ready, tasks);
+      expect(action).toEqual({ type: "unpinned", keep: false });
+      const pin = guideReducer(ready, action);
+      expect(pin).toMatchObject({ step: "pin", taskUuid: null });
+      expect(guideCard(pin).text).toContain("Open any task in Up next");
+      // With no guided task, nothing more can send it to the new-task sheet.
+      expect(reconcileGuide(pin, [])).toBeNull();
     }
-    expect(run(ready, "unpinned")).toMatchObject({ step: "pin", taskUuid: "t1" });
     // After the tour: no Start focus for a task that is gone; the guide just ends.
     const after = run(ready, "startTour", "next", "next", "next", "next", "next");
     expect(after).toMatchObject({ step: "ready", afterTour: true });
@@ -143,5 +152,15 @@ describe("first-run guide", () => {
   it("the Up next stop offers an optional Open Day map", () => {
     const s = run(startGuide(), { type: "taskAdded", uuid: "t1" }, { type: "pinned", uuid: "t1" }, "startTour", "next");
     expect(guideCard(s)).toMatchObject({ stopId: "upnext", extra: { action: "openDayMap" } });
+  });
+
+  it("offline after the 15 s timeout (no server reply yet) still never rewinds the guide", () => {
+    const trustedFor = isTrustedLoad;
+    expect(isTrustedLoad({ isSyncingFromCache: true })).toBe(false);
+    expect(isTrustedLoad({ demoMode: true, isSyncingFromCache: true })).toBe(true);
+    const ready = run(startGuide(), { type: "taskAdded", uuid: "t1" }, { type: "pinned", uuid: "t1" });
+    expect(reconcileGuide(ready, [], { trusted: trustedFor({ isSyncingFromCache: false, syncWarning: "offline" }) })).toBeNull();
+    // The real data arrives later with the task still in Now: nothing to do.
+    expect(reconcileGuide(ready, [{ uuid: "t1", isNowFocus: true }], { trusted: trustedFor({ isSyncingFromCache: false, syncWarning: null }) })).toBeNull();
   });
 });

@@ -32,7 +32,7 @@ import AddTaskDialog from "./components/AddTaskDialog";
 import FirstRunWelcome from "./components/FirstRunWelcome";
 import FirstRunGuide from "./components/FirstRunGuide";
 import FirstTaskSheet from "./components/FirstTaskSheet";
-import { loadGuide, saveGuide, boxReducer, reconcileGuide, guideCard } from "./utils/firstRun";
+import { loadGuide, saveGuide, boxReducer, reconcileGuide, guideCard, isTrustedLoad } from "./utils/firstRun";
 import PrivacyPolicy from "./components/PrivacyPolicy";
 import DayMapPage from "./components/DayMapPage";
 import FocusBar from "./components/FocusBar";
@@ -1375,9 +1375,9 @@ export default function App() {
   useEffect(() => {
     if (!guideDataReady || guideBox.uid !== guideUid) return;
     // Cached data the server hasn't confirmed can't prove a task is gone.
-    const action = reconcileGuide(guideBox.state, payload?.tasks || [], { trusted: demoMode || !isSyncingFromCache });
+    const action = reconcileGuide(guideBox.state, payload?.tasks || [], { trusted: isTrustedLoad({ demoMode, isSyncingFromCache, syncWarning }) });
     if (action) dispatchGuide(action);
-  }, [guideBox, guideUid, guideDataReady, payload?.tasks, dispatchGuide, demoMode, isSyncingFromCache]);
+  }, [guideBox, guideUid, guideDataReady, payload?.tasks, dispatchGuide, demoMode, isSyncingFromCache, syncWarning]);
   const wasFocusingRef = useRef(false);
   useEffect(() => {
     if (busyFocusing && !wasFocusingRef.current) dispatchGuide({ type: "focusStarted" });
