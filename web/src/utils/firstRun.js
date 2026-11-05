@@ -85,8 +85,12 @@ export function guideReducer(state, action) {
   }
   if (!state) return state;
   switch (action.type) {
-    case "taskAdded": return { ...state, step: "pin", taskUuid: action.uuid };
-    case "taskGone": return { ...state, step: "task", taskUuid: null, tourPending: false };
+    // Only from the first-task step: a save that lands after Skip or Esc
+    // must not bring the guide back (loopcheck of #654).
+    case "taskAdded": return state.step === "task" ? { ...state, step: "pin", taskUuid: action.uuid } : state;
+    // Their own task was done, parked or deleted before Do this now: stay on
+    // "Do this now" for any open task; never a new-task step.
+    case "ownGone": return state.step === "pin" ? { ...state, taskUuid: null } : state;
     case "pinned": return { ...state, step: "ready", taskUuid: action.uuid || state.taskUuid, tourPending: true };
     // The task left Now before the tour (done, parked, unpinned or deleted):
     // back to "Do this now" on a task; never a new task, never a pin for them.
@@ -163,7 +167,8 @@ export function reconcileGuide(state, tasks = [], { trusted = true } = {}) {
     // they chose a different task than the one they just wrote.
     const pinned = own?.isNowFocus && !own.isCompleted ? own : live.find(t => t.isNowFocus && !t.isCompleted && !t.isParked);
     if (pinned) return { type: "pinned", uuid: pinned.uuid };
-    if (trusted && state.taskUuid && !own) return { type: "taskGone" };
+    if (own && (own.isCompleted || own.isParked)) return { type: "ownGone" };
+    if (trusted && state.taskUuid && !own) return { type: "ownGone" };
     return null;
   }
   if (state.step !== "ready" || !state.taskUuid) return null;

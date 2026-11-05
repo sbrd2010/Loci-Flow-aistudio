@@ -147,6 +147,9 @@ export default function App() {
   const pendingFocusOptionsRef = useRef(null);
 
   const enterDemo = () => {
+    // Each demo is a fresh visit: no guide left over from an earlier one
+    // (loopcheck of #654).
+    saveGuide("demo", null);
     setDemoPayload(createDemoPayload());
     setDemoMode(true);
     setActiveTab("today");
@@ -159,6 +162,7 @@ export default function App() {
     // demo mode strands them so a signed-out/real-account session on this
     // device can still surface demo task titles as notifications.
     cancelAllNativeScheduling();
+    saveGuide("demo", null);
     setDemoMode(false);
     setDemoPayload(null);
     setActiveTab("today");

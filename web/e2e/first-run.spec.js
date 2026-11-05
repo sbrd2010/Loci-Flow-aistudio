@@ -152,6 +152,74 @@ test("finishing the guided task during the tour ends it quietly, without ringing
   await expect(guide(page)).toHaveCount(0);
 });
 
+// To Ready with a task of their own, the shortest way.
+async function toReady(page) {
+  await page.getByRole("button", { name: "Let’s begin" }).click();
+  await page.getByRole("button", { name: "Skip this question" }).click();
+  await page.getByLabel("What do you want to do?").fill("Book the dentist");
+  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: "This is already small" }).click();
+  await page.locator('[data-guide-id="upnext"] [data-guide-own]').click();
+  await page.getByRole("button", { name: /Do this now/ }).click();
+  await expect(guide(page)).toContainText("Your task is ready");
+}
+
+test("laptop: Esc on the Day map goes back and keeps the tour", async ({ page }) => {
+  await newAccount(page, 1280, 720, STARTERS);
+  await toReady(page);
+  await guide(page).getByRole("button", { name: "Show me around · 90 s" }).click();
+  await guide(page).getByRole("button", { name: "Next" }).click();
+  await guide(page).getByRole("button", { name: "Open Day map" }).click();
+  await expect(page.locator(".day-map-page")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".day-map-page")).toHaveCount(0);
+  await expect(guide(page)).toContainText("Up next and Day map");
+});
+
+test("Coach stays out of reach at its stop, also after leaving its tab and coming back", async ({ page }) => {
+  await newAccount(page, 390, 844);
+  await toReady(page);
+  await guide(page).getByRole("button", { name: "Show me around · 90 s" }).click();
+  for (const name of ["Next", "Next", "Later", "Next"]) await guide(page).getByRole("button", { name, exact: true }).click();
+  await expect(page.locator('[data-guide-id="coach"]')).toHaveAttribute("inert", "");
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await nav.getByRole("button", { name: "Today" }).click();
+  await nav.getByRole("button", { name: "Coach" }).click();
+  await expect(page.locator('[data-guide-id="coach"]')).toHaveAttribute("inert", "");
+  await guide(page).getByRole("button", { name: "Finish" }).click();
+  await expect(page.locator("[inert]")).toHaveCount(0);
+});
+
+test("the first-task sheet keeps focus inside it, and app shortcuts don't fire behind it", async ({ page }) => {
+  await newAccount(page, 1280, 720, STARTERS);
+  await page.getByRole("button", { name: "Let’s begin" }).click();
+  await page.getByRole("button", { name: "Skip this question" }).click();
+  const sheet = page.getByRole("dialog", { name: "Write down one real thing" });
+  await expect(sheet).toBeVisible();
+  for (let i = 0; i < 6; i++) {
+    await page.keyboard.press("Tab");
+    expect(await page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]'))).toBe(true);
+  }
+  await sheet.getByRole("button", { name: "Skip guide" }).focus();
+  await page.keyboard.press("n");
+  await page.keyboard.press("l");
+  await expect(page.getByRole("dialog")).toHaveCount(1);
+  await expect(sheet).toBeVisible();
+});
+
+test("each demo is a fresh visit: no tour left over from the last one", async ({ page }) => {
+  await newAccount(page, 390, 844);
+  await page.getByRole("button", { name: "Skip setup, show me the app" }).click();
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: /Replay the tour/ }).click();
+  await expect(guide(page)).toContainText("TOUR · 1 OF 5");
+  await page.getByRole("button", { name: "Exit" }).click();
+  await page.getByTestId("demo-btn").click();
+  await page.getByRole("button", { name: "Skip setup, show me the app" }).click();
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
+  await expect(guide(page)).toHaveCount(0);
+});
+
 test("Skip setup opens the app with no guide", async ({ page }) => {
   await newAccount(page, 390, 844);
   await page.getByRole("button", { name: "Skip setup, show me the app" }).click();

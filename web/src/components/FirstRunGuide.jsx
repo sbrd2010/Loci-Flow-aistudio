@@ -39,15 +39,21 @@ export default function FirstRunGuide({ state, onAction, onTab, taskTitle, thoug
   }, [ownUuid]);
 
   // Coach's own chat stays out of reach at its stop: onboarding makes no AI
-  // request. The written examples in this card stand in for it.
+  // request. The written examples in this card stand in for it. Coach mounts
+  // afresh each time its tab opens (and after a reload), so every Coach page
+  // that appears while this stop is on is made inert (loopcheck of #654).
   useEffect(() => {
     if (stopId !== "coach") return undefined;
-    let el = null;
-    const id = requestAnimationFrame(() => {
-      el = document.querySelector('[data-guide-id="coach"]');
-      el?.setAttribute("inert", "");
+    const mark = () => document.querySelectorAll('[data-guide-id="coach"]').forEach(el => {
+      if (!el.hasAttribute("inert")) el.setAttribute("inert", "");
     });
-    return () => { cancelAnimationFrame(id); el?.removeAttribute("inert"); };
+    mark();
+    const observer = new MutationObserver(mark);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      document.querySelectorAll('[data-guide-id="coach"][inert]').forEach(el => el.removeAttribute("inert"));
+    };
   }, [stopId]);
 
   // Mind Box: a thought saved at this stop is acknowledged, not required.
@@ -57,14 +63,16 @@ export default function FirstRunGuide({ state, onAction, onTab, taskTitle, thoug
 
   const [example, setExample] = useState(() => exampleForNeed(challengeType));
 
-  // Esc skips the guide, unless a dialog (which owns Esc) is open or the
-  // person is typing.
+  // Esc skips the guide only when nothing else owns Esc: not over a dialog, a
+  // task screen or drawer, the Day map page (Esc goes back) or Today's open
+  // Up next sheet (Esc puts it away), and not while typing. Those listen on
+  // window and this on document, which runs first (loopcheck of #654).
   const skipAction = card?.skip?.action;
   useEffect(() => {
     if (!skipAction) return undefined;
     const onKey = (e) => {
       if (e.key !== "Escape" || e.defaultPrevented) return;
-      if (document.querySelector('[role="dialog"], [data-guide-id="donow"]')) return;
+      if (document.querySelector('[role="dialog"], [data-guide-id="donow"], .task-detail, .day-map-page, .today-wall.is-open')) return;
       if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName) || e.target?.isContentEditable) return;
       onAction(skipAction);
     };
@@ -72,18 +80,21 @@ export default function FirstRunGuide({ state, onAction, onTab, taskTitle, thoug
     return () => document.removeEventListener("keydown", onKey);
   }, [skipAction, onAction]);
 
-  // While the task's own screen is open at the pin step, the card steps aside:
-  // it would sit over Do this now. The ring on that button carries on alone.
+  // The card steps aside while a task is open over it: at the pin step the
+  // task's own screen (it would sit over Do this now; the ring carries on
+  // alone), and at any step the laptop's task drawer, whose footer it would
+  // cover (loopcheck of #654). It comes back when the task closes.
   const [taskOpen, setTaskOpen] = useState(false);
   const pinStep = state?.step === "pin" && !state?.resume;
+  const hasCard = !!card;
   useEffect(() => {
-    if (!pinStep) { setTaskOpen(false); return undefined; }
-    const check = () => setTaskOpen(!!document.querySelector('[data-guide-id="donow"]'));
+    if (!hasCard) { setTaskOpen(false); return undefined; }
+    const check = () => setTaskOpen(!!document.querySelector(pinStep ? '[data-guide-id="donow"], .task-detail.is-drawer' : ".task-detail.is-drawer"));
     check();
     const observer = new MutationObserver(check);
     observer.observe(document.body, { childList: true, subtree: true });
     return () => observer.disconnect();
-  }, [pinStep]);
+  }, [pinStep, hasCard]);
   // On phones the page gets room at the bottom the card's height, so the card
   // never sits over a control the person may need (ChatGPT review of #654).
   const cardRef = useRef(null);

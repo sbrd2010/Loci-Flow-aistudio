@@ -68,13 +68,26 @@ export default function FirstTaskSheet({ email, payload, savePayloadAsync, uid, 
     onAdded(task.uuid);
   };
 
+  // A modal sheet: Tab stays inside it, and no key reaches the app behind it
+  // (Today's N, L, Space…), while typing in its fields works as usual
+  // (loopcheck of #654). React stops the native event at its root, before the
+  // app's window and document listeners.
+  const sheetRef = useRef(null);
   const onKeyDown = (e) => {
-    if (e.key === "Escape") { e.stopPropagation(); onSkip(); }
+    e.stopPropagation();
+    if (e.key === "Escape") { onSkip(); return; }
+    if (e.key !== "Tab") return;
+    const items = [...(sheetRef.current?.querySelectorAll("button:not([disabled]), input:not([disabled])") || [])];
+    if (items.length === 0) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   };
 
   return (
     <div className="frs-backdrop">
-      <section className="frs" role="dialog" aria-modal="true" aria-labelledby="frs-title" onKeyDown={onKeyDown}>
+      <section className="frs" ref={sheetRef} role="dialog" aria-modal="true" aria-labelledby="frs-title" onKeyDown={onKeyDown}>
         <span className="frs-kicker">{phase === "title" ? "YOUR FIRST TASK · 1 OF 3" : "YOUR FIRST TASK · 2 OF 3"}</span>
         {error && phase === "title" && <p className="frs-error" role="alert">{error}</p>}
         {phase === "title" ? (

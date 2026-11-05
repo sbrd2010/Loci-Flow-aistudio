@@ -53,13 +53,13 @@ describe("first-run guide", () => {
     expect(s).toMatchObject({ step: "done", note: "done" });
   });
 
-  it("follows the saved tasks: a pin made anywhere moves it on, a deleted task sends it back", () => {
+  it("follows the saved tasks: a pin made anywhere moves it on; their own task gone keeps it on Do this now", () => {
     const s = run(startGuide(), { type: "taskAdded", uuid: "t1" });
     expect(reconcileGuide(s, [{ uuid: "t1" }])).toBeNull();
     expect(reconcileGuide(s, [{ uuid: "t1", isNowFocus: true }])).toEqual({ type: "pinned", uuid: "t1" });
     // Pinning a different open task still counts as doing the step.
     expect(reconcileGuide(s, [{ uuid: "t1" }, { uuid: "t2", isNowFocus: true }])).toEqual({ type: "pinned", uuid: "t2" });
-    expect(reconcileGuide(s, [{ uuid: "t1", isDeleted: true }])).toEqual({ type: "taskGone" });
+    expect(reconcileGuide(s, [{ uuid: "t1", isDeleted: true }])).toEqual({ type: "ownGone" });
     expect(reconcileGuide(run(s, { type: "pinned", uuid: "t1" }), [])).toEqual({ type: "unpinned", keep: false });
     expect(reconcileGuide(run(s, "skip"), [])).toBeNull();
   });
@@ -95,7 +95,7 @@ describe("first-run guide", () => {
     const b = { uid: "B", state: run(startGuide(), { type: "taskAdded", uuid: "b1" }) };
     // A's tasks are gone from view while B loads: computed against A, sent while B is current.
     const stale = reconcileGuide(a.state, []);
-    expect(stale).toEqual({ type: "taskGone" });
+    expect(stale).toEqual({ type: "ownGone" });
     expect(boxReducer(b, "A", stale)).toBe(b);
     expect(boxReducer(b, "B", { type: "pinned", uuid: "b1" }).state.step).toBe("ready");
     // Back on A, its own guide is intact.
@@ -105,7 +105,8 @@ describe("first-run guide", () => {
   it("rings only the person's own task at the pin step, never the starter tasks", () => {
     const s = run(startGuide(), { type: "taskAdded", uuid: "t1" });
     expect(guideCard(s, { taskTitle: "Reply to the landlord" })).toMatchObject({ targets: ["own", "donow", "nav-today"] });
-    expect(guideCard(guideReducer(null, { type: "replay", hasTask: true })).targets).toContain("upnext");
+    // With no task of their own (e.g. it was dropped), Up next is ringed, never a starter task.
+    expect(guideCard(guideReducer(s, { type: "ownGone" })).targets).toEqual(["upnext", "donow", "nav-today"]);
   });
 
   it("tells a refused first-task save apart from one still on its way", async () => {
@@ -117,7 +118,7 @@ describe("first-run guide", () => {
   it("cached data the server hasn't confirmed never rewinds the guide, but a pin in it still counts", () => {
     const pin = run(startGuide(), { type: "taskAdded", uuid: "t1" });
     expect(reconcileGuide(pin, [], { trusted: false })).toBeNull();
-    expect(reconcileGuide(pin, [], { trusted: true })).toEqual({ type: "taskGone" });
+    expect(reconcileGuide(pin, [], { trusted: true })).toEqual({ type: "ownGone" });
     expect(reconcileGuide(pin, [{ uuid: "t1", isNowFocus: true }], { trusted: false })).toEqual({ type: "pinned", uuid: "t1" });
     const ready = run(pin, { type: "pinned", uuid: "t1" });
     expect(reconcileGuide(ready, [], { trusted: false })).toBeNull();
@@ -162,5 +163,23 @@ describe("first-run guide", () => {
     expect(reconcileGuide(ready, [], { trusted: trustedFor({ isSyncingFromCache: false, syncWarning: "offline" }) })).toBeNull();
     // The real data arrives later with the task still in Now: nothing to do.
     expect(reconcileGuide(ready, [{ uuid: "t1", isNowFocus: true }], { trusted: trustedFor({ isSyncingFromCache: false, syncWarning: null }) })).toBeNull();
+  });
+
+  it("at Do this now, their own task done, parked or deleted drops it and stays on that step; never a new-task sheet", () => {
+    const pin = run(startGuide(), { type: "taskAdded", uuid: "t1" });
+    for (const tasks of [[{ uuid: "t1", isCompleted: true }], [{ uuid: "t1", isParked: true }], [{ uuid: "t1", isDeleted: true }]]) {
+      const action = reconcileGuide(pin, tasks);
+      expect(action).toEqual({ type: "ownGone" });
+      const next = guideReducer(pin, action);
+      expect(next).toMatchObject({ step: "pin", taskUuid: null });
+      expect(guideCard(next).text).toContain("Open any task in Up next");
+      expect(reconcileGuide(next, tasks)).toBeNull();
+    }
+  });
+
+  it("a first-task save that lands after Skip does not bring the guide back", () => {
+    const skipped = run(startGuide(), "skip");
+    expect(guideReducer(skipped, { type: "taskAdded", uuid: "t1" })).toBe(skipped);
+    expect(run(startGuide(), { type: "taskAdded", uuid: "t1" })).toMatchObject({ step: "pin", taskUuid: "t1" });
   });
 });
