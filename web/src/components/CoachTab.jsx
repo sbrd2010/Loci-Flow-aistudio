@@ -151,7 +151,7 @@ const dateClock = (ms) => {
 };
 const briefChipLabel = (brief) => dateClock(brief.at);
 
-export default function CoachTab({ payload, savePayload, savePayloadAsync, saveSubPath, saveSubPaths, saveSubPathsAsync, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null, chatDraft = "", setChatDraft = () => {}, uid, writeActivityEvents, stuck = null, onClearStuck, onBackToFocus, onOpenPrivacy, onOpenDayMap = null }) {
+export default function CoachTab({ namePrompt = null, payload, savePayload, savePayloadAsync, saveSubPath, saveSubPaths, saveSubPathsAsync, saveConfigPatch, userProfile, focusTimer = {}, isSyncingFromCache = false, syncWarning = null, chatDraft = "", setChatDraft = () => {}, uid, writeActivityEvents, stuck = null, onClearStuck, onBackToFocus, onOpenPrivacy, onOpenDayMap = null }) {
   // 75i/75k: a session running while Chat is open shows as the focus pill.
   const sessionPill = !!onBackToFocus && !!focusTimer.activeTask;
   const [moreOpen, setMoreOpen] = useState(false);
@@ -1823,6 +1823,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
   return (
     <div className="coach-page" data-guide-id="coach" ref={pageRef}>
       {confirmDialog && <ConfirmDialog {...confirmDialog} />}
+      {namePrompt}
 
       {/* Q51: Coach is two tabs, Chat (first) and Review. */}
       <div className="coach-tabs">

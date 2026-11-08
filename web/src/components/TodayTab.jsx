@@ -99,7 +99,7 @@ function SortableTaskItem({ id, isOver = false, disabled = false, children }) {
 }
 
 export default function TodayTab({
-  payload, savePayload, savePayloadAsync, saveConfigPatch, onOpenDayMap, onOpenPlan, onOpenCoach, onScattered, onOpenAddTask, onOpenAddThought,
+  payload, savePayload, savePayloadAsync, saveConfigPatch, onOpenDayMap, onOpenPlan, onOpenCoach, onScattered, onOpenAddTask, onOpenAddThought, onShowHowToStart,
   // 57f: "September ended · 2 left · Review" until the review is done.
   reviewLine = null,
   // 55d–e, Q47: "Day ends 17:30 · Close the day"; and the closed day.
@@ -1956,6 +1956,7 @@ export default function TodayTab({
           list.animate?.([{ boxShadow: "0 0 0 2px var(--accent)" }, { boxShadow: "0 0 0 2px transparent" }], { duration: 1200, easing: "ease-out" });
         }}
         onAddTask={onOpenAddTask}
+        onShowHowToStart={onShowHowToStart}
         weekCount={wallIsAsking ? weekTasks(tasks).length : 0}
         onFromWeek={() => setWeekPickerOpen(true)}
         onScattered={onScattered}

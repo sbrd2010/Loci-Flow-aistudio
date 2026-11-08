@@ -26,6 +26,8 @@ export default function FirstRunWelcome({ payload, savePayload, onDone }) {
         userName: name.trim() || config.userName || "",
         ...(chosen ? { challengeType: chosen } : {}),
         isOnboardingCompleted: true,
+        // The coach's name is asked once, when Coach is first opened.
+        coachNamePending: true,
         pomodoroDurationMinutes: config.pomodoroDurationMinutes || 25,
         reminderNagIntervalMinutes: config.reminderNagIntervalMinutes || 15,
         eveningGuardWindowActive: config.eveningGuardWindowActive ?? false,

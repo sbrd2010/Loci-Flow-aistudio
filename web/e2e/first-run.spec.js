@@ -220,6 +220,44 @@ test("each demo is a fresh visit: no tour left over from the last one", async ({
   await expect(guide(page)).toHaveCount(0);
 });
 
+test("an empty Today offers Show me how to start, which opens the guided first task", async ({ page }) => {
+  await newAccount(page, 390, 844);
+  await page.getByRole("button", { name: "Skip setup, show me the app" }).click();
+  await page.getByRole("button", { name: "Show me how to start" }).click();
+  await expect(page.getByRole("dialog", { name: "Write down one real thing" })).toBeVisible();
+});
+
+test("the coach's name is asked once on the first visit to Coach, never during the tour", async ({ page }) => {
+  await newAccount(page, 390, 844);
+  await toReady(page);
+  await guide(page).getByRole("button", { name: "Show me around · 90 s" }).click();
+  for (const name of ["Next", "Next", "Later", "Next"]) await guide(page).getByRole("button", { name, exact: true }).click();
+  await expect(guide(page)).toContainText("TOUR · 5 OF 5");
+  await expect(page.getByRole("heading", { name: "Name your coach" })).toHaveCount(0);
+  await guide(page).getByRole("button", { name: "Finish" }).click();
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await nav.getByRole("button", { name: "Coach" }).click();
+  await expect(page.getByRole("heading", { name: "Name your coach" })).toBeVisible();
+  await page.getByLabel("Coach name").fill("Sage");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Name your coach" })).toHaveCount(0);
+  await nav.getByRole("button", { name: "Today" }).click();
+  await nav.getByRole("button", { name: "Coach" }).click();
+  await expect(page.getByRole("heading", { name: "Name your coach" })).toHaveCount(0);
+});
+
+test("Keep leaves the coach's name and the question does not come back", async ({ page }) => {
+  await newAccount(page, 390, 844);
+  await page.getByRole("button", { name: "Skip setup, show me the app" }).click();
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await nav.getByRole("button", { name: "Coach" }).click();
+  await page.getByRole("button", { name: /^Keep “/ }).click();
+  await expect(page.getByRole("heading", { name: "Name your coach" })).toHaveCount(0);
+  await nav.getByRole("button", { name: "Today" }).click();
+  await nav.getByRole("button", { name: "Coach" }).click();
+  await expect(page.getByRole("heading", { name: "Name your coach" })).toHaveCount(0);
+});
+
 test("Skip setup opens the app with no guide", async ({ page }) => {
   await newAccount(page, 390, 844);
   await page.getByRole("button", { name: "Skip setup, show me the app" }).click();

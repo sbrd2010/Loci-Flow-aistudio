@@ -267,6 +267,7 @@ function AnchorLine({ anchors }) {
 
 export default function TodayWall({
   task,
+  onShowHowToStart = null,
   goal = null,
   onOpenGoal = null,
   goalRecord = null,
@@ -452,6 +453,10 @@ export default function TodayWall({
               <>
                 {onAddTask && (
                   <button type="button" className="wall-empty-add" onClick={onAddTask}>Add a task</button>
+                )}
+                {/* #653: the guided first task, again, for anyone who skipped it. */}
+                {onShowHowToStart && (
+                  <button type="button" className="wall-empty-howto" onClick={onShowHowToStart}>Show me how to start</button>
                 )}
                 {weekCount > 0 && onFromWeek && (
                   <button type="button" className="wall-link wall-empty-week" onClick={onFromWeek}>

@@ -32,6 +32,7 @@ import AddTaskDialog from "./components/AddTaskDialog";
 import FirstRunWelcome from "./components/FirstRunWelcome";
 import FirstRunGuide from "./components/FirstRunGuide";
 import FirstTaskSheet from "./components/FirstTaskSheet";
+import CoachNamePrompt from "./components/CoachNamePrompt";
 import { loadGuide, saveGuide, boxReducer, reconcileGuide, guideCard, isTrustedLoad } from "./utils/firstRun";
 import PrivacyPolicy from "./components/PrivacyPolicy";
 import DayMapPage from "./components/DayMapPage";
@@ -1399,6 +1400,20 @@ export default function App() {
     dispatchGuide({ type: "replay", pinnedUuid: commitmentPinnedUuid });
     setActiveTab("today");
   };
+  // "Show me how to start" on an empty Today: the guided first task again,
+  // offered only while no guide is running. Opening it is the person's choice.
+  const showHowToStart = !guide || guide.step === "done"
+    ? () => { dispatchGuide({ type: "start" }); setActiveTab("today"); }
+    : null;
+  // The coach's name, asked once on a new account's first visit to Coach
+  // outside the tour (FirstRunWelcome sets coachNamePending).
+  const coachNamePrompt = payload?.config?.coachNamePending === true && guide?.step !== "tour"
+    ? <CoachNamePrompt
+        currentName={payload.config.mentorName}
+        onSave={name => saveConfigPatch({ mentorName: name, coachNamePending: false })}
+        onKeep={() => saveConfigPatch({ coachNamePending: false })}
+      />
+    : null;
   const guideTaskTitle = guide?.taskUuid ? ((payload?.tasks || []).find(t => t.uuid === guide.taskUuid)?.title || "") : "";
   // #643: Done and Undo say only what the server confirmed. While one waits
   // they can't be pressed again; after 10 s it says it isn't saved yet.
@@ -1796,6 +1811,7 @@ export default function App() {
             syncWarning={syncWarning}
             saveConfigPatch={saveConfigPatch}
             onOpenAddTask={() => openAddTask("today", "Today")}
+            onShowHowToStart={showHowToStart}
             onOpenAddThought={openAddThought}
             onOpenDayMap={openDayMap}
             onOpenPlan={() => handleTabSelect("roadmap")}
@@ -1895,7 +1911,7 @@ export default function App() {
           </div>
         )}
         {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveConfigPatch={saveConfigPatch} userProfile={userProfile} initialPanel={mindBoxInitialPanel} onMakeThoughtTask={openThoughtAsTask} onOpenRescue={(state) => { handleTabSelect("today"); setRescueRequest({ at: Date.now(), state: typeof state === "string" ? state : null }); }} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} uid={activityUid} writeActivityEvents={writeActivityEvents} focusTimer={focusTimer} />}
-        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveSubPathsAsync={saveSubPathsAsync} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} uid={activityUid} writeActivityEvents={writeActivityEvents} stuck={coachStuck} onClearStuck={() => setCoachStuck(null)} onBackToFocus={focusTimer.focusSessionActive && focusTimer.activeTask ? handleReturnToFocus : null} onOpenPrivacy={() => { handleTabSelect("settings"); setSettingsInitialPage("privacy"); }} onOpenDayMap={openDayMap} />}
+        {activeTab === "coach" && <CoachTab namePrompt={coachNamePrompt} payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveSubPathsAsync={saveSubPathsAsync} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} uid={activityUid} writeActivityEvents={writeActivityEvents} stuck={coachStuck} onClearStuck={() => setCoachStuck(null)} onBackToFocus={focusTimer.focusSessionActive && focusTimer.activeTask ? handleReturnToFocus : null} onOpenPrivacy={() => { handleTabSelect("settings"); setSettingsInitialPage("privacy"); }} onOpenDayMap={openDayMap} />}
         {activeTab === "settings" && (
           <SettingsTab
             initialPage={settingsInitialPage}

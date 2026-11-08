@@ -242,3 +242,38 @@ body[data-guide~="nav-coach"] [data-guide-id="nav-coach"],
     padding-bottom: calc(var(--guide-h, 0px) + 100px + env(safe-area-inset-bottom, 0px));
   }
 }
+
+/* — Coach: the coach's name, asked once (CoachNamePrompt) — */
+.cnp {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto 12px;
+  box-sizing: border-box;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cnp-title { margin: 0; font-family: var(--font-serif); font-weight: 500; font-size: 20px; color: var(--ink); }
+.cnp-text { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink-2); }
+.cnp-row { display: flex; gap: 8px; }
+.cnp-row .frw-input { flex: 1; min-width: 0; }
+.cnp-row .frw-primary { min-height: 50px; padding: 0 20px; }
+.cnp-keep { align-self: flex-start; }
+
+/* — "Show me how to start" on an empty Today: its own plain link, not a
+   .wall-link, so the wall's "·" separators between links are not shifted — */
+.wall-empty-howto {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: 600 14px var(--font-sans);
+  text-decoration: underline;
+  cursor: pointer;
+}

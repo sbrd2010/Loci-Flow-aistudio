@@ -305,7 +305,7 @@ export function KeyDeadlinePage({ config, saveConfigPatch, onBack }) {
 
 // ── The coach (44c, 44j) ───────────────────────────────────────────────────
 export function CoachPage({ config, saveConfigPatch, onBack, children }) {
-  const [name, setName, flushName] = useAutosave(config.mentorName || "", v => saveConfigPatch({ mentorName: v.trim() }));
+  const [name, setName, flushName] = useAutosave(config.mentorName || "", v => saveConfigPatch({ mentorName: v.trim(), ...(config.coachNamePending ? { coachNamePending: false } : {}) }));
   const [style, setStyle, flushStyle] = useAutosave(config.coachPersonaNote || "", v => saveConfigPatch({ coachPersonaNote: v.trim().slice(0, 300) }));
   const [about, setAbout, flushAbout] = useAutosave(config.coachProfileNote || "", v => saveConfigPatch({ coachProfileNote: v.trim().slice(0, COACH_PROFILE_NOTE_MAX_LENGTH) }));
   const persona = normalizeCoachPersona(config.coachPersona);
