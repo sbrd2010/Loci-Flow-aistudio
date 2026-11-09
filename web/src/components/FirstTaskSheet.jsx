@@ -9,7 +9,7 @@ import "../styles/firstRun.css";
 // #653: the guided first task, one question per screen: the task, then its
 // smallest first step (optional: "already small" or "not sure yet"). It saves
 // a Today task in the same shape and the same way as AddTaskDialog does.
-export default function FirstTaskSheet({ email, payload, savePayloadAsync, uid, writeActivityEvents, onAdded, onSkip }) {
+export default function FirstTaskSheet({ email, payload, savePayloadAsync, uid, writeActivityEvents, onAdded, onSkip, stepsLabel = "YOUR FIRST TASK" }) {
   const [phase, setPhase] = useState("title");
   const [title, setTitle] = useState("");
   const [step, setStep] = useState("");
@@ -88,7 +88,7 @@ export default function FirstTaskSheet({ email, payload, savePayloadAsync, uid, 
   return (
     <div className="frs-backdrop">
       <section className="frs" ref={sheetRef} role="dialog" aria-modal="true" aria-labelledby="frs-title" onKeyDown={onKeyDown}>
-        <span className="frs-kicker">{phase === "title" ? "YOUR FIRST TASK · 1 OF 3" : "YOUR FIRST TASK · 2 OF 3"}</span>
+        <span className="frs-kicker">{`${stepsLabel} · ${phase === "title" ? 1 : 2} OF 3`}</span>
         {error && phase === "title" && <p className="frs-error" role="alert">{error}</p>}
         {phase === "title" ? (
           <form className="frs-body" onSubmit={e => { e.preventDefault(); if (title.trim()) setPhase("step"); }}>

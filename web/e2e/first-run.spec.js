@@ -225,6 +225,7 @@ test("an empty Today offers Show me how to start, which opens the guided first t
   await page.getByRole("button", { name: "Skip setup, show me the app" }).click();
   await page.getByRole("button", { name: "Show me how to start" }).click();
   await expect(page.getByRole("dialog", { name: "Write down one real thing" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Write down one real thing" })).toContainText("GETTING STARTED · 1 OF 3");
 });
 
 test("the coach's name is asked once on the first visit to Coach, never during the tour", async ({ page }) => {

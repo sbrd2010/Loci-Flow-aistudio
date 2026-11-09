@@ -33,7 +33,7 @@ import FirstRunWelcome from "./components/FirstRunWelcome";
 import FirstRunGuide from "./components/FirstRunGuide";
 import FirstTaskSheet from "./components/FirstTaskSheet";
 import CoachNamePrompt from "./components/CoachNamePrompt";
-import { loadGuide, saveGuide, boxReducer, reconcileGuide, guideCard, isTrustedLoad } from "./utils/firstRun";
+import { loadGuide, saveGuide, boxReducer, reconcileGuide, guideCard, isTrustedLoad, stepsLabel } from "./utils/firstRun";
 import PrivacyPolicy from "./components/PrivacyPolicy";
 import DayMapPage from "./components/DayMapPage";
 import FocusBar from "./components/FocusBar";
@@ -1403,7 +1403,7 @@ export default function App() {
   // "Show me how to start" on an empty Today: the guided first task again,
   // offered only while no guide is running. Opening it is the person's choice.
   const showHowToStart = !guide || guide.step === "done"
-    ? () => { dispatchGuide({ type: "start" }); setActiveTab("today"); }
+    ? () => { dispatchGuide({ type: "start", howTo: true }); setActiveTab("today"); }
     : null;
   // The coach's name, asked once on a new account's first visit to Coach
   // outside the tour (FirstRunWelcome sets coachNamePending).
@@ -1978,6 +1978,7 @@ export default function App() {
 
       {guide?.step === "task" && !busyFocusing && (
         <FirstTaskSheet
+          stepsLabel={stepsLabel(guide)}
           email={demoMode ? "demo@loci.app" : user?.email}
           payload={payload}
           savePayloadAsync={savePayloadAsync}

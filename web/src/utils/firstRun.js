@@ -77,7 +77,9 @@ const finished = (state, note) => ({ ...state, step: "done", tourPending: false,
 const toStop = (state, stop) => ({ ...state, step: "tour", stop, tourPending: true, tourStarted: true, afterTour: false, resume: false, note: null });
 
 export function guideReducer(state, action) {
-  if (action.type === "start") return startGuide();
+  // `howTo`: started from "Show me how to start" on an empty Today, often by
+  // someone who has used Loci before, so the steps aren't called their first.
+  if (action.type === "start") return { ...startGuide(), howTo: !!action.howTo };
   if (action.type === "replay") {
     // Replay is the tour, always: it never asks for a task or creates one.
     // With nothing in Now, the first stop says where the one thing will show.
@@ -178,6 +180,12 @@ export function reconcileGuide(state, tasks = [], { trusted = true } = {}) {
   return { type: "unpinned", keep: !!own && !own.isCompleted && !own.isParked };
 }
 
+// What the three task steps are called: "YOUR FIRST TASK" on a new
+// account's first run, "GETTING STARTED" when reopened from Today.
+export function stepsLabel(state) {
+  return state?.howTo ? "GETTING STARTED" : "YOUR FIRST TASK";
+}
+
 // The card's words and which parts of the app it rings.
 export function guideCard(state, { taskTitle = "", tap = "Tap" } = {}) {
   if (!state) return null;
@@ -195,7 +203,7 @@ export function guideCard(state, { taskTitle = "", tap = "Tap" } = {}) {
     const text = taskTitle
       ? `Find “${taskTitle}” (outlined), open it and ${tap.toLowerCase()} Do this now. It moves to Now, and everything else can wait.`
       : `Open any task in Up next and ${tap.toLowerCase()} Do this now. It moves to Now, and everything else can wait.`;
-    return { kicker: "YOUR FIRST TASK · 3 OF 3", title: "Make it your one thing", text,
+    return { kicker: `${stepsLabel(state)} · 3 OF 3`, title: "Make it your one thing", text,
       targets: [...(state.taskUuid ? ["own"] : ["upnext"]), "donow", "nav-today"], tab: "today", skip: { label: "Skip guide", action: "skip" } };
   }
   if (state.step === "ready") {

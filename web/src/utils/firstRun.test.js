@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { startGuide, guideReducer, reconcileGuide, guideCard, loadGuide, saveGuide, exampleForNeed, boxReducer, saveFirstTask, isTrustedLoad, LAST_STOP } from "./firstRun";
+import { startGuide, guideReducer, reconcileGuide, guideCard, loadGuide, saveGuide, exampleForNeed, boxReducer, saveFirstTask, isTrustedLoad, stepsLabel, LAST_STOP } from "./firstRun";
 
 const run = (state, ...actions) => actions.reduce((s, a) => guideReducer(s, typeof a === "string" ? { type: a } : a), state);
 const memory = () => { const m = new Map(); return { getItem: k => m.get(k) ?? null, setItem: (k, v) => m.set(k, v), removeItem: k => m.delete(k) }; };
@@ -181,5 +181,14 @@ describe("first-run guide", () => {
     const skipped = run(startGuide(), "skip");
     expect(guideReducer(skipped, { type: "taskAdded", uuid: "t1" })).toBe(skipped);
     expect(run(startGuide(), { type: "taskAdded", uuid: "t1" })).toMatchObject({ step: "pin", taskUuid: "t1" });
+  });
+
+  it("calls the steps GETTING STARTED when reopened from Today, YOUR FIRST TASK on a first run", () => {
+    const first = guideReducer(null, { type: "start" });
+    const howTo = guideReducer(null, { type: "start", howTo: true });
+    expect(stepsLabel(first)).toBe("YOUR FIRST TASK");
+    expect(stepsLabel(howTo)).toBe("GETTING STARTED");
+    expect(guideCard(run(howTo, { type: "taskAdded", uuid: "t1" })).kicker).toBe("GETTING STARTED · 3 OF 3");
+    expect(guideCard(run(first, { type: "taskAdded", uuid: "t1" })).kicker).toBe("YOUR FIRST TASK · 3 OF 3");
   });
 });
