@@ -375,6 +375,23 @@ test("mobile reliability: no one thing: pick from the top three, with Undo", asy
   await expect(page.locator(".wall-pick")).toBeVisible({ timeout: 8_000 });
 });
 
+// #659: on a wide desktop the picker wall shows the list beside it, so the
+// task view's "list hidden" centring (75d) must not move its band and anchor
+// off the picker's left edge.
+test("wide: with no one thing, the goal band, anchor and picker share one left edge at 1920 (#659)", async ({ page }) => {
+  await emptyTheWall(page);
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await expect(page.locator(".today-wall.is-empty .wall-goal")).toBeVisible();
+  await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
+  const [band, anchor, title] = await Promise.all([
+    page.locator(".today-wall.is-empty .wall-goal").boundingBox(),
+    page.locator(".today-wall.is-empty .wall-anchor").boundingBox(),
+    page.locator(".wall-empty-title").boundingBox(),
+  ]);
+  expect(Math.abs(band.x - title.x)).toBeLessThan(2);
+  expect(Math.abs(anchor.x - title.x)).toBeLessThan(2);
+});
+
 // 67j/67s: nothing in Today: Add a task, or bring some in from This week; the
 // first one ticked is the one thing, and Undo takes them all back.
 test("mobile reliability: nothing in Today: From This week moves the ticked tasks in, the first as the one thing, with Undo", async ({ page }) => {
