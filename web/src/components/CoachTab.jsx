@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import FocusPill from "./FocusPill";
 import { auth } from "../firebase";
+import { challengeDescription } from "../utils/challenge";
 import { aiNeedsSignIn, callAI, describeAIError, fullPromptAllowed, getAIKeys, hasAIKey, isAISystemReply, isOnlyProviderKeyMissing, noKeyHint } from "../utils/aiCall";
 import { stripAIUsageNote } from "../utils/aiUsageLimits";
 import { buildLocalSafetyReply, localSafetyTurns, PRIVATE_REPLY_TURN, PRIVATE_USER_TURN } from "../utils/crisisSafety";
@@ -21,7 +22,6 @@ import { buildSplit, undoSplit } from "../utils/splitTask";
 import { horizonsFromConfig } from "../utils/horizons";
 import { requestNotifPermission } from "../utils/focusNotifications";
 import { scheduleCoachCheckin } from "../utils/reminders";
-import { challengeDescription } from "../utils/challenge";
 import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, parseCheckinRequestFromMessage, buildCoachCheckinContext } from "../utils/coachCheckin";
 import { parseCoachActionTags, applyCoachActions, buildActionReplyText, buildSetNowFocusTasks, buildParkTaskTasks, findTaskByTitle, undoCoachAction, withoutChangeClaims } from "../utils/coachActions";
 import { buildPersonaInstruction } from "../utils/coachPersona";

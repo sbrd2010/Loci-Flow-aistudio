@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { droppedLine, recentlyDropped } from "../../utils/recentlyDropped";
 import { COACH_PERSONAS, normalizeCoachPersona } from "../../utils/coachPersona";
 import { COACH_PROFILE_NOTE_MAX_LENGTH } from "../../utils/coachProfile";
+import { CHALLENGES, normalizeChallenge } from "../../utils/challenge";
 import { MEMORY_ENTRY_MAX_LENGTH, clearAllMemory, editMemoryEntry, isMemoryEnabled, removePinnedFact, removeRecentObservation } from "../../utils/coachMemory";
 import { analyzeFocusWindowRows, formatTime12 } from "../../utils/focusWindowHints";
 import { formatSpan } from "../../utils/dayMapPlan";
@@ -11,7 +12,6 @@ import { isNativeApp } from "../../utils/nativeNotifs";
 import { isRelayConfigured, PROVIDER_ORDERS } from "../../utils/aiCall";
 import { IconPencil, IconPlus, IconX } from "../ui/icons";
 import { Group, RadioList, Row, SubPage, SwitchRow, useAutosave } from "./ui";
-import { CHALLENGES, normalizeChallenge } from "../../utils/challenge";
 
 // The sub-pages of Settings (44c–44h). Everything saves as it changes; text
 // saves a moment after typing stops, and on leaving the field.
