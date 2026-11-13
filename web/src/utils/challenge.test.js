@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CHALLENGES, challengeDescription, normalizeChallenge } from "./challenge";
+import { CHALLENGES, challengeCoachLine, challengeDescription, normalizeChallenge } from "./challenge";
 import { buildAskAIRequest } from "./aiTaskPrompts";
 import { buildCoachSystemPrompt } from "./coachSystemPrompt";
 
@@ -36,16 +36,26 @@ describe("What helps you most (#656)", () => {
     expect(JSON.stringify(without)).not.toMatch(/core challenge/i);
   });
 
-  it("Coach gets the longer description, and no challenge line when not set, in every prompt mode", () => {
+  it("Coach gets its short line for the same choice, and no challenge line when not set, in every prompt mode", () => {
     const base = { mentorName: "Coach", firstName: "Sam", userName: "Sam" };
     for (const mode of ["full_task", "compact_task", "light", "emotional", "profile_reflection"]) {
-      const set = buildCoachSystemPrompt(mode, { ...base, challengeLabel: challengeDescription("overwhelmed") });
-      const unset = buildCoachSystemPrompt(mode, { ...base, challengeLabel: null });
-      if (/core challenge/i.test(set)) expect(set, mode).toContain(challengeDescription("overwhelmed"));
+      const set = buildCoachSystemPrompt(mode, { ...base, challengeLabel: challengeCoachLine("overwhelmed") });
+      const unset = buildCoachSystemPrompt(mode, { ...base, challengeLabel: challengeCoachLine(undefined) });
+      if (/core challenge/i.test(set)) expect(set, mode).toContain(challengeCoachLine("overwhelmed"));
       expect(unset, mode).not.toMatch(/core challenge/i);
       expect(unset, mode).not.toMatch(/null|undefined"/);
     }
-    expect(buildCoachSystemPrompt("full_task", { ...base, challengeLabel: challengeDescription("starting") }))
-      .toContain(`Core challenge: "${challengeDescription("initiation")}"`);
+    expect(buildCoachSystemPrompt("full_task", { ...base, challengeLabel: challengeCoachLine("starting") }))
+      .toContain(`Core challenge: "${challengeCoachLine("initiation")}"`);
+  });
+
+  // Coach's full-task turn sits close to Groq's free-tier limit
+  // (coachPromptBudget.test.js), so its line stays short; Ask AI has room.
+  it("Coach's lines stay short; every choice has one; no internal labels", () => {
+    for (const c of CHALLENGES) {
+      expect(c.coach.length, c.value).toBeLessThanOrEqual(50);
+      expect(`${c.coach} ${c.description}`, c.value).not.toMatch(/\bP[1-4]\b/);
+    }
+    expect(challengeCoachLine(null)).toBeNull();
   });
 });

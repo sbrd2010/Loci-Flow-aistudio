@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import FocusPill from "./FocusPill";
 import { auth } from "../firebase";
-import { challengeDescription } from "../utils/challenge";
+import { challengeCoachLine } from "../utils/challenge";
 import { aiNeedsSignIn, callAI, describeAIError, fullPromptAllowed, getAIKeys, hasAIKey, isAISystemReply, isOnlyProviderKeyMissing, noKeyHint } from "../utils/aiCall";
 import { stripAIUsageNote } from "../utils/aiUsageLimits";
 import { buildLocalSafetyReply, localSafetyTurns, PRIVATE_REPLY_TURN, PRIVATE_USER_TURN } from "../utils/crisisSafety";
@@ -176,9 +176,9 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
   useEffect(() => () => { if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current); }, []);
 
   // -- AI Mentor Chat --------------------------------------------------------
-  // #656: the same sentence Ask AI gets (Settings › Coach › What helps you
-  // most), or null when nothing was chosen: then no challenge line at all.
-  const challengeLabel = challengeDescription(config.challengeType);
+  // #656: Settings › Coach › What helps you most, as Coach's short line (the
+  // same choice Ask AI gets), or null when nothing was chosen: no line at all.
+  const challengeLabel = challengeCoachLine(config.challengeType);
 
   const firstName = (config.userName || "").split(" ")[0] || "friend";
   // 62j: an empty conversation shows its own empty state; Coach doesn't
