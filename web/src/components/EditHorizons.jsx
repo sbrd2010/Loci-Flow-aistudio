@@ -147,7 +147,7 @@ export default function EditHorizons({ payload, day, saveConfigPatch, savePayloa
       <section className="eh-panel" aria-labelledby="eh-edit-title">
         <h3 className="eh-sub" id="eh-edit-title">{h?.name}</h3>
         <label className="eh-label" htmlFor="eh-edit-end">This period ends</label>
-        <DateField id="eh-edit-end" className="eh-input" label="This period ends" min={day} today={day} value={editing.endDate}
+        <DateField key={editing.id} id="eh-edit-end" className="eh-input" label="This period ends" min={day} today={day} value={editing.endDate}
           onChange={v => setEditing(x => ({ ...x, endDate: v }))} />
         {moved && <p className="eh-note">{moveSentence(moved, editing.endDate, day)}</p>}
         <div className="eh-actions">

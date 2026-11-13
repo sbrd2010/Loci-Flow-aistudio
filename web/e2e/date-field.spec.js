@@ -75,6 +75,34 @@ test("desktop: a date can be typed; nonsense is refused with a hint and nothing 
   await expect(started).toHaveValue("");
 });
 
+// ChatGPT review of #668: Tab out of the open calendar closes it, and focus
+// stays where the person moved it.
+test("desktop: tabbing out of the open calendar closes it without pulling focus back", async ({ page }) => {
+  await enterDemo(page);
+  await openKeyDeadline(page);
+  const open = page.getByRole("button", { name: "Deadline: choose on a calendar" });
+  await open.click();
+  const calendar = page.getByRole("dialog", { name: "Deadline: calendar" });
+  await expect(calendar).toBeVisible();
+  for (let i = 0; i < 12; i++) await page.keyboard.press("Tab");
+  await expect(calendar).toHaveCount(0);
+  await expect(open).not.toBeFocused();
+  expect(await page.evaluate(() => !!document.activeElement?.closest(".df-pop"))).toBe(false);
+});
+
+// ChatGPT review of #668: a refused entry doesn't outlive a change made elsewhere.
+test("desktop: a refused entry and its hint go when the date is changed elsewhere", async ({ page }) => {
+  await enterDemo(page);
+  await openKeyDeadline(page);
+  const field = page.getByLabel("Deadline", { exact: true });
+  await field.fill("31 Feb 2026");
+  await field.press("Enter");
+  await expect(page.getByRole("alert")).toHaveText("Type a date like 13 Nov 2026");
+  await page.getByRole("button", { name: "Clear goal" }).click();
+  await expect(field).toHaveValue("");
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
 test("desktop: a reminder day before today is refused", async ({ page }) => {
   await enterDemo(page);
   await page.keyboard.press("n");

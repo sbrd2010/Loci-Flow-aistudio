@@ -19,8 +19,18 @@ export default function DateField({ id, value = "", onChange, min, today, label,
   const [error, setError] = useState("");
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
+  const inputRef = useRef(null);
   const buttonRef = useRef(null);
   const hintId = useId();
+
+  // The value changed from outside (Clear goal, another device, a different
+  // front) while nobody is typing here: drop any half-typed or refused text
+  // and its hint, so they never sit on top of the new value.
+  useEffect(() => {
+    if (document.activeElement === inputRef.current) return;
+    setDraft(null);
+    setError("");
+  }, [value]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -56,8 +66,15 @@ export default function DateField({ id, value = "", onChange, min, today, label,
   const close = () => { setOpen(false); buttonRef.current?.focus(); };
 
   return (
-    <span className="df" ref={wrapRef}>
+    <span
+      className="df"
+      ref={wrapRef}
+      // Focus moving out of the field (Tab past the calendar, say) closes the
+      // calendar; focus stays where the person put it.
+      onBlur={(e) => { if (open && !wrapRef.current?.contains(e.relatedTarget)) setOpen(false); }}
+    >
       <input
+        ref={inputRef}
         id={id}
         className={`${className} df-input`}
         type="text"
@@ -97,6 +114,8 @@ export default function DateField({ id, value = "", onChange, min, today, label,
         <div
           className="df-pop"
           role="dialog"
+          // A click on the calendar's blank parts mustn't count as leaving it.
+          onMouseDown={(e) => { if (!e.target.closest("button")) e.preventDefault(); }}
           aria-label={`${label || "Date"}: calendar`}
           onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); } }}
         >

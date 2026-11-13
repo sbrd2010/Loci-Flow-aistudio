@@ -116,7 +116,12 @@
   border: 1px solid var(--line);
   border-radius: 8px;
   box-shadow: var(--shadow-lg, 0 12px 32px rgba(15, 31, 22, 0.16));
-  /* DayPicker's own variables, in Loci's colours. */
+  color: var(--ink);
+  font-size: 14px;
+}
+/* DayPicker's own variables, in Loci's colours. Set on .rdp-root itself:
+   the library declares them there, which beats inheriting them. */
+.df-pop .rdp-root {
   --rdp-accent-color: var(--accent);
   --rdp-accent-background-color: var(--accent-soft);
   --rdp-today-color: var(--accent);
@@ -127,8 +132,6 @@
   --rdp-selected-border: 2px solid var(--accent);
   --rdp-nav_button-height: 32px;
   --rdp-nav_button-width: 32px;
-  color: var(--ink);
-  font-size: 14px;
 }
 .df-pop .rdp-selected .rdp-day_button { color: var(--on-accent); background: var(--accent); }
 .df-pop .rdp-caption_label { font-size: 15px; font-weight: 700; }
