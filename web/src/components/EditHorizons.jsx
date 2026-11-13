@@ -47,7 +47,12 @@ export default function EditHorizons({ payload, day, saveConfigPatch, savePayloa
     else onClose();
   };
   useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); back.current(); } };
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      // An open date calendar closes itself first (#668 loopcheck).
+      if (document.querySelector(".df-pop")) return;
+      e.preventDefault(); e.stopPropagation(); back.current();
+    };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, []);

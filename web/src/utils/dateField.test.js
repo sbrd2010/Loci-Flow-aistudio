@@ -48,11 +48,9 @@ describe("date field strings (#658)", () => {
   });
 
   it("reads the week start from the locale, or leaves the default", () => {
-    const gb = localeWeekStart("en-GB");
-    const us = localeWeekStart("en-US");
-    // Node without week data returns undefined for both; with it, GB is Monday and US Sunday.
-    if (gb !== undefined) expect(gb).toBe(1);
-    if (us !== undefined) expect(us).toBe(0);
+    // Node 22 (local and CI) has the locale week data.
+    expect(localeWeekStart("en-GB")).toBe(1);
+    expect(localeWeekStart("en-US")).toBe(0);
     expect(localeWeekStart("not a locale !!")).toBeUndefined();
   });
 

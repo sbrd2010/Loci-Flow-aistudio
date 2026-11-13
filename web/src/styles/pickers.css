@@ -137,7 +137,10 @@
 .df-pop .rdp-caption_label { font-size: 15px; font-weight: 700; }
 .df-pop .rdp-weekday { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--ink-2); }
 .df-pop .rdp-chevron { fill: var(--accent); }
-.df-loading { margin: 8px; color: var(--ink-2); }
+.df-loading { margin: 8px; color: var(--ink-2); max-width: 16rem; }
+/* The right-hand field of a pair opens its calendar leftwards, so it never
+   runs past the window's edge. */
+.set-field-pair .set-field:last-child .df-pop { left: auto; right: 0; }
 .df-clear {
   margin-top: 4px;
   padding: 4px 0;

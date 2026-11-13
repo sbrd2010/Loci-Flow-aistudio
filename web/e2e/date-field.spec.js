@@ -120,6 +120,77 @@ test("desktop: a reminder day before today is refused", async ({ page }) => {
   await expect(calendar.getByRole("button", { name: /June 16th, 2024/ })).toBeEnabled();
 });
 
+// Loopcheck of #668 ------------------------------------------------------
+
+async function openReminder(page, title) {
+  await page.keyboard.press("n");
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  if (title) await dialog.getByTestId("add-task-title").fill(title);
+  await dialog.getByRole("button", { name: "More details" }).click();
+  await dialog.getByRole("button", { name: "Set a reminder" }).click();
+  return dialog;
+}
+
+test("desktop: ⌘↵ in the typed reminder day saves that day; a refused one stops it", async ({ page }) => {
+  await page.addInitScript(() => { try { window.localStorage.setItem("loci_today_peek_open", "1"); } catch { /* private mode */ } });
+  await enterDemo(page);
+  const dialog = await openReminder(page, "Call the bank");
+  const day = dialog.getByLabel("Reminder date", { exact: true });
+  await day.fill("31 Feb 2024");
+  await day.press("Control+Enter");
+  await expect(dialog.getByRole("alert")).toHaveText("Type a date like 13 Nov 2026");
+  await expect(dialog).toBeVisible();
+  await day.fill("16 Jun 2024");
+  await day.press("Control+Enter");
+  await expect(page.locator(".add-card")).toHaveCount(0, { timeout: 5_000 });
+  const row = page.getByTestId("today-tasks-list").locator("[data-testid='task-row']", { hasText: "Call the bank" });
+  await expect(row).toContainText("Tomorrow");
+});
+
+test("desktop: clicks inside the calendar keep it open: a day before today, and its blank parts", async ({ page }) => {
+  await enterDemo(page);
+  const dialog = await openReminder(page);
+  await dialog.getByRole("button", { name: "Reminder date: choose on a calendar" }).click();
+  const calendar = dialog.getByRole("dialog", { name: "Reminder date: calendar" });
+  await calendar.getByRole("button", { name: /June 14th, 2024/ }).click({ force: true });
+  await expect(calendar).toBeVisible();
+  await calendar.locator(".rdp-caption_label").click();
+  await expect(calendar).toBeVisible();
+  await expect(dialog.getByLabel("Reminder date", { exact: true })).not.toBeFocused();
+});
+
+test("desktop: in Edit horizons, Escape in the calendar closes only the calendar, and a typed end date adds in one click", async ({ page }) => {
+  await enterDemo(page);
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
+  await page.getByRole("button", { name: "Edit horizons" }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit horizons" });
+  await dialog.getByRole("radio", { name: "Something else…" }).click();
+  await dialog.locator("#eh-add-name").fill("Grant round");
+  await dialog.getByRole("button", { name: "Ends: choose on a calendar" }).click();
+  const calendar = dialog.getByRole("dialog", { name: "Ends: calendar" });
+  await expect(calendar).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(calendar).toHaveCount(0);
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator("#eh-add-name")).toHaveValue("Grant round");
+  await dialog.getByLabel("Ends", { exact: true }).fill("30 Jun 2024");
+  await dialog.getByRole("button", { name: "Add horizon" }).click();
+  await expect(page.locator(".plan-rung", { hasText: "Grant round" })).toHaveCount(1);
+});
+
+test("desktop: if the calendar can't load, it says so and the app stays; typing still works", async ({ page }) => {
+  await page.route("**/DayPickerPanel*", route => route.abort());
+  await enterDemo(page);
+  await openKeyDeadline(page);
+  await page.getByRole("button", { name: "Deadline: choose on a calendar" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "The calendar couldn’t load. Type the date instead." })).toBeVisible();
+  await expect(page.locator(".app-container")).toBeVisible();
+  const field = page.getByLabel("Deadline", { exact: true });
+  await field.fill("1 Jan 2026");
+  await field.press("Enter");
+  await expect(field).toHaveValue("1 Jan 2026");
+});
+
 test.describe("touch-primary device", () => {
   test.use({ hasTouch: true, isMobile: true });
 
