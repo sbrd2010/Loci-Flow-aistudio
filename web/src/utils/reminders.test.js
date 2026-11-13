@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { getFocusWindows } from "./focusWindows";
-import { getDueDailyCheckins, checkDailyCheckinNotifications, VISIBLE_HEARTBEAT_KEY, scheduleReminder, scheduleCoachCheckin, cancelAllNativeScheduling } from "./reminders";
+import { getDueDailyCheckins, checkDailyCheckinNotifications, VISIBLE_HEARTBEAT_KEY, scheduleReminder, scheduleCoachCheckin, cancelAllNativeScheduling, clearWebReminders } from "./reminders";
 
 const dt = (h, mi = 0) => new Date(2024, 5, 15, h, mi);
 const TODAY = "2024-06-15";
@@ -176,6 +176,16 @@ describe("sign-out clears this tab's web reminders (#664)", () => {
     cancelAllNativeScheduling();
     resolveReady(reg);
     await flush();
+    expect(showNotification).not.toHaveBeenCalled();
+  });
+
+  it("clearWebReminders (App, whenever nobody is signed in) clears pending timers too", async () => {
+    vi.useFakeTimers();
+    stubWeb();
+    scheduleReminder(task());
+    scheduleCoachCheckin({ fireAt: Date.now() + 60_000, note: TITLE });
+    clearWebReminders();
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
     expect(showNotification).not.toHaveBeenCalled();
   });
 

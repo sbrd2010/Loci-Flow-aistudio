@@ -499,9 +499,7 @@ export function cancelDailyCheckins(config, windows, now = new Date()) {
 // account's task titles. Already-shown web notifications are closed too, as
 // nativeClearDelivered does below for Android.
 export function cancelAllNativeScheduling() {
-  accountEpoch += 1;
-  for (const id of scheduled.values()) clearTimeout(id);
-  scheduled.clear();
+  clearWebReminders();
   closeShownWebNotifications();
   if (!isNativeApp()) return;
   nativeReconcileReminders(new Set());
@@ -513,6 +511,16 @@ export function cancelAllNativeScheduling() {
   // account's already-shown notifications don't linger on a shared/signed-out
   // device (Codex finding).
   nativeClearDelivered();
+}
+
+// This tab's pending task-reminder and Coach timers only: no OS alarms, no
+// shown notifications. App also calls it whenever nobody is signed in (#664),
+// since its scheduling effect can rerun with the old account's tasks for a
+// moment after sign-out.
+export function clearWebReminders() {
+  accountEpoch += 1;
+  for (const id of scheduled.values()) clearTimeout(id);
+  scheduled.clear();
 }
 
 function closeShownWebNotifications() {

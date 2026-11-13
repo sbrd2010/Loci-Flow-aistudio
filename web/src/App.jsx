@@ -3,7 +3,7 @@ import { auth, db, track, setAnalyticsUser } from "./firebase";
 import { getCategoryKeyForTrack } from "./utils/soundLibrary";
 import { computeUserProfile } from "./utils/userProfile";
 import { useAppScale } from "./hooks/useAppScale";
-import { scheduleAllReminders, scheduleCoachCheckin, cancelCoachCheckin, checkDailyCheckinNotifications, scheduleDailyCheckins, cancelDailyCheckins, cancelAllNativeScheduling, VISIBLE_HEARTBEAT_KEY, DAILY_CHECKIN_SLOTS } from "./utils/reminders";
+import { scheduleAllReminders, scheduleCoachCheckin, cancelCoachCheckin, checkDailyCheckinNotifications, scheduleDailyCheckins, cancelDailyCheckins, cancelAllNativeScheduling, clearWebReminders, VISIBLE_HEARTBEAT_KEY, DAILY_CHECKIN_SLOTS } from "./utils/reminders";
 import { isNativeApp, refreshNativePermission, addNativeNotificationClickListener, NATIVE_PERMISSION_GRANTED_EVENT } from "./utils/nativeNotifs";
 import { signInWithGoogleNative, reauthenticateWithGoogleNative } from "./utils/nativeAuth";
 import { deleteAllMyData, clearLocalLociData, markWipePending } from "./utils/deleteAccount";
@@ -447,15 +447,22 @@ export default function App() {
   payloadRef.current = payload;
 
   // Schedule task reminders whenever payload loads/changes (or, on native,
-  // once notification permission is actually granted — see nativePermVersion above)
+  // once notification permission is actually granted — see nativePermVersion above).
+  // #664: only while an account or the demo is on screen. Sign-out keeps the
+  // old payload for a moment, and this effect reran with it right after
+  // cancelAllNativeScheduling, re-arming the old account's reminders; with
+  // nobody signed in it clears this tab's timers instead.
+  const remindersOwner = demoMode ? "demo" : (user?.uid || null);
   useEffect(() => {
+    if (!remindersOwner) { clearWebReminders(); return; }
     if (payload?.tasks) scheduleAllReminders(payload.tasks);
-  }, [payload?.tasks, nativePermVersion]);
+  }, [payload?.tasks, nativePermVersion, remindersOwner]);
 
   // Re-arm a pending Coach Check-In notification (see CoachTab) on load/refresh
   useEffect(() => {
+    if (!remindersOwner) return;
     if (payload?.config?.coachCheckin) scheduleCoachCheckin(payload.config.coachCheckin);
-  }, [payload?.config?.coachCheckin, nativePermVersion]);
+  }, [payload?.config?.coachCheckin, nativePermVersion, remindersOwner]);
 
   // Resume a "Coach Check-In" (see CoachTab) once it's due, regardless of
   // which tab is active. CoachTab unmounts on tab switch, so without this,
