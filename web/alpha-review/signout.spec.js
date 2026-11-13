@@ -71,21 +71,25 @@ for (const discard of [false, true]) {
 // #664: sign-out doesn't reload the tab, so a reminder armed for the account
 // that left must never show its task title on the signed-out screen. Service
 // workers are blocked in this suite, so the app uses the plain Notification
-// path; it is recorded here. Invented title, emulator account only.
+// path. It is replaced by a recording stand-in that reports permission
+// granted: headless Chromium (CI's headless shell) reports "denied" even
+// after grantPermissions, so the real one would schedule nothing and the
+// sign-out test would pass for the wrong reason. Invented title, emulator
+// account only.
 async function seedReminderAndRecord(page, context, title, inMs) {
   const u = await user();
   const base = payload(u, title);
   const reminderAt = Date.now() + inMs;
   await seed(u, { ...base, tasks: [{ ...base.tasks[0], reminderAt }], config: { ...base.config, onboardingComplete: true } });
-  await context.grantPermissions(["notifications"]);
   await context.addInitScript(() => {
     delete Navigator.prototype.serviceWorker;
     window.__shown = [];
-    const Native = window.Notification;
-    const Recording = function (t, o) { window.__shown.push(`${t} | ${o?.body || ""}`); return new Native(t, o); };
-    Recording.permission = Native.permission;
-    Recording.requestPermission = Native.requestPermission.bind(Native);
-    window.Notification = Recording;
+    window.Notification = class {
+      static permission = "granted";
+      static requestPermission() { return Promise.resolve("granted"); }
+      constructor(title, opts) { window.__shown.push(`${title} | ${opts?.body || ""}`); }
+      close() {}
+    };
   });
   await isolate(context);
   await page.setViewportSize({ width: 375, height: 812 });
