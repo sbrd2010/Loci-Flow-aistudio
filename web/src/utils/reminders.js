@@ -17,6 +17,37 @@ import {
 const scheduled = new Map();
 const COACH_CHECKIN_KEY = "__coach_checkin__";
 
+// #664: sign-out doesn't reload the page, so a timer armed for one account
+// must never show its task title after that account has gone. Bumped by
+// cancelAllNativeScheduling (sign-out, leaving demo, a deleted account): a
+// timer callback that already started — waiting on the service worker —
+// sees the change and shows nothing.
+let accountEpoch = 0;
+// Whose reminders this tab may schedule: the signed-in uid, "demo", or null
+// while nobody is signed in. App sets it; a change of owner clears this
+// tab's timers, and nothing is scheduled while it is null (#664).
+let remindersOwner = null;
+
+export function setRemindersOwner(owner) {
+  if (owner === remindersOwner) return;
+  remindersOwner = owner;
+  clearWebReminders();
+}
+
+export function getRemindersOwner() {
+  return remindersOwner;
+}
+// Notifications shown without a service worker can't be listed later, so
+// they're kept here to be closed at sign-out.
+const fallbackShown = new Set();
+
+function showFallback(title, opts) {
+  const notif = new Notification(title, opts);
+  attachFallbackClickHandler(notif, opts?.data);
+  fallbackShown.add(notif);
+  notif.onclose = () => fallbackShown.delete(notif);
+}
+
 // Fallback (non-service-worker) notifications don't go through sw.js's
 // notificationclick handler, so they'd otherwise have no deep-link behavior.
 // Replicate it via a window event that App.jsx listens for alongside the SW message.
@@ -32,7 +63,7 @@ function attachFallbackClickHandler(notif, data) {
 // Shows a notification via the service worker (preferred — works while the
 // tab is backgrounded) or falls back to the Notification constructor.
 // Returns true if a notification was (likely) shown, false if both paths failed.
-async function showNotificationSafe(title, opts) {
+async function showNotificationSafe(title, opts, epoch = accountEpoch) {
   try {
     if (isNativeApp()) {
       const key = String(opts?.data?.uuid || opts?.tag || title);
@@ -40,15 +71,17 @@ async function showNotificationSafe(title, opts) {
     }
     if ("serviceWorker" in navigator) {
       const reg = await navigator.serviceWorker.ready;
+      if (epoch !== accountEpoch) return false;
       await reg.showNotification(title, opts);
     } else {
-      attachFallbackClickHandler(new Notification(title, opts), opts.data);
+      if (epoch !== accountEpoch) return false;
+      showFallback(title, opts);
     }
     return true;
   } catch (_) {
-    if (isNativeApp()) return false;
+    if (isNativeApp() || epoch !== accountEpoch) return false;
     try {
-      attachFallbackClickHandler(new Notification(title, opts), opts.data);
+      showFallback(title, opts);
       return true;
     } catch (_) {
       return false;
@@ -69,6 +102,7 @@ export function scheduleReminder(task) {
     if (task?.uuid) cancelReminder(task.uuid);
     return;
   }
+  if (!remindersOwner) return;
   if (!notifPermissionGranted()) return;
 
   const delay = task.reminderAt - Date.now();
@@ -97,11 +131,12 @@ export function scheduleReminder(task) {
     return;
   }
 
+  const epoch = accountEpoch;
   const id = setTimeout(() => {
     scheduled.delete(task.uuid);
     const body = task.title;
     const opts = { body, icon: "/icon-192.png", tag: `task-${task.uuid}`, renotify: true, data: { uuid: task.uuid } };
-    showNotificationSafe("🎯 Task reminder", opts);
+    showNotificationSafe("🎯 Task reminder", opts, epoch);
   }, delay);
 
   scheduled.set(task.uuid, id);
@@ -129,7 +164,11 @@ export function scheduleAllReminders(tasks = []) {
 // Schedules a one-off notification for a pending "Coach Check-In" (see
 // utils/coachCheckin.js). Re-schedulable on app load — calling it again
 // replaces any previously-scheduled check-in.
-export function scheduleCoachCheckin(checkin) {
+// `owner`: whose conversation asked for it (getRemindersOwner() when the
+// message was sent). A Coach reply that lands after sign-out or a switch of
+// account must not arm the old account's check-in (#664).
+export function scheduleCoachCheckin(checkin, owner = remindersOwner) {
+  if (!remindersOwner || owner !== remindersOwner) return;
   cancelCoachCheckin();
   if (!checkin?.fireAt) return;
   if (!notifPermissionGranted()) return;
@@ -148,10 +187,11 @@ export function scheduleCoachCheckin(checkin) {
     return;
   }
 
+  const epoch = accountEpoch;
   const id = setTimeout(() => {
     scheduled.delete(COACH_CHECKIN_KEY);
     const opts = { body: buildCheckinNotificationBody(checkin.note), icon: "/icon-192.png", tag: "loci-coach-checkin", renotify: true, data: { type: "coach-checkin" } };
-    showNotificationSafe("🤖 Coach check-in", opts);
+    showNotificationSafe("🤖 Coach check-in", opts, epoch);
   }, delay);
 
   scheduled.set(COACH_CHECKIN_KEY, id);
@@ -471,7 +511,15 @@ export function cancelDailyCheckins(config, windows, now = new Date()) {
 // page reload/re-render the way the in-memory `scheduled` map is — call
 // this on sign-out/account-switch so a previous account's task titles and
 // check-ins can't surface as notifications on a shared/signed-out device.
+//
+// Despite the name, it clears the web side first (#664): the task-reminder
+// and Coach timers in `scheduled` live in this tab, and sign-out doesn't
+// reload it, so without this they fired after sign-out with the previous
+// account's task titles. Already-shown web notifications are closed too, as
+// nativeClearDelivered does below for Android.
 export function cancelAllNativeScheduling() {
+  clearWebReminders();
+  closeShownWebNotifications();
   if (!isNativeApp()) return;
   nativeReconcileReminders(new Set());
   cancelCoachCheckin();
@@ -482,6 +530,28 @@ export function cancelAllNativeScheduling() {
   // account's already-shown notifications don't linger on a shared/signed-out
   // device (Codex finding).
   nativeClearDelivered();
+}
+
+// This tab's pending task-reminder and Coach timers only: no OS alarms, no
+// shown notifications. Also run on every change of owner (setRemindersOwner),
+// since App's scheduling effect can rerun with the old account's tasks for a
+// moment after sign-out (#664).
+export function clearWebReminders() {
+  accountEpoch += 1;
+  for (const id of scheduled.values()) clearTimeout(id);
+  scheduled.clear();
+}
+
+function closeShownWebNotifications() {
+  for (const notif of fallbackShown) { try { notif.close(); } catch (_) {} }
+  fallbackShown.clear();
+  try {
+    if (typeof navigator === "undefined" || !navigator.serviceWorker?.getRegistration) return;
+    navigator.serviceWorker.getRegistration()
+      .then(reg => reg?.getNotifications?.())
+      .then(list => { for (const notif of list || []) notif.close(); })
+      .catch(() => {});
+  } catch (_) {}
 }
 
 export function formatReminderLabel(ts) {

@@ -20,7 +20,7 @@ import { buildBriefInput, BRIEF_SYSTEM_PROMPT, parseBrief, moveTaskToHorizon, un
 import { buildSplit, undoSplit } from "../utils/splitTask";
 import { horizonsFromConfig } from "../utils/horizons";
 import { requestNotifPermission } from "../utils/focusNotifications";
-import { scheduleCoachCheckin } from "../utils/reminders";
+import { getRemindersOwner, scheduleCoachCheckin } from "../utils/reminders";
 import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, parseCheckinRequestFromMessage, buildCoachCheckinContext } from "../utils/coachCheckin";
 import { parseCoachActionTags, applyCoachActions, buildActionReplyText, buildSetNowFocusTasks, buildParkTaskTasks, findTaskByTitle, undoCoachAction, withoutChangeClaims } from "../utils/coachActions";
 import { buildPersonaInstruction } from "../utils/coachPersona";
@@ -794,6 +794,9 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
     const deadlineIntent = !periodIntent && detectDeadlineIntent(userText);
     const isReference = needsConversationContext(userText);
     const epoch = conversationEpoch;
+    // Whose conversation this is: a reply landing after sign-out or an account
+    // switch must not arm that account's check-in (#664).
+    const replyOwner = getRemindersOwner();
     const controller = new AbortController();
 
     // Session summary: the raw-window boundary comes from the shared
@@ -1121,7 +1124,7 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
         }
         const checkin = buildCoachCheckin(checkinMinutes, pickCheckinNote(activeForCheckin, mentionedTitle));
         configPatch = { ...configPatch, coachCheckin: checkin };
-        scheduleCoachCheckin(checkin);
+        scheduleCoachCheckin(checkin, replyOwner);
         requestNotifPermission();
       }
 
