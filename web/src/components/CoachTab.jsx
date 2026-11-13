@@ -21,6 +21,7 @@ import { buildSplit, undoSplit } from "../utils/splitTask";
 import { horizonsFromConfig } from "../utils/horizons";
 import { requestNotifPermission } from "../utils/focusNotifications";
 import { scheduleCoachCheckin } from "../utils/reminders";
+import { challengeDescription } from "../utils/challenge";
 import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, parseCheckinRequestFromMessage, buildCoachCheckinContext } from "../utils/coachCheckin";
 import { parseCoachActionTags, applyCoachActions, buildActionReplyText, buildSetNowFocusTasks, buildParkTaskTasks, findTaskByTitle, undoCoachAction, withoutChangeClaims } from "../utils/coachActions";
 import { buildPersonaInstruction } from "../utils/coachPersona";
@@ -175,15 +176,9 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
   useEffect(() => () => { if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current); }, []);
 
   // -- AI Mentor Chat --------------------------------------------------------
-  const challengeLabel =
-    config.challengeType === "overplanner"  ? "Turning Plans into Action" :
-    config.challengeType === "overwhelmed"  ? "Recovery and Backlog Relief" :
-    config.challengeType === "initiation"   ? "Breaking Initiation Freeze" :
-    config.challengeType === "momentum"     ? "Building Momentum with Quick Wins" :
-    config.challengeType === "starting"     ? "Overcoming Inertia" :
-    config.challengeType === "focusing"     ? "Protecting Focus Sessions" :
-    config.challengeType === "tracking"     ? "Time Awareness" :
-    "Action over Perfectionism";
+  // #656: the same sentence Ask AI gets (Settings › Coach › What helps you
+  // most), or null when nothing was chosen: then no challenge line at all.
+  const challengeLabel = challengeDescription(config.challengeType);
 
   const firstName = (config.userName || "").split(" ")[0] || "friend";
   // 62j: an empty conversation shows its own empty state; Coach doesn't

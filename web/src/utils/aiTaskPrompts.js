@@ -8,6 +8,7 @@
 // and the date rule in Ask AI.
 
 import { MAX_STEP_MINUTES, STEP_MINUTE_OPTIONS, splitStepRange } from "./splitTask";
+import { challengeDescription } from "./challenge";
 import { thoughtText } from "./thoughts";
 import { plainThought } from "./thoughtFormat";
 
@@ -47,20 +48,10 @@ export function buildBreakdownRequest(task) {
   };
 }
 
-function challengeLabelFor(challengeType) {
-  return challengeType === "overplanner"  ? "over-plans and researches but rarely starts (needs forced simplicity and an execution nudge)" :
-    challengeType === "overwhelmed"  ? "feels overwhelmed and guilty about backlog (needs reassurance, recovery framing, and one clear next action)" :
-    challengeType === "initiation"   ? "freezes before starting despite knowing what to do (needs scaffolding, micro-starts, and low-threshold first steps)" :
-    challengeType === "momentum"     ? "needs a quick win to get rolling (needs P4 fast-finish tasks and visible forward movement)" :
-    challengeType === "starting"     ? "struggles to start tasks (task initiation block)" :
-    challengeType === "focusing"     ? "gets distracted mid-task (focus protection)" :
-    challengeType === "tracking"     ? "has trouble tracking progress and staying accountable (needs visible checkpoints)" :
-    "overthinks and delays finishing (perfectionism/action paralysis)";
-}
-
 // Add task, "Ask AI": a rough idea becomes a structured task.
 export function buildAskAIRequest({ title, challengeType, tasks = [], profile = null }) {
-  const challengeLabel = challengeLabelFor(challengeType);
+  // #656: the same sentence Coach gets; none at all when nothing was chosen.
+  const challenge = challengeDescription(challengeType);
   const existingTasks = (tasks || []).filter(t => !t.isDeleted && !t.isCompleted).slice(0, 8)
     .map(t => `[${t.priority}] ${t.title}`).join(", ") || "none yet";
   const profileNote = profile && profile.totalTasks >= 5
@@ -68,7 +59,7 @@ export function buildAskAIRequest({ title, challengeType, tasks = [], profile = 
     : "";
   const prompt = `You are an expert productivity coach specialising in focus, momentum, and execution support. The user typed this rough task idea: "${title.trim()}".
 
-Transform it into a well-structured, focus-friendly task. The user's core challenge: ${challengeLabel}.${profileNote}
+Transform it into a well-structured, focus-friendly task.${challenge ? ` The user's core challenge: ${challenge}.` : ""}${profileNote}
 
 TASK DESIGN RULES:
 - Title must be specific and outcome-oriented (not vague verbs like "work on" or "think about")

@@ -239,6 +239,27 @@ test("Anchors on Today: Off takes the anchor line off Today", async ({ page }) =
   await expect(page.locator(".wall-anchor")).toHaveCount(0);
 });
 
+// #656: "What helps you most" lives with the Coach settings and says what it
+// does: it only shapes Coach and Ask AI.
+test("What helps you most: under Coach, honest about what it does, and saved", async ({ page }) => {
+  await enterDemo(page, { width: 1280, height: 800 });
+  await openTab(page, "Settings");
+  const nav = page.getByRole("navigation", { name: "Settings sections" });
+  await expect(nav.getByRole("button", { name: "Profile" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("radiogroup", { name: "What helps you most" })).toHaveCount(0);
+  await nav.getByRole("button", { name: "Coach", exact: true }).click();
+  const group = page.getByRole("radiogroup", { name: "What helps you most" });
+  await expect(group.getByRole("radio", { name: /^Help me decide what to work on/ })).toHaveAttribute("aria-checked", "true");
+  await expect(group).not.toContainText(/streak|reset tools/i);
+  await expect(page.getByText("and Ask AI use this when they suggest next steps. Nothing else in Loci changes.")).toBeVisible();
+  await group.getByRole("radio", { name: /^Help me just start/ }).click();
+  await expect(group.getByRole("radio", { name: /^Help me just start/ })).toHaveAttribute("aria-checked", "true");
+  await nav.getByRole("button", { name: "Profile" }).click();
+  await nav.getByRole("button", { name: "Coach", exact: true }).click();
+  await expect(page.getByRole("radiogroup", { name: "What helps you most" }).getByRole("radio", { name: /^Help me just start/ }))
+    .toHaveAttribute("aria-checked", "true");
+});
+
 test("laptop: sections on the left, the chosen one on the right; The day's pages go back to The day", async ({ page }) => {
   await enterDemo(page, { width: 1280, height: 800 });
   await openTab(page, "Settings");
