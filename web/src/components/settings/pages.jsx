@@ -11,6 +11,8 @@ import { isNativeApp } from "../../utils/nativeNotifs";
 import { isRelayConfigured, PROVIDER_ORDERS } from "../../utils/aiCall";
 import { IconPencil, IconPlus, IconX } from "../ui/icons";
 import { Group, RadioList, Row, SubPage, SwitchRow, useAutosave } from "./ui";
+import DateField from "../ui/DateField";
+import { getFocusWindows, getLociDayStr } from "../../utils/focusWindows";
 
 // The sub-pages of Settings (44c–44h). Everything saves as it changes; text
 // saves a moment after typing stops, and on leaving the field.
@@ -242,6 +244,7 @@ export function KeyDeadlinePage({ config, saveConfigPatch, onBack }) {
   const [daily, setDaily, flushDaily] = useAutosave(config.deadlineAction || "", v => saveConfigPatch({ deadlineAction: v.trim() }));
   const left = daysLeft(config.deadlineDate);
   const hasGoal = !!(config.deadlineLabel || config.deadlineDate || config.deadlineAction || config.deadlineStartDate);
+  const lociDay = getLociDayStr(new Date(), getFocusWindows(config));
   return (
     <SubPage title="Key deadline" onBack={onBack} lede="One goal with a date. It shows as the gold band on Today; tap the band for its record.">
       <label className="set-field">
@@ -251,11 +254,11 @@ export function KeyDeadlinePage({ config, saveConfigPatch, onBack }) {
       <div className="set-field-pair">
         <label className="set-field">
           <span className="set-label">Started</span>
-          <input type="date" className="set-input" value={config.deadlineStartDate || ""} onChange={e => saveConfigPatch({ deadlineStartDate: e.target.value })} />
+          <DateField className="set-input" label="Started" allowClear today={lociDay} value={config.deadlineStartDate || ""} onChange={v => saveConfigPatch({ deadlineStartDate: v })} />
         </label>
         <label className="set-field">
           <span className="set-label">Deadline</span>
-          <input type="date" className="set-input" value={config.deadlineDate || ""} onChange={e => saveConfigPatch({ deadlineDate: e.target.value })} />
+          <DateField className="set-input" label="Deadline" allowClear today={lociDay} value={config.deadlineDate || ""} onChange={v => saveConfigPatch({ deadlineDate: v })} />
         </label>
       </div>
       {/* Q49: "Target", as the band says it; "minimum" is the Day map's. */}

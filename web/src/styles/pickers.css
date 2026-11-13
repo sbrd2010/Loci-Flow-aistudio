@@ -81,3 +81,74 @@
   box-shadow: var(--shadow-lg, 0 12px 32px rgba(15, 31, 22, 0.16));
 }
 @media (pointer: coarse) { .tp-chip { min-height: 44px; } .tp-input, .rp-date, .tp-set { min-height: 44px; } }
+
+/* #658: the shared date field — a typed field with a calendar button, and
+   the calendar in a popover under it. The caller's class (set-input,
+   eh-input, plan-new-input, rp-date) keeps the field's own look. */
+.df { position: relative; display: flex; align-items: stretch; gap: 6px; flex-wrap: wrap; }
+.df .df-input { flex: 1 1 9rem; min-width: 0; width: auto; }
+.df-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1.5px solid var(--control-edge);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.df-open:hover, .df-open[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+.df-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.df-input[aria-invalid="true"] { border-color: var(--danger, #A33A2A); }
+.df-hint { flex-basis: 100%; font-size: 13px; color: var(--danger, #A33A2A); }
+.df-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 600;
+  box-sizing: border-box;
+  padding: 10px 12px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg, 0 12px 32px rgba(15, 31, 22, 0.16));
+  /* DayPicker's own variables, in Loci's colours. */
+  --rdp-accent-color: var(--accent);
+  --rdp-accent-background-color: var(--accent-soft);
+  --rdp-today-color: var(--accent);
+  --rdp-day-height: 38px;
+  --rdp-day-width: 38px;
+  --rdp-day_button-height: 36px;
+  --rdp-day_button-width: 36px;
+  --rdp-selected-border: 2px solid var(--accent);
+  --rdp-nav_button-height: 32px;
+  --rdp-nav_button-width: 32px;
+  color: var(--ink);
+  font-size: 14px;
+}
+.df-pop .rdp-selected .rdp-day_button { color: var(--on-accent); background: var(--accent); }
+.df-pop .rdp-caption_label { font-size: 15px; font-weight: 700; }
+.df-pop .rdp-weekday { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--ink-2); }
+.df-pop .rdp-chevron { fill: var(--accent); }
+.df-loading { margin: 8px; color: var(--ink-2); }
+.df-clear {
+  margin-top: 4px;
+  padding: 4px 0;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink-2);
+  text-decoration: underline;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.df-pop .rdp-outside { opacity: 0.45; }
+.df-pop .rdp-disabled { opacity: 0.35; }
+.df-pop .rdp-day_button:focus,
+.df-pop .rdp-day_button:focus-visible,
+.df-pop .rdp-button_previous:focus-visible,
+.df-pop .rdp-button_next:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

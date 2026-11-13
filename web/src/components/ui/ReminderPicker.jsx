@@ -1,5 +1,6 @@
 import React from "react";
 import TimePicker from "./TimePicker";
+import DateField from "./DateField";
 import { formatHHMM, minutesOfHHMM, quarterHoursAfter, reminderQuickPicks } from "../../utils/clockText";
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -43,8 +44,8 @@ export default function ReminderPicker({ date, time, onChange, active = true, sa
       <div className="rp-when">
         <label className="rp-date-label">
           <span className="rp-cap">Day</span>
-          <input type="date" className="rp-date" aria-label="Reminder date" value={date} min={today}
-            onChange={(e) => e.target.value && onChange({ date: e.target.value, time })} />
+          <DateField className="rp-date" label="Reminder date" value={date} min={today} today={today}
+            onChange={(d) => d && onChange({ date: d, time })} />
         </label>
         <div className="rp-time">
           <span className="rp-cap">Time</span>
