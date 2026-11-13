@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { getFocusWindows } from "./focusWindows";
-import { getDueDailyCheckins, checkDailyCheckinNotifications, VISIBLE_HEARTBEAT_KEY } from "./reminders";
+import { getDueDailyCheckins, checkDailyCheckinNotifications, VISIBLE_HEARTBEAT_KEY, scheduleReminder, scheduleCoachCheckin, cancelAllNativeScheduling } from "./reminders";
 
 const dt = (h, mi = 0) => new Date(2024, 5, 15, h, mi);
 const TODAY = "2024-06-15";
@@ -120,5 +120,85 @@ describe("checkDailyCheckinNotifications", () => {
     await checkDailyCheckinNotifications(config, windows);
 
     expect(showNotification).toHaveBeenCalledTimes(1);
+  });
+});
+
+// #664: sign-out (and leaving demo) doesn't reload the tab. A reminder armed
+// for the account that just left must never show its task title afterwards.
+describe("sign-out clears this tab's web reminders (#664)", () => {
+  const TITLE = "Invented task title";
+  let showNotification, ready, getNotifications, closed;
+
+  function stubWeb({ readyPromise } = {}) {
+    showNotification = vi.fn(() => Promise.resolve());
+    closed = vi.fn();
+    getNotifications = vi.fn(() => Promise.resolve([{ close: closed }]));
+    const reg = { showNotification, getNotifications };
+    ready = readyPromise || Promise.resolve(reg);
+    vi.stubGlobal("Notification", { permission: "granted" });
+    vi.stubGlobal("navigator", { serviceWorker: { ready, getRegistration: () => Promise.resolve(reg) } });
+    return reg;
+  }
+  const task = () => ({ uuid: "t-664", title: TITLE, reminderAt: Date.now() + 60_000 });
+  const flush = async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); };
+
+  afterEach(() => {
+    cancelAllNativeScheduling();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("control: without sign-out, a due reminder shows its title", async () => {
+    vi.useFakeTimers();
+    stubWeb();
+    scheduleReminder(task());
+    await vi.advanceTimersByTimeAsync(61_000);
+    expect(showNotification).toHaveBeenCalledTimes(1);
+    expect(showNotification.mock.calls[0][1].body).toBe(TITLE);
+  });
+
+  it("a pending task reminder and Coach check-in never show after sign-out", async () => {
+    vi.useFakeTimers();
+    stubWeb();
+    scheduleReminder(task());
+    scheduleCoachCheckin({ fireAt: Date.now() + 60_000, note: TITLE });
+    cancelAllNativeScheduling();
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(showNotification).not.toHaveBeenCalled();
+  });
+
+  it("a reminder already firing (waiting on the service worker) shows nothing after sign-out", async () => {
+    vi.useFakeTimers();
+    let resolveReady;
+    const reg = stubWeb({ readyPromise: new Promise(r => { resolveReady = r; }) });
+    scheduleReminder(task());
+    await vi.advanceTimersByTimeAsync(61_000); // the timer has fired and is awaiting `ready`
+    cancelAllNativeScheduling();
+    resolveReady(reg);
+    await flush();
+    expect(showNotification).not.toHaveBeenCalled();
+  });
+
+  it("closes Loci notifications already shown in this browser", async () => {
+    stubWeb();
+    cancelAllNativeScheduling();
+    await flush();
+    expect(getNotifications).toHaveBeenCalled();
+    expect(closed).toHaveBeenCalled();
+  });
+
+  it("closes an already-shown fallback notification (no service worker)", async () => {
+    vi.useFakeTimers();
+    const instances = [];
+    function FakeNotification(title, opts) { this.title = title; this.opts = opts; this.close = vi.fn(); instances.push(this); }
+    FakeNotification.permission = "granted";
+    vi.stubGlobal("Notification", FakeNotification);
+    vi.stubGlobal("navigator", {});
+    vi.stubGlobal("window", { focus() {}, dispatchEvent() {} });
+    scheduleReminder(task());
+    await vi.advanceTimersByTimeAsync(61_000);
+    expect(instances).toHaveLength(1);
+    cancelAllNativeScheduling();
+    expect(instances[0].close).toHaveBeenCalled();
   });
 });
