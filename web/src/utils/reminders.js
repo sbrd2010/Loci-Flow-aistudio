@@ -23,6 +23,20 @@ const COACH_CHECKIN_KEY = "__coach_checkin__";
 // timer callback that already started — waiting on the service worker —
 // sees the change and shows nothing.
 let accountEpoch = 0;
+// Whose reminders this tab may schedule: the signed-in uid, "demo", or null
+// while nobody is signed in. App sets it; a change of owner clears this
+// tab's timers, and nothing is scheduled while it is null (#664).
+let remindersOwner = null;
+
+export function setRemindersOwner(owner) {
+  if (owner === remindersOwner) return;
+  remindersOwner = owner;
+  clearWebReminders();
+}
+
+export function getRemindersOwner() {
+  return remindersOwner;
+}
 // Notifications shown without a service worker can't be listed later, so
 // they're kept here to be closed at sign-out.
 const fallbackShown = new Set();
@@ -88,6 +102,7 @@ export function scheduleReminder(task) {
     if (task?.uuid) cancelReminder(task.uuid);
     return;
   }
+  if (!remindersOwner) return;
   if (!notifPermissionGranted()) return;
 
   const delay = task.reminderAt - Date.now();
@@ -149,7 +164,11 @@ export function scheduleAllReminders(tasks = []) {
 // Schedules a one-off notification for a pending "Coach Check-In" (see
 // utils/coachCheckin.js). Re-schedulable on app load — calling it again
 // replaces any previously-scheduled check-in.
-export function scheduleCoachCheckin(checkin) {
+// `owner`: whose conversation asked for it (getRemindersOwner() when the
+// message was sent). A Coach reply that lands after sign-out or a switch of
+// account must not arm the old account's check-in (#664).
+export function scheduleCoachCheckin(checkin, owner = remindersOwner) {
+  if (!remindersOwner || owner !== remindersOwner) return;
   cancelCoachCheckin();
   if (!checkin?.fireAt) return;
   if (!notifPermissionGranted()) return;
@@ -514,9 +533,9 @@ export function cancelAllNativeScheduling() {
 }
 
 // This tab's pending task-reminder and Coach timers only: no OS alarms, no
-// shown notifications. App also calls it whenever nobody is signed in (#664),
-// since its scheduling effect can rerun with the old account's tasks for a
-// moment after sign-out.
+// shown notifications. Also run on every change of owner (setRemindersOwner),
+// since App's scheduling effect can rerun with the old account's tasks for a
+// moment after sign-out (#664).
 export function clearWebReminders() {
   accountEpoch += 1;
   for (const id of scheduled.values()) clearTimeout(id);

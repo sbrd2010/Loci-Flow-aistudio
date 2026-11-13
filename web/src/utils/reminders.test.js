@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { getFocusWindows } from "./focusWindows";
-import { getDueDailyCheckins, checkDailyCheckinNotifications, VISIBLE_HEARTBEAT_KEY, scheduleReminder, scheduleCoachCheckin, cancelAllNativeScheduling, clearWebReminders } from "./reminders";
+import { getDueDailyCheckins, checkDailyCheckinNotifications, VISIBLE_HEARTBEAT_KEY, scheduleReminder, scheduleCoachCheckin, cancelAllNativeScheduling, clearWebReminders, setRemindersOwner } from "./reminders";
 
 const dt = (h, mi = 0) => new Date(2024, 5, 15, h, mi);
 const TODAY = "2024-06-15";
@@ -142,8 +142,10 @@ describe("sign-out clears this tab's web reminders (#664)", () => {
   const task = () => ({ uuid: "t-664", title: TITLE, reminderAt: Date.now() + 60_000 });
   const flush = async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); };
 
+  beforeEach(() => setRemindersOwner("account-a"));
   afterEach(() => {
     cancelAllNativeScheduling();
+    setRemindersOwner(null);
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
@@ -187,6 +189,41 @@ describe("sign-out clears this tab's web reminders (#664)", () => {
     clearWebReminders();
     await vi.advanceTimersByTimeAsync(10 * 60_000);
     expect(showNotification).not.toHaveBeenCalled();
+  });
+
+  it("nothing is scheduled while nobody is signed in", async () => {
+    vi.useFakeTimers();
+    stubWeb();
+    setRemindersOwner(null);
+    scheduleReminder(task());
+    scheduleCoachCheckin({ fireAt: Date.now() + 60_000, note: TITLE });
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(showNotification).not.toHaveBeenCalled();
+  });
+
+  it("switching straight from account A to B clears A's pending timers", async () => {
+    vi.useFakeTimers();
+    stubWeb();
+    scheduleReminder(task());
+    scheduleCoachCheckin({ fireAt: Date.now() + 60_000, note: TITLE });
+    setRemindersOwner("account-b");
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(showNotification).not.toHaveBeenCalled();
+  });
+
+  it("a Coach reply for A that lands after sign-out or under B arms nothing", async () => {
+    vi.useFakeTimers();
+    stubWeb();
+    const checkin = () => ({ fireAt: Date.now() + 60_000, note: TITLE });
+    setRemindersOwner(null);
+    scheduleCoachCheckin(checkin(), "account-a"); // landed after sign-out
+    setRemindersOwner("account-b");
+    scheduleCoachCheckin(checkin(), "account-a"); // landed after B signed in
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(showNotification).not.toHaveBeenCalled();
+    scheduleCoachCheckin(checkin(), "account-b"); // B's own still works
+    await vi.advanceTimersByTimeAsync(61_000);
+    expect(showNotification).toHaveBeenCalledTimes(1);
   });
 
   it("closes Loci notifications already shown in this browser", async () => {

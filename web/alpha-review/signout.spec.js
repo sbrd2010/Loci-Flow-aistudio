@@ -75,7 +75,8 @@ for (const discard of [false, true]) {
 async function seedReminderAndRecord(page, context, title, inMs) {
   const u = await user();
   const base = payload(u, title);
-  await seed(u, { ...base, tasks: [{ ...base.tasks[0], reminderAt: Date.now() + inMs }], config: { ...base.config, onboardingComplete: true } });
+  const reminderAt = Date.now() + inMs;
+  await seed(u, { ...base, tasks: [{ ...base.tasks[0], reminderAt }], config: { ...base.config, onboardingComplete: true } });
   await context.grantPermissions(["notifications"]);
   await context.addInitScript(() => {
     delete Navigator.prototype.serviceWorker;
@@ -90,24 +91,24 @@ async function seedReminderAndRecord(page, context, title, inMs) {
   await page.setViewportSize({ width: 375, height: 812 });
   await login(page, u, false);
   await expect(page.locator(".app-container")).toBeVisible();
-  return Date.now();
+  return reminderAt;
 }
 
 test("control: a signed-in account's reminder is shown when due (#664)", async ({ page, context }) => {
-  test.setTimeout(60_000);
-  await seedReminderAndRecord(page, context, "Invented reminder task", 15_000);
-  await expect.poll(() => page.evaluate(() => window.__shown), { timeout: 25_000 })
+  test.setTimeout(75_000);
+  await seedReminderAndRecord(page, context, "Invented reminder task", 30_000);
+  await expect.poll(() => page.evaluate(() => window.__shown), { timeout: 40_000 })
     .toContainEqual(expect.stringContaining("Invented reminder task"));
 });
 
 test("after signing out, the previous account's reminder is never shown (#664)", async ({ page, context }) => {
-  test.setTimeout(60_000);
-  const seededAt = await seedReminderAndRecord(page, context, "Invented private task", 15_000);
+  test.setTimeout(75_000);
+  const reminderAt = await seedReminderAndRecord(page, context, "Invented private task", 30_000);
   await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
   await page.getByRole("button", { name: "Sign out of Loci" }).click();
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page.getByTestId("demo-btn")).toBeVisible();
-  expect(Date.now() - seededAt).toBeLessThan(15_000); // signed out before it was due
-  await page.waitForTimeout(Math.max(0, seededAt + 18_000 - Date.now()));
+  expect(Date.now()).toBeLessThan(reminderAt); // signed out before it was due
+  await page.waitForTimeout(Math.max(0, reminderAt + 3_000 - Date.now()));
   expect(await page.evaluate(() => window.__shown)).toEqual([]);
 });
