@@ -423,12 +423,14 @@ html[data-theme="dark"] .screen-content-today { --upnext-surface: var(--surface)
 /* 75d (try-out 43): from 1280, with the list hidden the task moves to the
    centre — the goal card, the anchor and the task share one centred
    47.5rem column, so their left edges line up; the text inside stays left.
+   Task view only: the picker and done walls never carry is-open but show
+   the list beside them, so they keep the column's left edge (#659).
    The title goes up a step (46 → 52), "Show list · N · L" is a pill pinned
    top right, and the THEN line sits under a hairline. */
 @media (min-width: 1280px) {
   .screen-content-today .today-wall:not(.is-open):not(.is-done):not(.is-empty) { padding-right: 0; }
-  .screen-content-today .today-wall:not(.is-open) .wall-goal-wrap,
-  .screen-content-today .today-wall:not(.is-open) .wall-anchor,
+  .screen-content-today .today-wall:not(.is-open):not(.is-done):not(.is-empty) .wall-goal-wrap,
+  .screen-content-today .today-wall:not(.is-open):not(.is-done):not(.is-empty) .wall-anchor,
   .screen-content-today .today-wall:not(.is-open):not(.is-done):not(.is-empty) .wall-hero,
   .screen-content-today .today-wall:not(.is-open) .wall-foot {
     width: 100%;
