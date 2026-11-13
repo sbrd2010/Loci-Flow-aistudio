@@ -19,15 +19,8 @@ import { escapeThought, plainThought } from "../utils/thoughtFormat";
 import ThoughtEditor, { THOUGHT_EMOJI } from "./ui/ThoughtEditor";
 import EstimatePicker from "./EstimatePicker";
 import { formatEstimate } from "../utils/estimates";
+import { defaultReminderDateTime } from "../utils/clockText";
 import "../styles/addTask.css";
-
-function defaultReminderDateTime() {
-  const d = new Date();
-  d.setHours(d.getHours() + 1, 0, 0, 0);
-  const dateStr = d.toISOString().slice(0, 10);
-  const timeStr = `${String(d.getHours()).padStart(2, "0")}:00`;
-  return { dateStr, timeStr };
-}
 
 function parseManualSubSteps(raw) {
   return raw

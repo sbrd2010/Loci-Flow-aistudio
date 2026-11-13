@@ -44,6 +44,15 @@ export function minutesOfHHMM(hhmm) {
 
 const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
+// New task's starting reminder: the next whole hour, as local date and time.
+// The date comes from local parts, never toISOString(), which is UTC and put
+// the reminder a day early (east of UTC after midnight) or late (#665).
+export function defaultReminderDateTime(now = new Date()) {
+  const d = new Date(now);
+  d.setHours(d.getHours() + 1, 0, 0, 0);
+  return { dateStr: ymd(d), timeStr: `${pad(d.getHours())}:00` };
+}
+
 // Reminder quick picks (try-out 10): In 1 hour (to the next 5 minutes),
 // This evening 18:00 while it's before 17:30, Tomorrow 09:00, and next
 // Monday 09:00 (a week on when today is Monday).
