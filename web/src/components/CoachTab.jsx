@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import FocusPill from "./FocusPill";
 import { auth } from "../firebase";
+import { challengeCoachLine } from "../utils/challenge";
 import { aiNeedsSignIn, callAI, describeAIError, fullPromptAllowed, getAIKeys, hasAIKey, isAISystemReply, isOnlyProviderKeyMissing, noKeyHint } from "../utils/aiCall";
 import { stripAIUsageNote } from "../utils/aiUsageLimits";
 import { buildLocalSafetyReply, localSafetyTurns, PRIVATE_REPLY_TURN, PRIVATE_USER_TURN } from "../utils/crisisSafety";
@@ -175,15 +176,9 @@ export default function CoachTab({ payload, savePayload, savePayloadAsync, saveS
   useEffect(() => () => { if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current); }, []);
 
   // -- AI Mentor Chat --------------------------------------------------------
-  const challengeLabel =
-    config.challengeType === "overplanner"  ? "Turning Plans into Action" :
-    config.challengeType === "overwhelmed"  ? "Recovery and Backlog Relief" :
-    config.challengeType === "initiation"   ? "Breaking Initiation Freeze" :
-    config.challengeType === "momentum"     ? "Building Momentum with Quick Wins" :
-    config.challengeType === "starting"     ? "Overcoming Inertia" :
-    config.challengeType === "focusing"     ? "Protecting Focus Sessions" :
-    config.challengeType === "tracking"     ? "Time Awareness" :
-    "Action over Perfectionism";
+  // #656: Settings › Coach › What helps you most, as Coach's short line (the
+  // same choice Ask AI gets), or null when nothing was chosen: no line at all.
+  const challengeLabel = challengeCoachLine(config.challengeType);
 
   const firstName = (config.userName || "").split(" ")[0] || "friend";
   // 62j: an empty conversation shows its own empty state; Coach doesn't

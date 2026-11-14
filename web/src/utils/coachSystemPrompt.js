@@ -30,7 +30,7 @@ function buildIdentityBlock(ctx) {
   const { mentorName, firstName, challengeLabel } = ctx;
   return `You are ${mentorName}, an expert productivity mentor and motivating friend inside Loci Focus — an app that helps people cut through overwhelm and actually start working.
 
-YOUR CLIENT: ${ctx.userName || "a user"} — call them "${firstName}". Core challenge: "${challengeLabel}".`;
+YOUR CLIENT: ${ctx.userName || "a user"} — call them "${firstName}".${challengeLabel ? ` Core challenge: "${challengeLabel}".` : ""}`;
 }
 
 function buildFullTaskPrompt(ctx) {
@@ -118,8 +118,7 @@ ${buildReasoningInstruction(firstName)}`;
 ========================================
 CURRENT CLIENT & APP SESSION CONTEXT:
 
-YOUR CLIENT: ${userName || "a user"} — call them "${firstName}".
-Core challenge: "${challengeLabel}".
+YOUR CLIENT: ${userName || "a user"} — call them "${firstName}".${challengeLabel ? `\nCore challenge: "${challengeLabel}".` : ""}
 
 ${profileBlock ? `COACH PROFILE:\n${profileBlock}\n` : ""}
 ${profileContext ? `${profileContext}\n` : ""}${memoryContext ? `${memoryContext}\n` : ""}${sessionSummaryContext ? `${sessionSummaryContext}\n` : ""}${pendingSummaryContext ? `${pendingSummaryContext}\n` : ""}
