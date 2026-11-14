@@ -175,7 +175,7 @@ test("More opens Reminder and Category, closed until asked", async ({ page }) =>
   await quick.getByRole("button", { name: /^Tomorrow/ }).click();
   await expect(reminder.locator(".detail-value")).not.toHaveText("None");
   await expect(quick.getByRole("button", { name: /^Tomorrow/ })).toHaveAttribute("aria-pressed", "true");
-  await sheet(page).getByLabel("Reminder date").fill("2024-06-16");
+  await sheet(page).getByLabel("Reminder date", { exact: true }).fill("2024-06-16");
   const typed = sheet(page).getByLabel("Reminder time, typed");
   await typed.fill("2:30pm");
   await typed.press("Enter");

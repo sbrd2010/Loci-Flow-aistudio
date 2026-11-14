@@ -217,7 +217,7 @@ test("Key deadline: a preview of the band, and Clear goal", async ({ page }) => 
   await enterDemo(page);
   await openTab(page, "Settings");
   await page.getByRole("button", { name: /^Key deadline/ }).click();
-  await page.getByLabel("Deadline").fill("2024-06-25");
+  await page.getByLabel("Deadline", { exact: true }).fill("2024-06-25");
   await expect(page.locator(".set-preview")).toContainText("10 days left");
   await page.getByRole("button", { name: "Clear goal" }).click();
   await expect(page.locator(".set-preview")).toContainText("Set a deadline");
