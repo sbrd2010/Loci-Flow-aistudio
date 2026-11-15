@@ -120,7 +120,7 @@ test("mobile reliability: the goal is one gold line on a phone, with its days", 
   // and the band above it keeps its one-line height. Measured against the
   // font's own line, not a pixel count, so the real fonts pass too.
   const target = band.locator(".wall-goal-target");
-  await expect(target).toHaveText(/^Target · \S/);
+  await expect(target).toHaveText(/^Target: \S/);
   const m = await target.evaluate(el => ({ h: el.getBoundingClientRect().height, line: parseFloat(getComputedStyle(el).lineHeight) }));
   expect(m.h).toBeLessThanOrEqual(m.line * 1.5);
   const h = (await band.boundingBox()).height;
@@ -1951,7 +1951,7 @@ test("a moved-from-yesterday task drags like any other row and keeps its tag (Q7
 test("the goal band shows the Target; Edit goal in its record opens Key deadline", async ({ page }) => {
   await emptyTheWall(page);
   const band = page.locator(".today-wall .wall-goal");
-  await expect(band.locator(".wall-goal-target")).toHaveText("Target · Finish one launch task today");
+  await expect(band.locator(".wall-goal-target")).toHaveText("Target: Finish one launch task today");
   await band.click();
   await page.getByRole("dialog", { name: /^Goal record/ }).getByRole("button", { name: "Edit goal" }).click();
   await expect(page.getByRole("heading", { name: "Key deadline" })).toBeVisible();

@@ -26,7 +26,7 @@ const fold = (page) => page.locator(".today-parked");
 test("a parked task sits in the folded PARKED fold; Restore puts it back at the bottom of the list", async ({ page }) => {
   const title = await parkTheOneThing(page);
   const line = fold(page).locator(".today-parked-line");
-  await expect(line).toContainText("Parked · 1");
+  await expect(line).toContainText("Parked 1");
   await expect(line).toContainText("since 15 Jun");
   await expect(line).toHaveAttribute("aria-expanded", "false");
   await line.click();
@@ -42,5 +42,5 @@ test("Drop deletes the parked task, with Undo", async ({ page }) => {
   await fold(page).getByRole("button", { name: `Drop: ${title}` }).click();
   await expect(fold(page)).toHaveCount(0);
   await page.getByRole("button", { name: "Undo" }).click();
-  await expect(fold(page).locator(".today-parked-line")).toContainText("Parked · 1");
+  await expect(fold(page).locator(".today-parked-line")).toContainText("Parked 1");
 });

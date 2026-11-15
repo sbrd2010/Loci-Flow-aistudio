@@ -85,10 +85,10 @@ test("rows: an overdue reminder is a gold dot, and no horizon-review tag (Turn 7
   await expect(list.locator("[data-testid='task-row']", { hasText: "Mum: write card" })).toContainText("FROM YESTERDAY");
 });
 
-test("the task side: the mantra, NOW · UNTIL, and the goal on up to two lines", async ({ page }) => {
+test("the task side: the mantra, Now until, and the goal on up to two lines", async ({ page }) => {
   await openToday(page, { width: 1280, height: 720 });
   await expect(page.locator(".wall-mantra")).toHaveText("ONE task at a time.");
-  await expect(page.locator(".wall-kicker-wide")).toHaveText(/^NOW · UNTIL \d\d:\d\d$/);
+  await expect(page.locator(".wall-kicker-wide")).toHaveText(/^Now, until \d\d:\d\d$/);
   const name = page.locator(".wall-goal-line-name");
   await expect(name).toHaveText("Send 3 applications. Get an interview in 2 weeks");
   expect(await name.evaluate(el => el.scrollHeight <= el.clientHeight + 1)).toBe(true);
