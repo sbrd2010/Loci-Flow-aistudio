@@ -306,7 +306,7 @@ test("72: the task side reads goal · NOW · UNTIL · title · step · buttons, 
   const h = Math.round((await goal.boundingBox()).height);
   expect(h).toBeGreaterThanOrEqual(44);
   expect(h).toBeLessThanOrEqual(52);
-  await expect(page.locator(".wall-kicker-wide")).toHaveText(/^Now, until \d\d:\d\d$/);
+  await expect(page.locator(".wall-kicker-wide")).toHaveText(/^Now until \d\d:\d\d$/);
   await expect(page.locator(".wall-step-count")).toHaveText(/^1 \/ \d+$/);
   await expect(page.locator(".wall-first-step-label")).toBeHidden();
   const [start, done] = await Promise.all([page.locator(".wall-start").boundingBox(), page.locator(".wall-action", { hasText: "Mark done" }).boundingBox()]);

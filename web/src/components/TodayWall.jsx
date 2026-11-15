@@ -485,7 +485,7 @@ export default function TodayWall({
         <p className="wall-mantra" data-flip="mantra">ONE task at a time.</p>
         <div className="wall-kicker-row" data-flip="kicker">
           <span className="wall-kicker">
-            <span className="wall-kicker-wide">{nowUntil != null ? `Now, until ${formatClock24(nowUntil)}` : "Now"}</span>
+            <span className="wall-kicker-wide">{nowUntil != null ? `Now until ${formatClock24(nowUntil)}` : "Now"}</span>
             <span className="wall-kicker-phone">{nowCount > 0 ? `Now, 1 of ${nowCount}` : "Now"}</span>
           </span>
           {meta && <span className="wall-kicker-meta">{meta}</span>}

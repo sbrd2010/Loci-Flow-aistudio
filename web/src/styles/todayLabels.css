@@ -26,7 +26,7 @@ main.screen-content.screen-content-today :is(
   font-variant-numeric: tabular-nums;
 }
 
-/* The one signal on the task side: "Now, until 10:25". */
+/* The one signal on the task side: "Now until 10:25". */
 main.screen-content.screen-content-today .wall-kicker { font-size: 13px; font-weight: 700; }
 
 /* Shared rows still say "25 MIN" (formatSpanCaps); Today shows "25 min". */
