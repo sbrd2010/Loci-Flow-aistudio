@@ -1731,22 +1731,24 @@ html[data-theme="dark"] {
   color-scheme: dark;
 
   /* — 1. design tokens — */
-  --bg:           #141A16;
-  --surface:      #1B231E;
-  --panel:        #222B25;
-  --line:         #2C3630;
+  /* Grounds and lines are neutral greys (a hair of green); green is kept
+     for the accent, so it has something to stand out against. */
+  --bg:           #141514;
+  --surface:      #1B1C1B;
+  --panel:        #222322;
+  --line:         #2D2F2D;
   --ink:          #E4E8E2;
   --ink-2:        #AEB9B1;
   --placeholder:  #87928A;
-  --edge:         #5E6A62;
+  --edge:         #636763;
   --accent:       #A3C29B;
   --accent-edge:  #76946C;
   --on-accent:    #0D1F15;
   --accent-tint:  #2B3A29;
-  --btn-line:     #3F4B43;
-  --rule:         #232C26;
-  --rule-surface: #232C26;
-  --field:        #222B25;
+  --btn-line:     #424542;
+  --rule:         #232423;
+  --rule-surface: #232423;
+  --field:        #222322;
   --row-hover:    var(--panel);
   --hair-soft:    var(--line);
   --accent-soft:  #1F4D36;
