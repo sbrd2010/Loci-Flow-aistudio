@@ -838,7 +838,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
                   <ol className="dm-route" aria-label="Today's route">
                     {rows.filter(r => !rowIsOver(r)).map(renderRow)}
                     <li className="dm-dayend" aria-label={`Day ends at ${dayEndLabel}`}>
-                      <span className="dm-dayend-label">{dayEndText}{dayEndFree && <span className="dm-dayend-free">{dayEndFree}</span>}</span>
+                      <span className="dm-dayend-label">{dayEndText}{dayEndFree && <>{" "}<span className="dm-dayend-free">{dayEndFree}</span></>}</span>
                     </li>
                     {rows.filter(rowIsOver).map(renderRow)}
                   </ol>

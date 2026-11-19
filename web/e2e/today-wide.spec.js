@@ -34,7 +34,7 @@ test("1680: no third column; the switch shows the Day map in the list's place, a
   const stops = column(page).getByRole("list", { name: "Today's route" }).getByRole("button");
   await expect(stops.first()).toHaveAccessibleName(/^Now to /);
   // Nothing past the line: the time to spare.
-  await expect(column(page).locator(".tdm-dayend")).toHaveText(/^Day ends 02:00\d+h(\d{2}m)? spare$/);
+  await expect(column(page).locator(".tdm-dayend")).toHaveText(/^Day ends 02:00 \d+h(\d{2}m)? spare$/);
   // The view is kept: back on Today after the Day map page, still the map.
   await column(page).getByRole("button", { name: "Day map page ›" }).click();
   await expect(page.locator(".day-map-page")).toBeVisible();

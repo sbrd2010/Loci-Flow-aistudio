@@ -260,4 +260,4 @@
 }
 
 /* #671: "Sat 14 Nov   16h00m left", spaced rather than dot-joined. */
-.shell-clock-date { margin-right: 0.75em; }
+.shell-clock-date { margin-right: 0.5em; }

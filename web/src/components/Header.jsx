@@ -37,7 +37,8 @@ export default function Header({ activeTab, onTabSelect, onGoHome, dayClock, onD
         <span className="shell-clock">
           {/* 58.2: the full date leaves Today on the phone; the time left stays. */}
           <span className="shell-clock-date">{dayClock.date}</span>
-          {dayClock.left && <><span className="shell-clock-left">{dayClock.left}</span> left</>}
+          {/* A real space, not only a margin: read aloud and copied as two facts. */}
+          {dayClock.left && <>{" "}<span className="shell-clock-left">{dayClock.left}</span> left</>}
         </span>
         <button
           type="button"

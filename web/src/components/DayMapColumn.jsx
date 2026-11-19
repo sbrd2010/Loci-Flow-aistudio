@@ -117,7 +117,7 @@ export default function DayMapColumn({ route, onOpenDayMap, onOpenTask, onDone, 
             {rows.filter(r => !rowIsOver(r)).map(row)}
           </ol>
           <p className="tdm-dayend">
-            <span>Day ends {formatClock24(plan.dayEnd)}</span>{spare > 0 && plan.wontFit.length === 0 && <span className="tdm-dayend-spare">{formatSpanCaps(spare).toLowerCase()} spare</span>}
+            <span>Day ends {formatClock24(plan.dayEnd)}</span>{spare > 0 && plan.wontFit.length === 0 && <>{" "}<span className="tdm-dayend-spare">{formatSpanCaps(spare).toLowerCase()} spare</span></>}
           </p>
           {plan.wontFit.length > 0 && (
             <section className="tdm-wontfit-block" aria-label="Won't fit today">

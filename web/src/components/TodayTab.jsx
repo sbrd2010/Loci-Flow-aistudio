@@ -2120,7 +2120,7 @@ export default function TodayTab({
                   ))}
                 </SortableContext>
                 {cut.overIds.size === 0 && remainingTasks.length > 0 && route.scheduledTasks.length > 0 && (
-                  <p className="today-dayend"><span>Day ends {formatClock24(route.plan.dayEnd)}</span>{cut.spare > 0 && <span className="today-dayend-spare">{formatSpanCaps(cut.spare).toLowerCase()} spare</span>}</p>
+                  <p className="today-dayend"><span>Day ends {formatClock24(route.plan.dayEnd)}</span>{cut.spare > 0 && <>{" "}<span className="today-dayend-spare">{formatSpanCaps(cut.spare).toLowerCase()} spare</span></>}</p>
                 )}
                 {/* Turn 76 (c): the same count and total as the Day map,
                     even when the only task cut is the pinned one thing. */}

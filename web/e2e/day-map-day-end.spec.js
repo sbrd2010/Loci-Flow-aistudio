@@ -39,7 +39,7 @@ async function overfill(page) {
 
 test("a route that fits: the day ends at the end of the focus window, with the time to spare", async ({ page }) => {
   await openDayMapAt(page, "2024-06-15T21:00:00");
-  await expect(page.locator(".dm-dayend")).toHaveText(/^Day ends 02:00\d+h(\d+m)? free$/);
+  await expect(page.locator(".dm-dayend")).toHaveText(/^Day ends 02:00 \d+h(\d+m)? free$/);
   await expect(fact(page)).toHaveText(/^On track: done by \d{2}:\d{2}\.$/);
   await expect(page.locator(".dm-daybar-past")).toHaveCount(0);
   await expect(page.locator(".dm-stop.is-over")).toHaveCount(0);
@@ -60,7 +60,7 @@ test("stops after the day end are marked, and Move N to tomorrow takes them off 
   await expect(fact(page).locator(".dm-fact-alert")).toHaveText("1 task won’t fit · 2h.");
   await expect(page.locator(".dm-daybar-legend")).toContainText("won’t fit 2h");
   await expect(page.locator(".dm-daybar-legend")).not.toContainText("past your day end");
-  await expect(dayEnd).toHaveText("Day ends 02:001h30m free");
+  await expect(dayEnd).toHaveText("Day ends 02:00 1h30m free");
   // Screen readers hear where a stop sits against the day's end (brief §6).
   await expect(page.locator(".dm-stop.is-over .dm-main")).toHaveAttribute("aria-label", /after the day ends$/);
 
@@ -69,7 +69,7 @@ test("stops after the day end are marked, and Move N to tomorrow takes them off 
   await expect(page.locator(".dm-stop")).toHaveCount(2);
   await expect(page.locator(".dm-tomorrow-note")).toHaveText("1 task now starts tomorrow.");
   // What is left ends at 00:30: an hour and a half to spare.
-  await expect(dayEnd).toHaveText("Day ends 02:001h30m free");
+  await expect(dayEnd).toHaveText("Day ends 02:00 1h30m free");
 
   await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
   await expect(page.locator(".dm-stop")).toHaveCount(3);

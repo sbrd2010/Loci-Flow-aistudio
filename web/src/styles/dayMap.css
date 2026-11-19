@@ -1006,4 +1006,4 @@ html[data-theme="dark"] { --break-tint: #1D262D; --break-ink: #A9B6C1; }
 }
 
 /* #671: "Day ends 02:00   1h30m free", spaced rather than dot-joined. */
-.dm-dayend-free { margin-left: 0.75em; font-weight: 500; color: var(--ink-2); }
+.dm-dayend-free { margin-left: 0.5em; font-weight: 500; color: var(--ink-2); }

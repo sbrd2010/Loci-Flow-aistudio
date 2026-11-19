@@ -318,7 +318,7 @@ export default function FocusModePage({
     task.isNowFocus ? "Today, now" : "Focus",
     estimate > 0 ? `${spanLabel(estimate)} task` : null,
     doneToday >= 1 ? `${spanLabel(doneToday)} done` : null,
-  ].filter(Boolean).map(part => <span key={part} className="fm-kicker-part">{part}</span>);
+  ].filter(Boolean).flatMap((part, i) => [i ? " " : null, <span key={part} className="fm-kicker-part">{part}</span>]);
 
   const doneButton = (filled) => (
     <button
@@ -431,7 +431,7 @@ export default function FocusModePage({
         <p className="focus-mode-kicker">
           <span className="focus-mode-header-label">{kicker}</span>
           {/* Q37.1: "Focus  Block 1" — no day or block end up here. */}
-          <span className="fm-head-meta">Block {Math.max(1, blockNumber)}</span>
+          {" "}<span className="fm-head-meta">Block {Math.max(1, blockNumber)}</span>
           <span className="sr-only"> · {stateLabel}</span>
         </p>
         <div className="fm-head-actions">
@@ -458,7 +458,7 @@ export default function FocusModePage({
       <main className="focus-mode-body" aria-label="Deep focus session">
         <section className="focus-mode-task-panel" aria-label="Focused task">
           <p className="fm-stage-kicker">
-            {splitNote ? <><span className="fm-kicker-part">Split into {splitNote.n}</span><span className="fm-kicker-part">Piece 1 of {splitNote.n}</span></> : stageKicker}
+            {splitNote ? <><span className="fm-kicker-part">Split into {splitNote.n}</span>{" "}<span className="fm-kicker-part">Piece 1 of {splitNote.n}</span></> : stageKicker}
             {splitNote?.onUndo && <> <button type="button" className="fm-link" onClick={splitNote.onUndo}>Undo</button></>}
           </p>
           <h1 className="focus-mode-task-title" data-len={titleLength(task.title)}><LinkifyText text={task.title} /></h1>
@@ -519,7 +519,7 @@ export default function FocusModePage({
             {(startedLabel || endsLabel) && (
               <span className="fm-figures-times">
                 {startedLabel && <span className="focus-mode-started">started {startedLabel}</span>}
-                {endsLabel && <span className="focus-mode-ends">ends {endsLabel}</span>}
+                {startedLabel && endsLabel && " "}{endsLabel && <span className="focus-mode-ends">ends {endsLabel}</span>}
               </span>
             )}
           </p>
@@ -529,7 +529,7 @@ export default function FocusModePage({
             the timer waits for an answer, and pauses after 60 s. */}
         {isComplete ? (
           <div className="focus-mode-hold-actions fm-block-end" role="group" aria-label="Block done">
-            <p className="fm-block-end-kicker"><span className="fm-kicker-part">Block {Math.max(1, blockNumber)} done</span><span className="fm-kicker-part">Session {hoursMinutes(loggedMinutes)}</span></p>
+            <p className="fm-block-end-kicker"><span className="fm-kicker-part">Block {Math.max(1, blockNumber)} done</span>{" "}<span className="fm-kicker-part">Session {hoursMinutes(loggedMinutes)}</span></p>
             {breaking ? (
               <>
                 <p className="fm-block-end-note">A 5-minute break. Block {Math.max(1, blockNumber) + 1} waits for you after it.</p>

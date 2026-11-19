@@ -72,6 +72,12 @@ test("mobile reliability: the session names its length and when it ends (45b)", 
   // Q37.1: "of 25:00", then when it ends under it (the phone leaves "started" out).
   await expect(overlay.locator(".fm-figures-of")).toHaveText(/^of \d+:\d{2}$/);
   await expect(overlay.locator(".fm-figures-times")).toContainText(/ends \d{2}:\d{2}$/);
+  // Review of #673: the parts are separate words in the text itself, not only
+  // spaced by CSS ("started 10:00 ends 10:25", "Focus Block 1", "now 25m task").
+  const text = async (sel) => (await overlay.locator(sel).first().textContent()) || "";
+  expect(await text(".fm-figures-times")).toMatch(/^started \d{2}:\d{2} ends \d{2}:\d{2}$/);
+  expect(await text(".focus-mode-kicker")).toMatch(/^Focus Block 1/);
+  expect(await text(".fm-stage-kicker")).not.toMatch(/[a-z]\d|\d[a-z]{2,}[A-Z0-9]/);
 });
 
 test("the block can be paused, resumed and given five more minutes, and the keys work", async ({ page }) => {
@@ -121,7 +127,7 @@ test("mobile reliability: reaching 00:00 shows block end, with its choices and n
   await expect(overlay).toBeVisible();
   await expect(overlay.locator(".focus-mode-time-digits")).toHaveText("0:00");
   const end = overlay.getByRole("group", { name: "Block done" });
-  await expect(end.locator(".fm-block-end-kicker")).toHaveText("Block 1 doneSession 0:25");
+  await expect(end.locator(".fm-block-end-kicker")).toHaveText("Block 1 done Session 0:25");
   await expect(end.getByRole("button")).toHaveText([/^5-minute break, then continue/, "Another 25m", "+5 min", "Mark done", "End session"]);
   // Leaving without an answer isn't one of them.
   await expect(overlay.getByRole("button", { name: "Leave focus" })).toHaveCount(0);

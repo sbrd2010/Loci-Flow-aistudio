@@ -753,5 +753,5 @@
 /* #671: kicker and figure parts spaced, not dot-joined. */
 .fm-kicker-part + .fm-kicker-part,
 .focus-mode-header-label + .fm-head-meta,
-.focus-mode-started + .focus-mode-ends { margin-left: 0.75em; }
+.focus-mode-started + .focus-mode-ends { margin-left: 0.5em; }
 .fm-kicker-part + .fm-kicker-part { color: var(--ink-2); }
