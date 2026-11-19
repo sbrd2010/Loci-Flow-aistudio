@@ -27,8 +27,14 @@ describe("miniView (#508, C2 ring)", () => {
   it("block end wins over paused: a full ring and the block's length, labelled by phase", () => {
     const done = miniView({ secondsLeft: 0, maxSeconds: 1500, running: false, blockPhase: "done" });
     expect(done).toMatchObject({ state: "done", label: "Block done", time: "25:00", frac: 1 });
-    expect(miniView({ secondsLeft: 0, maxSeconds: 1500, running: false, blockPhase: "break" }).label).toBe("On a break");
-    expect(miniView({ secondsLeft: 0, maxSeconds: 1500, running: false, blockPhase: "over" }).label).toBe("Break’s over");
+    expect(miniView({ secondsLeft: 0, maxSeconds: 1500, running: false, blockPhase: "over" })).toMatchObject({ state: "done", label: "Break’s over", time: "25:00", frac: 1 });
+  });
+
+  it("block end's 5-minute break counts the break down, not the block (review of #672)", () => {
+    const v = miniView({ secondsLeft: 0, maxSeconds: 1500, running: false, blockPhase: "break", breakLeft: 241, breakSeconds: 300 });
+    expect(v).toMatchObject({ state: "done", phase: "break", label: "On a break", time: "4:01" });
+    expect(v.frac).toBeCloseTo(241 / 300);
+    expect(miniView({ secondsLeft: 0, maxSeconds: 1500, running: false, blockPhase: "break", breakLeft: 0, breakSeconds: 300 }).frac).toBe(0);
   });
 
   it("a block over 99 minutes reads h:mm:ss and says so", () => {

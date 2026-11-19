@@ -27,13 +27,20 @@ export function soundShortName(trackId) {
 
 // What the window shows. `blockPhase` is the hook's block end ("done" |
 // "break" | "over" | null). Block end wins over paused, paused over the last
-// five minutes. The ring is the remaining fraction (full at block end).
-export function miniView({ secondsLeft, maxSeconds, running, blockPhase = null, sound = "" }) {
+// five minutes. The ring is the remaining fraction: full when a block is
+// done; during block end's 5-minute break (Q41) it counts the break down, as
+// the focus bar does.
+export function miniView({ secondsLeft, maxSeconds, running, blockPhase = null, sound = "", breakLeft = 0, breakSeconds = 300 }) {
   const left = Math.max(0, Math.round(Number(secondsLeft) || 0));
   const max = Math.max(0, Math.round(Number(maxSeconds) || 0));
+  if (blockPhase === "break") {
+    const b = Math.max(0, Math.round(Number(breakLeft) || 0));
+    const bMax = Math.max(1, Math.round(Number(breakSeconds) || 0));
+    return { state: "done", phase: "break", label: "On a break", ...clock(b, bMax), frac: Math.min(1, b / bMax) };
+  }
   if (blockPhase) {
-    const label = blockPhase === "break" ? "On a break" : blockPhase === "over" ? "Break’s over" : "Block done";
-    return { state: "done", label, ...clock(max, max), frac: 1 };
+    const label = blockPhase === "over" ? "Break’s over" : "Block done";
+    return { state: "done", phase: blockPhase, label, ...clock(max, max), frac: 1 };
   }
   const frac = max > 0 ? Math.min(1, left / max) : 0;
   if (!running) return { state: "paused", label: "Paused", ...clock(left, max), frac };
@@ -63,7 +70,6 @@ const CSS = `
   #ring { position: relative; flex: none; width: calc(min(100vw, 100vh) - 28px); aspect-ratio: 1;
     container-type: size; border-radius: 50%; cursor: pointer; }
   body.has-cta #ring { width: calc(min(100vw, 100vh) - 92px); }
-  #ring:focus-visible { outline: 2px solid var(--arc); outline-offset: 4px; }
   #ring > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
   #pr-bg, #pr-fg { fill: none; }
   #pr-bg { stroke: var(--track); }
@@ -108,8 +114,9 @@ const CSS = `
   .ic[hidden] { display: none; }
 
   /* The ⋯ menu: what the row leaves out, and the theme. */
-  #pip-menu { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(14px + 9.5 * (min(100vw, 100vh) - 28px) / 100 + 48px);
-    min-width: 168px; padding: 4px; display: none; flex-direction: column; background: var(--chip);
+  /* A panel at the window's bottom (over the row), never past its edges. */
+  #pip-menu { position: fixed; left: 50%; transform: translateX(-50%); bottom: 8px; width: min(220px, calc(100vw - 16px));
+    max-height: calc(100vh - 16px); overflow-y: auto; padding: 4px; display: none; flex-direction: column; background: var(--chip);
     border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.28); z-index: 2; }
   body.menu-open #pip-menu { display: flex; }
   #pip-menu button { min-height: 36px; padding: 0 12px; text-align: left; font: inherit; font-size: 13px; font-weight: 700;
@@ -134,8 +141,8 @@ const CSS = `
     #pp { font-size: 11px; }
     /* The row takes the label's place while it shows. */
     body:not(.has-cta):hover #pp, body:not(.has-cta).is-fresh #pp { visibility: hidden; }
-    #pip-cta button { height: 36px; font-size: 13px; }
-    #pip-cta-done { display: none; }
+    #pip-cta { gap: 6px; }
+    #pip-cta button { height: 36px; padding: 0 9px; font-size: 12.5px; }
   }
   @media (min-width: 400px) and (min-height: 400px) { #pl { font-size: 14px; } }
 
@@ -190,7 +197,7 @@ export function ringDash(frac, r = 48) {
 // Builds the window once. `on` holds the actions: togglePlay, addFive,
 // shuffle, stuck, done, nextBlock, openTab. Returns `render(view)`, where
 // view = miniView(...) plus { title, canShuffle, running }.
-export function buildMiniWindow(doc, win, on, storage) {
+export function buildMiniWindow(doc, win, on, storage, fontHrefs = []) {
   const svgNS = "http://www.w3.org/2000/svg";
   const el = (tag, props = {}, ...kids) => { const e = doc.createElement(tag); Object.assign(e, props); e.append(...kids); return e; };
   const icon = (name) => {
@@ -208,6 +215,13 @@ export function buildMiniWindow(doc, win, on, storage) {
     return s;
   };
 
+  // The PiP document starts empty: it needs the app's font stylesheet too.
+  for (const href of fontHrefs) {
+    const link = doc.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    doc.head.appendChild(link);
+  }
   const style = doc.createElement("style");
   style.textContent = CSS;
   doc.head.appendChild(style);
@@ -216,8 +230,9 @@ export function buildMiniWindow(doc, win, on, storage) {
   doc.body.classList.toggle("is-light", light);
 
   // The ring: track, arc, and the face (check, label, time, title).
-  const ring = el("div", { id: "ring", tabIndex: 0, title: "Pause or resume · Space" });
-  ring.setAttribute("role", "button");
+  // A click on the ring pauses or resumes (a mouse convenience); the
+  // accessible control is #pip-play, and Space works anywhere.
+  const ring = el("div", { id: "ring", title: "Pause or resume · Space" });
   const svg = doc.createElementNS(svgNS, "svg");
   svg.setAttribute("viewBox", "0 0 100 100");
   svg.setAttribute("aria-hidden", "true");
@@ -308,9 +323,18 @@ export function buildMiniWindow(doc, win, on, storage) {
   // shuffles; D is Done; Esc closes ⋯.
   doc.addEventListener("keydown", (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
-    if (e.key === "Escape") { setMenu(false); return; }
+    const menuOpen = doc.body.classList.contains("menu-open");
+    if (e.key === "Escape") { if (menuOpen) { setMenu(false); more.focus(); } return; }
+    if (menuOpen && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+      const items = [...menu.querySelectorAll("button:not([hidden])")];
+      const i = items.indexOf(doc.activeElement);
+      const next = items[(i + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length];
+      e.preventDefault();
+      next?.focus();
+      return;
+    }
     const onButton = e.target?.closest?.("button");
-    if (e.key === " " || (e.key === "Enter" && e.target === ring)) {
+    if (e.key === " ") {
       if (onButton) return;
       e.preventDefault();
       on.togglePlay();
@@ -351,7 +375,6 @@ export function buildMiniWindow(doc, win, on, storage) {
       play.replaceChildren(icon(running ? "pause" : "play"));
       play.setAttribute("aria-label", running ? "Pause" : "Resume");
       play.title = running ? "Pause · Space" : "Resume · Space";
-      ring.setAttribute("aria-label", running ? "Pause the timer" : "Resume the timer");
     }
     shuffle.hidden = !v.canShuffle;
     drawArc();

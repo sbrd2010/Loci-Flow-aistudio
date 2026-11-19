@@ -174,13 +174,14 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
   const pipRenderRef = useRef(null);
   const pipCallsRef = useRef({});
   const blockEndPhase = !sessionCompletePending ? null : breakUntil != null ? "break" : breakOver ? "over" : "done";
+  const breakLeft = breakUntil == null ? 0 : Math.max(0, Math.ceil((breakUntil - breakNow) / 1000));
 
   const updatePiPUI = (seconds, maxSeconds, running, title) => {
     const render = pipRenderRef.current;
     if (!render) return;
     const actions = pipActionsRef?.current || {};
     render({
-      ...miniView({ secondsLeft: seconds, maxSeconds, running, blockPhase: blockEndPhase, sound: actions.soundName?.() || "" }),
+      ...miniView({ secondsLeft: seconds, maxSeconds, running, blockPhase: blockEndPhase, breakLeft, breakSeconds: BREAK_SECONDS, sound: actions.soundName?.() || "" }),
       title,
       canShuffle: Boolean(actions.canShuffle?.()),
     });
@@ -217,7 +218,7 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
         done: () => actions().onDone?.(),
         nextBlock: () => pipCallsRef.current.startNextBlock?.(),
         openTab,
-      }, storage);
+      }, storage, [...document.querySelectorAll('link[rel="stylesheet"][href*="fonts.googleapis.com"]')].map(l => l.href));
 
       pipWin.addEventListener("pagehide", () => {
         pipWinRef.current = null;
@@ -236,7 +237,7 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
     if (pipWinRef.current && pipOpen) {
       updatePiPUI(timerSecondsLeft, timerMaxSeconds, isTimerRunning, pipNotice || activeTask?.title || "Deep Focus");
     }
-  }, [timerSecondsLeft, timerMaxSeconds, isTimerRunning, activeTask?.title, pipOpen, pipNotice, blockEndPhase]);
+  }, [timerSecondsLeft, timerMaxSeconds, isTimerRunning, activeTask?.title, pipOpen, pipNotice, blockEndPhase, breakLeft]);
 
   // PiP safety close rules: close when session ends or no active task exists
   useEffect(() => {
@@ -507,7 +508,6 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
   }, [focusSessionId]);
   // Q38.1d: the mini window says so.
   useEffect(() => { setPipNotice(breakOver ? "Break’s over" : null); }, [breakOver]);
-  const breakLeft = breakUntil == null ? 0 : Math.max(0, Math.ceil((breakUntil - breakNow) / 1000));
 
   // Request notification permission when focus overlay opens (already a user interaction)
   useEffect(() => {
