@@ -103,7 +103,7 @@ test("the sheet's estimate is the stop's duration, and the route is timed again"
   await sheet(page).getByRole("radio", { name: "1h", exact: true }).click();
   await expect(page.locator(".dm-stop").nth(0).locator(".dm-dur")).toHaveText("1h");
   const [first, second] = await times(page);
-  expect(first).toBe("NOW");
+  expect(first).toBe("Now");
   // From 11:35 exactly; an hour, then the 5-minute gap on a 5-minute mark.
   expect(second).toBe("12:40");
 });
@@ -245,7 +245,7 @@ test("the one thing moved off Today from its stop's sheet ends its session and l
 
   await expect.poll(() => titles(page)).toEqual(before.filter(t => t !== wallTitle));
   // The next stop moved up into the freed start.
-  await expect(page.locator(".dm-stop").nth(0).locator(".dm-time")).toHaveText("NOW");
+  await expect(page.locator(".dm-stop").nth(0).locator(".dm-time")).toHaveText("Now");
   // The session ended: the Day map's focus bar goes.
   await expect(floating).toHaveCount(0);
 });

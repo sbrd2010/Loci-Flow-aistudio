@@ -1,10 +1,10 @@
 import { getRemainingFocusMinutes } from "./focusWindows";
 
-// The header's "WED 23 SEP · 5h40m LEFT" (turn 37 on). Both figures change at
+// The header's "Wed 23 Sep   5h40m left" (turn 37 on; sentence case, #671). Both figures change at
 // most once a minute, so callers build this on a minute tick rather than on
 // every render. `left` is null once the day's focus windows are used up.
-const WEEKDAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 export function buildDayClock(now, windows) {
   const mins = Math.round(getRemainingFocusMinutes(now, windows));

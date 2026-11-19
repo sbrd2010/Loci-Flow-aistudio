@@ -309,12 +309,12 @@ test("laptop: a block ending on a front's page shows block end on the bar, with 
   await page.clock.runFor(25 * 60_000 + 5_000);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const bar = page.getByRole("region", { name: "Focus session" });
-  await expect(bar).toContainText("BLOCK 1 DONE");
+  await expect(bar).toContainText("Block 1 done");
   await expect(back(page)).toBeVisible();
   await bar.getByRole("button", { name: /Take a break/ }).click();
-  await expect(bar).toContainText("BREAK");
+  await expect(bar).toContainText("Break");
   await page.clock.runFor(5 * 60_000 + 2_000);
-  await expect(bar).toContainText("BREAK’S OVER");
+  await expect(bar).toContainText("Break’s over");
   await bar.getByRole("button", { name: /Start block 2/ }).click();
   await expect(bar.getByRole("button", { name: "Pause focus timer" })).toBeVisible();
 });

@@ -44,17 +44,17 @@ test("Something else, fixed at 12:30: the route flows around it, moved stops say
   await expect(call.locator(".dm-main")).toHaveAttribute("aria-label", /, fixed time/);
   // The first stop ends at 12:00, as the call starts: no buffer, no gap (Q35).
   await expect(route(page).locator(".dm-free")).toHaveCount(0);
-  expect(await times(page)).toEqual(["NOW", "12:00", "12:35", "13:05"]);
-  await expect(route(page).locator(".dm-stop", { hasText: titles[1] })).toContainText("WAS 12:05");
-  await expect(route(page).locator(".dm-stop", { hasText: titles[2] })).toContainText("WAS 12:35");
+  expect(await times(page)).toEqual(["Now", "12:00", "12:35", "13:05"]);
+  await expect(route(page).locator(".dm-stop", { hasText: titles[1] })).toContainText("Was 12:05");
+  await expect(route(page).locator(".dm-stop", { hasText: titles[2] })).toContainText("Was 12:35");
   await expect(page.locator(".undo-toast")).toContainText("Call with the recruiter fixed at 12:00 · 2 stops moved");
 
   // Undo: the call is gone (it was made for this), and the route is as it was.
   await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
   await expect(route(page).locator(".dm-stop", { hasText: "Call with the recruiter" })).toHaveCount(0);
   // Gone from Today altogether.
-  expect(await times(page)).toEqual(["NOW", "12:05", "12:35"]);
-  await expect(route(page).getByText(/^WAS /)).toHaveCount(0);
+  expect(await times(page)).toEqual(["Now", "12:05", "12:35"]);
+  await expect(route(page).getByText(/^Was /)).toHaveCount(0);
 });
 
 test("a stop's sheet fixes its time, then shows Change time and Unfix; Unfix lets it flow again", async ({ page }) => {
@@ -97,12 +97,12 @@ test("Unfix clears the WAS badges of the stops the fix moved", async ({ page }) 
   for (let i = 0; i < 6; i += 1) await page.keyboard.press("ArrowDown");
   await expect(at).toHaveValue("12:05");
   await page.keyboard.press("Enter");
-  await expect(route(page).getByText(/^WAS /)).not.toHaveCount(0);
+  await expect(route(page).getByText(/^Was /)).not.toHaveCount(0);
 
   await route(page).locator(".dm-stop", { hasText: title }).locator(".dm-main").click();
   await sheet.getByRole("button", { name: "Unfix" }).click();
   await expect(page.locator(".undo-toast")).toContainText(`No fixed time: ${title}`);
-  await expect(route(page).getByText(/^WAS /)).toHaveCount(0);
+  await expect(route(page).getByText(/^Was /)).toHaveCount(0);
 });
 
 test("the fixed-time dialog keeps Tab inside and Escape closes it", async ({ page }) => {

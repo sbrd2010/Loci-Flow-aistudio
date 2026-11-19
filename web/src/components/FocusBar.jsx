@@ -113,18 +113,18 @@ export default function FocusBar({
         <MiniRing secondsLeft={ring.secondsLeft} maxSeconds={ring.maxSeconds} paused={ring.paused} />
         <span className="fb-time" aria-live="polite">
           {phase === "done" ? (
-            <span className="fb-of">BLOCK {n} DONE</span>
+            <span className="fb-of">Block {n} done</span>
           ) : phase === "break" ? (
             <>
               <span className="fb-clock">{clock(blockEnd.breakLeft)}</span>
-              <span className="fb-of">BREAK</span>
+              <span className="fb-of">Break</span>
             </>
           ) : phase === "over" ? (
-            <span className="fb-of">BREAK&rsquo;S OVER</span>
+            <span className="fb-of">Break&rsquo;s over</span>
           ) : (
             <>
               <span className="fb-clock">{clock(secondsLeft)}</span>
-              <span className="fb-of">{isRunning ? `OF ${blockLabel}` : "PAUSED"}</span>
+              <span className="fb-of">{isRunning ? `of ${blockLabel}` : "Paused"}</span>
             </>
           )}
         </span>

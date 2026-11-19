@@ -74,7 +74,7 @@ for (const viewport of MOBILE_VIEWPORTS) {
 
     await routeReady(page);
     await expectVisibleRouteTimeLabels(page);
-    await expect(page.locator(".dm-dayend")).toContainText("DAY ENDS", { timeout: 5_000 });
+    await expect(page.locator(".dm-dayend")).toContainText("Day ends", { timeout: 5_000 });
     await expectNoHorizontalOverflow(page);
   });
 }
@@ -92,7 +92,7 @@ test("reliability: Day Map route persists after closing and reopening", async ({
   await openDayMap(page);
   await routeReady(page);
   await expectVisibleRouteTimeLabels(page);
-  await expect(page.locator(".dm-dayend")).toContainText("DAY ENDS", { timeout: 5_000 });
+  await expect(page.locator(".dm-dayend")).toContainText("Day ends", { timeout: 5_000 });
   await expectNoHorizontalOverflow(page);
 });
 
