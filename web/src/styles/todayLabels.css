@@ -1,0 +1,43 @@
+/* Today's labels in the body face, not tracked mono caps.
+   Sentence case, untracked, tabular figures; size and colour carry the
+   hierarchy instead. Space Mono stays where mono is literal: the focus
+   timer and the keyboard keys.
+   Scoped to Today on purpose (a trial); `main.screen-content` lifts the
+   specificity above every Today rule, so file order does not matter. */
+main.screen-content.screen-content-today :is(
+  .wall-kicker,
+  .wall-goal-line-figures,
+  .wall-goal-target-label,
+  .wall-anchor-count,
+  .wall-step-count,
+  .today-list-count,
+  .task-row-meta,
+  .task-row-dur,
+  .wall-peek-next-dur,
+  .today-dayend,
+  .today-parked-kicker,
+  .today-foot-done
+) {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The one signal on the task side: "Now until 10:25". */
+main.screen-content.screen-content-today .wall-kicker { font-size: 13px; font-weight: 700; }
+
+/* Shared rows still say "25 MIN" (formatSpanCaps); Today shows "25 min". */
+main.screen-content.screen-content-today :is(.task-row-dur, .wall-peek-next-dur) { text-transform: lowercase; }
+
+main.screen-content.screen-content-today .task-row-meta { font-size: 12px; font-weight: 500; }
+
+/* "Day ends 02:00   14h35m spare ———": two facts, spaced, not dot-joined. */
+main.screen-content.screen-content-today .today-dayend { font-weight: 700; }
+main.screen-content.screen-content-today .today-dayend-spare { font-weight: 500; color: var(--ink-2); }
+
+/* "Done today 2 ▸": the count quieter than its label. */
+main.screen-content.screen-content-today .today-parked-kicker { font-size: 13px; }
+main.screen-content.screen-content-today .today-parked-n { font-weight: 500; }

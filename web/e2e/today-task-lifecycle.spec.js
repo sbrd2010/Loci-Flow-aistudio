@@ -408,9 +408,9 @@ test("mobile reliability: the Done today fold and its count agree across a day c
   // The Undo toast holds while the pointer is over it, and Playwright never
   // moves the mouse off the spot it clicked, so the toast could cover the fold.
   await page.mouse.move(0, 0);
-  // 58.6: the done rows sit in the "Done today · N" fold.
+  // 58.6: the done rows sit in the "Done today N" fold.
   const fold = page.locator(".today-done-fold .today-parked-line");
-  const doneToday = Number((await fold.innerText()).match(/Done today · (\d+)/i)[1]);
+  const doneToday = Number((await fold.innerText()).match(/Done today (\d+)/i)[1]);
   await fold.click();
   await expect(list.locator(".task-row.completed")).toHaveCount(doneToday);
 

@@ -175,13 +175,13 @@ test("the List shows where the day ends; the row past it is muted, and Sort in D
   await enterDemo(page, { width: 1280, height: 900 }, "2024-06-16T01:00:00");
   const list = page.getByTestId("today-tasks-list");
   const line = list.locator(".today-dayend");
-  await expect(line).toHaveText("DAY ENDS 02:00");
+  await expect(line).toHaveText("Day ends 02:00");
   await expect(list.locator(".today-row-over")).toHaveCount(1);
   // The muted row comes after the line.
   const [lineBox, overBox] = await Promise.all([line.boundingBox(), list.locator(".today-row-over").boundingBox()]);
   expect(overBox.y).toBeGreaterThan(lineBox.y);
   const sort = list.locator(".today-wontfit-line");
-  await expect(sort).toHaveText(/^1 won’t fit · 25 min · Sort in Day map ›$/);
+  await expect(sort).toHaveText(/^1 won’t fit, 25 min Sort in Day map ›$/);
   await sort.getByRole("button", { name: "Sort in Day map ›" }).click();
   await expect(column(page).getByRole("button", { name: "Move 1 to tomorrow" })).toBeVisible();
   await expect(column(page).getByRole("button", { name: "Park 1" })).toBeVisible();
@@ -306,16 +306,16 @@ test("72: the task side reads goal · NOW · UNTIL · title · step · buttons, 
   const h = Math.round((await goal.boundingBox()).height);
   expect(h).toBeGreaterThanOrEqual(44);
   expect(h).toBeLessThanOrEqual(52);
-  await expect(page.locator(".wall-kicker-wide")).toHaveText(/^NOW · UNTIL \d\d:\d\d$/);
+  await expect(page.locator(".wall-kicker-wide")).toHaveText(/^Now until \d\d:\d\d$/);
   await expect(page.locator(".wall-step-count")).toHaveText(/^1 \/ \d+$/);
   await expect(page.locator(".wall-first-step-label")).toBeHidden();
   const [start, done] = await Promise.all([page.locator(".wall-start").boundingBox(), page.locator(".wall-action", { hasText: "Mark done" }).boundingBox()]);
   expect(done.x).toBeGreaterThan(start.x + start.width);
   await expect(page.locator(".wall-quiet").getByRole("button", { name: "More" })).toBeVisible();
   await expect(page.locator(".wall-daymap")).toBeHidden();
-  await expect(page.locator(".today-foot-done")).toHaveText(/^0 OF \d+ DONE TODAY$/);
+  await expect(page.locator(".today-foot-done")).toHaveText(/^0 of \d+ done today$/);
   await page.getByTestId("today-tasks-list").getByTestId("task-checkbox").first().click();
-  await expect(page.locator(".today-foot-done")).toHaveText(/^1 OF \d+ DONE TODAY$/);
+  await expect(page.locator(".today-foot-done")).toHaveText(/^1 of \d+ done today$/);
 });
 
 // The widest screens: the dragged copy lands on the row it is moved to.

@@ -78,7 +78,7 @@ test("stops after the day end are marked, and Move N to tomorrow takes them off 
   // Three tasks: the one thing on the wall, two rows in the list.
   await expect(page.getByTestId("today-tasks-list").locator("[data-testid='task-row']")).toHaveCount(2);
   // Today gives the same total as the Day map (Turn 76 c).
-  await expect(page.locator(".today-wontfit-line")).toContainText("1 won’t fit · 2h");
+  await expect(page.locator(".today-wontfit-line")).toContainText("1 won’t fit, 2h");
 });
 
 test("on a laptop the action sits on the right of the route (52e)", async ({ page }) => {

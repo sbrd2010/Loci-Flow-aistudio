@@ -25,7 +25,7 @@ test("phone: the quiet row stands in for the buttons and links; Start is the onl
   await expect(page.locator(".wall-actions")).toBeHidden();
   await expect(page.locator(".wall-foot .wall-links")).toBeHidden();
   await expect(page.locator(".wall-anchor")).toBeHidden();
-  await expect(page.locator(".wall-kicker-phone")).toHaveText(/^NOW · 1 OF \d+$/);
+  await expect(page.locator(".wall-kicker-phone")).toHaveText(/^Now, 1 of \d+$/);
   // 58.2: the date leaves the header; the time left stays.
   await expect(page.locator(".shell-clock-date")).toBeHidden();
   await expect(page.locator(".shell-clock")).toContainText(/LEFT/);
@@ -125,7 +125,7 @@ test("phone: Up next shows the whole list with the List | Day map switch; done t
 
   await rows.first().getByTestId("task-checkbox").click();
   const fold = sheet.locator(".today-done-fold .today-parked-line");
-  await expect(fold).toHaveText(/^Done today · 1/);
+  await expect(fold).toHaveText(/^Done today 1/);
   await expect(sheet.locator(".task-row.completed")).toHaveCount(0);
   await fold.click();
   await expect(sheet.locator(".task-row.completed")).toHaveCount(1);
