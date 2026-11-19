@@ -142,6 +142,11 @@ test("the mini window's clock pauses and resumes at any size; its title leaves i
   expect(await measure(pip)).toMatchObject({ ring: 228, fits: true });
   await pip.locator("#pip-resume").click();
   await expect.poll(paused).toBe(false);
+  // No key for Done in the mini window: a stray "d" changes nothing.
+  await pip.keyboard.press("d");
+  await page.waitForTimeout(500);
+  expect(pip.isClosed()).toBe(false);
+  await expect(pip.locator("#pip-done")).toHaveAttribute("title", "Done");
 
   // The time alone: no buttons, the clock still pauses, and says so.
   await pip.setViewportSize({ width: 140, height: 60 });

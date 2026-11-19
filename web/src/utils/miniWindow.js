@@ -265,7 +265,9 @@ export function buildMiniWindow(doc, win, on, storage, fontHrefs = []) {
   const play = iconBtn("pip-play", "pause", "Pause", "Pause · Space", on.togglePlay);
   iconBtn("pip-add5", "plus", "Add 5 minutes", "+5 min", on.addFive);
   const shuffle = iconBtn("pip-shuffle", "shuffle", "Shuffle sound", "Another track · S", on.shuffle);
-  iconBtn("pip-done", "check", "Done", "Done · D", on.done);
+  // No key for Done here: the window keeps focus over other apps, so a stray
+  // "d" would complete the task, with no Undo (owner decision, #672).
+  iconBtn("pip-done", "check", "Done", "Done", on.done);
   const more = iconBtn("pip-more", "more", "More", "More", () => setMenu(!doc.body.classList.contains("menu-open")));
   more.setAttribute("aria-haspopup", "menu");
   ring.append(svg, face, row);
@@ -320,7 +322,7 @@ export function buildMiniWindow(doc, win, on, storage, fontHrefs = []) {
   doc.body.append(ring, cta, menu);
 
   // Space pauses or resumes (on a focused button, it presses the button); S
-  // shuffles; D is Done; Esc closes ⋯.
+  // shuffles; Esc closes ⋯.
   doc.addEventListener("keydown", (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
     const menuOpen = doc.body.classList.contains("menu-open");
@@ -339,7 +341,6 @@ export function buildMiniWindow(doc, win, on, storage, fontHrefs = []) {
       e.preventDefault();
       on.togglePlay();
     } else if (e.key === "s" || e.key === "S") on.shuffle();
-    else if (e.key === "d" || e.key === "D") on.done();
   });
 
   // Shown for the first 4 s, so the buttons can be found.
