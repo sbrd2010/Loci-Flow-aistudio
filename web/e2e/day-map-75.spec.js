@@ -40,5 +40,5 @@ test("the Day map and Today give the same won't-fit count and total; no 'over by
   const m = /^(\d+) tasks? won’t fit · (\S+)\.$/.exec(alert);
   expect(m, alert).not.toBeNull();
   await page.locator(".dm-back").click();
-  await expect(page.locator(".today-wontfit-line")).toContainText(`${m[1]} won’t fit · ${m[2]}`);
+  await expect(page.locator(".today-wontfit-line")).toContainText(`${m[1]} won’t fit, ${m[2]}`);
 });
