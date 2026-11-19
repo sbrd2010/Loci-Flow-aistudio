@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { auth, db, track, setAnalyticsUser } from "./firebase";
 import { getCategoryKeyForTrack } from "./utils/soundLibrary";
+import { soundShortName } from "./utils/miniWindow";
 import { computeUserProfile } from "./utils/userProfile";
 import { useAppScale } from "./hooks/useAppScale";
 import { scheduleAllReminders, scheduleCoachCheckin, cancelCoachCheckin, checkDailyCheckinNotifications, scheduleDailyCheckins, cancelDailyCheckins, cancelAllNativeScheduling, setRemindersOwner, VISIBLE_HEARTBEAT_KEY, DAILY_CHECKIN_SLOTS } from "./utils/reminders";
@@ -1131,6 +1132,8 @@ export default function App() {
     onStuck: () => { handleReturnToFocus(); setStuckPending(true); },
     onShuffle: () => focusAudio.reshuffleTrack(),
     canShuffle: () => Boolean(getCategoryKeyForTrack(focusAudio.selectedTrack)),
+    // #508: the running label names the sound that's on ("Rain").
+    soundName: () => soundShortName(focusAudio.selectedTrack),
   };
 
 
