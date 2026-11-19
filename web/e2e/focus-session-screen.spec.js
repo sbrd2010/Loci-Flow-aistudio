@@ -69,9 +69,9 @@ test("mobile reliability: progress is a ring around the digits, and it reports w
 
 test("mobile reliability: the session names its length and when it ends (45b)", async ({ page }) => {
   const overlay = await openSession(page);
-  // Q37.1: "OF 25:00", then when it ends under it (the phone leaves STARTED out).
-  await expect(overlay.locator(".fm-figures-of")).toHaveText(/^OF \d+:\d{2}$/);
-  await expect(overlay.locator(".fm-figures-times")).toContainText(/ENDS \d{2}:\d{2}$/);
+  // Q37.1: "of 25:00", then when it ends under it (the phone leaves "started" out).
+  await expect(overlay.locator(".fm-figures-of")).toHaveText(/^of \d+:\d{2}$/);
+  await expect(overlay.locator(".fm-figures-times")).toContainText(/ends \d{2}:\d{2}$/);
 });
 
 test("the block can be paused, resumed and given five more minutes, and the keys work", async ({ page }) => {
@@ -81,7 +81,7 @@ test("the block can be paused, resumed and given five more minutes, and the keys
   await overlay.getByRole("button", { name: "Pause timer" }).click();
   await expect(overlay.getByRole("button", { name: "Resume timer" })).toBeVisible();
   // A paused block has no end time to claim.
-  await expect(overlay.locator(".focus-mode-figures")).not.toContainText("ENDS");
+  await expect(overlay.locator(".focus-mode-figures")).not.toContainText("ends");
   // +5 min is for a running block (59a); paused, it is not offered (59g).
   await expect(overlay.getByRole("button", { name: "Add 5 minutes" })).toHaveCount(0);
   await overlay.getByRole("button", { name: "Resume timer" }).click();
@@ -90,7 +90,7 @@ test("the block can be paused, resumed and given five more minutes, and the keys
   const [bm, bs] = before.split(":").map(Number);
   await expect(digits).toHaveText(`${bm + 5}:${String(bs).padStart(2, "0")}`);
   // The block itself is five minutes longer (the demo wall starts 25:00).
-  await expect(overlay.locator(".focus-mode-figures")).toContainText("OF 30:00");
+  await expect(overlay.locator(".focus-mode-figures")).toContainText("of 30:00");
   await overlay.getByRole("button", { name: "Pause timer" }).click();
   // Space resumes; Esc leaves.
   await page.evaluate(() => document.activeElement?.blur());
@@ -121,7 +121,7 @@ test("mobile reliability: reaching 00:00 shows block end, with its choices and n
   await expect(overlay).toBeVisible();
   await expect(overlay.locator(".focus-mode-time-digits")).toHaveText("0:00");
   const end = overlay.getByRole("group", { name: "Block done" });
-  await expect(end.locator(".fm-block-end-kicker")).toHaveText("BLOCK 1 DONE · SESSION 0:25");
+  await expect(end.locator(".fm-block-end-kicker")).toHaveText("Block 1 doneSession 0:25");
   await expect(end.getByRole("button")).toHaveText([/^5-minute break, then continue/, "Another 25m", "+5 min", "Mark done", "End session"]);
   // Leaving without an answer isn't one of them.
   await expect(overlay.getByRole("button", { name: "Leave focus" })).toHaveCount(0);
@@ -149,7 +149,7 @@ test("the 5-minute break counts down, then asks; Enter starts the next block", a
   await expect(overlay.getByRole("button", { name: "Skip the break" })).toBeVisible();
   await expect(overlay.locator(".focus-mode-time-digits")).toHaveText(/^[45]:\d{2}$/);
   // The break is not part of the block (Codex review of #433).
-  await expect(overlay.locator(".fm-figures-of")).toHaveText("BREAK");
+  await expect(overlay.locator(".fm-figures-of")).toHaveText("Break");
   await page.clock.runFor(5 * 60_000 + 2_000);
   await expect(overlay.getByRole("heading", { name: "Break’s over" })).toBeVisible();
   await expect(page).toHaveTitle("Break's over");
@@ -160,7 +160,7 @@ test("the 5-minute break counts down, then asks; Enter starts the next block", a
   await page.evaluate(() => document.activeElement?.blur());
   await page.keyboard.press("Enter");
   await expect(overlay.getByLabel("Pause timer")).toBeVisible();
-  await expect(overlay.locator(".fm-figures-of")).toHaveText("OF 30:00");
+  await expect(overlay.locator(".fm-figures-of")).toHaveText("of 30:00");
   await expect(overlay.getByRole("group", { name: "Block done" })).toHaveCount(0);
 });
 
@@ -203,7 +203,7 @@ test("well over the estimate: the fact, then Re-estimate above the time spent", 
   await expect(row.getByRole("button")).toHaveText(["1h", "1h30m", "2h", "3h"]);
   await row.getByRole("button", { name: "1h", exact: true }).click();
   await expect(overlay.locator(".fm-over-note")).toHaveCount(0);
-  await expect(overlay.locator(".fm-stage-kicker")).toContainText("1H TASK");
+  await expect(overlay.locator(".fm-stage-kicker")).toContainText("1h task");
 });
 
 test("with no answer in 60 seconds, block end pauses on a fresh block", async ({ page }) => {
@@ -236,7 +236,7 @@ test("paused, a fresh block of a new length restarts the timer", async ({ page }
   const chips = overlay.getByRole("group", { name: "Restart with a new length" });
   await expect(chips.getByRole("button")).toHaveText(["5m", "25m", "50m", "Whole task"]);
   await chips.getByRole("button", { name: "50m" }).click();
-  await expect(overlay.locator(".focus-mode-figures")).toContainText("OF 50:00");
+  await expect(overlay.locator(".focus-mode-figures")).toContainText("of 50:00");
   await expect(overlay.getByRole("button", { name: "Pause timer" })).toBeVisible();
 });
 

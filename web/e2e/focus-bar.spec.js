@@ -22,9 +22,9 @@ async function sessionThenPlan(page) {
 test("on Plan the bar shows the session; F goes back to focus", async ({ page }) => {
   const bar = await sessionThenPlan(page);
   await expect(bar).toBeVisible();
-  await expect(bar.locator(".fb-of")).toHaveText("OF 25:00");
+  await expect(bar.locator(".fb-of")).toHaveText("of 25:00");
   await bar.getByRole("button", { name: "Pause focus timer" }).click();
-  await expect(bar.locator(".fb-of")).toHaveText("PAUSED");
+  await expect(bar.locator(".fb-of")).toHaveText("Paused");
   await page.locator("body").click({ position: { x: 5, y: 300 } });
   await page.keyboard.press("f");
   await expect(page.locator(".focus-mode-overlay")).toBeVisible();
@@ -45,10 +45,10 @@ const BLOCK_OUT = 25 * 60_000 + 5_000;
 test("at 0:00 off the focus page, no answer in 60 s pauses on a fresh block", async ({ page }) => {
   const bar = await sessionThenPlan(page);
   await page.clock.runFor(BLOCK_OUT);
-  await expect(bar).toContainText("BLOCK 1 DONE");
+  await expect(bar).toContainText("Block 1 done");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.clock.runFor(61_000);
-  await expect(bar.locator(".fb-of")).toHaveText("PAUSED");
+  await expect(bar.locator(".fb-of")).toHaveText("Paused");
   await expect(bar.locator(".fb-clock")).toHaveText("25:00");
 });
 
@@ -57,7 +57,7 @@ test("Enter at block end on the bar takes the break", async ({ page }) => {
   await page.clock.runFor(BLOCK_OUT);
   await page.locator("body").click({ position: { x: 5, y: 300 } });
   await page.keyboard.press("Enter");
-  await expect(bar.locator(".fb-of")).toHaveText("BREAK");
+  await expect(bar.locator(".fb-of")).toHaveText("Break");
 });
 
 // Codex review of #435: an End session question open at 0:00 stays open,
@@ -71,7 +71,7 @@ test("End session… open as the block ends stays open, note and all", async ({ 
   await page.clock.runFor(70_000);
   await expect(ask).toBeVisible();
   await expect(ask.getByRole("textbox", { name: /Where did you stop/ })).toHaveValue("Check the figures");
-  await expect(bar).toContainText("BLOCK 1 DONE");
+  await expect(bar).toContainText("Block 1 done");
 });
 
 test("Today's Back to focus row goes through block end in place", async ({ page }) => {
@@ -86,11 +86,11 @@ test("Today's Back to focus row goes through block end in place", async ({ page 
   await overlay.getByLabel("Leave focus").click();
   await page.clock.runFor(BLOCK_OUT);
   const primary = page.locator(".today-wall .wall-primary");
-  await expect(primary).toContainText("BLOCK 1 DONE");
+  await expect(primary).toContainText("Block 1 done");
   await page.locator(".today-wall").getByRole("button", { name: "Take a break" }).click();
-  await expect(primary).toContainText(/BREAK \d:\d{2}/);
+  await expect(primary).toContainText(/Break \d:\d{2}/);
   await page.clock.runFor(5 * 60_000 + 2_000);
-  await expect(primary).toContainText("BREAK’S OVER");
+  await expect(primary).toContainText("Break’s over");
   await page.locator(".today-wall").getByRole("button", { name: "Start block 2" }).click();
   await expect(page.locator(".today-wall").getByRole("button", { name: "Pause" })).toBeVisible();
 });

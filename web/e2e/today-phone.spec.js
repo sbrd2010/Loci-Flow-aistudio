@@ -28,7 +28,7 @@ test("phone: the quiet row stands in for the buttons and links; Start is the onl
   await expect(page.locator(".wall-kicker-phone")).toHaveText(/^Now, 1 of \d+$/);
   // 58.2: the date leaves the header; the time left stays.
   await expect(page.locator(".shell-clock-date")).toBeHidden();
-  await expect(page.locator(".shell-clock")).toContainText(/LEFT/);
+  await expect(page.locator(".shell-clock")).toContainText(/left/);
 
   await quiet(page).getByRole("button", { name: "I’m stuck" }).click();
   await expect(page.getByRole("dialog", { name: "Rescue" })).toBeVisible();

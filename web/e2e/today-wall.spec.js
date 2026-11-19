@@ -1730,7 +1730,7 @@ test("the next morning, moved tasks head the list tagged FROM YESTERDAY, for tha
   await expect(list.locator(".today-list-group")).toHaveCount(0);
   await expect(rows.first().locator(".task-title-text")).toHaveText(last);
   await expect(tags).toHaveCount(1);
-  await expect(rows.first().locator(".from-yesterday")).toHaveText("FROM YESTERDAY");
+  await expect(rows.first().locator(".from-yesterday")).toHaveText("From yesterday");
   // Not pinned automatically.
   await expect(page.locator(".wall-title")).not.toHaveText(last);
 
@@ -1938,7 +1938,7 @@ test("a moved-from-yesterday task drags like any other row and keeps its tag (Q7
   await announced(/Draggable item (\S+) was moved over droppable area (?!\1\b)\S+/);
   await page.keyboard.press("Space");
   await expect(rows.nth(1).locator(".task-title-text")).toHaveText(last);
-  await expect(rows.nth(1).locator(".from-yesterday")).toHaveText("FROM YESTERDAY");
+  await expect(rows.nth(1).locator(".from-yesterday")).toHaveText("From yesterday");
 
   // The day after, the order is still as it was shown.
   await page.clock.setFixedTime(new Date("2024-06-17T10:00:00"));

@@ -228,7 +228,7 @@ export default function TaskRow({ task, onToggleComplete, onDelete, onOpen, onMa
             {isGoal && <span className="task-tag is-goal" aria-label="Goal task">GOAL</span>}
             {isMin && <span className="task-tag is-min" aria-label="Minimum day">MIN</span>}
             {/* Q7: moved here from yesterday; the tag lasts the day. */}
-            {fromYesterday && <span className="from-yesterday">FROM YESTERDAY</span>}
+            {fromYesterday && <span className="from-yesterday">From yesterday</span>}
           </span>
         )}
         {reminderAt && !isCompleted && !reminderAsDot && (

@@ -39,12 +39,13 @@
 }
 
 .shell-clock {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   color: var(--ink-2);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .shell-clock-left { color: var(--ink); }
 
@@ -257,3 +258,6 @@
   .shell-tabs { gap: 6px; }
   .shell-tab { font-size: 15px; }
 }
+
+/* #671: "Sat 14 Nov   16h00m left", spaced rather than dot-joined. */
+.shell-clock-date { margin-right: 0.75em; }

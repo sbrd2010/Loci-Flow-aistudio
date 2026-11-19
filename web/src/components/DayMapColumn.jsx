@@ -77,13 +77,13 @@ export default function DayMapColumn({ route, onOpenDayMap, onOpenTask, onDone, 
             + `${oneThing ? ", your now task" : ""}${r.fixed ? ", fixed time" : ""}${r.continued ? ", continued after the break" : ""}${isOver ? ", after the day ends" : ""}${asks ? ", did it happen?" : ""}`}
           onClick={() => onOpenTask(task)}
         >
-          <span className="tdm-time">{isNow ? "NOW" : late ? "now" : formatClock24(r.start)}</span>
+          <span className="tdm-time">{isNow ? "Now" : late ? "now" : formatClock24(r.start)}</span>
           <span className="tdm-title">
             {task.title}{r.continued ? " · continued" : ""}
             {r.fixed && <span className="dm-lock"><IconLock size={13} /></span>}
-            {task.deferredUntil === todayStr && !r.continued && <span className="from-yesterday">FROM YESTERDAY</span>}
+            {task.deferredUntil === todayStr && !r.continued && <span className="from-yesterday">From yesterday</span>}
             {oneThing && (
-              <span className="tdm-one-thing"><IconPin size={12} />NOW · UNTIL {formatClock24(until)}</span>
+              <span className="tdm-one-thing"><IconPin size={12} />Now until {formatClock24(until)}</span>
             )}
           </span>
           <span className="tdm-dur">{formatSpan(r.end - r.start)}</span>
@@ -117,11 +117,11 @@ export default function DayMapColumn({ route, onOpenDayMap, onOpenTask, onDone, 
             {rows.filter(r => !rowIsOver(r)).map(row)}
           </ol>
           <p className="tdm-dayend">
-            <span>DAY ENDS {formatClock24(plan.dayEnd)}{spare > 0 && plan.wontFit.length === 0 ? ` · ${formatSpanCaps(spare)} SPARE` : ""}</span>
+            <span>Day ends {formatClock24(plan.dayEnd)}</span>{spare > 0 && plan.wontFit.length === 0 && <span className="tdm-dayend-spare">{formatSpanCaps(spare).toLowerCase()} spare</span>}
           </p>
           {plan.wontFit.length > 0 && (
             <section className="tdm-wontfit-block" aria-label="Won't fit today">
-              <h3 className="tdm-wontfit">Won’t fit today <span className="tdm-wontfit-sum">{plan.wontFit.length} · {formatSpanCaps(wontFitMinutes)}</span></h3>
+              <h3 className="tdm-wontfit">Won’t fit today <span className="tdm-wontfit-sum">{plan.wontFit.length} {plan.wontFit.length === 1 ? "task" : "tasks"}, {formatSpanCaps(wontFitMinutes).toLowerCase()}</span></h3>
               <ol className="tdm-route" aria-label="Won't fit today">
                 {rows.filter(rowIsOver).map(row)}
               </ol>
