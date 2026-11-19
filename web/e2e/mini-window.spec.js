@@ -102,13 +102,26 @@ test("the mini window's Shuffle shows with Rain, plays another rain, and hides w
   const afterClick = rainTracks.at(-1);
   await pip.keyboard.press("s");
   await expect.poll(() => rainTracks.at(-1)).not.toBe(afterClick);
-  await pip.setViewportSize({ width: 399, height: 399 });
-  await expect(shuffle).toBeHidden();
-  expect(await measure(pip)).toMatchObject({ buttons: 4, fits: true });
+  // Under 400, while a sound plays, Shuffle takes +5's place in the row (the
+  // default 320 window keeps it in reach; owner, after #672); +5 is in ⋯.
+  for (const size of [399, 320]) {
+    await pip.setViewportSize({ width: size, height: size });
+    await expect(shuffle).toBeVisible();
+    await expect(pip.locator("#pip-add5")).toBeHidden();
+    expect(await measure(pip)).toMatchObject({ buttons: 4, fits: true });
+  }
   await pip.locator("#pip-more").click();
-  await expect(pip.locator("#pip-menu-shuffle")).toBeVisible();
+  await expect(pip.locator("#pip-menu-add5")).toBeVisible();
+  await expect(pip.locator("#pip-menu-shuffle")).toBeHidden();
   await pip.keyboard.press("Escape");
   await expect(pip.locator("#pip-menu")).toBeHidden();
+  // Under 320: Pause · Done · ⋯; Shuffle and +5 are both in ⋯.
+  await pip.setViewportSize({ width: 300, height: 300 });
+  await expect(shuffle).toBeHidden();
+  await pip.locator("#pip-more").click();
+  await expect(pip.locator("#pip-menu-shuffle")).toBeVisible();
+  await expect(pip.locator("#pip-menu-add5")).toBeVisible();
+  await pip.keyboard.press("Escape");
   await pip.setViewportSize({ width: 400, height: 400 });
   await expect(shuffle).toBeVisible();
   // Still Rain: Shuffle stays within the sound that's on.
@@ -118,6 +131,9 @@ test("the mini window's Shuffle shows with Rain, plays another rain, and hides w
   await soundRow.getByRole("button", { name: "Off" }).click();
   await expect(shuffle).toBeHidden({ timeout: 3_000 });
   expect(await measure(pip)).toMatchObject({ buttons: 4 });
+  // With nothing to shuffle, +5 is back in the row at 320.
+  await pip.setViewportSize({ width: 320, height: 320 });
+  await expect(pip.locator("#pip-add5")).toBeVisible();
 });
 
 // Try-out 35: the clock pauses and resumes at every size (the Pause button

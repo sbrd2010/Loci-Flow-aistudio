@@ -133,10 +133,16 @@ const CSS = `
   #pip-cta button[hidden] { display: none; }
   #pip-cta button:focus-visible { outline: 2px solid var(--arc); outline-offset: 2px; }
 
-  /* The row by width (77-c2): 400 → Pause +5 Shuffle Done ⋯; 320 → Pause +5 Done ⋯; less → Pause Done ⋯. */
-  @media (max-width: 399px) { #pip-shuffle { display: none; } }
+  /* The row by width (77-c2): 400 → Pause +5 Shuffle Done ⋯; 320 → Pause +5 Done ⋯; less → Pause Done ⋯.
+     From 320, while a sound can shuffle, Shuffle takes +5's place (owner, after #672: Shuffle stays
+     in reach at the default size); +5 moves to ⋯. */
+  @media (max-width: 399px) {
+    #pip-shuffle { display: none; }
+    body.can-shuffle #pip-shuffle { display: grid; }
+    body.can-shuffle #pip-add5 { display: none; }
+  }
   @media (max-width: 319px) {
-    #pip-add5 { display: none; }
+    #pip-add5, body.can-shuffle #pip-shuffle { display: none; }
     #pl { display: none; }
     #pp { font-size: 11px; }
     /* The row takes the label's place while it shows. */
@@ -299,8 +305,10 @@ export function buildMiniWindow(doc, win, on, storage, fontHrefs = []) {
     more.setAttribute("aria-expanded", String(open));
     if (open) {
       const w = win.innerWidth;
-      mAdd5.hidden = w >= 320;
-      mShuffle.hidden = w >= 400 || shuffle.hidden;
+      // ⋯ holds what the row leaves out (see the row by width, above).
+      const canShuffle = !shuffle.hidden;
+      mAdd5.hidden = w >= 400 || (w >= 320 && !canShuffle);
+      mShuffle.hidden = !canShuffle || w >= 320;
       menu.querySelector("button:not([hidden])")?.focus();
     }
   };
@@ -378,6 +386,7 @@ export function buildMiniWindow(doc, win, on, storage, fontHrefs = []) {
       play.title = running ? "Pause · Space" : "Resume · Space";
     }
     shuffle.hidden = !v.canShuffle;
+    doc.body.classList.toggle("can-shuffle", Boolean(v.canShuffle));
     drawArc();
     resume.hidden = v.state !== "paused";
     next.hidden = doneTask.hidden = v.state !== "done";
