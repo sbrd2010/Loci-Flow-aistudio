@@ -9,7 +9,7 @@
 //
 // cmd:
 //   { kind: "detect", day, now }
-//   { kind: "done", id, end, day, now, op, choices, shown }   shown: uuid → lastUpdated, as the dialog showed them
+//   { kind: "done", id, end, day, now, op, choices, shown }   shown: uuid → task (without its clock), as the dialog showed it
 //   { kind: "undo", id, op, through, now, beforeRecord, beforeTasks, after }   after: uuid → task, as the Done left it
 import { child, onValue, ref, runTransaction } from "firebase/database";
 import { applyReview, detectReviews, pendingReviews } from "./horizonReview";
@@ -25,6 +25,8 @@ const reviewsOf = (config) => (config?.horizonReviews && typeof config.horizonRe
 // undoPullFromWeek does. Any other change, stamped or not, stops it.
 const ignoredByUndo = (k) => k.startsWith("dayMap") || k === "orderIndex" || k === "lastUpdated";
 const editedFields = (task) => Object.fromEntries(Object.entries(task || {}).filter(([k]) => !ignoredByUndo(k)));
+// A task as Done compares it: everything but its clock.
+const withoutClock = ({ lastUpdated: _clock, ...rest } = {}) => rest;
 
 // What `server` (a normalized payload) should become:
 // { action: "write", next } | { action: "noop" } | { action: "conflict", reason }.
@@ -46,14 +48,16 @@ export function decideReviewCommand(server, cmd) {
   if (cmd.kind === "done") {
     if (!rec.pending) return { action: "conflict", reason: "already-reviewed" };
     if (rec.pending.end !== cmd.end) return { action: "conflict", reason: "stale-period" };
-    // The tasks waiting now must be the ones shown, none edited since (by its
-    // lastUpdated: an edit that didn't bump it goes unnoticed here, which is
-    // harmless — the choices are applied to the server's own copy below, so
-    // nothing stale is written; this only makes sure the list was current).
+    // The tasks waiting now must be the ones shown, none edited since — by
+    // content, not by lastUpdated: a clock is ordering, not an edit, and a
+    // save elsewhere can move it with nothing changed, which refused every
+    // Done on a device whose copy lagged only by the clock (24 Nov). The
+    // choices are applied to the server's own copy below, so nothing stale is
+    // written; this only makes sure the list was current.
     const review = pendingReviews(config, tasks, cmd.day).find(r => r.id === cmd.id);
-    const now = new Map((review?.tasks || []).map(t => [t.uuid, t.lastUpdated]));
+    const now = new Map((review?.tasks || []).map(t => [t.uuid, t]));
     const shown = Object.entries(cmd.shown || {});
-    if (!review || now.size !== shown.length || shown.some(([uuid, lu]) => !now.has(uuid) || now.get(uuid) !== lu)) {
+    if (!review || now.size !== shown.length || shown.some(([uuid, t]) => !now.has(uuid) || !configValuesEqual(withoutClock(now.get(uuid)), t))) {
       return { action: "conflict", reason: "tasks-changed" };
     }
     const applied = applyReview(server, review, cmd.choices || {}, cmd.day, cmd.now);
@@ -190,7 +194,7 @@ export function doneCommand(review, choices, day, now, op) {
   return {
     kind: "done", id: review.id, end: review.end, day, now, op,
     choices: Object.fromEntries(review.tasks.map(t => [t.uuid, choices[t.uuid] || "keep"])),
-    shown: Object.fromEntries(review.tasks.map(t => [t.uuid, t.lastUpdated])),
+    shown: Object.fromEntries(review.tasks.map(t => [t.uuid, withoutClock(t)])),
   };
 }
 
