@@ -331,7 +331,9 @@ function mergeTasks(remoteTasks, localTasks, baseTasks) {
 // stale copy is never written back over a newer one.
 export const COMMAND_OWNED_CONFIG_KEYS = new Set(["horizonReviews"]);
 
-// Nothing RTDB would store: null/undefined, or a container of only such values.
+// Nothing RTDB would store: null/undefined, or an array or plain object of
+// only such values. Anything else (a Date, a Map) is never absent: it has no
+// own keys, and must not compare equal to a missing field.
 function isAbsentValue(v) {
   if (v == null) return true;
   if (typeof v !== "object") return false;
@@ -339,6 +341,8 @@ function isAbsentValue(v) {
     for (let i = 0; i < v.length; i++) if (!isAbsentValue(v[i])) return false;
     return true;
   }
+  const proto = Object.getPrototypeOf(v);
+  if (proto !== Object.prototype && proto !== null) return false;
   return Object.keys(v).every(key => isAbsentValue(v[key]));
 }
 

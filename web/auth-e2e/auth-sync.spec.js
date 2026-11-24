@@ -419,6 +419,9 @@ async function expectStable(request, uid, uuid, { strict = false, ms = 5000 } = 
   return prev.lastUpdated;
 }
 
+// A regression guard on the real steps path, not a reproduction: this flow
+// healed before the fix too (the commit's copy wins on the echo). The stuck
+// cases below are the reproductions.
 test("#677: removing a task's last steps lands once, then stays quiet; the other device adds one back", async ({ clients }) => {
   const a = await clients.open();
   const b = await clients.open(a.email, { phone: true });
@@ -496,8 +499,11 @@ for (const rootNewer of [false, true]) {
     expect((await cacheRecord(a, "stuck-x")).base.lastUpdated).toBe(T);
     expect((await serverTask(clients.request, a.uid, "stuck-x")).lastUpdated).toBe(T);
     const root = (await readServer(clients.request, a.uid)).timestamp;
-    if (rootNewer) expect(root).toBe(cachedRoot); // the write-back branch ran
-    else expect(root).not.toBe(cachedRoot); // the incoming-merge branch ran: nothing carried the older root up
+    // Only the write-back branch can carry the cache's future root up. (The
+    // older case takes the incoming merge by construction: data.timestamp is
+    // newer than the cache's; no server value can show it, as writes keep
+    // the larger root.)
+    if (rootNewer) expect(root).toBe(cachedRoot);
     await expectStable(clients.request, a.uid, "stuck-x", { strict: true });
 
     // A second device, an unrelated save from it, and another reload: the
@@ -518,6 +524,8 @@ for (const rootNewer of [false, true]) {
 
 // saveConfigPatch with a value that holds nothing RTDB would store: Coach
 // memory's "Forget everything" writes { pinnedFacts: [], recentObservations: [] }.
+// A regression guard on that path (it healed before the fix too); the stuck
+// config case after it is the reproduction.
 test("#677: Forget everything in Coach memory lands as no memory on the server, and the config stays quiet", async ({ clients }) => {
   const a = await clients.open();
   const now = Date.now();

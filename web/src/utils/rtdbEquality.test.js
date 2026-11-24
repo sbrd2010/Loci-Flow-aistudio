@@ -14,7 +14,8 @@ const stored = (v) => {
   if (v == null) return undefined;
   if (Array.isArray(v)) {
     const items = v.map(stored);
-    return items.every(x => x === undefined) ? undefined : items.map(x => (x === undefined ? null : x));
+    while (items.length && items[items.length - 1] === undefined) items.pop(); // trailing nulls go too
+    return items.length ? items.map(x => (x === undefined ? null : x)) : undefined;
   }
   if (typeof v === "object") {
     const entries = Object.entries(v).map(([k, x]) => [k, stored(x)]).filter(([, x]) => x !== undefined);
@@ -84,6 +85,12 @@ describe("configValuesEqual: a value with nothing stored in it is absent (#677)"
     expect(eq(holed, [null, "keep"])).toBe(true);
     expect(eq([null, "keep"], holed)).toBe(true);
     expect(eq(["x", null], ["x"])).toBe(false); // lengths are not normalised (out of scope)
+  });
+  it("only arrays and plain objects are containers: a Date is never absent", () => {
+    expect(eq(new Date(0), undefined)).toBe(false);
+    expect(eq(undefined, new Date(0))).toBe(false);
+    expect(eq({ at: new Date(0) }, {})).toBe(false);
+    expect(eq(Object.create(null), undefined)).toBe(true);
   });
   it("does not change its inputs", () => {
     const a = deepFreeze({ s: [], c: { p: [] }, n: [1, { x: null }] });
