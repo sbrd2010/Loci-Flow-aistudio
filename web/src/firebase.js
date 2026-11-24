@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getDatabase, forceLongPolling, connectDatabaseEmulator } from "firebase/database";
+import { getDatabase, connectDatabaseEmulator } from "firebase/database";
 import { getAuth, connectAuthEmulator } from "firebase/auth";
 
 // Signed-in integration tests use an isolated demo project. This opt-in is
@@ -20,12 +20,11 @@ const firebaseConfig = useEmulators ? {
   appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:862993748883:web:e78b0587e367aa1580ce66"
 };
 
-// Use HTTP long-polling instead of WebSocket for RTDB connections.
-// WebSocket (wss://) is blocked by Brave Shields, carrier-level DPI filters,
-// corporate proxies, and many mobile networks. Long-polling uses standard
-// HTTPS on port 443 which works on virtually every network.
-// MUST be called before getDatabase().
-forceLongPolling();
+// RTDB uses the SDK's default transport: WebSocket first, falling back to
+// long-polling by itself where WebSocket is blocked (and remembering that).
+// Forcing long-polling (#650) sent every full save as ~1.8 KB requests one
+// round trip apart: a 225 KB account took 20-40 s to save, so sign-out's
+// confirmed save timed out. Don't force a transport without measuring it.
 
 const app = initializeApp(firebaseConfig);
 export const db = getDatabase(app);

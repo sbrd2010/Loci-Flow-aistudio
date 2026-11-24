@@ -113,8 +113,16 @@ export async function cachedTasks(client) {
   return client.page.evaluate(uid => JSON.parse(localStorage.getItem(`loci_payload_v1_${uid}`))?.payload?.tasks || [], client.uid);
 }
 
-// Forward real requests to the emulator, but hold their responses. This lets
-// the server commit a write while the browser is still awaiting its result.
+// Forward real traffic to the emulator, but hold the server's answer to the
+// marked write. This lets the server commit a write while the browser is
+// still awaiting its result.
+//
+// Two transports (#652): the SDK's default is WebSocket, with long-polling
+// (HTTP) only as a fallback. Over HTTP, a response containing the marker is
+// held. Over WebSocket, the page's frame carrying the marker is tagged by its
+// request id; from the first server frame that answers it (or carries the
+// marker) every later server frame waits too, in order, as a delayed
+// connection would — until release().
 export async function responseBarrier(context) {
   let active = false;
   let held = 0;
@@ -131,6 +139,30 @@ export async function responseBarrier(context) {
     } catch (error) {
       if (!closed) throw error;
     }
+  });
+  const requestId = (text) => { try { return JSON.parse(text)?.d?.r; } catch { return undefined; } };
+  await context.routeWebSocket(url => url.host === new URL(DATABASE).host, ws => {
+    const server = ws.connectToServer();
+    const marked = new Set();
+    let queue = Promise.resolve();
+    let holding = false;
+    ws.onMessage(message => {
+      const text = String(message);
+      if (active && text.includes(marker)) { const r = requestId(text); if (r !== undefined) marked.add(r); }
+      server.send(message);
+    });
+    server.onMessage(message => {
+      const text = String(message);
+      queue = queue.then(async () => {
+        if (active && !holding && (text.includes(marker) || marked.has(requestId(text)))) {
+          holding = true;
+          held += 1;
+        }
+        if (holding) await gate;
+        if (!active) holding = false;
+        if (!closed) ws.send(message);
+      }).catch(() => {});
+    });
   });
   return {
     hold(text) { marker = text; active = true; held = 0; gate = new Promise(resolve => { release = resolve; }); },

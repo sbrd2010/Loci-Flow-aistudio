@@ -1,20 +1,29 @@
-name: Deploy redesign preview
+name: Deploy preview
 
-# The redesign round (redesign-75) on a Firebase Hosting preview channel, for
-# a try-out before the one merge to main. The live site and the database
-# rules are never touched here: only main's workflow deploys those.
+# A branch on a Firebase Hosting preview channel, for a try-out before merging
+# to main. A push to redesign-75 deploys it to the "redesign-75" channel; any
+# branch can be deployed on demand (Actions -> Deploy preview -> Run workflow,
+# pick the branch and a channel). The live site and the database rules are
+# never touched here: only main's workflow deploys those.
+# A preview channel still uses the PRODUCTION Firebase Auth and database:
+# test it with a disposable account and made-up data only.
 on:
   push:
     branches: [ redesign-75 ]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Preview channel id (lowercase letters, digits, dashes). Its URL must be an Auth authorized domain for sign-in to work."
+        required: true
+        default: redesign-75
 
 concurrency:
-  group: firebase-preview-redesign-75
+  group: firebase-preview-${{ inputs.channel || 'redesign-75' }}
   cancel-in-progress: true
 
 jobs:
   preview:
-    if: github.ref == 'refs/heads/redesign-75'
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/redesign-75'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -47,11 +56,12 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
-      # The same REST deploy as main's, to the "redesign-75" preview channel
-      # (created if missing; each deploy renews its 14-day expiry).
+      # The same REST deploy as main's, to the chosen preview channel (created
+      # if missing; each deploy renews its 14-day expiry). The channel id is
+      # passed as an env var and validated by the script, never into the shell.
       - name: Deploy Hosting to the preview channel
         env:
-          HOSTING_CHANNEL_ID: redesign-75
+          HOSTING_CHANNEL_ID: ${{ inputs.channel || 'redesign-75' }}
         run: |
           set -euo pipefail
           export FIREBASE_ACCESS_TOKEN="$(gcloud auth print-access-token)"
