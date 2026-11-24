@@ -91,7 +91,7 @@ test("Talk it through with Coach: a removable chip, Coach waits, the session sta
   // 75k: on phone Chat the session is the pill in the Chat | Review row,
   // and the bar (it would cover the composer) gives way.
   const pill = page.locator(".coach-tabs-end .focus-pill");
-  await expect(pill).toContainText("PAUSED");
+  await expect(pill).toContainText("Paused");
   await expect(page.getByRole("region", { name: "Focus session" })).toBeHidden();
   await page.getByRole("button", { name: "Remove the stuck task" }).click();
   await expect(page.locator(".coach-stuck-chip")).toHaveCount(0);

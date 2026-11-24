@@ -66,6 +66,8 @@ import { cssZoom, unzoomTransform } from "../utils/cssZoom";
 import { useListChoreography, listMotionMode } from "../hooks/useListChoreography";
 // 75 (Turn 76): the 1280+ Today, last so it wins the cascade.
 import "../styles/today75.css";
+// Today's labels in the body face; scoped, so it does not depend on order.
+import "../styles/todayLabels.css";
 
 const PencilIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2018,7 +2020,7 @@ export default function TodayTab({
             Hide list (L). On the phone (70a): Up next and the switch. */}
         <div className="today-list-head">
           <h2 className="today-list-title">Up next</h2>
-          {listDoneCount > 0 && <span className="today-list-count">{listDoneCount} DONE</span>}
+          {listDoneCount > 0 && <span className="today-list-count">{listDoneCount} done</span>}
           <span className="today-list-head-end">
             {onOpenAddTask && (
               <button type="button" className="today-list-add" title="Add task · N" onClick={onOpenAddTask}>
@@ -2078,7 +2080,7 @@ export default function TodayTab({
                   {remainingTasks.map((task, idx) => (
                     <React.Fragment key={getTaskKey(task)}>
                       {idx === firstOver && (
-                        <p className="today-dayend" aria-label={`Day ends at ${formatClock24(route.plan.dayEnd)}`}>DAY ENDS {formatClock24(route.plan.dayEnd)}</p>
+                        <p className="today-dayend" aria-label={`Day ends at ${formatClock24(route.plan.dayEnd)}`}>Day ends {formatClock24(route.plan.dayEnd)}</p>
                       )}
                       <SortableTaskItem id={getTaskKey(task)} isOver={firstOver !== -1 && idx >= firstOver} disabled={isFixedStop(task) && task.dayMapDate === todayStr}>
                         {({ dragHandleListeners, dragHandleAttributes, dragActivatorRef }) => (
@@ -2118,14 +2120,14 @@ export default function TodayTab({
                   ))}
                 </SortableContext>
                 {cut.overIds.size === 0 && remainingTasks.length > 0 && route.scheduledTasks.length > 0 && (
-                  <p className="today-dayend">DAY ENDS {formatClock24(route.plan.dayEnd)}{cut.spare > 0 ? ` · ${formatSpanCaps(cut.spare)} SPARE` : ""}</p>
+                  <p className="today-dayend"><span>Day ends {formatClock24(route.plan.dayEnd)}</span>{cut.spare > 0 && <>{" "}<span className="today-dayend-spare">{formatSpanCaps(cut.spare).toLowerCase()} spare</span></>}</p>
                 )}
                 {/* Turn 76 (c): the same count and total as the Day map,
                     even when the only task cut is the pinned one thing. */}
                 {cut.overIds.size > 0 && (
                   <p className="today-wontfit-line">
-                    {cut.overIds.size} won’t fit · {formatSpanCaps(cut.wontFitMinutes).toLowerCase()}
-                    {" · "}<button type="button" className="today-list-empty-link" onClick={() => setListView("daymap")}>Sort in Day map ›</button>
+                    {cut.overIds.size} won’t fit, {formatSpanCaps(cut.wontFitMinutes).toLowerCase()}
+                    {" "}<button type="button" className="today-list-empty-link" onClick={() => setListView("daymap")}>Sort in Day map ›</button>
                   </p>
                 )}
                 <DragOverlay dropAnimation={null} style={{ zoom: 1 / cssZoom() }}>
@@ -2163,7 +2165,7 @@ export default function TodayTab({
           {parkedList.length > 0 && (
             <div className="today-parked">
               <button type="button" className="today-parked-line" aria-expanded={parkedOpen} onClick={() => setParkedOpen(o => !o)}>
-                <span className="today-parked-kicker">Parked · {parkedList.length} {parkedOpen ? "▾" : "▸"}</span>
+                <span className="today-parked-kicker">Parked <span className="today-parked-n">{parkedList.length}</span> {parkedOpen ? "▾" : "▸"}</span>
                 {parkedSince(parkedList[0]) > 0 && (
                   <span className="today-parked-since">since {new Date(parkedSince(parkedList[0])).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
                 )}
@@ -2184,7 +2186,7 @@ export default function TodayTab({
           {completedTasks.length > 0 && (
             <div className="today-parked today-done-fold">
               <button type="button" className="today-parked-line" aria-expanded={doneOpen} onClick={() => setDoneOpen(o => !o)}>
-                <span className="today-parked-kicker">Done today · {completedTasks.length} {doneOpen ? "▾" : "▸"}</span>
+                <span className="today-parked-kicker">Done today <span className="today-parked-n">{completedTasks.length}</span> {doneOpen ? "▾" : "▸"}</span>
               </button>
               {doneOpen && completedTasks.map(task => (
                 <TaskRow key={task.uuid} task={task} onToggleComplete={handleToggleComplete} onDelete={handleDeleteTask} />
@@ -2226,7 +2228,7 @@ export default function TodayTab({
           <Momentum bars={momentum.bars} sentence={momentum.sentence} />
         )}
         {!closedView && (listDoneCount > 0 || todayTasksAll.some(t => !t.isCompleted)) && (
-          <span className="today-foot-done">{listDoneCount} OF {listDoneCount + todayTasksAll.filter(t => !t.isCompleted).length} DONE TODAY</span>
+          <span className="today-foot-done">{listDoneCount} of {listDoneCount + todayTasksAll.filter(t => !t.isCompleted).length} done today</span>
         )}
       </div>
 

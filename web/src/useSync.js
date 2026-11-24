@@ -641,7 +641,6 @@ export function useSync(uid, email) {
               userId: email,
               userName: displayName,
               mentorName: "Marcus Aurelius",
-              challengeType: "starting",
               pomodoroDurationMinutes: 25,
               reminderNagIntervalMinutes: 15,
               intentionMessage: "Start tiny. One action. Right now.",

@@ -82,13 +82,13 @@ test("rows: an overdue reminder is a gold dot, and no horizon-review tag (Turn 7
   const cv = list.locator("[data-testid='task-row']", { hasText: "Prepare CV- Northwind" });
   await expect(cv).toBeVisible();
   await expect(cv).not.toContainText("FROM WEEK");
-  await expect(list.locator("[data-testid='task-row']", { hasText: "Mum: write card" })).toContainText("FROM YESTERDAY");
+  await expect(list.locator("[data-testid='task-row']", { hasText: "Mum: write card" })).toContainText("From yesterday");
 });
 
-test("the task side: the mantra, NOW · UNTIL, and the goal on up to two lines", async ({ page }) => {
+test("the task side: the mantra, Now until, and the goal on up to two lines", async ({ page }) => {
   await openToday(page, { width: 1280, height: 720 });
   await expect(page.locator(".wall-mantra")).toHaveText("ONE task at a time.");
-  await expect(page.locator(".wall-kicker-wide")).toHaveText(/^NOW · UNTIL \d\d:\d\d$/);
+  await expect(page.locator(".wall-kicker-wide")).toHaveText(/^Now until \d\d:\d\d$/);
   const name = page.locator(".wall-goal-line-name");
   await expect(name).toHaveText("Send 3 applications. Get an interview in 2 weeks");
   expect(await name.evaluate(el => el.scrollHeight <= el.clientHeight + 1)).toBe(true);
@@ -165,7 +165,7 @@ test("1903×940: the sign-in screen isn't scaled; Today is once the app opens", 
 
 // Try-out 21/28: nothing on Today scrolls sideways — the list, its Day map
 // view (whose now row bleeds past the rows) and the task panel — and the
-// Day map's FROM YESTERDAY stays a small mono tag.
+// Day map's "From yesterday" stays small (sentence case in the body face, #671).
 for (const viewport of [{ width: 1280, height: 720 }, { width: 1903, height: 940 }]) {
   test(`${viewport.width}×${viewport.height}: nothing on Today scrolls sideways`, async ({ page }) => {
     await openToday(page, viewport);
@@ -176,8 +176,8 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 1903, height: 940
     const tag = page.locator(".today-daymap .from-yesterday").first();
     await expect(tag).toBeVisible();
     const font = await tag.evaluate(el => ({ size: parseFloat(getComputedStyle(el).fontSize), family: getComputedStyle(el).fontFamily }));
-    expect(font.size).toBeLessThanOrEqual(12);
-    expect(font.family).toMatch(/Mono/);
+    expect(font.size).toBeLessThanOrEqual(13);
+    expect(font.family).toMatch(/Manrope/);
     await page.locator(".today-view-opt", { hasText: "List" }).click();
     await page.locator(".today-list .task-title-text").first().click();
     await expect(page.getByTestId("task-detail")).toBeVisible();

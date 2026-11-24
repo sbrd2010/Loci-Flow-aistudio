@@ -4,7 +4,7 @@ import { armChime, playChime, chimesOn } from "../utils/chime";
 import { buildExtendedTimerState, buildResetFocusState, shouldTriggerSessionComplete, focusBlockSeconds, focusExpiryReason, DEFAULT_BLOCK_MINUTES } from "../utils/focusSession";
 import { getFocusWindows, getLociDayStr, lociDayEndsAt } from "../utils/focusWindows";
 import { safeUUID } from "../utils/uuid";
-import { clockParts, ringGeometry } from "../utils/focusClock";
+import { buildMiniWindow, miniView } from "../utils/miniWindow";
 import { clearOpenSession } from "../utils/openFocusSession";
 
 // The part of a task a saved session keeps (#527): its id and title, and the
@@ -165,46 +165,26 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
     setPipOpen(false);
   };
 
-  // The mini window (59b): Document Picture-in-Picture, 360 wide, in the
-  // app's own tokens (Dark when the app is Dark, Light otherwise; no cyan).
-  // A 132 ring with fitted digits, the title on one line, and Pause · +5 ·
-  // I'm stuck · Done (filled). Restart is gone. Shuffle came back beside
-  // I'm stuck (Rohan, 5 Oct): shown only while a sound with variations plays.
-  // It follows the window's size, live (as the pre-59b pop-up did, #314):
-  // the ring and its digits grow and shrink with it; too small for a ring,
-  // the time becomes one line; smaller still, the time alone fills it.
-  // PIP_RING is the drawing's own size; the ring is scaled from it.
-  const PIP_RING = 132;
+  // The mini window: Document Picture-in-Picture, design 77 C2 "Ring" (#508),
+  // built by utils/miniWindow. It follows its size live (#314): the ring and
+  // its digits grow with it; too small for a ring, the time is one line;
+  // smaller still, the time alone. Its buttons are attached once, when it
+  // opens, so they call through pipCallsRef (set every render) rather than
+  // closures that could predate later state.
+  const pipRenderRef = useRef(null);
+  const pipCallsRef = useRef({});
+  const blockEndPhase = !sessionCompletePending ? null : breakUntil != null ? "break" : breakOver ? "over" : "done";
+  const breakLeft = breakUntil == null ? 0 : Math.max(0, Math.ceil((breakUntil - breakNow) / 1000));
 
-  const updatePiPUI = (pipWin, seconds, maxSeconds, running, title) => {
-    if (!pipWin) return;
-    const doc = pipWin.document;
-    const { lead, seconds: ss, hours, lastMinute } = clockParts(seconds, maxSeconds);
-    const lEl = doc.getElementById("pt-lead");
-    if (lEl) lEl.textContent = `${lead}:`;
-    const sEl = doc.getElementById("pt-secs");
-    if (sEl) { sEl.textContent = ss; sEl.className = lastMinute ? "is-last" : ""; }
-    const tEl = doc.getElementById("pt");
-    // Fitted to the ring as ringGeometry fits it (0.21, or 0.16 with hours),
-    // in units of the ring's own size so it scales with it.
-    if (tEl) tEl.className = hours ? "is-hours" : "";
-    const labelEl = doc.getElementById("pl-text");
-    if (labelEl) labelEl.textContent = title;
-    const playBtn = doc.getElementById("pip-play");
-    if (playBtn) playBtn.textContent = running ? "Pause" : "Resume";
-    const g = ringGeometry(PIP_RING, seconds, maxSeconds, hours);
-    const arc = doc.getElementById("pr-fg");
-    if (arc) {
-      arc.setAttribute("stroke-dasharray", g.dash);
-      arc.setAttribute("stroke-dashoffset", String(g.offset));
-      arc.style.display = seconds > 0 ? "" : "none";
-    }
-    doc.body.className = running ? "" : "is-paused";
-    // Try-out 35: the clock itself pauses and resumes, at every size.
-    const ringEl = doc.getElementById("ring");
-    if (ringEl) ringEl.setAttribute("aria-label", running ? "Pause the timer" : "Resume the timer");
-    const shuffleBtn = doc.getElementById("pip-shuffle");
-    if (shuffleBtn) shuffleBtn.hidden = !pipActionsRef?.current?.canShuffle?.();
+  const updatePiPUI = (seconds, maxSeconds, running, title) => {
+    const render = pipRenderRef.current;
+    if (!render) return;
+    const actions = pipActionsRef?.current || {};
+    render({
+      ...miniView({ secondsLeft: seconds, maxSeconds, running, blockPhase: blockEndPhase, breakLeft, breakSeconds: BREAK_SECONDS, sound: actions.soundName?.() || "" }),
+      title,
+      canShuffle: Boolean(actions.canShuffle?.()),
+    });
   };
 
   const handleOpenPiP = async () => {
@@ -217,192 +197,36 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
       return;
     }
     try {
-      const pipWin = await window.documentPictureInPicture.requestWindow({ width: 360, height: 320 });
+      const pipWin = await window.documentPictureInPicture.requestWindow({ width: 320, height: 320 });
       pipWinRef.current = pipWin;
       setPipOpen(true);
-      const doc = pipWin.document;
-
-      // The app's tokens as they are now: Dark or Light, whichever it shows.
-      const css = getComputedStyle(document.documentElement);
-      const token = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
-      const g = ringGeometry(PIP_RING, timerSecondsLeft, timerMaxSecondsRef.current);
-      const style = doc.createElement("style");
-      style.textContent = `
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        :root {
-          --bg: ${token("--bg", "#F7F4EC")}; --surface: ${token("--surface", "#FFFDF8")};
-          --panel: ${token("--panel", "#EAEDE3")}; --line: ${token("--line", "#DCDFD5")};
-          --ink: ${token("--ink", "#0F1F16")}; --ink-2: ${token("--ink-2", "#3E5044")};
-          --edge: ${token("--edge", "#858B86")}; --accent: ${token("--accent", "#1F4D36")};
-          --accent-edge: ${token("--accent-edge", "#133524")}; --on-accent: ${token("--on-accent", "#FFFFFF")};
-          --control-edge: ${token("--control-edge", "#858B86")};
-        }
-        body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
-          height: 100vh; padding: 16px 12px; font-family: Manrope, system-ui, sans-serif; color: var(--ink);
-          background: var(--bg); user-select: none; overflow: hidden; }
-        #ring { position: relative; display: grid; place-items: center; flex: 0 0 auto; container-type: size;
-          width: clamp(72px, min(calc(100vh - 188px), calc(100vw - 32px)), 320px); aspect-ratio: 1; height: auto; }
-        #ring svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-        #pr-bg { fill: none; stroke: var(--panel); }
-        #pr-fg { fill: none; stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
-        body.is-paused #pr-fg { stroke: var(--edge); }
-        #pt { position: relative; font-family: 'Space Mono', ui-monospace, monospace; font-weight: 700;
-          line-height: 1; font-variant-numeric: tabular-nums; color: var(--ink); font-size: 21cqmin; white-space: nowrap; }
-        #pt.is-hours { font-size: 16cqmin; }
-        #pt-secs { font-size: 0.58em; font-weight: 400; opacity: 0.72; }
-        #pt-secs.is-last { font-size: 1em; font-weight: 700; opacity: 1; }
-        /* Try-out 35: a click on the clock (or Space) pauses and resumes; a
-           paused clock dims and says so. */
-        #ring { cursor: pointer; border-radius: 50%; }
-        #ring:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
-        body.is-paused #pt { opacity: 0.45; }
-        #pp { display: none; position: absolute; left: 0; right: 0; bottom: 22%; text-align: center;
-          font-family: 'Space Mono', ui-monospace, monospace; font-size: max(10px, 8cqmin); font-weight: 700;
-          letter-spacing: 0.14em; color: var(--ink-2); }
-        body.is-paused #pp { display: block; }
-        /* Try-out 38: the title opens Loci's tab; the mini window stays. */
-        #pl { display: flex; align-items: baseline; gap: 6px; max-width: 100%; padding: 2px 4px; font: inherit;
-          font-size: 14px; font-weight: 700; color: var(--ink); background: none; border: 0; border-radius: 4px; cursor: pointer; }
-        #pl-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-        #pl::after { content: "↗"; flex: none; font-weight: 800; color: var(--accent); }
-        #pl:hover { text-decoration: underline; text-underline-offset: 3px; }
-        #pl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-        #pip-btns { display: flex; gap: 6px; width: 100%; }
-        /* 59b (PART11): text buttons, 13/800, 40 tall, 6 apart. */
-        #pip-btns button { flex: 1 1 auto; min-height: 40px; padding: 0 8px; font: inherit; font-size: 13px; font-weight: 800;
-          color: var(--ink); background: var(--surface); border: 1px solid var(--control-edge); border-radius: 6px;
-          cursor: pointer; white-space: nowrap; }
-        #pip-btns #pip-done { color: var(--on-accent); background: var(--accent); border-color: var(--accent-edge); }
-        #pip-btns button[hidden] { display: none; }
-        #pip-btns button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-        /* Under 340 wide, five don't fit: Shuffle goes first (59b). */
-        @media (max-width: 339px) {
-          #pip-shuffle { display: none; }
-        }
-        /* Narrow: Pause and Done only. */
-        @media (max-width: 299px) {
-          #pip-add5, #pip-shuffle, #pip-stuck { display: none; }
-        }
-        /* Too small for a ring: the time on one line, large; no title. */
-        @media (max-height: 259px), (max-width: 179px) {
-          body { gap: 8px; padding: 8px 12px; }
-          #ring { container-type: normal; width: 100%; height: auto; aspect-ratio: auto; }
-          #ring svg, #pl { display: none; }
-          #ring { border-radius: 6px; text-align: center; }
-          #pp { position: static; font-size: 10px; margin-top: 2px; }
-          #pt, #pt.is-hours { font-size: clamp(24px, min(34vh, 21vw), 120px); }
-          #pip-btns { max-width: 280px; }
-          #pip-add5, #pip-shuffle, #pip-stuck { display: none; }
-        }
-        /* Smaller still: the time alone fills the window. */
-        @media (max-height: 139px), (max-width: 139px) {
-          body { padding: 4px 8px; }
-          #pp { position: static; margin: 0 0 2px; font-size: 10px; line-height: 1; }
-          #ring { display: flex; flex-direction: column-reverse; align-items: center; }
-          body.is-paused #pt, body.is-paused #pt.is-hours { font-size: clamp(14px, min(52vh, 20vw), 120px); }
-          #pip-btns { display: none; }
-          #pt, #pt.is-hours { font-size: clamp(16px, min(70vh, 22vw), 140px); }
-        }
-      `;
-      doc.head.appendChild(style);
-
-      const svgNS = "http://www.w3.org/2000/svg";
-      const ring = doc.createElement("div");
-      ring.id = "ring";
-      const svg = doc.createElementNS(svgNS, "svg");
-      svg.setAttribute("viewBox", `0 0 ${PIP_RING} ${PIP_RING}`);
-      svg.setAttribute("aria-hidden", "true");
-      const mid = String(PIP_RING / 2);
-      for (const id of ["pr-bg", "pr-fg"]) {
-        const c = doc.createElementNS(svgNS, "circle");
-        c.id = id;
-        c.setAttribute("cx", mid);
-        c.setAttribute("cy", mid);
-        c.setAttribute("r", String(g.r));
-        c.setAttribute("stroke-width", String(g.stroke));
-        if (id === "pr-fg") c.setAttribute("transform", `rotate(-90 ${mid} ${mid})`);
-        svg.appendChild(c);
-      }
-      ring.appendChild(svg);
-      const timeEl = doc.createElement("div");
-      timeEl.id = "pt";
-      const leadEl = doc.createElement("span");
-      leadEl.id = "pt-lead";
-      const secsEl = doc.createElement("span");
-      secsEl.id = "pt-secs";
-      timeEl.append(leadEl, secsEl);
-      ring.appendChild(timeEl);
-      const pausedEl = doc.createElement("div");
-      pausedEl.id = "pp";
-      pausedEl.setAttribute("aria-hidden", "true");
-      pausedEl.textContent = "PAUSED";
-      ring.appendChild(pausedEl);
       // At block end there is nothing to resume: the block-end choices are
-      // the main window's (Codex review of #439).
+      // Next block and Done task (Codex review of #439).
       const togglePlay = () => { if (!sessionCompletePendingRef.current) setIsTimerRunning(r => !r); };
-      ring.setAttribute("role", "button");
-      ring.tabIndex = 0;
-      ring.title = "Pause or resume · Space";
-      ring.addEventListener("click", togglePlay);
-      doc.body.appendChild(ring);
-      // Space pauses and resumes from anywhere in the window; on a focused
-      // button it presses that button instead. Enter on the ring (a focusable
-      // button of its own) does the same (review of #511, 1.3).
-      doc.addEventListener("keydown", (e) => {
-        if ((e.key !== " " && !(e.key === "Enter" && e.target === ring)) || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
-        const t = e.target;
-        if (t && t !== ring && t.closest?.("button")) return;
-        e.preventDefault();
-        togglePlay();
-      });
-
-      // The title opens Loci's tab and leaves the mini window open (the
-      // browser's own "Back to tab" closes it).
-      const labelEl = doc.createElement("button");
-      labelEl.id = "pl";
-      labelEl.type = "button";
-      labelEl.title = "Open Loci — this window stays open";
-      labelEl.addEventListener("click", () => { try { window.focus(); } catch (_) {} });
-      const labelText = doc.createElement("span");
-      labelText.id = "pl-text";
-      labelEl.appendChild(labelText);
-      doc.body.appendChild(labelEl);
-
-      const btnsEl = doc.createElement("div");
-      btnsEl.id = "pip-btns";
-      const button = (id, text, onClick, { label, tip } = {}) => {
-        const b = doc.createElement("button");
-        b.id = id;
-        b.type = "button";
-        b.textContent = text;
-        if (label) b.setAttribute("aria-label", label);
-        if (tip) b.title = tip;
-        b.addEventListener("click", onClick);
-        btnsEl.appendChild(b);
-      };
-      button("pip-play", "Pause", togglePlay);
-      button("pip-add5", "+5", () => addTimeToSession(5));
-      // Shuffle plays another variation of the sound that's on (as the
-      // focus page's "Another" does); hidden when nothing can shuffle.
-      // 59b: restored at Rohan's request; do not remove again.
-      const shuffle = () => { if (pipActionsRef?.current?.canShuffle?.()) pipActionsRef.current.onShuffle?.(); };
-      button("pip-shuffle", "Shuffle", shuffle, { label: "Shuffle sound", tip: "Another track (S)" });
-      // S shuffles from the mini window too (59b), not while typing.
-      doc.addEventListener("keydown", (e) => {
-        if ((e.key === "s" || e.key === "S") && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat) shuffle();
-      });
-      // I'm stuck opens the main window on the focus page (its I'm stuck
-      // panel, 59d, arrives with 6c).
-      button("pip-stuck", "I’m stuck", () => { try { window.focus(); } catch (_) {} pipActionsRef?.current?.onStuck?.(); });
-      button("pip-done", "Done", () => pipActionsRef?.current?.onDone?.());
-      doc.body.appendChild(btnsEl);
+      const openTab = () => { try { window.focus(); } catch (_) {} };
+      const actions = () => pipActionsRef?.current || {};
+      let storage = null;
+      try { storage = window.localStorage; } catch (_) { /* storage blocked */ }
+      pipRenderRef.current = buildMiniWindow(pipWin.document, pipWin, {
+        togglePlay,
+        addFive: () => pipCallsRef.current.addTimeToSession?.(5),
+        // Shuffle plays another variation of the sound that's on, as the
+        // focus page's "Another" does (59b: restored at Rohan's request).
+        shuffle: () => { if (actions().canShuffle?.()) actions().onShuffle?.(); },
+        // I'm stuck opens the main window on the focus page.
+        stuck: () => { openTab(); actions().onStuck?.(); },
+        done: () => actions().onDone?.(),
+        nextBlock: () => pipCallsRef.current.startNextBlock?.(),
+        openTab,
+      }, storage, [...document.querySelectorAll('link[rel="stylesheet"][href*="fonts.googleapis.com"]')].map(l => l.href));
 
       pipWin.addEventListener("pagehide", () => {
         pipWinRef.current = null;
+        pipRenderRef.current = null;
         setPipOpen(false);
       });
 
-      updatePiPUI(pipWin, timerSecondsLeft, timerMaxSecondsRef.current, isTimerRunning, pipNotice || activeTask?.title || "Deep Focus");
+      updatePiPUI(timerSecondsLeft, timerMaxSecondsRef.current, isTimerRunning, pipNotice || activeTask?.title || "Deep Focus");
     } catch (e) {
       console.error("Failed to open PiP:", e);
     }
@@ -411,9 +235,9 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
   // Sync timer state changes to PiP window in real-time
   useEffect(() => {
     if (pipWinRef.current && pipOpen) {
-      updatePiPUI(pipWinRef.current, timerSecondsLeft, timerMaxSeconds, isTimerRunning, pipNotice || activeTask?.title || "Deep Focus");
+      updatePiPUI(timerSecondsLeft, timerMaxSeconds, isTimerRunning, pipNotice || activeTask?.title || "Deep Focus");
     }
-  }, [timerSecondsLeft, timerMaxSeconds, isTimerRunning, activeTask?.title, pipOpen, pipNotice]);
+  }, [timerSecondsLeft, timerMaxSeconds, isTimerRunning, activeTask?.title, pipOpen, pipNotice, blockEndPhase, breakLeft]);
 
   // PiP safety close rules: close when session ends or no active task exists
   useEffect(() => {
@@ -684,8 +508,6 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
   }, [focusSessionId]);
   // Q38.1d: the mini window says so.
   useEffect(() => { setPipNotice(breakOver ? "Break’s over" : null); }, [breakOver]);
-  const blockEndPhase = !sessionCompletePending ? null : breakUntil != null ? "break" : breakOver ? "over" : "done";
-  const breakLeft = breakUntil == null ? 0 : Math.max(0, Math.ceil((breakUntil - breakNow) / 1000));
 
   // Request notification permission when focus overlay opens (already a user interaction)
   useEffect(() => {
@@ -1033,6 +855,9 @@ export function useFocusTimer(tasks, config, uid, pipActionsRef) {
     setFocusSessionId(null);
     return result;
   };
+
+  // The mini window's buttons call the latest of these (see pipCallsRef).
+  pipCallsRef.current = { addTimeToSession, startNextBlock };
 
   return {
     activeTask,

@@ -10,6 +10,7 @@ import { historyLimitForMode } from "./coachContextMode";
 import { buildSessionSummaryContext, buildPendingSummaryContext, pendingSummaryMessages, shouldIncludeSessionSummaryContext, llmHistoryStart, SUMMARY_UPDATE_MIN_PENDING } from "./coachSessionSummary";
 import { profileToCoachContext } from "./userProfile";
 import { buildLociPeriodContext } from "./coachPeriodDigest";
+import { challengeCoachLine } from "./challenge";
 
 // Prompt-size budgets per Coach mode (#545 C8, C39). Groq's free tier counts
 // prompt + max_tokens against 8,000 tokens per minute before it runs anything,
@@ -82,7 +83,7 @@ function buildRequest(mode, { large = false, summaryTurn = false, carried = 0, p
   const base = buildCoachSystemPrompt(mode, {
     lociCoreInstruction: L.buildLociCoreInstruction({ firstName: FIRST }),
     mentorName: "Loci AI Coach", firstName: FIRST, userName: FIRST,
-    challengeLabel: "Breaking Initiation Freeze",
+    challengeLabel: challengeCoachLine("overplanner"), // #656: what Coach sends now (the longest line)
     profileContext: buildProfileContext(config),
     memoryContext: buildLociMemoryContext(config.coachMemory),
     memorySectionEnabled: true,
@@ -126,7 +127,7 @@ function buildRequest(mode, { large = false, summaryTurn = false, carried = 0, p
 describe("Coach prompt budgets (#545 C8)", () => {
   // System-prompt chars on the typical fixture. A change that grows a prompt
   // past its line has to make room elsewhere or update the budget on purpose.
-  const SYSTEM_CHARS = { full_task: 26000, compact_task: 17700, emotional: 19500, profile_reflection: 14700, light: 8250 }; // #555 PR 4: +200 chars on purpose (no circular 'ask me', no due dates); #588: +50 for the day on recent finishes
+  const SYSTEM_CHARS = { full_task: 26000, compact_task: 17700, emotional: 19500, profile_reflection: 14700, light: 8300 }; // #555 PR 4: +200 chars on purpose (no circular 'ask me', no due dates); #588: +50 for the day on recent finishes; #656: light +50 for the challenge line (a ~45-char phrase instead of a 3-word label)
   for (const [mode, max] of Object.entries(SYSTEM_CHARS)) {
     it(`${mode} system prompt stays within ${max} chars (typical plan)`, () => {
       expect(buildRequest(mode).system.length).toBeLessThanOrEqual(max);

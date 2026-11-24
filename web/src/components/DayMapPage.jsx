@@ -110,23 +110,23 @@ function RouteStop({ task, row, fromYesterday = false, isNow, isOver, isGoal, is
           listeners?.onKeyDown?.(e);
         }}
       >
-        <span className="dm-time">{isNow ? "NOW" : late ? "now" : formatClock24(start)}</span>
+        <span className="dm-time">{isNow ? "Now" : late ? "now" : formatClock24(start)}</span>
         <span className="dm-rail" aria-hidden="true"><span className={`dm-dot${isNow ? " is-now" : ""}${isOver ? " is-over" : ""}`} /></span>
         <span className="dm-title">
           <LinkifyText text={task.title} />
           {row.fixed && <span className="dm-lock"><IconLock size={14} /></span>}
-          {row.pulledForward && <span className="dm-pulled">PULLED FORWARD</span>}
+          {row.pulledForward && <span className="dm-pulled">Pulled forward</span>}
           {/* 58e: a stop a fixed time moved says where it was, until you leave. */}
-          {was != null && <span className="dm-pulled">WAS {formatClock24(was)}</span>}
+          {was != null && <span className="dm-pulled">Was {formatClock24(was)}</span>}
           {isGoal && <span className="task-tag is-goal">GOAL</span>}
           {/* Q33.1: a dotted MIN while the minimum day is suggested; the
               green one once it's confirmed. */}
           {min && <span className={`task-tag is-min${min === "suggested" ? " is-suggested" : ""}`}>MIN</span>}
-          {fromYesterday && <span className="from-yesterday">FROM YESTERDAY</span>}
+          {fromYesterday && <span className="from-yesterday">From yesterday</span>}
         </span>
         <span className="dm-dur">{formatSpan(end - start)}</span>
         {/* 56a: the one thing, at NOW, until the end of its stop. */}
-        {until != null && <span className="dm-one-thing"><IconPin size={12} />NOW · UNTIL {formatClock24(until)}</span>}
+        {until != null && <span className="dm-one-thing"><IconPin size={12} />Now until {formatClock24(until)}</span>}
       </div>
       {/* Q36.3: still open 5 minutes after it ended, it asks (Q47.5). */}
       {asks && <DidItHappen title={task.title} {...asks} />}
@@ -511,8 +511,8 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   // still open counts from now (Codex review of #428).
   const barPlanned = finish == null ? plan.planned : Math.max(0, finish - Math.max(anchorMinutes, nowMins));
   const barOverBy = finish == null ? 0 : Math.max(0, finish - dayEnd);
-  const dayEndText = `DAY ENDS ${dayEndLabel}`
-    + (free > 0 ? ` · ${formatSpan(free)} FREE` : "");
+  const dayEndText = `Day ends ${dayEndLabel}`;
+  const dayEndFree = free > 0 ? `${formatSpan(free)} free` : "";
   const routeIndex = new Map(routeTasks.map((t, i) => [getTaskId(t), i]));
   // NOW is the first stop, unless it is a fixed time already passed (that
   // row says "now" in red instead).
@@ -536,7 +536,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
   const timeOf = (id) => {
     const r = rows.find(x => x.kind === "stop" && getTaskId(x.task) === id);
     if (!r) return "";
-    return r === firstOnTime && r.start <= nowMins + 15 ? "NOW" : formatClock24(r.start);
+    return r === firstOnTime && r.start <= nowMins + 15 ? "Now" : formatClock24(r.start);
   };
   const confirmMin = (ids) => {
     const p = payloadRef.current;
@@ -748,7 +748,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
         <span className="dm-time" />
         <span className="dm-rail" aria-hidden="true"><span className="dm-dot is-done"><IconCheck size={10} /></span></span>
         <span className="dm-title">Done so far today · {done.length}</span>
-        <span className="dm-dur">{doneMinutes != null && doneMinutes > 0 ? formatSpan(doneMinutes).toUpperCase() : ""} <IconChevronDown size={16} /></span>
+        <span className="dm-dur">{doneMinutes != null && doneMinutes > 0 ? formatSpan(doneMinutes) : ""} <IconChevronDown size={16} /></span>
       </button>
       {doneOpen && (
         <ol className="dm-done-list">
@@ -756,7 +756,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
             <li key={`${r.kind}:${r.id}`} className="dm-done-row">
               <span className="dm-time">{r.start == null ? "" : formatClock24(r.start)}</span>
               <span className="dm-rail" aria-hidden="true"><span className="dm-dot is-done"><IconCheck size={10} /></span></span>
-              <span className="dm-title">{r.title}{r.kind === "marked" && <span className="dm-pulled">MARKED DONE</span>}</span>
+              <span className="dm-title">{r.title}{r.kind === "marked" && <span className="dm-pulled">Marked done</span>}</span>
               <span className="dm-dur">{r.kind === "session" ? formatSpan(r.minutes) : ""}</span>
             </li>
           ))}
@@ -838,7 +838,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
                   <ol className="dm-route" aria-label="Today's route">
                     {rows.filter(r => !rowIsOver(r)).map(renderRow)}
                     <li className="dm-dayend" aria-label={`Day ends at ${dayEndLabel}`}>
-                      <span className="dm-dayend-label">{dayEndText}</span>
+                      <span className="dm-dayend-label">{dayEndText}{dayEndFree && <>{" "}<span className="dm-dayend-free">{dayEndFree}</span></>}</span>
                     </li>
                     {rows.filter(rowIsOver).map(renderRow)}
                   </ol>
@@ -912,7 +912,7 @@ export default function DayMapPage({ payload, savePayload, savePayloadAsync, onC
         {routeConfig.momentumEnabled !== false && momentum && (
           <Momentum bars={momentum.bars} sentence={momentum.sentence} />
         )}
-        {todayAll.length > 0 && <span className="dm-foot-done">{todayDone} OF {todayDone + todayAll.filter(t => !t.isCompleted).length} DONE TODAY</span>}
+        {todayAll.length > 0 && <span className="dm-foot-done">{todayDone} of {todayDone + todayAll.filter(t => !t.isCompleted).length} done today</span>}
       </footer>
 
       {fixing && (

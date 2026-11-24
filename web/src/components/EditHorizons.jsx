@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
+import DateField from "./ui/DateField";
 import { IconEye, IconEyeOff, IconX } from "./ui/icons";
 import { BUILT_IN_HORIZONS, currentPeriod, horizonsFromConfig, TODAY_ID } from "../utils/horizons";
 import { dayLabel } from "../utils/planLadder";
@@ -46,7 +47,12 @@ export default function EditHorizons({ payload, day, saveConfigPatch, savePayloa
     else onClose();
   };
   useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); back.current(); } };
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      // An open date calendar closes itself first (#668 loopcheck).
+      if (document.querySelector(".df-pop")) return;
+      e.preventDefault(); e.stopPropagation(); back.current();
+    };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, []);
@@ -146,8 +152,8 @@ export default function EditHorizons({ payload, day, saveConfigPatch, savePayloa
       <section className="eh-panel" aria-labelledby="eh-edit-title">
         <h3 className="eh-sub" id="eh-edit-title">{h?.name}</h3>
         <label className="eh-label" htmlFor="eh-edit-end">This period ends</label>
-        <input id="eh-edit-end" className="eh-input" type="date" min={day} value={editing.endDate}
-          onChange={e => setEditing(x => ({ ...x, endDate: e.target.value }))} />
+        <DateField key={editing.id} id="eh-edit-end" className="eh-input" label="This period ends" min={day} today={day} value={editing.endDate}
+          onChange={v => setEditing(x => ({ ...x, endDate: v }))} />
         {moved && <p className="eh-note">{moveSentence(moved, editing.endDate, day)}</p>}
         <div className="eh-actions">
           <button type="button" className="eh-btn is-primary" disabled={!moved}
@@ -222,7 +228,7 @@ export default function EditHorizons({ payload, day, saveConfigPatch, savePayloa
               {preset === "other" ? (
                 <>
                   <label className="eh-label" htmlFor="eh-add-end">Ends</label>
-                  <input id="eh-add-end" className="eh-input" type="date" min={day} value={endDate} onChange={e => setEndDate(e.target.value)} />
+                  <DateField id="eh-add-end" className="eh-input" label="Ends" min={day} today={day} value={endDate} onChange={setEndDate} />
                 </>
               ) : (
                 <p className="eh-label">Ends <span className="eh-rule">{draft ? dayLabel(currentPeriod(draft, day).end, day) : ""}</span></p>

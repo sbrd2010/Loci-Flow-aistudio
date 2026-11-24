@@ -53,7 +53,7 @@ function StartHelper({ task, blockMinutes, startChoice }) {
 // one block, 50 minutes, the whole task. ↓ on Start opens it too; 1–4 pick;
 // the choice is remembered. A running session only resumes — no chooser.
 // Q41: at block end the row's ring is full, then counts the break; its
-// figure reads BLOCK n DONE, BREAK 4:12, then BREAK'S OVER.
+// figure reads "Block n done", "Break 4:12", then "Break’s over".
 function liveRing(live) {
   const phase = live.blockEnd?.phase;
   if (phase === "break") return { secondsLeft: live.blockEnd.breakLeft, maxSeconds: live.blockEnd.breakSeconds, paused: false };
@@ -62,12 +62,12 @@ function liveRing(live) {
 }
 function liveFigure(live) {
   const phase = live.blockEnd?.phase;
-  if (phase === "done") return `BLOCK ${Math.max(1, live.blockNumber || 1)} DONE`;
+  if (phase === "done") return `Block ${Math.max(1, live.blockNumber || 1)} done`;
   if (phase === "break") {
     const s = Math.max(0, live.blockEnd.breakLeft);
-    return `BREAK ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    return `Break ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
   }
-  if (phase === "over") return "BREAK’S OVER";
+  if (phase === "over") return "Break’s over";
   return null;
 }
 
@@ -120,7 +120,11 @@ function StartButton({ task, blockMinutes, startChoice, onChooseStart, onStartFo
             small ring. */}
         {resuming && live && <MiniRing size={22} {...liveRing(live)} />}
         <span>{resuming ? "Back to focus" : "Start focus"}</span>
-        <span className="wall-primary-figure">{(resuming && live && liveFigure(live)) || timerLabel || startFigure(chosen.minutes)}</span>
+        {(() => {
+          // A word at block end is a label, so the body face; a time stays mono.
+          const word = resuming && live && liveFigure(live);
+          return <span className={`wall-primary-figure${word ? " is-word" : ""}`}>{word || timerLabel || startFigure(chosen.minutes)}</span>;
+        })()}
         <kbd className="wall-key is-on-fill" aria-hidden="true">Space</kbd>
       </button>
       {!resuming && (
@@ -170,7 +174,7 @@ function goalFigures(goal) {
     parts.push(`${goal.daysLeft} ${goal.daysLeft === 1 ? "day" : "days"}`);
   }
   if (goal.total > 0) parts.push(`${goal.done} of ${goal.total}`);
-  return parts.join(" · ");
+  return parts.join(", ");
 }
 
 // Q49: tapping the band opens Settings → Key deadline, where it is set.
@@ -217,7 +221,7 @@ function GoalBand({ goal, onOpen, record = null }) {
       </div>
       {/* Q49: the least you'll do each day toward it. */}
       {goal.target && (
-        <div className="wall-goal-target"><span className="wall-goal-target-label">Target ·</span> {goal.target}</div>
+        <div className="wall-goal-target"><span className="wall-goal-target-label">Target:</span> {goal.target}</div>
       )}
       <span className={`wall-goal-track${hasCount ? "" : " is-rule"}`} aria-hidden="true">
         {hasCount && <span className="wall-goal-fill" style={{ width: `${Math.round((goal.done / goal.total) * 100)}%` }} />}
@@ -485,8 +489,8 @@ export default function TodayWall({
         <p className="wall-mantra" data-flip="mantra">ONE task at a time.</p>
         <div className="wall-kicker-row" data-flip="kicker">
           <span className="wall-kicker">
-            <span className="wall-kicker-wide">{nowUntil != null ? `NOW · UNTIL ${formatClock24(nowUntil)}` : "NOW"}</span>
-            <span className="wall-kicker-phone">{nowCount > 0 ? `NOW · 1 OF ${nowCount}` : "NOW"}</span>
+            <span className="wall-kicker-wide">{nowUntil != null ? `Now until ${formatClock24(nowUntil)}` : "Now"}</span>
+            <span className="wall-kicker-phone">{nowCount > 0 ? `Now, 1 of ${nowCount}` : "Now"}</span>
           </span>
           {meta && <span className="wall-kicker-meta">{meta}</span>}
         </div>

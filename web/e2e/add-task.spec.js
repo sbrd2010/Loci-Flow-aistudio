@@ -517,7 +517,7 @@ test("Add task: a reminder time that has passed says so", async ({ page }) => {
   const dialog = page.getByRole("dialog", { name: "New task" });
   await dialog.getByRole("button", { name: "More details" }).click();
   await dialog.getByRole("button", { name: "Set a reminder" }).click();
-  await dialog.getByLabel("Reminder date").fill("2024-06-15");
+  await dialog.getByLabel("Reminder date", { exact: true }).fill("2024-06-15");
   const typed = dialog.getByLabel("Reminder time, typed");
   await typed.fill("0900");
   await typed.press("Enter");

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatHHMM, parseClock, quarterHoursAfter, minutesOfHHMM, reminderQuickPicks } from "./clockText";
+import { defaultReminderDateTime, formatHHMM, parseClock, quarterHoursAfter, minutesOfHHMM, reminderQuickPicks } from "./clockText";
 
 describe("parseClock", () => {
   it("reads 24-hour and 12-hour times as typed", () => {
@@ -42,5 +42,25 @@ describe("reminderQuickPicks", () => {
   });
   it("on a Monday, Monday is a week on", () => {
     expect(reminderQuickPicks(new Date(2026, 9, 12, 8, 0)).at(-1).date).toBe("2026-10-19");
+  });
+});
+
+// #665: the date came from toISOString() (UTC) while the hour was local, so
+// east of UTC after midnight it was yesterday, and west of UTC in the evening
+// it was tomorrow.
+describe("defaultReminderDateTime", () => {
+  const inZone = (tz, fn) => {
+    const previous = process.env.TZ;
+    process.env.TZ = tz;
+    try { fn(); } finally { if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous; }
+  };
+  it("is the next whole hour on the local date, in any time zone", () => {
+    for (const [tz, [y, mo, d, h, mi], want] of [
+      ["Asia/Kolkata", [2026, 10, 13, 2, 10], { dateStr: "2026-11-13", timeStr: "03:00" }],
+      ["America/Los_Angeles", [2026, 10, 13, 19, 10], { dateStr: "2026-11-13", timeStr: "20:00" }],
+      ["Europe/London", [2026, 10, 13, 14, 10], { dateStr: "2026-11-13", timeStr: "15:00" }],
+      ["Asia/Kolkata", [2026, 10, 13, 23, 30], { dateStr: "2026-11-14", timeStr: "00:00" }],
+      ["America/Los_Angeles", [2026, 11, 31, 23, 5], { dateStr: "2027-01-01", timeStr: "00:00" }],
+    ]) inZone(tz, () => expect(defaultReminderDateTime(new Date(y, mo, d, h, mi)), `${tz} ${h}:${mi}`).toEqual(want));
   });
 });

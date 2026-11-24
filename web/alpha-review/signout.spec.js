@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { user, seed, database, isolate, login, exposeSyncForReview } from "./local-fixture.js";
+import { user, seed, payload, database, isolate, login, exposeSyncForReview } from "./local-fixture.js";
 
 test("sign-out confirmation does not declare newer local edits saved", async ({ page, context }) => {
   const u = await user(); await seed(u); await isolate(context);
@@ -67,3 +67,52 @@ for (const discard of [false, true]) {
     expect(saved.tasks.some(t => t.uuid === "unsynced-task")).toBe(!discard);
   });
 }
+
+// #664: sign-out doesn't reload the tab, so a reminder armed for the account
+// that left must never show its task title on the signed-out screen. Service
+// workers are blocked in this suite, so the app uses the plain Notification
+// path. It is replaced by a recording stand-in that reports permission
+// granted: headless Chromium (CI's headless shell) reports "denied" even
+// after grantPermissions, so the real one would schedule nothing and the
+// sign-out test would pass for the wrong reason. Invented title, emulator
+// account only.
+async function seedReminderAndRecord(page, context, title, inMs) {
+  const u = await user();
+  const base = payload(u, title);
+  const reminderAt = Date.now() + inMs;
+  await seed(u, { ...base, tasks: [{ ...base.tasks[0], reminderAt }], config: { ...base.config, onboardingComplete: true } });
+  await context.addInitScript(() => {
+    delete Navigator.prototype.serviceWorker;
+    window.__shown = [];
+    window.Notification = class {
+      static permission = "granted";
+      static requestPermission() { return Promise.resolve("granted"); }
+      constructor(title, opts) { window.__shown.push(`${title} | ${opts?.body || ""}`); }
+      close() {}
+    };
+  });
+  await isolate(context);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await login(page, u, false);
+  await expect(page.locator(".app-container")).toBeVisible();
+  return reminderAt;
+}
+
+test("control: a signed-in account's reminder is shown when due (#664)", async ({ page, context }) => {
+  test.setTimeout(75_000);
+  await seedReminderAndRecord(page, context, "Invented reminder task", 30_000);
+  await expect.poll(() => page.evaluate(() => window.__shown), { timeout: 40_000 })
+    .toContainEqual(expect.stringContaining("Invented reminder task"));
+});
+
+test("after signing out, the previous account's reminder is never shown (#664)", async ({ page, context }) => {
+  test.setTimeout(75_000);
+  const reminderAt = await seedReminderAndRecord(page, context, "Invented private task", 30_000);
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Sign out of Loci" }).click();
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await expect(page.getByTestId("demo-btn")).toBeVisible();
+  expect(Date.now()).toBeLessThan(reminderAt); // signed out before it was due
+  await page.waitForTimeout(Math.max(0, reminderAt + 3_000 - Date.now()));
+  expect(await page.evaluate(() => window.__shown)).toEqual([]);
+});

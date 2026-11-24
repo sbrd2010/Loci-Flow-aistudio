@@ -30,11 +30,12 @@
   font-variant-numeric: tabular-nums;
 }
 .fb-of {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 0.625rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
 }
 .fb-title {
   flex: 1;
@@ -251,3 +252,6 @@ body:has(#coach-panel-chat) .focus-bar:not(.is-docked) { display: none; }
   border-radius: 8px;
   cursor: pointer;
 }
+
+/* #671: "Paused", "Block done": a word, so the body face; a time stays mono. */
+.focus-pill-time.is-word { font-family: var(--font-sans); }

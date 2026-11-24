@@ -87,7 +87,7 @@ test("reliability: Clear my day → Park takes Today's open tasks off the list, 
   await rescue.getByRole("button", { name: /^Leave/ }).click();
 
   await expect(tasksList.getByText(title)).not.toBeVisible({ timeout: 5_000 });
-  await expect(page.locator(".today-parked-kicker")).toContainText(/Parked · \d+/);
+  await expect(page.locator(".today-parked-kicker")).toContainText(/Parked \d+/);
 });
 
 test("reliability: pinning a task sets Now Focus", async ({ page }) => {
