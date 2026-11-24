@@ -108,11 +108,22 @@ describe("#643 S2–S6, S8: commands decided on the server's copy", () => {
   it("S5: Done conflicts when a shown task changed on the server", async () => {
     const s = await seedDetected();
     const a = client(); const offA = await listen(a);
-    await update(ref(a), { [`${path}/tasks/1/lastUpdated`]: 999 });
+    await update(ref(a), { [`${path}/tasks/1/title`]: "Sample edited elsewhere", [`${path}/tasks/1/lastUpdated`]: 999 });
     const r = await run(a, done(s));
     offA();
     expect([r.outcome, r.reason]).toEqual(["conflict", "tasks-changed"]);
     expect((await serverNow()).config.horizonReviews.week.pending).toBeTruthy();
+  });
+  // A clock is ordering, not an edit (24 Nov: Done refused on every tap while
+  // one shown task lagged the server only by its lastUpdated).
+  it("S5b: Done goes through when only a shown task's clock moved on the server", async () => {
+    const s = await seedDetected();
+    const a = client(); const offA = await listen(a);
+    await update(ref(a), { [`${path}/tasks/1/lastUpdated`]: 999 });
+    const r = await run(a, done(s));
+    offA();
+    expect(r.outcome).toBe("accepted");
+    expect((await serverNow()).config.horizonReviews.week.pending).toBeFalsy();
   });
   it("S6: Undo is all or nothing, then restores the review and the moved task", async () => {
     const s = await seedDetected();
