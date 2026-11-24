@@ -149,6 +149,18 @@ describe("tasks: an empty value the server drops is not an edit (#677)", () => {
     expect(r.committed.tasks[0].title).toBe("Sample task renamed");
     expect(r.committed.tasks[0].lastUpdated).toBe(9001);
   });
+  it("a true two-sided conflict resolves the same with or without the empty value", () => {
+    const base = baseOf(payload([task({ title: "Base title", lastUpdated: 9000 })]));
+    const server = payload([task({ title: "Server title", lastUpdated: 9500 })]);
+    for (const [localClock, winner] of [[9600, "Local title"], [9400, "Server title"]]) {
+      const plain = task({ title: "Local title", lastUpdated: localClock });
+      const noisy = { ...plain, subSteps: [] };
+      for (const local of [plain, noisy]) {
+        expect(incoming(server, payload([local]), base).merged.tasks[0].title).toBe(winner);
+        expect(mergeLocalIntoServer(server, payload([local]), base).tasks[0].title).toBe(winner);
+      }
+    }
+  });
   it("a deletion on the other device is not undone by the empty value", () => {
     const base = baseOf(payload([task({ lastUpdated: 9000 })]));
     const remote = payload([task({ isDeleted: true, lastUpdated: 9800 })]);
