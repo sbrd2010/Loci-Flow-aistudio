@@ -34,7 +34,7 @@ test("1680: no third column; the switch shows the Day map in the list's place, a
   const stops = column(page).getByRole("list", { name: "Today's route" }).getByRole("button");
   await expect(stops.first()).toHaveAccessibleName(/^Now to /);
   // Nothing past the line: the time to spare.
-  await expect(column(page).locator(".tdm-dayend")).toHaveText(/^DAY ENDS 02:00 · \d+H(\d{2}M)? SPARE$/);
+  await expect(column(page).locator(".tdm-dayend")).toHaveText(/^Day ends 02:00 \d+h(\d{2}m)? spare$/);
   // The view is kept: back on Today after the Day map page, still the map.
   await column(page).getByRole("button", { name: "Day map page ›" }).click();
   await expect(page.locator(".day-map-page")).toBeVisible();
@@ -87,7 +87,7 @@ test("won't fit: Move N to tomorrow moves the stops past the day's end, with Tod
   // at 02:00, so it won't fit.
   await enterDemo(page, { width: 1680, height: 1000 }, "2024-06-16T01:00:00");
   await routeReady(page);
-  await expect(column(page).getByRole("heading", { name: /^Won’t fit today 1 · 25 MIN$/ })).toBeVisible();
+  await expect(column(page).getByRole("heading", { name: /^Won’t fit today 1 task, 25 min$/ })).toBeVisible();
   const late = column(page).getByRole("list", { name: "Won't fit today" }).getByRole("button");
   await expect(late).toHaveCount(1);
   await expect(late).toHaveAccessibleName(/, after the day ends$/);
@@ -106,7 +106,7 @@ test("won't fit: Move N to tomorrow moves the stops past the day's end, with Tod
   await column(page).getByRole("button", { name: "Park 1" }).click();
   await expect(page.locator(".undo-toast")).toContainText("1 parked");
   await expect(column(page).getByText(title)).toHaveCount(0);
-  await expect(column(page).locator(".tdm-dayend")).toContainText("SPARE");
+  await expect(column(page).locator(".tdm-dayend")).toContainText("spare");
   await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
   await expect(column(page).getByText(title)).toBeVisible();
 });
@@ -161,7 +161,7 @@ test("made the one thing, a task moves to NOW on the route; the rest flows after
   await page.getByTestId("task-detail").getByRole("button", { name: /^Do this now/ }).click();
   await expect(page.locator(".wall-title")).toHaveText(lastTitle);
   await expect(stops.first()).toHaveAccessibleName(new RegExp(`^Now to \\d\\d:\\d\\d, ${lastTitle}, your now task`));
-  await expect(stops.first().locator(".tdm-one-thing")).toHaveText(/^NOW · UNTIL \d\d:\d\d$/);
+  await expect(stops.first().locator(".tdm-one-thing")).toHaveText(/^Now until \d\d:\d\d$/);
   await expect(stops).toHaveCount(3);
 
   await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
@@ -175,13 +175,13 @@ test("the List shows where the day ends; the row past it is muted, and Sort in D
   await enterDemo(page, { width: 1280, height: 900 }, "2024-06-16T01:00:00");
   const list = page.getByTestId("today-tasks-list");
   const line = list.locator(".today-dayend");
-  await expect(line).toHaveText("DAY ENDS 02:00");
+  await expect(line).toHaveText("Day ends 02:00");
   await expect(list.locator(".today-row-over")).toHaveCount(1);
   // The muted row comes after the line.
   const [lineBox, overBox] = await Promise.all([line.boundingBox(), list.locator(".today-row-over").boundingBox()]);
   expect(overBox.y).toBeGreaterThan(lineBox.y);
   const sort = list.locator(".today-wontfit-line");
-  await expect(sort).toHaveText(/^1 won’t fit · 25 min · Sort in Day map ›$/);
+  await expect(sort).toHaveText(/^1 won’t fit, 25 min Sort in Day map ›$/);
   await sort.getByRole("button", { name: "Sort in Day map ›" }).click();
   await expect(column(page).getByRole("button", { name: "Move 1 to tomorrow" })).toBeVisible();
   await expect(column(page).getByRole("button", { name: "Park 1" })).toBeVisible();
@@ -306,16 +306,16 @@ test("72: the task side reads goal · NOW · UNTIL · title · step · buttons, 
   const h = Math.round((await goal.boundingBox()).height);
   expect(h).toBeGreaterThanOrEqual(44);
   expect(h).toBeLessThanOrEqual(52);
-  await expect(page.locator(".wall-kicker-wide")).toHaveText(/^NOW · UNTIL \d\d:\d\d$/);
+  await expect(page.locator(".wall-kicker-wide")).toHaveText(/^Now until \d\d:\d\d$/);
   await expect(page.locator(".wall-step-count")).toHaveText(/^1 \/ \d+$/);
   await expect(page.locator(".wall-first-step-label")).toBeHidden();
   const [start, done] = await Promise.all([page.locator(".wall-start").boundingBox(), page.locator(".wall-action", { hasText: "Mark done" }).boundingBox()]);
   expect(done.x).toBeGreaterThan(start.x + start.width);
   await expect(page.locator(".wall-quiet").getByRole("button", { name: "More" })).toBeVisible();
   await expect(page.locator(".wall-daymap")).toBeHidden();
-  await expect(page.locator(".today-foot-done")).toHaveText(/^0 OF \d+ DONE TODAY$/);
+  await expect(page.locator(".today-foot-done")).toHaveText(/^0 of \d+ done today$/);
   await page.getByTestId("today-tasks-list").getByTestId("task-checkbox").first().click();
-  await expect(page.locator(".today-foot-done")).toHaveText(/^1 OF \d+ DONE TODAY$/);
+  await expect(page.locator(".today-foot-done")).toHaveText(/^1 of \d+ done today$/);
 });
 
 // The widest screens: the dragged copy lands on the row it is moved to.
@@ -355,7 +355,7 @@ test("no one thing: picking the second task puts it at NOW on the Day map", asyn
   await expect(page.locator(".wall-title")).toHaveText(second);
   await routeReady(page);
   await expect(column(page).locator("button.tdm-stop .tdm-title").first()).toContainText(second);
-  await expect(column(page).locator("button.tdm-stop .tdm-title").first()).toContainText("NOW · UNTIL");
+  await expect(column(page).locator("button.tdm-stop .tdm-title").first()).toContainText("Now until");
 });
 
 // Loopcheck of #486: with only set-time things open (a call can't be the one

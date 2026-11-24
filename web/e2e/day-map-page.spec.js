@@ -29,7 +29,7 @@ test("phone: the Day map keeps the bottom nav with Today current, and its own he
   // 56c: the factual line, then the day bar with NOW on it.
   await expect(page.locator(".dm-fact")).toHaveText(/^On track: done by \d{2}:\d{2}\.$/);
   await expect(page.getByRole("img", { name: /^The day so far: it runs 07:00 to 02:00; now 11:35$/ })).toBeVisible();
-  await expect(page.locator(".dm-daybar-labels")).toContainText("11:35 NOW");
+  await expect(page.locator(".dm-daybar-labels")).toContainText("11:35 now");
 
   // Today in the nav takes you back.
   await nav.getByRole("button", { name: "Today" }).click();
@@ -109,7 +109,7 @@ test("a task marked done shows in the folded Done so far today, and the line say
   await openDayMapByKey(page);
   await expect(page.locator(".dm-fact")).toHaveText(/^On track: done by \d{2}:\d{2}\.$/);
   // The one thing, at NOW, until its stop ends.
-  await expect(page.locator(".dm-stop.is-now .dm-one-thing")).toHaveText(/^NOW · UNTIL \d{2}:\d{2}$/);
+  await expect(page.locator(".dm-stop.is-now .dm-one-thing")).toHaveText(/^Now until \d{2}:\d{2}$/);
 
   const first = page.locator(".dm-stop .dm-main").first();
   const title = (await page.locator(".dm-stop .dm-title").first().innerText()).trim();
@@ -122,7 +122,7 @@ test("a task marked done shows in the folded Done so far today, and the line say
   await toggle.click();
   await expect(fold.locator(".dm-done-row")).toHaveCount(1);
   await expect(fold.locator(".dm-done-row")).toContainText(title);
-  await expect(fold.locator(".dm-done-row")).toContainText("MARKED DONE");
+  await expect(fold.locator(".dm-done-row")).toContainText("Marked done");
 });
 
 // 56a–b, 57b answer 6, Q33.1: Change picks up to three; Confirm makes them
@@ -265,7 +265,7 @@ test("the footer counts done today out of done plus open", async ({ page }) => {
   await enterDemo(page, { width: 1280, height: 800 });
   await openDayMapByKey(page);
   const text = await page.locator(".dm-foot-done").innerText();
-  const [, done, total] = text.match(/^(\d+) OF (\d+) DONE TODAY$/);
+  const [, done, total] = text.match(/^(\d+) of (\d+) done today$/);
   const open = await page.locator(".dm-stop[data-task-uuid]").count();
   expect(Number(total)).toBe(Number(done) + open);
 });

@@ -62,14 +62,14 @@ test("mobile reliability: Deep Focus overlay supports pause, resume, and brain-d
   const pinnedSection = page.locator(".today-wall");
   await pinnedSection.scrollIntoViewIfNeeded();
   await expect(pinnedSection).toBeVisible({ timeout: 8_000 });
-  await expect(pinnedSection.locator(".wall-kicker")).toContainText(/^NOW/);
+  await expect(pinnedSection.locator(".wall-kicker")).toContainText(/^Now/);
 
   // Open full-screen timer via Start focus (starts timer immediately)
   await pinnedSection.locator(".wall-primary").click();
 
   const overlay = page.locator(".focus-mode-overlay");
   await expect(overlay).toBeVisible({ timeout: 5_000 });
-  await expect(overlay.locator(".focus-mode-header-label")).toHaveText("FOCUS");
+  await expect(overlay.locator(".focus-mode-header-label")).toHaveText("Focus");
   await expect(overlay.getByRole("heading", { name: "Reply to the important message sitting in your inbox" })).toBeVisible();
   await expect(overlay.getByLabel("Pause timer")).toBeVisible({ timeout: 5_000 });
   await expectNoHorizontalOverflow(page);

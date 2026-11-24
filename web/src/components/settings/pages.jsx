@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { droppedLine, recentlyDropped } from "../../utils/recentlyDropped";
 import { COACH_PERSONAS, normalizeCoachPersona } from "../../utils/coachPersona";
 import { COACH_PROFILE_NOTE_MAX_LENGTH } from "../../utils/coachProfile";
+import { CHALLENGES, normalizeChallenge } from "../../utils/challenge";
 import { MEMORY_ENTRY_MAX_LENGTH, clearAllMemory, editMemoryEntry, isMemoryEnabled, removePinnedFact, removeRecentObservation } from "../../utils/coachMemory";
 import { analyzeFocusWindowRows, formatTime12 } from "../../utils/focusWindowHints";
 import { formatSpan } from "../../utils/dayMapPlan";
@@ -11,21 +12,11 @@ import { isNativeApp } from "../../utils/nativeNotifs";
 import { isRelayConfigured, PROVIDER_ORDERS } from "../../utils/aiCall";
 import { IconPencil, IconPlus, IconX } from "../ui/icons";
 import { Group, RadioList, Row, SubPage, SwitchRow, useAutosave } from "./ui";
+import DateField from "../ui/DateField";
+import { getFocusWindows, getLociDayStr } from "../../utils/focusWindows";
 
 // The sub-pages of Settings (44c–44h). Everything saves as it changes; text
 // saves a moment after typing stops, and on leaving the field.
-
-export const CHALLENGES = [
-  { value: "overplanner", label: "Help me decide what to work on", sub: "Prompts to narrow down to the one thing that matters now." },
-  { value: "initiation", label: "Help me just start", sub: "Tiny first steps; tasks broken down to make starting easy." },
-  { value: "momentum", label: "Keep me moving forward", sub: "Wins and streaks; reminders that build on what you finished." },
-  { value: "overwhelmed", label: "Help me recover and catch up", sub: "Gentle, shame-free prompts; reset tools up front." },
-];
-
-export function normalizeChallenge(key) {
-  const legacy = { starting: "initiation", focusing: "momentum", execution: "overplanner", tracking: "overwhelmed" };
-  return legacy[key] || key || "overplanner";
-}
 
 export function coachName(config) {
   return (config.mentorName || "").trim() || "Your coach";
@@ -49,15 +40,6 @@ export function ProfilePage({ config, email, saveConfigPatch, onBack }) {
           <span className="set-static">{email}</span>
         </div>
       )}
-      <Group label="What helps you most">
-        <RadioList
-          label="What helps you most"
-          options={CHALLENGES}
-          value={normalizeChallenge(config.challengeType)}
-          onChange={(v) => saveConfigPatch({ challengeType: v })}
-        />
-      </Group>
-      <p className="set-note">The coach leans this way in how it helps you.</p>
     </SubPage>
   );
 }
@@ -242,6 +224,7 @@ export function KeyDeadlinePage({ config, saveConfigPatch, onBack }) {
   const [daily, setDaily, flushDaily] = useAutosave(config.deadlineAction || "", v => saveConfigPatch({ deadlineAction: v.trim() }));
   const left = daysLeft(config.deadlineDate);
   const hasGoal = !!(config.deadlineLabel || config.deadlineDate || config.deadlineAction || config.deadlineStartDate);
+  const lociDay = getLociDayStr(new Date(), getFocusWindows(config));
   return (
     <SubPage title="Key deadline" onBack={onBack} lede="One goal with a date. It shows as the gold band on Today; tap the band for its record.">
       <label className="set-field">
@@ -251,11 +234,11 @@ export function KeyDeadlinePage({ config, saveConfigPatch, onBack }) {
       <div className="set-field-pair">
         <label className="set-field">
           <span className="set-label">Started</span>
-          <input type="date" className="set-input" value={config.deadlineStartDate || ""} onChange={e => saveConfigPatch({ deadlineStartDate: e.target.value })} />
+          <DateField className="set-input" label="Started" allowClear today={lociDay} value={config.deadlineStartDate || ""} onChange={v => saveConfigPatch({ deadlineStartDate: v })} />
         </label>
         <label className="set-field">
           <span className="set-label">Deadline</span>
-          <input type="date" className="set-input" value={config.deadlineDate || ""} onChange={e => saveConfigPatch({ deadlineDate: e.target.value })} />
+          <DateField className="set-input" label="Deadline" allowClear today={lociDay} value={config.deadlineDate || ""} onChange={v => saveConfigPatch({ deadlineDate: v })} />
         </label>
       </div>
       {/* Q49: "Target", as the band says it; "minimum" is the Day map's. */}
@@ -336,6 +319,16 @@ export function CoachPage({ config, saveConfigPatch, onBack, children }) {
         <textarea id="settings-coach-profile" className="set-input set-textarea" rows={3} value={about} maxLength={COACH_PROFILE_NOTE_MAX_LENGTH} onChange={e => setAbout(e.target.value)} onBlur={flushAbout} placeholder="e.g. PhD student, thesis due in March; I work best in the mornings." />
       </label>
       <p className="set-note">Changes save as you type. Facts go here; how {shown} talks goes in Style notes.</p>
+      {/* #656: moved here from Profile; it only shapes Coach and Ask AI. */}
+      <Group label="What helps you most">
+        <RadioList
+          label="What helps you most"
+          options={CHALLENGES}
+          value={normalizeChallenge(config.challengeType)}
+          onChange={(v) => saveConfigPatch({ challengeType: v })}
+        />
+      </Group>
+      <p className="set-note">{name.trim() || "Coach"} and Ask AI use this when they suggest next steps. Nothing else in Loci changes.</p>
       {children}
     </SubPage>
   );

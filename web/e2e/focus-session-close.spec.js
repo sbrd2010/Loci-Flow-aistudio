@@ -34,7 +34,7 @@ test("Start runs one block of the Focus timer, not the task's estimate", async (
 
   await expect(page.locator(".wall-primary-figure")).toHaveText("25:00");
   const overlay = await startFocus(page);
-  await expect(overlay.locator(".focus-mode-figures")).toContainText(/^OF 25:00/);
+  await expect(overlay.locator(".focus-mode-figures")).toContainText(/^of 25:00/);
 });
 
 test("a pause of 15 minutes keeps the session; a longer one closes it", async ({ page }) => {

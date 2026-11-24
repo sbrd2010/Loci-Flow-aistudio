@@ -20,7 +20,7 @@ export default function DayBar({ bar, now, doneMinutes, plannedMinutes, overBy, 
       </div>
       <div className="dm-daybar-labels" aria-hidden="true">
         <span className={bar.now < 0.12 ? "is-covered" : undefined}>{formatClock24(bar.start)}</span>
-        <span className="dm-daybar-now" style={{ left: pct(bar.now), transform: `translateX(-${pct(bar.now)})` }}>{formatClock24(now)} NOW</span>
+        <span className="dm-daybar-now" style={{ left: pct(bar.now), transform: `translateX(-${pct(bar.now)})` }}>{formatClock24(now)} now</span>
         <span className={`dm-daybar-end${bar.over ? " is-over" : ""}`} style={{ left: pct(bar.dayEnd), transform: `translateX(-${pct(bar.dayEnd)})` }}>
           {Math.abs(bar.dayEnd - bar.now) < 0.12 ? "" : formatClock24(bar.start + (bar.end - bar.start) * bar.dayEnd)}
         </span>

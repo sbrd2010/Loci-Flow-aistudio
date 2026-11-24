@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import FocusPill from "./FocusPill";
 import { auth } from "../firebase";
+import { challengeCoachLine } from "../utils/challenge";
 import { aiNeedsSignIn, callAI, describeAIError, fullPromptAllowed, getAIKeys, hasAIKey, isAISystemReply, isOnlyProviderKeyMissing, noKeyHint } from "../utils/aiCall";
 import { stripAIUsageNote } from "../utils/aiUsageLimits";
 import { buildLocalSafetyReply, localSafetyTurns, PRIVATE_REPLY_TURN, PRIVATE_USER_TURN } from "../utils/crisisSafety";
@@ -20,7 +21,7 @@ import { buildBriefInput, BRIEF_SYSTEM_PROMPT, parseBrief, moveTaskToHorizon, un
 import { buildSplit, undoSplit } from "../utils/splitTask";
 import { horizonsFromConfig } from "../utils/horizons";
 import { requestNotifPermission } from "../utils/focusNotifications";
-import { scheduleCoachCheckin } from "../utils/reminders";
+import { getRemindersOwner, scheduleCoachCheckin } from "../utils/reminders";
 import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, parseCheckinRequestFromMessage, buildCoachCheckinContext } from "../utils/coachCheckin";
 import { parseCoachActionTags, applyCoachActions, buildActionReplyText, buildSetNowFocusTasks, buildParkTaskTasks, findTaskByTitle, undoCoachAction, withoutChangeClaims } from "../utils/coachActions";
 import { buildPersonaInstruction } from "../utils/coachPersona";
@@ -175,15 +176,9 @@ export default function CoachTab({ namePrompt = null, payload, savePayload, save
   useEffect(() => () => { if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current); }, []);
 
   // -- AI Mentor Chat --------------------------------------------------------
-  const challengeLabel =
-    config.challengeType === "overplanner"  ? "Turning Plans into Action" :
-    config.challengeType === "overwhelmed"  ? "Recovery and Backlog Relief" :
-    config.challengeType === "initiation"   ? "Breaking Initiation Freeze" :
-    config.challengeType === "momentum"     ? "Building Momentum with Quick Wins" :
-    config.challengeType === "starting"     ? "Overcoming Inertia" :
-    config.challengeType === "focusing"     ? "Protecting Focus Sessions" :
-    config.challengeType === "tracking"     ? "Time Awareness" :
-    "Action over Perfectionism";
+  // #656: Settings › Coach › What helps you most, as Coach's short line (the
+  // same choice Ask AI gets), or null when nothing was chosen: no line at all.
+  const challengeLabel = challengeCoachLine(config.challengeType);
 
   const firstName = (config.userName || "").split(" ")[0] || "friend";
   // 62j: an empty conversation shows its own empty state; Coach doesn't
@@ -794,6 +789,9 @@ export default function CoachTab({ namePrompt = null, payload, savePayload, save
     const deadlineIntent = !periodIntent && detectDeadlineIntent(userText);
     const isReference = needsConversationContext(userText);
     const epoch = conversationEpoch;
+    // Whose conversation this is: a reply landing after sign-out or an account
+    // switch must not arm that account's check-in (#664).
+    const replyOwner = getRemindersOwner();
     const controller = new AbortController();
 
     // Session summary: the raw-window boundary comes from the shared
@@ -1121,7 +1119,7 @@ export default function CoachTab({ namePrompt = null, payload, savePayload, save
         }
         const checkin = buildCoachCheckin(checkinMinutes, pickCheckinNote(activeForCheckin, mentionedTitle));
         configPatch = { ...configPatch, coachCheckin: checkin };
-        scheduleCoachCheckin(checkin);
+        scheduleCoachCheckin(checkin, replyOwner);
         requestNotifPermission();
       }
 

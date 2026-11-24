@@ -41,6 +41,17 @@ describe("Firebase emulator isolation", () => {
     expect(sdk.connectDatabaseEmulator).not.toHaveBeenCalled();
   });
 
+  it("never forces long-polling, in production or with emulators (#650)", async () => {
+    for (const emulators of ["", "true"]) {
+      vi.resetModules();
+      vi.stubEnv("DEV", true);
+      vi.stubEnv("VITE_USE_FIREBASE_EMULATORS", emulators);
+      await import("./firebase");
+    }
+    expect(sdk.getDatabase).toHaveBeenCalledTimes(2);
+    expect(sdk.forceLongPolling).not.toHaveBeenCalled();
+  });
+
   it("ignores the opt-in in a production build", async () => {
     vi.stubEnv("DEV", false);
     vi.stubEnv("VITE_USE_FIREBASE_EMULATORS", "true");

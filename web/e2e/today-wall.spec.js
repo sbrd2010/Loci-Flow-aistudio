@@ -120,7 +120,7 @@ test("mobile reliability: the goal is one gold line on a phone, with its days", 
   // and the band above it keeps its one-line height. Measured against the
   // font's own line, not a pixel count, so the real fonts pass too.
   const target = band.locator(".wall-goal-target");
-  await expect(target).toHaveText(/^Target · \S/);
+  await expect(target).toHaveText(/^Target: \S/);
   const m = await target.evaluate(el => ({ h: el.getBoundingClientRect().height, line: parseFloat(getComputedStyle(el).lineHeight) }));
   expect(m.h).toBeLessThanOrEqual(m.line * 1.5);
   const h = (await band.boundingBox()).height;
@@ -373,6 +373,23 @@ test("mobile reliability: no one thing: pick from the top three, with Undo", asy
   await expect(page.locator(".wall-title")).toHaveText(pickTitles[0]);
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.locator(".wall-pick")).toBeVisible({ timeout: 8_000 });
+});
+
+// #659: on a wide desktop the picker wall shows the list beside it, so the
+// task view's "list hidden" centring (75d) must not move its band and anchor
+// off the picker's left edge.
+test("wide: with no one thing, the goal band, anchor and picker share one left edge at 1920 (#659)", async ({ page }) => {
+  await emptyTheWall(page);
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await expect(page.locator(".today-wall.is-empty .wall-goal")).toBeVisible();
+  await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"));
+  const [band, anchor, title] = await Promise.all([
+    page.locator(".today-wall.is-empty .wall-goal").boundingBox(),
+    page.locator(".today-wall.is-empty .wall-anchor").boundingBox(),
+    page.locator(".wall-empty-title").boundingBox(),
+  ]);
+  expect(Math.abs(band.x - title.x)).toBeLessThan(2);
+  expect(Math.abs(anchor.x - title.x)).toBeLessThan(2);
 });
 
 // 67j/67s: nothing in Today: Add a task, or bring some in from This week; the
@@ -1713,7 +1730,7 @@ test("the next morning, moved tasks head the list tagged FROM YESTERDAY, for tha
   await expect(list.locator(".today-list-group")).toHaveCount(0);
   await expect(rows.first().locator(".task-title-text")).toHaveText(last);
   await expect(tags).toHaveCount(1);
-  await expect(rows.first().locator(".from-yesterday")).toHaveText("FROM YESTERDAY");
+  await expect(rows.first().locator(".from-yesterday")).toHaveText("From yesterday");
   // Not pinned automatically.
   await expect(page.locator(".wall-title")).not.toHaveText(last);
 
@@ -1921,7 +1938,7 @@ test("a moved-from-yesterday task drags like any other row and keeps its tag (Q7
   await announced(/Draggable item (\S+) was moved over droppable area (?!\1\b)\S+/);
   await page.keyboard.press("Space");
   await expect(rows.nth(1).locator(".task-title-text")).toHaveText(last);
-  await expect(rows.nth(1).locator(".from-yesterday")).toHaveText("FROM YESTERDAY");
+  await expect(rows.nth(1).locator(".from-yesterday")).toHaveText("From yesterday");
 
   // The day after, the order is still as it was shown.
   await page.clock.setFixedTime(new Date("2024-06-17T10:00:00"));
@@ -1934,7 +1951,7 @@ test("a moved-from-yesterday task drags like any other row and keeps its tag (Q7
 test("the goal band shows the Target; Edit goal in its record opens Key deadline", async ({ page }) => {
   await emptyTheWall(page);
   const band = page.locator(".today-wall .wall-goal");
-  await expect(band.locator(".wall-goal-target")).toHaveText("Target · Finish one launch task today");
+  await expect(band.locator(".wall-goal-target")).toHaveText("Target: Finish one launch task today");
   await band.click();
   await page.getByRole("dialog", { name: /^Goal record/ }).getByRole("button", { name: "Edit goal" }).click();
   await expect(page.getByRole("heading", { name: "Key deadline" })).toBeVisible();

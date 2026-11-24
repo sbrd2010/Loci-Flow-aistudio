@@ -17,14 +17,16 @@ export default function FocusPill({ secondsLeft, maxSeconds, isRunning, blockEnd
     ? { secondsLeft: blockEnd.breakLeft, maxSeconds: blockEnd.breakSeconds, paused: false }
     : phase ? { secondsLeft: 1, maxSeconds: 1, paused: false }
       : { secondsLeft, maxSeconds, paused: !isRunning };
-  const time = phase === "done" ? "BLOCK DONE"
+  const time = phase === "done" ? "Block done"
     : phase === "break" ? clock(blockEnd.breakLeft)
-      : phase === "over" ? "BREAK’S OVER"
-        : isRunning ? clock(secondsLeft) : "PAUSED";
+      : phase === "over" ? "Break’s over"
+        : isRunning ? clock(secondsLeft) : "Paused";
+  // A word is a label, so the body face; a time stays mono (#671).
+  const isWord = phase === "done" || phase === "over" || (!phase && !isRunning);
   return (
     <button type="button" className={`focus-pill${className ? ` ${className}` : ""}`} onClick={onBack}>
       <MiniRing size={24} secondsLeft={ring.secondsLeft} maxSeconds={ring.maxSeconds} paused={ring.paused} />
-      <span className="focus-pill-time">{time}</span>
+      <span className={`focus-pill-time${isWord ? " is-word" : ""}`}>{time}</span>
       <span className="focus-pill-label">Back to focus</span>
       <kbd className="focus-pill-key" aria-hidden="true">F</kbd>
     </button>

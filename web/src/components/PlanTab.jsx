@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import UndoToast, { UndoAnnouncer } from "./ui/UndoToast";
+import DateField from "./ui/DateField";
 import { IconChevronLeft, IconChevronRight, IconPlus } from "./ui/icons";
 import {
   frontsFromConfig,
@@ -341,12 +342,14 @@ export default function PlanTab({ payload = {}, saveConfigPatch, openFrontId = n
             }}
           />
           <label className="plan-new-label" htmlFor="plan-new-date">Deadline, if it has one</label>
-          <input
+          <DateField
             id="plan-new-date"
             className="plan-new-input"
-            type="date"
+            label="Deadline"
+            allowClear
+            today={lociDay}
             value={draftDate}
-            onChange={e => setDraftDate(e.target.value)}
+            onChange={setDraftDate}
           />
           <div className="plan-new-actions">
             <button type="button" className="plan-new-commit" disabled={!draftName.trim() || atFrontLimit} onClick={commitFront}>

@@ -6,6 +6,12 @@ export default defineConfig({
   server: {
     port: 3000
   },
+  // The date calendar is loaded lazily; pre-bundle its library so the dev
+  // server doesn't discover it mid-session and reload every open page
+  // (that reload made a parallel e2e flaky on a cold cache, #668).
+  optimizeDeps: {
+    include: ["@daypicker/react"]
+  },
   build: {
     minify: "terser"
   },

@@ -33,12 +33,12 @@ const lower = (m) => spanLabel(m).toLowerCase();
 // "1:05" — the session so far, in hours and minutes.
 const hoursMinutes = (m) => `${Math.floor(m / 60)}:${String(Math.round(m) % 60).padStart(2, "0")}`;
 
-// "3H", "1H05M", "25M" — the kicker's figures.
+// "3h", "1h05m", "25m" — the kicker's figures.
 function spanLabel(minutes) {
   const m = Math.max(0, Math.round(minutes));
   const h = Math.floor(m / 60);
-  if (!h) return `${m}M`;
-  return m % 60 ? `${h}H${String(m % 60).padStart(2, "0")}M` : `${h}H`;
+  if (!h) return `${m}m`;
+  return m % 60 ? `${h}h${String(m % 60).padStart(2, "0")}m` : `${h}h`;
 }
 
 // The ring's size by screen width (59a–c, Q37.4): 248 on a phone, 280 on a
@@ -282,8 +282,8 @@ export default function FocusModePage({
   }, []);
 
   const kicker = isFiveMinute
-    ? (isComplete ? "FIVE MINUTES · DONE" : "FIVE MINUTES · THAT'S ALL")
-    : "FOCUS";
+    ? (isComplete ? "Five minutes, done" : "Five minutes, that’s all")
+    : "Focus";
   // Q37.1–2: one line — what this is, the task's estimate, and what is done
   // on it today (every session, this one included).
   const doneToday = Math.max(0, Number(taskMinutesToday) || 0) + loggedMinutes;
@@ -313,11 +313,12 @@ export default function FocusModePage({
     setReestimating(false);
     setCustomEstimate("");
   };
+  // Sentence case, the parts spaced rather than dot-joined (#671).
   const stageKicker = [
-    task.isNowFocus ? "TODAY, NOW" : "FOCUS",
-    estimate > 0 ? `${spanLabel(estimate)} TASK` : null,
-    doneToday >= 1 ? `${spanLabel(doneToday)} DONE` : null,
-  ].filter(Boolean).join(" · ");
+    task.isNowFocus ? "Today, now" : "Focus",
+    estimate > 0 ? `${spanLabel(estimate)} task` : null,
+    doneToday >= 1 ? `${spanLabel(doneToday)} done` : null,
+  ].filter(Boolean).flatMap((part, i) => [i ? " " : null, <span key={part} className="fm-kicker-part">{part}</span>]);
 
   const doneButton = (filled) => (
     <button
@@ -429,8 +430,8 @@ export default function FocusModePage({
       <header className="focus-mode-head">
         <p className="focus-mode-kicker">
           <span className="focus-mode-header-label">{kicker}</span>
-          {/* Q37.1: "FOCUS · BLOCK 1" — no day or block end up here. */}
-          <span className="fm-head-meta"> · BLOCK {Math.max(1, blockNumber)}</span>
+          {/* Q37.1: "Focus  Block 1" — no day or block end up here. */}
+          {" "}<span className="fm-head-meta">Block {Math.max(1, blockNumber)}</span>
           <span className="sr-only"> · {stateLabel}</span>
         </p>
         <div className="fm-head-actions">
@@ -457,7 +458,7 @@ export default function FocusModePage({
       <main className="focus-mode-body" aria-label="Deep focus session">
         <section className="focus-mode-task-panel" aria-label="Focused task">
           <p className="fm-stage-kicker">
-            {splitNote ? `SPLIT INTO ${splitNote.n} · PIECE 1 OF ${splitNote.n}` : stageKicker}
+            {splitNote ? <><span className="fm-kicker-part">Split into {splitNote.n}</span>{" "}<span className="fm-kicker-part">Piece 1 of {splitNote.n}</span></> : stageKicker}
             {splitNote?.onUndo && <> <button type="button" className="fm-link" onClick={splitNote.onUndo}>Undo</button></>}
           </p>
           <h1 className="focus-mode-task-title" data-len={titleLength(task.title)}><LinkifyText text={task.title} /></h1>
@@ -511,14 +512,14 @@ export default function FocusModePage({
               valueText={`${mins} minutes ${secs} seconds left of ${blockLabel}`}
             />
           )}
-          {/* Q37.1: "OF 25:00", then "STARTED · ENDS" under it. */}
+          {/* Q37.1: "of 25:00", then "started  ends" under it. */}
           <p className="focus-mode-figures">
             {/* The break isn't part of the block (Codex review of #433). */}
-            <span className="fm-figures-of">{breaking ? "BREAK" : breakOver ? "BREAK'S OVER" : `OF ${blockLabel}`}</span>
+            <span className="fm-figures-of">{breaking ? "Break" : breakOver ? "Break’s over" : `of ${blockLabel}`}</span>
             {(startedLabel || endsLabel) && (
               <span className="fm-figures-times">
-                {startedLabel && <span className="focus-mode-started">STARTED {startedLabel}{endsLabel ? " · " : ""}</span>}
-                {endsLabel && <span>ENDS {endsLabel}</span>}
+                {startedLabel && <span className="focus-mode-started">started {startedLabel}</span>}
+                {startedLabel && endsLabel && " "}{endsLabel && <span className="focus-mode-ends">ends {endsLabel}</span>}
               </span>
             )}
           </p>
@@ -528,7 +529,7 @@ export default function FocusModePage({
             the timer waits for an answer, and pauses after 60 s. */}
         {isComplete ? (
           <div className="focus-mode-hold-actions fm-block-end" role="group" aria-label="Block done">
-            <p className="fm-block-end-kicker">BLOCK {Math.max(1, blockNumber)} DONE · SESSION {hoursMinutes(loggedMinutes)}</p>
+            <p className="fm-block-end-kicker"><span className="fm-kicker-part">Block {Math.max(1, blockNumber)} done</span>{" "}<span className="fm-kicker-part">Session {hoursMinutes(loggedMinutes)}</span></p>
             {breaking ? (
               <>
                 <p className="fm-block-end-note">A 5-minute break. Block {Math.max(1, blockNumber) + 1} waits for you after it.</p>
@@ -636,14 +637,14 @@ export default function FocusModePage({
           <aside className={`fm-panel${panelBelow ? " is-below" : ""}`} aria-label="Steps, sound and a stray thought">
             {steps.length > 0 && (
               <section className="fm-panel-section">
-                <h2 className="fm-panel-head">Steps <span>{stepIndex} OF {steps.length}</span></h2>
+                <h2 className="fm-panel-head">Steps <span>{stepIndex} of {steps.length}</span></h2>
                 <ul className="fm-steps">
                   {steps.map(st => (
                     <li key={st.id}>
                       <label className={`fm-step${st.done ? " is-done" : ""}`}>
                         <input type="checkbox" checked={!!st.done} onChange={() => onToggleStep?.(st.id)} disabled={!onToggleStep} />
                         <span>{st.text}</span>
-                        {st === nextStep && <span className="fm-step-now">NOW</span>}
+                        {st === nextStep && <span className="fm-step-now">Now</span>}
                       </label>
                     </li>
                   ))}

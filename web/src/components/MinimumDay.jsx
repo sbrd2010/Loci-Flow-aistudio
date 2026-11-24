@@ -56,7 +56,7 @@ export default function MinimumDay({ state, ids, tasks, timeOf, onConfirm, unfit
       <div className="dm-min-head">
         {/* Turn 76 (d): N is how many fit, 1 to 3. */}
         <h2 className="dm-min-title">{picked.length === 0 ? `At least these ${MINIMUM_DAY_SIZE}` : picked.length === 1 ? "At least this one" : `At least these ${picked.length}`}</h2>
-        <span className="dm-min-kicker">SUGGESTED</span>
+        <span className="dm-min-kicker">Suggested</span>
       </div>
       {picked.length > 0 ? (
         <ul className="dm-min-list">

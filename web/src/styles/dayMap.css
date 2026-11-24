@@ -139,7 +139,7 @@
 .dm-from-select {
   min-height: 44px;
   padding: 0 4px;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 0.8125rem;
   font-weight: 700;
   color: var(--ink);
@@ -147,6 +147,7 @@
   border: 0;
   border-radius: 6px;
   cursor: pointer;
+  font-variant-numeric: tabular-nums;
 }
 .dm-text-btn {
   white-space: nowrap;
@@ -189,10 +190,11 @@
 }
 .dm-time,
 .dm-dur {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
   font-weight: 700;
   color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
 }
 .dm-title {
   display: flex;
@@ -248,11 +250,12 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
+  font-family: var(--font-sans);
+  font-size: 0.78125rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0;
   color: var(--accent);
+  font-variant-numeric: tabular-nums;
 }
 /* 12 Oct: while a stop is held the route holds still. Its row stays as a
    faint placeholder, a card follows the pointer, and a line marks where it
@@ -294,11 +297,12 @@
    rest of a stop a break split, the break itself, and free time. */
 .dm-lock { align-self: center; color: var(--ink-2); }
 .dm-pulled {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 0.625rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0;
   color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
 }
 .dm-stop.is-late .dm-time { color: var(--coral); }
 .dm-stop.is-continued .dm-title { font-weight: 600; color: var(--ink-2); }
@@ -339,11 +343,12 @@
 .dm-dayend,
 .dm-wontfit {
   list-style: none;
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
+  font-family: var(--font-sans);
+  font-size: 0.78125rem;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0;
   color: var(--coral);
+  font-variant-numeric: tabular-nums;
 }
 .dm-dayend-label {
   display: flex;
@@ -662,10 +667,11 @@
   position: relative;
   height: 1.4em;
   margin-top: 6px;
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
+  font-family: var(--font-sans);
+  font-size: 0.78125rem;
   font-weight: 700;
   color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
 }
 .dm-daybar-labels > span { position: absolute; top: 0; white-space: nowrap; }
 .dm-daybar-labels > span:first-child { left: 0; }
@@ -732,11 +738,12 @@
 .dm-min-title { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.01em; } /* 75g: a section heading */
 .dm-min-kicker,
 .dm-min-time {
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
+  font-family: var(--font-sans);
+  font-size: 0.78125rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0;
   color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
 }
 .dm-min-list,
 .dm-min-pick { margin: 8px 0 0; padding: 0; list-style: none; }
@@ -949,11 +956,12 @@
   .day-map-page > .dm-foot .momentum-line { font-size: 14.5px; font-style: italic; }
   .dm-foot-done {
     margin-left: auto;
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
+    font-family: var(--font-sans);
+    font-size: 0.78125rem;
     font-weight: 700;
-    letter-spacing: 0.08em;
+    letter-spacing: 0;
     color: var(--ink-2);
+    font-variant-numeric: tabular-nums;
   }
 }
 
@@ -996,3 +1004,6 @@ html[data-theme="dark"] { --break-tint: #1D262D; --break-ink: #A9B6C1; }
     --dm-row-bg: var(--surface);
   }
 }
+
+/* #671: "Day ends 02:00   1h30m free", spaced rather than dot-joined. */
+.dm-dayend-free { margin-left: 0.5em; font-weight: 500; color: var(--ink-2); }

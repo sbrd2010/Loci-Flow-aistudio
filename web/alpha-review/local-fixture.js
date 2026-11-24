@@ -59,9 +59,8 @@ export async function isolate(context) {
     };
     await route.fulfill({ contentType: "text/javascript", body: `
       import { initializeApp } from ${JSON.stringify(moduleUrl("app"))};
-      import { getDatabase, connectDatabaseEmulator, forceLongPolling, goOffline, goOnline } from ${JSON.stringify(moduleUrl("database"))};
+      import { getDatabase, connectDatabaseEmulator, goOffline, goOnline } from ${JSON.stringify(moduleUrl("database"))};
       import { getAuth, connectAuthEmulator, signInWithEmailAndPassword, signOut } from ${JSON.stringify(moduleUrl("auth"))};
-      forceLongPolling();
       const app = initializeApp({ apiKey: "review-key", projectId: "${PROJECT}", databaseURL: "https://${NAMESPACE}.firebaseio.com" });
       export const db = getDatabase(app);
       connectDatabaseEmulator(db, "127.0.0.1", 9000);

@@ -32,7 +32,7 @@ test("A break starts now; the one thing continues after it; its row opens Length
   // The one thing waits for it; no buffer after a break (Q35a).
   const brk = route(page).locator(".dm-break.is-added");
   await expect(brk.getByRole("button", { name: "11:35 to 11:50, Break" })).toBeVisible();
-  expect(await times(page)).toEqual(["NOW", "12:20", "12:50"]);
+  expect(await times(page)).toEqual(["Now", "12:20", "12:50"]);
 
   // Its row: Length, Time, Remove.
   await brk.getByRole("button").click();
@@ -47,7 +47,7 @@ test("A break starts now; the one thing continues after it; its row opens Length
   await brk.getByRole("button").click();
   await page.getByRole("dialog", { name: "Break" }).getByRole("button", { name: "Remove" }).click();
   await expect(route(page).locator(".dm-break")).toHaveCount(0);
-  expect(await times(page)).toEqual(["NOW", "12:05", "12:35"]);
+  expect(await times(page)).toEqual(["Now", "12:05", "12:35"]);
 
   // Undo puts it back.
   await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
@@ -68,7 +68,7 @@ test("Later… puts the break after what you're doing now; the next stop goes af
   await step2.getByRole("button", { name: "Later…" }).click();
   await step2.getByRole("button", { name: "Add break at 12:00" }).click();
   await expect(route(page).locator(".dm-break.is-added").getByRole("button", { name: "12:00 to 12:15, Break" })).toBeVisible();
-  expect(await times(page)).toEqual(["NOW", "12:15", "12:45"]);
+  expect(await times(page)).toEqual(["Now", "12:15", "12:45"]);
   await expect(route(page).locator(".dm-stop.is-continued")).toHaveCount(0);
 });
 

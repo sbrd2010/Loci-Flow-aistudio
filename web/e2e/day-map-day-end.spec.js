@@ -39,7 +39,7 @@ async function overfill(page) {
 
 test("a route that fits: the day ends at the end of the focus window, with the time to spare", async ({ page }) => {
   await openDayMapAt(page, "2024-06-15T21:00:00");
-  await expect(page.locator(".dm-dayend")).toHaveText(/^DAY ENDS 02:00 · \d+h(\d+m)? FREE$/);
+  await expect(page.locator(".dm-dayend")).toHaveText(/^Day ends 02:00 \d+h(\d+m)? free$/);
   await expect(fact(page)).toHaveText(/^On track: done by \d{2}:\d{2}\.$/);
   await expect(page.locator(".dm-daybar-past")).toHaveCount(0);
   await expect(page.locator(".dm-stop.is-over")).toHaveCount(0);
@@ -51,7 +51,7 @@ test("stops after the day end are marked, and Move N to tomorrow takes them off 
   await overfill(page);
 
   const dayEnd = page.locator(".dm-dayend");
-  await expect(dayEnd).toContainText("DAY ENDS 02:00");
+  await expect(dayEnd).toContainText("Day ends 02:00");
   await expect(page.locator(".dm-stop.is-over")).toHaveCount(1);
   // 56a, Turn 76 (c): the line says it in words, in red, as Today does: the
   // task that won't fit and its length (not a separate 35m overrun), and the
@@ -60,7 +60,7 @@ test("stops after the day end are marked, and Move N to tomorrow takes them off 
   await expect(fact(page).locator(".dm-fact-alert")).toHaveText("1 task won’t fit · 2h.");
   await expect(page.locator(".dm-daybar-legend")).toContainText("won’t fit 2h");
   await expect(page.locator(".dm-daybar-legend")).not.toContainText("past your day end");
-  await expect(dayEnd).toHaveText("DAY ENDS 02:00 · 1h30m FREE");
+  await expect(dayEnd).toHaveText("Day ends 02:00 1h30m free");
   // Screen readers hear where a stop sits against the day's end (brief §6).
   await expect(page.locator(".dm-stop.is-over .dm-main")).toHaveAttribute("aria-label", /after the day ends$/);
 
@@ -69,7 +69,7 @@ test("stops after the day end are marked, and Move N to tomorrow takes them off 
   await expect(page.locator(".dm-stop")).toHaveCount(2);
   await expect(page.locator(".dm-tomorrow-note")).toHaveText("1 task now starts tomorrow.");
   // What is left ends at 00:30: an hour and a half to spare.
-  await expect(dayEnd).toHaveText("DAY ENDS 02:00 · 1h30m FREE");
+  await expect(dayEnd).toHaveText("Day ends 02:00 1h30m free");
 
   await page.locator(".undo-toast").getByRole("button", { name: "Undo" }).click();
   await expect(page.locator(".dm-stop")).toHaveCount(3);
@@ -78,7 +78,7 @@ test("stops after the day end are marked, and Move N to tomorrow takes them off 
   // Three tasks: the one thing on the wall, two rows in the list.
   await expect(page.getByTestId("today-tasks-list").locator("[data-testid='task-row']")).toHaveCount(2);
   // Today gives the same total as the Day map (Turn 76 c).
-  await expect(page.locator(".today-wontfit-line")).toContainText("1 won’t fit · 2h");
+  await expect(page.locator(".today-wontfit-line")).toContainText("1 won’t fit, 2h");
 });
 
 test("on a laptop the action sits on the right of the route (52e)", async ({ page }) => {
@@ -106,7 +106,7 @@ test("the next day, moved tasks open tomorrow's route at the top, timed from its
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Plan", exact: true }).click();
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
   await expect(list.locator("[data-testid='task-row']:not(:has(.task-tag.is-now))").first()).toContainText(moved);
-  await expect(list.locator("[data-testid='task-row']").first().locator(".from-yesterday")).toHaveText("FROM YESTERDAY");
+  await expect(list.locator("[data-testid='task-row']").first().locator(".from-yesterday")).toHaveText("From yesterday");
   const oneThing = (await page.locator(".wall-title").innerText()).trim();
   await openDayMapPage(page);
   // Q59: the one thing heads the route at NOW; the moved task comes next,
@@ -116,9 +116,9 @@ test("the next day, moved tasks open tomorrow's route at the top, timed from its
   const stops = page.locator(".dm-stop");
   await expect(stops).toHaveCount(3);
   await expect(stops.first().locator(".dm-title")).toContainText(oneThing);
-  await expect(stops.first().locator(".dm-time")).toHaveText("NOW");
+  await expect(stops.first().locator(".dm-time")).toHaveText("Now");
   await expect(stops.nth(1).locator(".dm-title")).toContainText(moved);
-  await expect(stops.nth(1).locator(".from-yesterday")).toHaveText("FROM YESTERDAY");
+  await expect(stops.nth(1).locator(".from-yesterday")).toHaveText("From yesterday");
   await expect(stops.nth(1).locator(".dm-time")).toHaveText("12:05");
   await expect(page.locator(".dm-time", { hasText: "00:00" })).toHaveCount(0);
 });
@@ -158,7 +158,7 @@ test("at 00:30 with a window to 02:00, the route starts now and the day has 1h30
   await openDayMapPage(page);
   // 00:30 plus the 1h30m left is 02:00: the route's day ends there.
   await expect(page.locator(".dm-stop .dm-main").first()).toHaveAttribute("aria-label", /^Now to 00:\d\d, /);
-  await expect(page.locator(".dm-dayend")).toContainText("DAY ENDS 02:00");
+  await expect(page.locator(".dm-dayend")).toContainText("Day ends 02:00");
 });
 
 // A 09:00–17:00 window, opened at 18:00: the day is over, so every stop is
@@ -273,7 +273,7 @@ test("Today's Day map view: Move N and Park N leave the confirmed minimum-day ta
 
   await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Day map", exact: true }).click();
   const column = page.getByRole("region", { name: "Day map" });
-  await expect(column.getByRole("heading", { name: /Won’t fit today/ })).toContainText("2 ·");
+  await expect(column.getByRole("heading", { name: /Won’t fit today/ })).toContainText("2 tasks,");
   await expect(column.locator(".dm-kept-note")).toHaveText(KEPT_NOTE);
   await expect(column.getByRole("button", { name: "Move 1 to tomorrow" })).toBeVisible();
   await column.getByRole("button", { name: "Park 1" }).click();

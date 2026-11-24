@@ -25,6 +25,7 @@ import { buildLocalSafetyReply } from "./crisisSafety";
 import { detectFactIntent, buildFactCard } from "./coachFactCards";
 import { lociDayWindow } from "./focusLedger";
 import { profileToCoachContext } from "./userProfile";
+import { challengeCoachLine } from "./challenge";
 
 export const NOW = new Date(2026, 9, 21, 10, 0); // Wed 21 Oct 2026, 10:00
 const DAY = 86400000;
@@ -263,7 +264,7 @@ export function buildTurn(q, { ownKey = true, fixture = null, now = NOW, windows
   const system = buildCoachSystemPrompt(mode, {
     lociCoreInstruction: L.buildLociCoreInstruction({ firstName: FIRST_NAME }),
     mentorName: "Loci AI Coach", firstName: FIRST_NAME, userName: FIRST_NAME,
-    challengeLabel: "Breaking Initiation Freeze",
+    challengeLabel: challengeCoachLine("overplanner"), // #656: what Coach sends now (the longest line)
     profileContext: buildProfileContext(config),
     memoryContext: buildLociMemoryContext(config.coachMemory),
     memorySectionEnabled: true,
