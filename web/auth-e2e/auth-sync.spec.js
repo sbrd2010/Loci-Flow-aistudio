@@ -383,3 +383,102 @@ test("Undo of a horizon review restores the review and the moved task on the ser
   await expect.poll(async () => (await weekReview(clients.request, a.uid)).pending?.uuids?.slice().sort()).toEqual(["wk-a", "wk-b"]);
   expect(await horizonOf(clients.request, a.uid, "wk-a")).toBe("week");
 });
+
+// #677: RTDB never stores an empty list. A device holding one (subSteps: []
+// after the last step goes) used to see an edit the server could never take:
+// every save re-stamped the task, and the device kept its stale copy for good.
+const serverTask = async (request, uid, uuid) => (await readServer(request, uid)).tasks.find(t => t.uuid === uuid);
+const cacheRecord = (client, uuid) => client.page.evaluate(([u, id]) => {
+  const r = JSON.parse(localStorage.getItem(`loci_payload_v1_${u}`) || "null");
+  const find = l => (l || []).find(t => t.uuid === id) || null;
+  return { local: find(r?.payload?.tasks), base: find(r?.base?.tasks) };
+}, [client.uid, uuid]);
+// The #677 signature is a task clock moving with nothing in the task changed,
+// and full saves while nothing changed. Over a settled interval: the task's
+// clock moves only with a real change to it (Today's route re-times a stop as
+// the minute turns, a real edit stamped by design), and with no change to
+// any task the server's root timestamp, moved by every full save, stays put.
+async function expectQuiet(request, uid, uuid, ms = 5000) {
+  const content = ({ lastUpdated: _clock, ...rest }) => JSON.stringify(rest);
+  const before = await readServer(request, uid);
+  await new Promise(r => setTimeout(r, ms));
+  const after = await readServer(request, uid);
+  const was = before.tasks.find(t => t.uuid === uuid);
+  const now = after.tasks.find(t => t.uuid === uuid);
+  if (now.lastUpdated !== was.lastUpdated) expect(content(now)).not.toBe(content(was));
+  const same = before.tasks.length === after.tasks.length && before.tasks.every((t, i) => content(t) === content(after.tasks[i]));
+  if (same) expect(after.timestamp).toBe(before.timestamp);
+  return now.lastUpdated;
+}
+
+test("#677: removing a task's last step lands once, then stays quiet; the other device adds one back", async ({ clients }) => {
+  const a = await clients.open();
+  const b = await clients.open(a.email, { phone: true });
+  await row(a.page, "Sort sample notes").locator(".task-title-text").click();
+  const sheet = a.page.getByTestId("task-detail");
+  await sheet.getByRole("button", { name: "Remove step Open the sample folder" }).click();
+  await sheet.getByRole("button", { name: "Close", exact: true }).click();
+  // RTDB holds no steps at all, not an empty list.
+  await expect.poll(async () => {
+    const t = await serverTask(clients.request, a.uid, "seed-a");
+    return t.concreteStep === undefined && t.subSteps === undefined;
+  }).toBe(true);
+  const clock = (await serverTask(clients.request, a.uid, "seed-a")).lastUpdated;
+  await expect.poll(async () => (await cacheRecord(a, "seed-a")).local?.lastUpdated).toBe(clock);
+  await expect.poll(async () => (await cacheRecord(b, "seed-a")).local?.lastUpdated).toBe(clock);
+  await expectQuiet(clients.request, a.uid, "seed-a");
+
+  // An unrelated save and a reload don't touch it either.
+  await addTask(a.page, "Sample unrelated errand");
+  await expect.poll(async () => (await readServer(clients.request, a.uid)).tasks.some(t => t.title === "Sample unrelated errand")).toBe(true);
+  await a.page.reload();
+  await appReady(a.page);
+  const settled = await expectQuiet(clients.request, a.uid, "seed-a");
+  await expect.poll(async () => (await cacheRecord(a, "seed-a")).local?.lastUpdated).toBe(settled);
+
+  // A step added back on the phone reaches the laptop.
+  await row(b.page, "Sort sample notes").locator(".task-title-text").click();
+  const phoneSheet = b.page.getByTestId("task-detail");
+  await phoneSheet.getByLabel("Add a step").fill("Sample step back");
+  await phoneSheet.getByLabel("Add a step").press("Enter");
+  await expect.poll(async () => (await serverTask(clients.request, a.uid, "seed-a")).subSteps?.map(s => s.text)).toEqual(["Sample step back"]);
+  await expect.poll(async () => (await cacheRecord(a, "seed-a")).local?.subSteps?.map(s => s.text)).toEqual(["Sample step back"]);
+});
+
+// The state the owner's laptop was in: its cached copy of a task holds
+// subSteps: [] and an older clock, its base and the server the newer copy
+// without steps. Both ways the first delivery can go (useSync onValue): the
+// cache's root timestamp older than the server's (the delivery is merged) or
+// newer (this device's copy is written back first).
+for (const rootNewer of [false, true]) {
+  test(`#677: a device stuck on an empty list the server dropped heals and stays quiet (cache root ${rootNewer ? "newer" : "older"})`, async ({ clients }) => {
+    const a = await clients.open();
+    const T = Date.now() - 10_000;
+    const X = {
+      id: 9001, uuid: "stuck-x", title: "Sample stuck task", userId: a.email, horizonLevel: "week", priority: "P3",
+      category: "Personal", isCompleted: false, isDeleted: false, isParked: false, isNowFocus: false, orderIndex: 6, lastUpdated: T,
+    };
+    const patched = await clients.request.patch(databaseUrl(`sync/${a.uid}`), {
+      headers: { Authorization: "Bearer owner" }, // Emulator-only administrative credential.
+      data: { "tasks/2": X, timestamp: Date.now() },
+    });
+    expect(patched.ok()).toBe(true);
+    await expect.poll(async () => (await cacheRecord(a, "stuck-x")).base?.lastUpdated).toBe(T);
+    await a.page.addInitScript(([u, newer]) => {
+      if (sessionStorage.getItem("stuck-677")) return;
+      sessionStorage.setItem("stuck-677", "1");
+      const key = `loci_payload_v1_${u}`;
+      const rec = JSON.parse(localStorage.getItem(key));
+      rec.payload.tasks = rec.payload.tasks.map(t => (t.uuid === "stuck-x" ? { ...t, subSteps: [], lastUpdated: t.lastUpdated - 3000 } : t));
+      if (newer) rec.payload.timestamp = Date.now() + 60_000;
+      localStorage.setItem(key, JSON.stringify(rec));
+    }, [a.uid, rootNewer]);
+    await a.page.reload();
+    await appReady(a.page);
+    await expect.poll(async () => (await cacheRecord(a, "stuck-x")).local?.lastUpdated).toBe(T);
+    expect((await cacheRecord(a, "stuck-x")).base.lastUpdated).toBe(T);
+    expect((await serverTask(clients.request, a.uid, "stuck-x")).lastUpdated).toBe(T);
+    // Not on Today's route: nothing may move it at all.
+    expect(await expectQuiet(clients.request, a.uid, "stuck-x")).toBe(T);
+  });
+}

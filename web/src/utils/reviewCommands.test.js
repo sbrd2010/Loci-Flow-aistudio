@@ -93,6 +93,16 @@ describe("done", () => {
     const cmd = doneCommand({ ...review(s), tasks: [shownCopy] }, {}, MON, 100, "op-1");
     expect(decideReviewCommand(normalizePayload(s), cmd).action).toBe("write");
   });
+  // #677: RTDB drops an empty list, so the dialog's copy can hold
+  // subSteps: [] where the server has none. That is not a change; a step
+  // added or removed is.
+  it("an empty list the server dropped is not a change; a step added is", () => {
+    const s = detected();
+    const shownWithEmpty = { ...review(s), tasks: review(s).tasks.map(t => (t.uuid === "a" ? { ...t, subSteps: [] } : t)) };
+    expect(decideReviewCommand(s, doneCommand(shownWithEmpty, {}, MON, 100, "op-1")).action).toBe("write");
+    const stepped = { ...s, tasks: s.tasks.map(t => (t.uuid === "a" ? { ...t, subSteps: [{ id: "s1", text: "Sample step", done: false }] } : t)) };
+    expect(decideReviewCommand(stepped, doneCommand(shownWithEmpty, {}, MON, 100, "op-1")).reason).toBe("tasks-changed");
+  });
   it("tasks without lastUpdated (older data) still compare", () => {
     const s = write(server({ tasks: [task("a", { lastUpdated: undefined })] }), { kind: "detect", day: MON, now: 50 });
     expect(decideReviewCommand(s, done(s)).action).toBe("write");
@@ -123,6 +133,13 @@ describe("undo", () => {
     const { after, undo } = setup({ a: "today" });
     const renamed = { ...after, tasks: after.tasks.map(t => (t.uuid === "a" ? { ...t, title: "Renamed elsewhere" } : t)) };
     expect(decideReviewCommand(renamed, undo)).toEqual({ action: "conflict", reason: "changed-since" });
+  });
+  it("#677: an empty list the server dropped doesn't stop it; a step added since does", () => {
+    const { after, undo } = setup({ a: "today" });
+    const withEmpty = { ...undo, after: { a: { ...undo.after.a, subSteps: [] } } };
+    expect(decideReviewCommand(after, withEmpty).action).toBe("write");
+    const stepped = { ...after, tasks: after.tasks.map(t => (t.uuid === "a" ? { ...t, subSteps: [{ id: "s1", text: "Sample step", done: false }] } : t)) };
+    expect(decideReviewCommand(stepped, withEmpty)).toEqual({ action: "conflict", reason: "changed-since" });
   });
   it("conflicts when another Done or a newer period came after", () => {
     const { after, undo } = setup({ a: "today" });

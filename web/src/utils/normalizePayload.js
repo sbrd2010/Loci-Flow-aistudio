@@ -315,22 +315,44 @@ function mergeTasks(remoteTasks, localTasks, baseTasks) {
 // Structural equality for config values. Config holds primitives plus arrays
 // (dailyAnchors, focusWindows) and plain objects (coachMemory), all produced by
 // this app, so a recursive walk is enough — no Date/Map/Set/cycle handling needed.
-// null and undefined compare equal on purpose: RTDB drops keys written as null,
-// so the same logical "unset" arrives as `undefined` from the server but may sit
-// as `null` in a local object, and treating that round-trip as a change would
-// make every device look like it had edited the field.
+// Values compare as RTDB stores them (#677). RTDB drops null, and it never
+// stores an empty array or object either — nor a container holding only such
+// values — so all of those arrive as `undefined` from the server while the
+// local copy may still hold `null`, `[]` or `{ list: [] }`. Treating that
+// round-trip as a change made a device see an edit the server could never
+// take: every save re-stamped the task (mergeTasksForWrite) and the device
+// kept its stale copy (mergeTasks), e.g. a task whose last step was removed
+// (subSteps: []). So a value with nothing stored in it is absent, at any
+// depth. false, 0 and "" are values. Non-empty arrays keep their length and
+// order, compared index by index (every() would skip a hole one way round
+// only); converting between arrays and numeric-key maps is out of scope.
 // Config keys only their own commands write (#643: useSync runReviewCommand).
 // Every merge and overlay keeps the server's value for them, so a device's
 // stale copy is never written back over a newer one.
 export const COMMAND_OWNED_CONFIG_KEYS = new Set(["horizonReviews"]);
 
+// Nothing RTDB would store: null/undefined, or a container of only such values.
+function isAbsentValue(v) {
+  if (v == null) return true;
+  if (typeof v !== "object") return false;
+  if (Array.isArray(v)) {
+    for (let i = 0; i < v.length; i++) if (!isAbsentValue(v[i])) return false;
+    return true;
+  }
+  return Object.keys(v).every(key => isAbsentValue(v[key]));
+}
+
 export function configValuesEqual(a, b) {
   if (a === b) return true;
-  if (a == null || b == null) return a == null && b == null;
+  const absentA = isAbsentValue(a);
+  const absentB = isAbsentValue(b);
+  if (absentA || absentB) return absentA && absentB;
   if (typeof a !== "object" || typeof b !== "object") return false;
   if (Array.isArray(a) !== Array.isArray(b)) return false;
   if (Array.isArray(a)) {
-    return a.length === b.length && a.every((item, i) => configValuesEqual(item, b[i]));
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (!configValuesEqual(a[i], b[i])) return false;
+    return true;
   }
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
   for (const key of keys) {
