@@ -185,7 +185,18 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
   // Enter or ⌘↵) while the notification prompt is open is ignored; cleared
   // on unmount, so closing the dialog during the prompt cancels the add.
   const submitRef = useRef(null);
-  useEffect(() => () => { submitRef.current = null; }, []);
+  const closeTimerRef = useRef(null);
+  useEffect(() => () => {
+    submitRef.current = null;
+    // The "Added" hold must not close a dialog opened after this one.
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+  }, []);
+  // Closing cancels a submit still waiting for the prompt, at once rather
+  // than at unmount. An add already accepted is queued and unaffected.
+  const close = () => {
+    submitRef.current = null;
+    onClose();
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -273,7 +284,7 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
       return;
     }
     setSaved(true);
-    setTimeout(onClose, 900);
+    closeTimerRef.current = setTimeout(onClose, 900);
   };
 
   // Where + was tapped sets the horizon (45a); since 79 the Horizon pill
@@ -314,7 +325,7 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
     setPicker(null);
   };
   const onKeyDown = (e) => {
-    if (e.key === "Escape") { e.stopPropagation(); onClose(); return; }
+    if (e.key === "Escape") { e.stopPropagation(); close(); return; }
     // 79: T puts you back in the writing box, as in Mind Box.
     const typing = e.target.closest?.("input, textarea, select, [contenteditable='true']");
     if (mode === "task" && !typing && (e.key === "t" || e.key === "T") && !e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -347,6 +358,8 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
   };
   const thoughtRef = useRef(null);
   const switchMode = (next) => {
+    // A task submit waiting for the prompt stays a task (#680).
+    if (submitRef.current) return;
     // A task title is one plain line.
     if (next === "task" && mode === "thought") setTitle(t => plainThought(t));
     // A task title is plain text: a typed foo__bar__ stays as typed.
@@ -361,7 +374,7 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
   const heading = mode === "thought" ? "New thought" : "New task";
 
   return (
-    <div className="add-overlay is-add-sheet" onClick={onClose}>
+    <div className="add-overlay is-add-sheet" onClick={close}>
       <div
         ref={cardRef}
         className={`add-card is-add-sheet${mode === "thought" ? " is-thought" : ""}`}
@@ -382,7 +395,7 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
               ))}
             </div>
           )}
-          <button type="button" className="add-close" onClick={onClose} aria-label="Close"><IconX size={20} /></button>
+          <button type="button" className="add-close" onClick={close} aria-label="Close"><IconX size={20} /></button>
         </div>
 
         {mode === "thought" ? (

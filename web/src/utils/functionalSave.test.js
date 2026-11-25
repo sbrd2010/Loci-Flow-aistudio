@@ -62,6 +62,30 @@ describe("resolveFunctionalSave: the updater's result (#680)", () => {
       expect(resolveFunctionalSave({ update: () => result, live: live(), owner: owner() }).outcome).toBe("refused:invalid");
     });
   }
+  // Review of #681: a known collection replaced by the wrong type, or a live
+  // field set to undefined, would be turned into an empty list by
+  // normalisation and read by the merges as a deletion.
+  for (const [name, result] of [
+    ["brainDump set to null", p => ({ ...p, brainDump: null })],
+    ["contributions as an object", p => ({ ...p, contributions: {} })],
+    ["chatHistory as a string", p => ({ ...p, chatHistory: "x" })],
+    ["a live field set to undefined", p => ({ ...p, userId: undefined })],
+    ["a plain object with a then method", p => ({ ...p, then() {} })],
+  ]) {
+    it(`refuses a malformed replacement: ${name}`, () => {
+      const current = { ...live(), chatHistory: [{ text: "Sample", isUser: true }] };
+      expect(resolveFunctionalSave({ update: result, live: current, owner: owner() }).outcome).toBe("refused:invalid");
+    });
+  }
+  it("accepts legitimate shapes: emptied lists, a field the live payload lacks, a new field", () => {
+    const emptied = resolveFunctionalSave({ update: p => ({ ...p, brainDump: [], contributions: [] }), live: live(), owner: owner() });
+    expect(emptied.outcome).toBe("applied");
+    // live() has no chatHistory: the result may leave it out or add one.
+    expect(resolveFunctionalSave({ update: p => ({ ...p }), live: live(), owner: owner() }).outcome).toBe("applied");
+    expect(resolveFunctionalSave({ update: p => ({ ...p, chatHistory: [] }), live: live(), owner: owner() }).outcome).toBe("applied");
+    // A conversation cleared to null (CoachTab clearConversation) stays saveable.
+    expect(resolveFunctionalSave({ update: p => ({ ...p }), live: { ...live(), chatHistory: null }, owner: owner() }).outcome).toBe("applied");
+  });
   it("refuses a result that drops a top-level key the live payload has", () => {
     const { brainDump: _dropped, ...rest } = live();
     expect(resolveFunctionalSave({ update: () => rest, live: live(), owner: owner() }).outcome).toBe("refused:invalid");

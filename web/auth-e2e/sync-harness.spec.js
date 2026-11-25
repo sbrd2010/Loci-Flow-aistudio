@@ -106,3 +106,54 @@ test("#680 harness: a save function from before signing out (same account after)
   await expect.poll(() => serverUuids(clients, a)).toEqual(expect.arrayContaining(["h8"]));
   expect(await serverUuids(clients, a)).not.toContain("h7");
 });
+
+test("#680 harness: a named removal the drop guard would block is applied with expectedRemovals, refused without", async ({ clients }) => {
+  const a = await openHarness(clients);
+  await a.page.evaluate(nine => window.__h.api.savePayload(p => ({ ...p, tasks: [...p.tasks, nine] })), task("h9", "Harness nine"));
+  const r = await a.page.evaluate(() => {
+    const { api } = window.__h;
+    const gone = ["seed-a", "seed-b", "h9"];
+    const drop = p => ({ ...p, tasks: p.tasks.map(t => (gone.includes(t.uuid) ? { ...t, isDeleted: true, lastUpdated: Date.now() } : t)) });
+    return { without: api.savePayload(drop), withNamed: api.savePayload(drop, { expectedRemovals: gone }) };
+  });
+  expect(r).toEqual({ without: "refused:drop-guard", withNamed: "applied" });
+  await expect.poll(async () => (await readServer(clients.request, a.uid)).tasks.filter(t => !t.isDeleted).length).toBe(0);
+});
+
+test("#680 harness: an observer that throws is told once and the write still lands", async ({ clients }) => {
+  const a = await openHarness(clients);
+  const r = await a.page.evaluate(ten => {
+    let calls = 0;
+    const outcome = window.__h.api.savePayload(p => ({ ...p, tasks: [...p.tasks, ten] }), { onLocalOutcome: () => { calls += 1; throw new Error("observer"); } });
+    return { outcome, calls };
+  }, task("h10", "Harness ten"));
+  expect(r).toEqual({ outcome: "applied", calls: 1 });
+  await expect.poll(() => serverUuids(clients, a)).toContain("h10");
+});
+
+test("#680 harness: async refusals reject (never throw at the call), and two coalesced saves settle after the server has both", async ({ clients }) => {
+  const a = await openHarness(clients);
+  const r = await a.page.evaluate(async ([eleven, twelve]) => {
+    const { api } = window.__h;
+    let threwSync = false;
+    let invalid;
+    try { invalid = api.savePayloadAsync(() => ({})); } catch { threwSync = true; }
+    const invalidOutcome = await invalid.then(() => "resolved", e => e.outcome);
+    const both = [api.savePayloadAsync(p => ({ ...p, tasks: [...p.tasks, eleven] })), api.savePayloadAsync(p => ({ ...p, tasks: [...p.tasks, twelve] }))];
+    await Promise.all(both);
+    return { threwSync, invalidOutcome };
+  }, [task("h11", "Harness eleven"), task("h12", "Harness twelve")]);
+  expect(r).toEqual({ threwSync: false, invalidOutcome: "refused:invalid" });
+  expect(await serverUuids(clients, a)).toEqual(expect.arrayContaining(["h11", "h12"])); // already there when both resolved
+});
+
+test("#680 harness: a no-op or refusal while a write is pending does not delay it (no debounce reset)", async ({ clients }) => {
+  const a = await openHarness(clients);
+  const started = Date.now();
+  await a.page.evaluate(t13 => window.__h.api.savePayload(p => ({ ...p, tasks: [...p.tasks, t13] })), task("h13", "Harness thirteen"));
+  await a.page.waitForTimeout(1000);
+  await a.page.evaluate(() => { const { api } = window.__h; api.savePayload(() => null); api.savePayload(() => ({})); api.savePayload(() => { throw new Error("x"); }); });
+  await expect.poll(() => serverUuids(clients, a), { intervals: [100] }).toContain("h13");
+  // The debounce is 1.5 s from the first save; a reset by the no-op at +1 s would push it past 2.5 s.
+  expect(Date.now() - started).toBeLessThan(2400);
+});

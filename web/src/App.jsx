@@ -54,8 +54,7 @@ import { doneCommand, undoCommand } from "./utils/reviewCommands";
 import { confirmBeforeSignOut, safeErrorCode } from "./utils/signOutFlush";
 import SignOutReason from "./components/SignOutReason";
 import { safeUUID } from "./utils/uuid";
-import { endLeftReviewMarks } from "./utils/normalizePayload";
-import { resolveFunctionalSave } from "./utils/functionalSave";
+import { createDemoStore } from "./utils/demoStore";
 import CloseTheDay from "./components/CloseTheDay";
 import { applyClose, closeLineDue, isDayClosed, leftovers, pinFirstThing, reopenDay, undoClose } from "./utils/closeDay";
 import { makeOneThing } from "./utils/oneThing";
@@ -149,22 +148,19 @@ export default function App() {
   // task estimate and the "day_map" source.
   const pendingFocusOptionsRef = useRef(null);
 
-  // #680: the demo's live payload, authoritative. Every demo write reads and
-  // replaces it synchronously, then publishes it to React once, so a
-  // functional save resolves against the latest copy and reports its real
-  // outcome (applied / noop / refused), as useSync does. The token moves on
-  // every enter and exit, so a demo callback from an earlier visit is refused.
-  const demoLiveRef = useRef(null);
-  const demoSessionRef = useRef(0);
-  const demoSessionToken = demoSessionRef.current;
-  const publishDemo = (next) => { demoLiveRef.current = next; setDemoPayload(next); };
+  // #680: the demo's saves (utils/demoStore): one authoritative live demo
+  // payload behind every demo write, with useSync's contract and truthful
+  // outcomes. Each render's demo save functions carry that render's session.
+  const demoStoreRef = useRef(null);
+  if (!demoStoreRef.current) demoStoreRef.current = createDemoStore(setDemoPayload);
+  const demoStore = demoStoreRef.current;
+  const demoSessionToken = demoStore.state.session;
 
   const enterDemo = () => {
     // Each demo is a fresh visit: no guide left over from an earlier one
     // (loopcheck of #654).
     saveGuide("demo", null);
-    demoSessionRef.current += 1;
-    publishDemo(createDemoPayload());
+    demoStore.enter(createDemoPayload());
     setDemoMode(true);
     setActiveTab("today");
     track("demo_start");
@@ -177,54 +173,15 @@ export default function App() {
     // device can still surface demo task titles as notifications.
     cancelAllNativeScheduling();
     saveGuide("demo", null);
-    demoSessionRef.current += 1;
     setDemoMode(false);
-    publishDemo(null);
+    demoStore.exit();
     setActiveTab("today");
   };
 
-  // Same contract as useSync's savePayload: an object, or (#680) a function
-  // of the live demo payload (null: nothing to save); returns the outcome and
-  // tells options.onLocalOutcome.
-  const saveDemoPayload = (update, options) => {
-    let updated = update;
-    let outcome = "applied";
-    if (typeof update === "function") {
-      const resolved = resolveFunctionalSave({
-        update,
-        live: demoLiveRef.current,
-        owner: { uid: "demo", currentUid: demoLiveRef.current ? "demo" : null, payloadUid: "demo", session: demoSessionToken, currentSession: demoSessionRef.current },
-      });
-      if (resolved.error) console.error("[Loci demo] functional save threw; nothing was saved:", resolved.error);
-      outcome = resolved.outcome;
-      updated = resolved.next;
-    }
-    if (outcome === "applied") {
-      // Demo saves skip normalizePayload; the review mark's rule still holds (Q48.1).
-      publishDemo({ ...updated, ...(Array.isArray(updated.tasks) ? { tasks: endLeftReviewMarks(updated.tasks) } : {}), timestamp: Date.now() });
-    }
-    if (typeof options?.onLocalOutcome === "function") {
-      try { options.onLocalOutcome(outcome); } catch (err) { console.error("[Loci demo] onLocalOutcome observer threw:", err); }
-    }
-    return outcome;
-  };
-
-  const saveDemoSubPath = (subPath, value) => {
-    const prev = demoLiveRef.current;
-    if (prev) publishDemo({ ...prev, [subPath]: value, timestamp: Date.now() });
-  };
-
-  const saveDemoSubPaths = (patch) => {
-    const prev = demoLiveRef.current;
-    if (prev) publishDemo({ ...prev, ...patch, timestamp: Date.now() });
-  };
-
-  const saveDemoConfigPatch = (patch) => {
-    const prev = demoLiveRef.current;
-    if (!prev) return;
-    const resolvedPatch = typeof patch === "function" ? patch(prev.config || {}) : patch;
-    publishDemo({ ...prev, config: { ...prev.config, ...resolvedPatch, lastUpdated: Date.now() }, timestamp: Date.now() });
-  };
+  const saveDemoPayload = (update, options) => demoStore.save(update, options, demoSessionToken);
+  const saveDemoSubPath = (subPath, value) => demoStore.saveSubPath(subPath, value);
+  const saveDemoSubPaths = (patch) => demoStore.saveSubPaths(patch);
+  const saveDemoConfigPatch = (patch) => demoStore.saveConfigPatch(patch);
 
   // Async counterparts of the demo save functions above — Demo Mode never
   // touches Firebase, so these just apply the same local state update and
@@ -628,8 +585,8 @@ export default function App() {
       }
     });
     return unsubscribe;
-    // exitDemo only touches refs and state setters (#680's demo live ref
-    // included), so the copy from this render is safe to call later.
+    // exitDemo only touches refs, state setters and the demo store (#680),
+    // so the copy from this render is safe to call later.
   }, [demoMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track session duration when the user closes or navigates away
