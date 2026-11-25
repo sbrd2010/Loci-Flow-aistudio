@@ -2,17 +2,22 @@ import { test, expect, addTask, appReady, cachedTasks, currentUid, databaseUrl, 
 
 test("a new Google-emulator account completes onboarding and keeps it after refresh", async ({ clients }) => {
   const a = await clients.open("alpha-new@example.test", { onboarding: true });
-  await a.page.getByLabel("What should Loci call you?").fill("Sample Alex");
-  for (let step = 0; step < 3; step++) await a.page.getByRole("button", { name: "Continue", exact: true }).click();
-  await a.page.getByRole("button", { name: "Skip tour, start now", exact: true }).click();
+  // #653's welcome: name, one optional question, then the first-task guide (skipped here).
+  await a.page.getByLabel("What should we call you? (optional)").fill("Sample Alex");
+  await a.page.getByRole("button", { name: "Let’s begin", exact: true }).click();
+  await a.page.getByRole("button", { name: "Help me just start", exact: true }).click();
+  await a.page.getByRole("button", { name: "Continue", exact: true }).click();
+  await a.page.getByRole("button", { name: "Skip guide", exact: true }).click();
   await appReady(a.page);
   await expect.poll(async () => (await readServer(clients.request, a.uid)).config.isOnboardingCompleted).toBe(true);
   await a.page.reload();
   await appReady(a.page);
   expect(await currentUid(a.page)).toBe(a.uid);
   const fresh = await clients.fresh(a.email);
-  await expect(fresh.page.getByRole("heading", { name: "Welcome to Loci Focus" })).toHaveCount(0);
-  expect((await readServer(clients.request, a.uid)).config.userName).toBe("Sample Alex");
+  await expect(fresh.page.getByRole("heading", { name: "A calmer way to get things done." })).toHaveCount(0);
+  const config = (await readServer(clients.request, a.uid)).config;
+  expect(config.userName).toBe("Sample Alex");
+  expect(config.challengeType).toBe("initiation");
 });
 
 test("Google popup, saved task, refresh, and fresh-client persistence", async ({ clients }) => {
