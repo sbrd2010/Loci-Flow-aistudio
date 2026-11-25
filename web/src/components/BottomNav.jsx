@@ -23,6 +23,7 @@ export default function BottomNav({ activeTab, onTabSelect }) {
             key={id}
             type="button"
             className={`tab-bar-item${isActive ? " is-active" : ""}`}
+            data-guide-id={`nav-${id}`}
             onClick={() => onTabSelect(id)}
             aria-current={isActive ? "page" : undefined}
           >

@@ -63,7 +63,7 @@ function shortDeadline(dateStr) {
   return new Date(y, m - 1, d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-export default function SettingsTab({ initialPage = null, payload, savePayload, savePayloadAsync, uid, writeActivityEvents, saveSubPath, saveConfigPatch, lastSyncedAt, onSignOut, signOutState = null, signOutReason = null, onDeleteAllData, onLeaveDeletedAccount, theme, onThemeChange, email, flushNow }) {
+export default function SettingsTab({ initialPage = null, payload, savePayload, savePayloadAsync, uid, writeActivityEvents, saveSubPath, saveConfigPatch, lastSyncedAt, onReplayTour, onSignOut, signOutState = null, signOutReason = null, onDeleteAllData, onLeaveDeletedAccount, theme, onThemeChange, email, flushNow }) {
   const config = payload.config || {};
   const lociDay = getLociDayStr(new Date(), getFocusWindows(config));
   const [editHorizons, setEditHorizons] = useState(false);
@@ -183,6 +183,7 @@ export default function SettingsTab({ initialPage = null, payload, savePayload, 
   );
   const supportRows = (
     <>
+      {onReplayTour && <Row title="Replay the tour" sub="A 90-second look around Loci" onClick={onReplayTour} />}
       <Row title="Report a bug" external onClick={() => setShowBug(true)} />
       <Row title="Privacy policy" external onClick={() => setShowPrivacy(true)} />
     </>

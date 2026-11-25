@@ -113,6 +113,7 @@ function StartButton({ task, blockMinutes, startChoice, onChooseStart, onStartFo
       <button
         type="button"
         className="wall-primary"
+        data-guide-id="start"
         onClick={onStartFocus}
         onKeyDown={resuming ? undefined : (e) => { if (e.key === "ArrowDown") { e.preventDefault(); setOpen(true); } }}
       >
@@ -270,6 +271,7 @@ function AnchorLine({ anchors }) {
 
 export default function TodayWall({
   task,
+  onShowHowToStart = null,
   goal = null,
   onOpenGoal = null,
   goalRecord = null,
@@ -417,12 +419,12 @@ export default function TodayWall({
             {links}
           </div>
         ) : picks.length > 0 ? (
-          <div className="wall-empty wall-pick">
+          <div className="wall-empty wall-pick" data-guide-id="pick">
             <h2 className="wall-empty-title">Pick what to do now</h2>
             <ul className="wall-pick-list">
               {picks.map(t => (
                 <li key={t.uuid}>
-                  <button type="button" className={`wall-pick-row${t.why ? " is-loci-pick" : ""}`} onClick={() => onPick?.(t)}>
+                  <button type="button" className={`wall-pick-row${t.why ? " is-loci-pick" : ""}`} data-task-uuid={t.uuid} onClick={() => onPick?.(t)}>
                     <span className="wall-pick-body">
                       {t.why && <span className="wall-pick-label">Loci’s pick</span>}
                       <span className="wall-pick-title">{t.title}</span>
@@ -456,6 +458,10 @@ export default function TodayWall({
                 {onAddTask && (
                   <button type="button" className="wall-empty-add" onClick={onAddTask}>Add a task</button>
                 )}
+                {/* #653: the guided first task, again, for anyone who skipped it. */}
+                {onShowHowToStart && (
+                  <button type="button" className="wall-empty-howto" onClick={onShowHowToStart}>Show me how to start</button>
+                )}
                 {weekCount > 0 && onFromWeek && (
                   <button type="button" className="wall-link wall-empty-week" onClick={onFromWeek}>
                     From This week · {weekCount}
@@ -484,7 +490,7 @@ export default function TodayWall({
     <section className={`today-wall${peekOpen ? " is-open" : ""}${quiet ? " has-quiet" : ""}`}>
       {top}
 
-      <div className="wall-hero">
+      <div className="wall-hero" data-guide-id="now">
         {/* 75a, 75c: the mantra, above the kicker. */}
         <p className="wall-mantra" data-flip="mantra">ONE task at a time.</p>
         <div className="wall-kicker-row" data-flip="kicker">
@@ -633,6 +639,7 @@ export default function TodayWall({
           <button
             type="button"
             className="wall-peek"
+            data-guide-id="upnext"
             onClick={onTogglePeek}
             aria-expanded={peekOpen}
           >
