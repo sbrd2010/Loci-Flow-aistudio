@@ -48,6 +48,8 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
   const [concreteStep, setConcreteStep] = useState("");
   const [horizonLevel, setHorizonLevel] = useState(defaultHorizon || "today");
   const [saved, setSaved] = useState(false);
+  // #680: the notification prompt is open for this submit (see handleSubmit).
+  const [waitingPermission, setWaitingPermission] = useState(false);
   const [priority, setPriority] = useState("P3");
   const [category, setCategory] = useState("Personal");
   // "" means no front. Stored as null, never "", so the field is absent rather
@@ -229,11 +231,14 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
 
     const op = {};
     submitRef.current = op;
+    let accepted = false;
+    try {
     // Request notification permission if a reminder is set. The prompt can
     // stay open for as long as the person likes: everything below is decided
     // after it, against the live payload (#680).
     if (reminderAt && notifPermissionState() === "default") {
-      await nativeRequestPermission();
+      setWaitingPermission(true);
+      try { await nativeRequestPermission(); } finally { setWaitingPermission(false); }
       if (submitRef.current !== op) return; // closed meanwhile
     }
     const now = Date.now();
@@ -279,12 +284,17 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
       .catch(() => {});
 
     if (outcome !== "applied") {
-      submitRef.current = null;
       setFormError(outcome === "noop" ? EVENING_GUARD_MESSAGE : "Couldn't add this task. Try again.");
       return;
     }
+    accepted = true;
     setSaved(true);
     closeTimerRef.current = setTimeout(onClose, 900);
+    } finally {
+      // Anything short of an accepted add (a refusal, an unexpected throw)
+      // frees Add again, unless the dialog was closed meanwhile.
+      if (!accepted && submitRef.current === op) submitRef.current = null;
+    }
   };
 
   // Where + was tapped sets the horizon (45a); since 79 the Horizon pill
@@ -374,7 +384,7 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
   const heading = mode === "thought" ? "New thought" : "New task";
 
   return (
-    <div className="add-overlay is-add-sheet" onClick={close}>
+    <div className="add-overlay is-add-sheet" onClick={waitingPermission ? undefined : close}>
       <div
         ref={cardRef}
         className={`add-card is-add-sheet${mode === "thought" ? " is-thought" : ""}`}
@@ -455,6 +465,10 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
                 <span className="add-foot-gap" />
                 {saved ? (
                   <p className="add-saved" role="status">{`Added to ${horizonName}`}</p>
+                ) : waitingPermission ? (
+                  // A click on the page to dismiss the browser's prompt must
+                  // not close the sheet (the backdrop is inert meanwhile).
+                  <p className="add-saved" role="status">Waiting for notification permission…</p>
                 ) : (
                   <>
                     <kbd className="add-kbd" aria-hidden="true">⌘↵</kbd>

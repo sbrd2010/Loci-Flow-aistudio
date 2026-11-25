@@ -55,6 +55,7 @@ test("demo: Add task waits for the permission prompt, then adds the task and say
   await page.evaluate(() => window.__releasePermission("granted"));
   await expect(dialog.getByRole("status").filter({ hasText: "Added to Today" })).toBeVisible();
   await expect(page.getByTestId("today-tasks-list").getByText("Sample demo reminder task")).toBeVisible();
+  await expect(page.getByTestId("today-tasks-list").getByTestId("task-row").filter({ hasText: "Sample demo reminder task" })).toContainText("Reminder");
   await expect(page.getByTestId("today-tasks-list").getByText("Sample existing task")).toBeVisible();
 });
 
@@ -67,4 +68,37 @@ test("demo: if the Evening Guard starts while the prompt waits, nothing is added
   await expect(dialog.getByRole("status").filter({ hasText: "Added to Today" })).toHaveCount(0);
   await expect(dialog.getByTestId("add-task-title")).toHaveValue("Sample late demo task");
   await expect(page.getByTestId("today-tasks-list").getByText("Sample late demo task")).toHaveCount(0);
+});
+
+// Moved here from the signed-in spec (loopcheck of #681): the clock is fixed,
+// so the reminder passes during the prompt without a real two-minute wait.
+test("demo: a reminder time that passes while the prompt waits: the task is added without it", async ({ page }) => {
+  await setup(page, { at: new Date("2024-06-15T10:00:00") });
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.keyboard.press("n");
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await dialog.getByTestId("add-task-title").fill("Sample passing reminder task");
+  await dialog.getByRole("button", { name: "More details" }).click();
+  await dialog.getByRole("button", { name: "Set a reminder" }).click();
+  const typed = dialog.getByLabel("Reminder time, typed");
+  await typed.fill("1005");
+  await typed.press("Enter");
+  await dialog.getByTestId("add-task-submit").click();
+  await expect.poll(() => page.evaluate(() => window.__permissionAsks)).toBe(2);
+  await expect(dialog.getByRole("status").filter({ hasText: "Waiting for notification permission" })).toBeVisible();
+  await page.clock.setFixedTime(new Date("2024-06-15T10:06:00"));
+  await page.evaluate(() => window.__releasePermission("granted"));
+  await expect(dialog.getByRole("status").filter({ hasText: "Added to Today" })).toBeVisible();
+  const row = page.getByTestId("today-tasks-list").getByTestId("task-row").filter({ hasText: "Sample passing reminder task" });
+  await expect(row).toBeVisible();
+  await expect(row).not.toContainText("Reminder");
+});
+
+test("demo: while the prompt waits, a click on the page behind does not close Add task", async ({ page }) => {
+  await setup(page, { at: new Date("2024-06-15T10:00:00") });
+  const dialog = await addWithReminderAndHold(page, "Sample backdrop task");
+  await page.mouse.click(5, 5); // the dimmed backdrop, where a click also dismisses the browser's prompt
+  await expect(dialog).toBeVisible();
+  await page.evaluate(() => window.__releasePermission("granted"));
+  await expect(dialog.getByRole("status").filter({ hasText: "Added to Today" })).toBeVisible();
 });
