@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { ref, onValue, set, update, runTransaction, get, goOffline, goOnline } from "firebase/database";
 import { db } from "./firebase";
 import { safeUUID } from "./utils/uuid";
+import { resolveFunctionalSave } from "./utils/functionalSave";
 import { normalizePayload, mergeRemotePayloadWithMeta, prepareBrainDumpForSave, isTaskCountDropSuspicious, configValuesEqual, mergeLocalIntoServer, clampConfigStringsForRules, sanitizeChatHistoryForRules, applyEditsSince, COMMAND_OWNED_CONFIG_KEYS } from "./utils/normalizePayload";
 import { runReviewTransaction, whenConnected } from "./utils/reviewCommands";
 import { flushOutcome, safeErrorCode, unknownRootKeyCount } from "./utils/signOutFlush";
@@ -310,6 +311,15 @@ export function useSync(uid, email) {
   // an earlier render (before an account switch) can tell it is stale.
   const uidRef = useRef(uid);
   uidRef.current = uid;
+  // #680: one token per observed owner session. It moves whenever the uid
+  // differs from the one it was set for (A → signed out → A gives two new
+  // tokens), and each render's save functions carry the value of their
+  // render, so a functional save created before a sign-out cannot apply
+  // after the same account signs in again. Idempotent per uid, so a
+  // StrictMode double render does not move it twice.
+  const sessionRef = useRef({ uid: undefined, token: 0 });
+  if (sessionRef.current.uid !== uid) sessionRef.current = { uid, token: sessionRef.current.token + 1 };
+  const sessionToken = sessionRef.current.token;
   const localEditSeqRef = useRef(0);
   // Counts adopted deliveries. A write captures it when it starts; if it has
   // moved by the time the write's promise resolves, a newer delivery was
@@ -811,14 +821,33 @@ export function useSync(uid, email) {
   // state/cache exactly as before. Returns { blocked: true } if the
   // drop-guard rejected the write (nothing was applied), otherwise
   // { blocked: false, nextPayload }.
-  const applyPayloadLocally = (updatedPayload, { expectedRemovals = [] } = {}) => {
+  const applyPayloadLocally = (update, { expectedRemovals = [] } = {}) => {
+    // #680: the function form is decided against the live payload, now, and
+    // only for this render's account and session (utils/functionalSave). Its
+    // no-op and refusals touch nothing: no clock, payload, cache, base,
+    // first-delivery flag, waiter or debounce.
+    const functional = typeof update === "function";
+    let updatedPayload = update;
+    if (functional) {
+      const resolved = resolveFunctionalSave({
+        update,
+        live: payloadRef.current,
+        owner: { uid, currentUid: uidRef.current, payloadUid: payloadUidRef.current, session: sessionToken, currentSession: sessionRef.current.token },
+      });
+      if (resolved.outcome !== "applied") {
+        if (resolved.error) console.error("[Loci sync] functional save threw; nothing was saved:", resolved.error);
+        return { blocked: true, outcome: resolved.outcome, reason: resolved.outcome === "refused:owner" ? "account-changed" : resolved.outcome };
+      }
+      updatedPayload = resolved.next;
+    }
     // An async caller can outlive its account (e.g. a Coach reply). Its
     // captured save function must not mutate the next account's shared refs.
-    if (!uid || uidRef.current !== uid) return { blocked: true, reason: "account-changed" };
+    if (!uid || uidRef.current !== uid) return { blocked: true, reason: "account-changed", outcome: "refused:owner" };
     // Track if savePayload fires before the first RTDB response — used in onValue
     // to distinguish a fake-fresh timestamp (from a premature mount effect) from a
     // legitimate unsaved edit (app killed before the last debounce flushed).
-    if (!hasReceivedFirstRtdbRef.current) {
+    // The function form sets it only once the save is accepted (below).
+    if (!functional && !hasReceivedFirstRtdbRef.current) {
       localWriteBeforeFirstRtdbRef.current = true;
     }
     const brainDumpPatch = prepareBrainDumpForSave(updatedPayload, payloadRef.current);
@@ -840,9 +869,12 @@ export function useSync(uid, email) {
         `  Missing titles: ${dropped.map(t => t.title || "(untitled)").join(", ")}`
       );
       setSyncWarning("drop-guard");
-      return { blocked: true };
+      return { blocked: true, outcome: "refused:drop-guard" };
     }
 
+    if (functional && !hasReceivedFirstRtdbRef.current) {
+      localWriteBeforeFirstRtdbRef.current = true;
+    }
     localEditSeqRef.current += 1;
     payloadUidRef.current = uid;
     setPayload(nextPayload);
@@ -851,7 +883,17 @@ export function useSync(uid, email) {
     // Keep local cache up-to-date immediately — protects against network loss
     if (uid) writeCache(uid, nextPayload, baseRef.current);
 
-    return { blocked: false, nextPayload };
+    return { blocked: false, outcome: "applied", nextPayload };
+  };
+
+  // `options.onLocalOutcome(outcome)`: told once, synchronously, whether the
+  // save was applied locally ("applied", after its write is queued), was a
+  // deliberate no-op ("noop") or was refused ("refused:owner" /
+  // "refused:threw" / "refused:invalid" / "refused:drop-guard"). An observer
+  // that throws cannot undo or hide an applied save.
+  const notifyLocalOutcome = (options, outcome) => {
+    if (typeof options?.onLocalOutcome !== "function") return;
+    try { options.onLocalOutcome(outcome); } catch (err) { console.error("[Loci sync] onLocalOutcome observer threw:", err); }
   };
 
   // Detaches the current batch of savePayloadAsync waiters so whoever
@@ -943,10 +985,13 @@ export function useSync(uid, email) {
     timeoutRef.current = timer;
   };
 
-  const savePayload = (updatedPayload) => {
-    const result = applyPayloadLocally(updatedPayload);
-    if (result.blocked) return;
-    scheduleFlush();
+  // `update` is the whole next payload, or (#680) a function of the live
+  // payload returning it (null: nothing to save). Returns the local outcome.
+  const savePayload = (update, options) => {
+    const result = applyPayloadLocally(update, options);
+    if (!result.blocked) scheduleFlush();
+    notifyLocalOutcome(options, result.outcome);
+    return result.outcome;
   };
 
   // Same as savePayload, but returns a promise that resolves once the
@@ -954,17 +999,30 @@ export function useSync(uid, email) {
   // the drop-guard blocked it or the write ultimately failed after retries.
   // Never call this AND savePayload for the same logical action — that would
   // duplicate the write. `options.expectedRemovals`: see isTaskCountDropSuspicious.
-  const savePayloadAsync = (updatedPayload, options) => {
-    const result = applyPayloadLocally(updatedPayload, options);
-    if (result.blocked) {
-      return Promise.reject(new Error(result.reason === "account-changed"
-        ? "savePayloadAsync: canceled by uid change"
-        : "savePayloadAsync: write blocked by drop-guard"));
+  // A function's no-op resolves at once with "noop" (no waiter); a refusal
+  // rejects at once with an Error whose `.outcome` names it.
+  const savePayloadAsync = (update, options) => {
+    const result = applyPayloadLocally(update, options);
+    if (result.outcome === "noop") {
+      notifyLocalOutcome(options, "noop");
+      return Promise.resolve("noop");
     }
-    return new Promise((resolve, reject) => {
+    if (result.blocked) {
+      notifyLocalOutcome(options, result.outcome);
+      const err = new Error(result.reason === "account-changed"
+        ? "savePayloadAsync: canceled by uid change"
+        : result.outcome === "refused:drop-guard"
+          ? "savePayloadAsync: write blocked by drop-guard"
+          : `savePayloadAsync: ${result.outcome}`);
+      err.outcome = result.outcome;
+      return Promise.reject(err);
+    }
+    const confirmed = new Promise((resolve, reject) => {
       pendingWriteWaitersRef.current.push({ resolve, reject });
       scheduleFlush();
     });
+    notifyLocalOutcome(options, "applied");
+    return confirmed;
   };
 
   // Sub-path writes bypass normalizePayload, so the rule caps it applies to

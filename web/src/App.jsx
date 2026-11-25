@@ -54,7 +54,7 @@ import { doneCommand, undoCommand } from "./utils/reviewCommands";
 import { confirmBeforeSignOut, safeErrorCode } from "./utils/signOutFlush";
 import SignOutReason from "./components/SignOutReason";
 import { safeUUID } from "./utils/uuid";
-import { endLeftReviewMarks } from "./utils/normalizePayload";
+import { createDemoStore } from "./utils/demoStore";
 import CloseTheDay from "./components/CloseTheDay";
 import { applyClose, closeLineDue, isDayClosed, leftovers, pinFirstThing, reopenDay, undoClose } from "./utils/closeDay";
 import { makeOneThing } from "./utils/oneThing";
@@ -148,11 +148,19 @@ export default function App() {
   // task estimate and the "day_map" source.
   const pendingFocusOptionsRef = useRef(null);
 
+  // #680: the demo's saves (utils/demoStore): one authoritative live demo
+  // payload behind every demo write, with useSync's contract and truthful
+  // outcomes. Each render's demo save functions carry that render's session.
+  const demoStoreRef = useRef(null);
+  if (!demoStoreRef.current) demoStoreRef.current = createDemoStore(setDemoPayload);
+  const demoStore = demoStoreRef.current;
+  const demoSessionToken = demoStore.state.session;
+
   const enterDemo = () => {
     // Each demo is a fresh visit: no guide left over from an earlier one
     // (loopcheck of #654).
     saveGuide("demo", null);
-    setDemoPayload(createDemoPayload());
+    demoStore.enter(createDemoPayload());
     setDemoMode(true);
     setActiveTab("today");
     track("demo_start");
@@ -166,38 +174,26 @@ export default function App() {
     cancelAllNativeScheduling();
     saveGuide("demo", null);
     setDemoMode(false);
-    setDemoPayload(null);
+    demoStore.exit();
     setActiveTab("today");
   };
 
-  const saveDemoPayload = (updated) => {
-    // Demo saves skip normalizePayload; the review mark's rule still holds (Q48.1).
-    setDemoPayload({ ...updated, ...(Array.isArray(updated.tasks) ? { tasks: endLeftReviewMarks(updated.tasks) } : {}), timestamp: Date.now() });
-  };
-
-  const saveDemoSubPath = (subPath, value) => {
-    setDemoPayload(prev => prev ? { ...prev, [subPath]: value, timestamp: Date.now() } : prev);
-  };
-
-  const saveDemoSubPaths = (patch) => {
-    setDemoPayload(prev => prev ? { ...prev, ...patch, timestamp: Date.now() } : prev);
-  };
-
-  const saveDemoConfigPatch = (patch) => {
-    setDemoPayload(prev => {
-      if (!prev) return prev;
-      const resolvedPatch = typeof patch === "function" ? patch(prev.config || {}) : patch;
-      return { ...prev, config: { ...prev.config, ...resolvedPatch, lastUpdated: Date.now() }, timestamp: Date.now() };
-    });
-  };
+  const saveDemoPayload = (update, options) => demoStore.save(update, options, demoSessionToken);
+  const saveDemoSubPath = (subPath, value) => demoStore.saveSubPath(subPath, value);
+  const saveDemoSubPaths = (patch) => demoStore.saveSubPaths(patch);
+  const saveDemoConfigPatch = (patch) => demoStore.saveConfigPatch(patch);
 
   // Async counterparts of the demo save functions above — Demo Mode never
   // touches Firebase, so these just apply the same local state update and
   // resolve immediately, giving write-path call sites a consistent awaitable
-  // interface regardless of demoMode.
-  const saveDemoPayloadAsync = (updated) => {
-    saveDemoPayload(updated);
-    return Promise.resolve();
+  // interface regardless of demoMode. Outcomes as useSync's savePayloadAsync.
+  const saveDemoPayloadAsync = (update, options) => {
+    const outcome = saveDemoPayload(update, options);
+    if (outcome === "applied") return Promise.resolve();
+    if (outcome === "noop") return Promise.resolve("noop");
+    const err = new Error(`savePayloadAsync: ${outcome}`);
+    err.outcome = outcome;
+    return Promise.reject(err);
   };
   const saveDemoSubPathsAsync = (patch) => {
     saveDemoSubPaths(patch);
@@ -589,7 +585,9 @@ export default function App() {
       }
     });
     return unsubscribe;
-  }, [demoMode]);
+    // exitDemo only touches refs, state setters and the demo store (#680),
+    // so the copy from this render is safe to call later.
+  }, [demoMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track session duration when the user closes or navigates away
   useEffect(() => {
