@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { auth, db, track, setAnalyticsUser } from "./firebase";
 import { getCategoryKeyForTrack } from "./utils/soundLibrary";
 import { soundShortName } from "./utils/miniWindow";
@@ -30,7 +30,11 @@ import MindBoxTab from "./components/MindBoxTab";
 import CoachTab from "./components/CoachTab";
 import SettingsTab from "./components/SettingsTab";
 import AddTaskDialog from "./components/AddTaskDialog";
-import OnboardingWizard from "./components/OnboardingWizard";
+import FirstRunWelcome from "./components/FirstRunWelcome";
+import FirstRunGuide from "./components/FirstRunGuide";
+import FirstTaskSheet from "./components/FirstTaskSheet";
+import CoachNamePrompt from "./components/CoachNamePrompt";
+import { loadGuide, saveGuide, boxReducer, reconcileGuide, guideCard, isTrustedLoad, stepsLabel } from "./utils/firstRun";
 import PrivacyPolicy from "./components/PrivacyPolicy";
 import DayMapPage from "./components/DayMapPage";
 import FocusBar from "./components/FocusBar";
@@ -145,6 +149,9 @@ export default function App() {
   const pendingFocusOptionsRef = useRef(null);
 
   const enterDemo = () => {
+    // Each demo is a fresh visit: no guide left over from an earlier one
+    // (loopcheck of #654).
+    saveGuide("demo", null);
     setDemoPayload(createDemoPayload());
     setDemoMode(true);
     setActiveTab("today");
@@ -157,6 +164,7 @@ export default function App() {
     // demo mode strands them so a signed-out/real-account session on this
     // device can still surface demo task titles as notifications.
     cancelAllNativeScheduling();
+    saveGuide("demo", null);
     setDemoMode(false);
     setDemoPayload(null);
     setActiveTab("today");
@@ -612,7 +620,7 @@ export default function App() {
   // Only the main app grows: sign-in, loading, errors and onboarding (the
   // early returns below) keep their own sizes (Codex review of #494).
   const mainAppShown = demoMode
-    ? !!payload
+    ? !!payload && payload.config?.isOnboardingCompleted !== false
     : !authLoading && !!user && !error && !loading && !!payload && payload.config?.isOnboardingCompleted !== false;
   useAppScale(!mainAppShown ? null : focusTimer.isFocusMode ? "focus" : activeTab);
   // Live (non-stale) read of focusTimer for effect/promise callbacks that
@@ -1357,6 +1365,71 @@ export default function App() {
     if (keys.some(k => !reviewShown.includes(k)) && !busyFocusing && !showAddTask) { setReviewOpen(true); setReviewShown([...new Set([...reviewShown, ...keys])]); }
   }, [reviewKey, reviewShown, busyFocusing, showAddTask]);
   const openReview = () => setReviewOpen(true);
+
+  // #653: the first-run guide. Progress is kept on this device, one key per
+  // account (utils/firstRun.js); the saved tasks move it on, and it never
+  // presses Start focus or calls an AI provider.
+  // The guide is held with the account it belongs to ({ uid, state }): an
+  // action for one account can never change or save another's (A → B → A).
+  const guideUid = demoMode ? "demo" : (user?.uid || null);
+  const [guideBox, setGuideBox] = useState({ uid: null, state: null });
+  const guideBoxRef = useRef(guideBox);
+  useEffect(() => {
+    const box = { uid: guideUid, state: guideUid ? loadGuide(guideUid) : null };
+    guideBoxRef.current = box;
+    setGuideBox(box);
+  }, [guideUid]);
+  const dispatchGuide = useCallback((action) => {
+    const box = guideBoxRef.current;
+    const next = boxReducer(box, guideUid, action);
+    if (next === box) return box.uid === guideUid ? box.state : null;
+    guideBoxRef.current = next;
+    setGuideBox(next);
+    saveGuide(next.uid, next.state);
+    return next.state;
+  }, [guideUid]);
+  const guide = guideBox.uid === guideUid ? guideBox.state : null;
+  // Only once this account's own data has loaded, so a switch or a loading
+  // gap never reads one account's tasks against another's guide.
+  const guideDataReady = demoMode || (!loading && !!payload);
+  useEffect(() => {
+    if (!guideDataReady || guideBox.uid !== guideUid) return;
+    // Cached data the server hasn't confirmed can't prove a task is gone.
+    const action = reconcileGuide(guideBox.state, payload?.tasks || [], { trusted: isTrustedLoad({ demoMode, isSyncingFromCache, syncWarning }) });
+    if (action) dispatchGuide(action);
+  }, [guideBox, guideUid, guideDataReady, payload?.tasks, dispatchGuide, demoMode, isSyncingFromCache, syncWarning]);
+  const wasFocusingRef = useRef(false);
+  useEffect(() => {
+    if (busyFocusing && !wasFocusingRef.current) dispatchGuide({ type: "focusStarted" });
+    if (!busyFocusing && wasFocusingRef.current) dispatchGuide({ type: "focusEnded" });
+    wasFocusingRef.current = busyFocusing;
+  }, [busyFocusing, dispatchGuide]);
+  const guideAction = (type) => {
+    // An optional step onto the real Day map page; the tour stays where it is.
+    if (type === "openDayMap") { openDayMap(); return; }
+    const next = dispatchGuide({ type });
+    const card = guideCard(next);
+    if (card?.tab && card.tab !== activeTab && ["next", "back", "startTour", "resumeTour"].includes(type)) handleTabSelect(card.tab);
+  };
+  const replayGuide = () => {
+    dispatchGuide({ type: "replay", pinnedUuid: commitmentPinnedUuid });
+    setActiveTab("today");
+  };
+  // "Show me how to start" on an empty Today: the guided first task again,
+  // offered only while no guide is running. Opening it is the person's choice.
+  const showHowToStart = !guide || guide.step === "done"
+    ? () => { dispatchGuide({ type: "start", howTo: true }); setActiveTab("today"); }
+    : null;
+  // The coach's name, asked once on a new account's first visit to Coach
+  // outside the tour (FirstRunWelcome sets coachNamePending).
+  const coachNamePrompt = payload?.config?.coachNamePending === true && guide?.step !== "tour"
+    ? <CoachNamePrompt
+        currentName={payload.config.mentorName}
+        onSave={name => saveConfigPatch({ mentorName: name, coachNamePending: false })}
+        onKeep={() => saveConfigPatch({ coachNamePending: false })}
+      />
+    : null;
+  const guideTaskTitle = guide?.taskUuid ? ((payload?.tasks || []).find(t => t.uuid === guide.taskUuid)?.title || "") : "";
   // #643: Done and Undo say only what the server confirmed. While one waits
   // they can't be pressed again; after 10 s it says it isn't saved yet.
   const [reviewSaving, setReviewSaving] = useState(null); // null | "saving" | "slow"
@@ -1626,9 +1699,9 @@ export default function App() {
     );
   }
 
-  // ── Onboarding wizard (real users only) ───────────────────────────────────
-  if (!demoMode && payload.config && payload.config.isOnboardingCompleted === false) {
-    return <OnboardingWizard payload={payload} savePayload={savePayload} />;
+  // ── First run (#653): two optional questions, then the app itself guides ──
+  if (payload?.config && payload.config.isOnboardingCompleted === false) {
+    return <FirstRunWelcome payload={payload} savePayload={savePayload} onDone={guided => { if (guided) dispatchGuide({ type: "start" }); }} />;
   }
 
   // ── Main app ───────────────────────────────────────────────────────────────
@@ -1753,6 +1826,7 @@ export default function App() {
             syncWarning={syncWarning}
             saveConfigPatch={saveConfigPatch}
             onOpenAddTask={() => openAddTask("today", "Today")}
+            onShowHowToStart={showHowToStart}
             onOpenAddThought={openAddThought}
             onOpenDayMap={openDayMap}
             onOpenPlan={() => handleTabSelect("roadmap")}
@@ -1852,7 +1926,7 @@ export default function App() {
           </div>
         )}
         {activeTab === "mindbox" && <MindBoxTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveConfigPatch={saveConfigPatch} userProfile={userProfile} initialPanel={mindBoxInitialPanel} onMakeThoughtTask={openThoughtAsTask} onOpenRescue={(state) => { handleTabSelect("today"); setRescueRequest({ at: Date.now(), state: typeof state === "string" ? state : null }); }} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} uid={activityUid} writeActivityEvents={writeActivityEvents} focusTimer={focusTimer} />}
-        {activeTab === "coach" && <CoachTab payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveSubPathsAsync={saveSubPathsAsync} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} uid={activityUid} writeActivityEvents={writeActivityEvents} stuck={coachStuck} onClearStuck={() => setCoachStuck(null)} onBackToFocus={focusTimer.focusSessionActive && focusTimer.activeTask ? handleReturnToFocus : null} onOpenPrivacy={() => { handleTabSelect("settings"); setSettingsInitialPage("privacy"); }} onOpenDayMap={openDayMap} />}
+        {activeTab === "coach" && <CoachTab namePrompt={coachNamePrompt} payload={payload} savePayload={savePayload} savePayloadAsync={savePayloadAsync} saveSubPath={saveSubPath} saveSubPaths={saveSubPaths} saveSubPathsAsync={saveSubPathsAsync} saveConfigPatch={saveConfigPatch} userProfile={userProfile} focusTimer={focusTimer} isSyncingFromCache={isSyncingFromCache} syncWarning={syncWarning} chatDraft={coachChatDraft} setChatDraft={setCoachChatDraft} uid={activityUid} writeActivityEvents={writeActivityEvents} stuck={coachStuck} onClearStuck={() => setCoachStuck(null)} onBackToFocus={focusTimer.focusSessionActive && focusTimer.activeTask ? handleReturnToFocus : null} onOpenPrivacy={() => { handleTabSelect("settings"); setSettingsInitialPage("privacy"); }} onOpenDayMap={openDayMap} />}
         {activeTab === "settings" && (
           <SettingsTab
             initialPage={settingsInitialPage}
@@ -1864,6 +1938,7 @@ export default function App() {
             saveSubPath={saveSubPath}
             saveConfigPatch={saveConfigPatch}
             lastSyncedAt={lastSyncedAt}
+            onReplayTour={replayGuide}
             onSignOut={demoMode ? exitDemo : handleSwitchUser}
             signOutState={signOutState}
             signOutReason={signOutReason}
@@ -1915,6 +1990,29 @@ export default function App() {
 
       {/* Bottom Nav — hidden on Day Map (full-screen page) */}
       <BottomNav activeTab={activeTab === "daymap" ? "today" : activeTab} onTabSelect={handleTabSelect} />
+
+      {guide?.step === "task" && !busyFocusing && (
+        <FirstTaskSheet
+          stepsLabel={stepsLabel(guide)}
+          email={demoMode ? "demo@loci.app" : user?.email}
+          payload={payload}
+          savePayloadAsync={savePayloadAsync}
+          uid={activityUid}
+          writeActivityEvents={writeActivityEvents}
+          onAdded={uuid => { dispatchGuide({ type: "taskAdded", uuid }); setActiveTab("today"); }}
+          onSkip={() => guideAction("skip")}
+        />
+      )}
+      {guide && guide.step !== "task" && !busyFocusing && activeTab !== "settings" && (
+        <FirstRunGuide
+          state={guide}
+          onAction={guideAction}
+          onTab={handleTabSelect}
+          taskTitle={guideTaskTitle}
+          thoughtCount={(payload?.brainDump || []).length}
+          challengeType={payload?.config?.challengeType}
+        />
+      )}
 
       {/* Add / Edit Task Dialog */}
       {closeDayOpen && (

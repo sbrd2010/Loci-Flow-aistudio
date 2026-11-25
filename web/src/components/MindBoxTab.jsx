@@ -761,7 +761,7 @@ export default function MindBoxTab({ payload, savePayload, savePayloadAsync, sav
           {/* Try-out 12 Oct: the tab names the page; Brain dump is its one heading. */}
           <h2 className="mbx-sr">Mind Box</h2>
           <div className="mbx-grid">
-            <section className="mbx-dump" aria-labelledby="mbx-dump-title">
+            <section className="mbx-dump" data-guide-id="braindump" aria-labelledby="mbx-dump-title">
               <div className="mbx-dump-head">
                 <h3 className="mbx-h" id="mbx-dump-title">Brain dump</h3>
                 <p className="mbx-dump-line"><span className="mbx-wide-only">A worry, a to-do, a half-baked idea. </span>Anything goes. Get it out now, sort it later.</p>

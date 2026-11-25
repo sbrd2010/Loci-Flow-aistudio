@@ -101,7 +101,7 @@ function SortableTaskItem({ id, isOver = false, disabled = false, children }) {
 }
 
 export default function TodayTab({
-  payload, savePayload, savePayloadAsync, saveConfigPatch, onOpenDayMap, onOpenPlan, onOpenCoach, onScattered, onOpenAddTask, onOpenAddThought,
+  payload, savePayload, savePayloadAsync, saveConfigPatch, onOpenDayMap, onOpenPlan, onOpenCoach, onScattered, onOpenAddTask, onOpenAddThought, onShowHowToStart,
   // 57f: "September ended · 2 left · Review" until the review is done.
   reviewLine = null,
   // 55d–e, Q47: "Day ends 17:30 · Close the day"; and the closed day.
@@ -1958,6 +1958,7 @@ export default function TodayTab({
           list.animate?.([{ boxShadow: "0 0 0 2px var(--accent)" }, { boxShadow: "0 0 0 2px transparent" }], { duration: 1200, easing: "ease-out" });
         }}
         onAddTask={onOpenAddTask}
+        onShowHowToStart={onShowHowToStart}
         weekCount={wallIsAsking ? weekTasks(tasks).length : 0}
         onFromWeek={() => setWeekPickerOpen(true)}
         onScattered={onScattered}
@@ -1981,6 +1982,7 @@ export default function TodayTab({
            rather than leaving the screen empty. */}
       <section
         ref={sheetRef}
+        data-guide-id="upnext"
         className={`tasks-section today-list${pinnedFocusTask ? " is-sheet" : ""}${sheetFull ? " is-full" : ""}`}
         aria-label={`Today's list, ${listOpenRows} ${listOpenRows === 1 ? "task" : "tasks"}`}
         // Conditional INLINE, not via a class: an inline display beats any
@@ -2028,7 +2030,7 @@ export default function TodayTab({
               </button>
             )}
             {/* Q59: List | Day map, two views of one plan. */}
-            <span className="today-view-switch" role="group" aria-label="View">
+            <span className="today-view-switch" data-guide-id="switch" role="group" aria-label="View">
               <button type="button" className="today-view-opt" aria-pressed={listView === "list"} onClick={() => setListView("list")}>List</button>
               <button type="button" className="today-view-opt" aria-pressed={listView === "daymap"} onClick={() => setListView("daymap")}>Day map</button>
             </span>
