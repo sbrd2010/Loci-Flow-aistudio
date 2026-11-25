@@ -126,3 +126,117 @@ test("#680: Coach \"Make it your now task\" confirmed after the phone completed 
   const after = (await readServer(clients.request, a.uid)).tasks.find(t => t.uuid === "seed-b");
   expect(after).toEqual(before);
 });
+
+// Another device's committed write where the phone has no UI for it (chat,
+// deferral): an emulator admin commit, then the same barrier.
+const commit = async (clients, a, data) => {
+  const r = await clients.request.patch(databaseUrl(`sync/${a.uid}`), { headers: OWNER_AUTH, data: { ...data, timestamp: Date.now() } });
+  expect(r.ok()).toBe(true);
+};
+async function eventsFor(clients, a, taskId) {
+  const res = await clients.request.get(databaseUrl(`activityLogs/${a.uid}/events`), { headers: OWNER_AUTH });
+  const days = (await res.json()) || {};
+  return Object.values(days).flatMap(d => Object.values(d || {})).filter(e => e?.taskId === taskId).map(e => e.type).sort();
+}
+
+test("#680: Coach \"Park\" confirmed after another device added to the Coach chat: the chat is kept, one task_parked event", async ({ clients }) => {
+  const a = await clients.open();
+  await seed(clients, a, "seed-b");
+  const dialog = await openChip(a, "Park");
+  const chat = (await readServer(clients.request, a.uid)).chatHistory;
+  const extended = [...chat, { text: "Sample message from the other device", isUser: true, at: Date.now() }];
+  await commit(clients, a, { chatHistory: extended });
+  await expect.poll(async () => { const p = await cache(a); return [p.chatHistory?.length, p.base.chatHistory?.length]; }).toEqual([3, 3]);
+  await dialog.getByRole("button", { name: "Park it", exact: true }).click();
+  await expect.poll(async () => (await readServer(clients.request, a.uid)).tasks.find(t => t.uuid === "seed-b")?.isParked).toBe(true);
+  expect((await readServer(clients.request, a.uid)).chatHistory.map(m => m.text)).toEqual(extended.map(m => m.text));
+  await expect.poll(() => eventsFor(clients, a, "seed-b")).toEqual(["task_parked"]);
+});
+
+test("#680: Coach \"Make it your now task\" after the task was deferred elsewhere: not widened into a move, nothing written", async ({ clients }) => {
+  const a = await clients.open();
+  await seed(clients, a, "seed-b");
+  const dialog = await openChip(a, "Make it your now task");
+  await commit(clients, a, { "tasks/1/deferredUntil": "2099-01-01", "tasks/1/lastUpdated": Date.now() });
+  await expect.poll(async () => (await cache(a)).base.tasks?.find(t => t.uuid === "seed-b")?.deferredUntil).toBe("2099-01-01");
+  const before = (await readServer(clients.request, a.uid)).tasks.find(t => t.uuid === "seed-b");
+  await dialog.getByRole("button", { name: "Yes", exact: true }).click();
+  await new Promise(r => setTimeout(r, 2500)); // settling wait: a write would be queued within the save debounce
+  expect((await readServer(clients.request, a.uid)).tasks.find(t => t.uuid === "seed-b")).toEqual(before);
+  expect(await eventsFor(clients, a, "seed-b")).toEqual([]);
+});
+
+test("#680: Coach \"Park\" after the task was parked elsewhere: already done, nothing written or logged", async ({ clients }) => {
+  const a = await clients.open();
+  await seed(clients, a, "seed-b");
+  const dialog = await openChip(a, "Park");
+  await commit(clients, a, { "tasks/1/isParked": true, "tasks/1/parkedAt": Date.now(), "tasks/1/lastUpdated": Date.now() });
+  await expect.poll(async () => (await cache(a)).base.tasks?.find(t => t.uuid === "seed-b")?.isParked).toBe(true);
+  const before = await readServer(clients.request, a.uid);
+  await dialog.getByRole("button", { name: "Park it", exact: true }).click();
+  await new Promise(r => setTimeout(r, 2500)); // settling wait
+  const after = await readServer(clients.request, a.uid);
+  expect(after.tasks.find(t => t.uuid === "seed-b")).toEqual(before.tasks.find(t => t.uuid === "seed-b"));
+  expect(after.timestamp).toBe(before.timestamp);
+  expect(await eventsFor(clients, a, "seed-b")).toEqual([]);
+});
+
+test("#680: Coach chip dialog cancelled after the phone changed a setting: the laptop writes nothing, the setting stays", async ({ clients }) => {
+  const a = await clients.open();
+  await seed(clients, a, "seed-b");
+  const dialog = await openChip(a, "Park");
+  const b = await clients.open(a.email, { phone: true });
+  await PHONE.setting.act(b);
+  await expect.poll(async () => { const p = await cache(a); return [p.config?.userName, p.base.config?.userName]; }).toEqual(["Sample Renamed", "Sample Renamed"]);
+  const before = await readServer(clients.request, a.uid);
+  await dialog.getByRole("button", { name: /^(Cancel|Not now|No)$/ }).first().click();
+  await new Promise(r => setTimeout(r, 2500)); // settling wait
+  const after = await readServer(clients.request, a.uid);
+  expect(after.config.userName).toBe("Sample Renamed");
+  expect(after.tasks.find(t => t.uuid === "seed-b")).toEqual(before.tasks.find(t => t.uuid === "seed-b"));
+  expect(await eventsFor(clients, a, "seed-b")).toEqual([]);
+});
+
+// The focus session: a chip that takes the pin from a task whose session is
+// running ends that session (one terminal event), only once the save is
+// applied, and never a session twice.
+async function startFocusThenLeave(clients, a) {
+  const { row } = await import("./helpers");
+  await row(a.page, "Sort sample notes").locator(".task-title-text").click();
+  const detail = a.page.getByTestId("task-detail");
+  await detail.getByRole("button", { name: /Do this now/ }).click();
+  if (await detail.isVisible()) await detail.getByRole("button", { name: "Close", exact: true }).click();
+  await a.page.locator(".today-wall .wall-primary").click();
+  await expect(a.page.locator(".focus-mode-overlay")).toBeVisible();
+  await a.page.getByRole("button", { name: "Leave focus" }).click();
+  await expect(a.page.locator(".focus-mode-overlay")).toHaveCount(0);
+  await expect.poll(async () => (await readServer(clients.request, a.uid)).tasks.find(t => t.uuid === "seed-a").isNowFocus).toBe(true);
+}
+const terminal = (types) => types.filter(t => t === "focus_abandoned" || t === "focus_completed");
+
+test("#680: Coach \"Make it your now task\" on another task while a session runs: that session ends once, the new task is pinned", async ({ clients }) => {
+  const a = await clients.open();
+  await seed(clients, a, "seed-b");
+  await startFocusThenLeave(clients, a);
+  const dialog = await openChip(a, "Make it your now task");
+  await dialog.getByRole("button", { name: "Yes", exact: true }).click();
+  await expect.poll(async () => { const s = await readServer(clients.request, a.uid); return [s.tasks.find(t => t.uuid === "seed-a").isNowFocus, s.tasks.find(t => t.uuid === "seed-b").isNowFocus]; }).toEqual([false, true]);
+  await expect.poll(async () => terminal(await eventsFor(clients, a, "seed-a"))).toEqual(["focus_abandoned"]);
+});
+
+test("#680: the session's task completed on the phone while a chip's dialog is open: confirming ends nothing twice", async ({ clients }) => {
+  const a = await clients.open();
+  await seed(clients, a, "seed-b");
+  const b = await clients.open(a.email, { phone: true }); // before the pin, as the helper checks the list
+  await startFocusThenLeave(clients, a);
+  const dialog = await openChip(a, "Make it your now task");
+  await expect(b.page.locator(".today-wall h2")).toHaveText("Sort sample notes");
+  await b.page.locator(".today-list-head").getByRole("button", { name: "Hide list", exact: true }).click();
+  await b.page.locator(".today-wall").getByRole("button", { name: "Done", exact: true }).click();
+  await expect.poll(async () => (await cache(a)).base.tasks?.find(t => t.uuid === "seed-a")?.isCompleted).toBe(true);
+  await dialog.getByRole("button", { name: "Yes", exact: true }).click();
+  await expect.poll(async () => (await readServer(clients.request, a.uid)).tasks.find(t => t.uuid === "seed-b").isNowFocus).toBe(true);
+  await new Promise(r => setTimeout(r, 2500)); // settling wait for any late ledger write
+  expect(terminal(await eventsFor(clients, a, "seed-a")).length).toBeLessThanOrEqual(1);
+  expect((await readServer(clients.request, a.uid)).tasks.find(t => t.uuid === "seed-a").isCompleted).toBe(true);
+});
