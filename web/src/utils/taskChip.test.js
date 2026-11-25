@@ -24,7 +24,9 @@ describe("planTaskChip: what each chip does, from the live payload (#680)", () =
     const p = live([task("a", { orderIndex: 4 }), task("t", { horizonLevel: "week", deferredUntil: "2026-12-01", isParked: true })]);
     const r = plan(p, "focus+today");
     expect(r.next.tasks.find(t => t.uuid === "t")).toMatchObject({ horizonLevel: "today", deferredUntil: null, isParked: false, isNowFocus: true, orderIndex: 5, lastUpdated: NOW });
-    expect(r.transition).toMatchObject({ fromHorizon: "week", wasParked: true, unpinnedUuid: null });
+    expect(r.transition).toMatchObject({ fromHorizon: "week", wasOnToday: false, wasParked: true, unpinnedUuid: null });
+    // On Today but parked: unparked and pinned, and it was already on Today (no move to log).
+    expect(plan(live([task("t", { isParked: true })]), "focus+today").transition).toMatchObject({ wasOnToday: true, wasParked: true });
     keepsRest(p, r);
   });
   it("today: moves to Today without pinning, and unpins the target if it was the now task", () => {

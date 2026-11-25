@@ -1520,8 +1520,12 @@ export default function CoachTab({ namePrompt = null, payload, savePayload, save
       }
       return ended;
     };
+    // The focus windows at confirm (live), so the ledger files this under
+    // the right Loci day even if they changed while the dialog was open.
+    let liveWindows = windows;
     savePayloadAsync(live => {
-      planned = planTaskChip(live, action, taskUuid, { now, todayStr: getLociDayStr(new Date(now), getFocusWindows(live.config || {})) });
+      liveWindows = getFocusWindows(live.config || {});
+      planned = planTaskChip(live, action, taskUuid, { now, todayStr: getLociDayStr(new Date(now), liveWindows) });
       return planned ? planned.next : null;
     }, {
       onLocalOutcome: (outcome) => {
@@ -1530,17 +1534,18 @@ export default function CoachTab({ namePrompt = null, payload, savePayload, save
     })
       .then((result) => {
         if (result === "noop" || !planned) return;
-        const { task, fromHorizon, wasParked } = planned.transition;
+        const { task, fromHorizon, wasOnToday, wasParked } = planned.transition;
         const events = [];
-        if (action === "focus+today" || action === "today") {
-          events.push(buildTaskMutationEvent("task_moved", task, { fromState: { horizonLevel: fromHorizon }, toState: { horizonLevel: "today" }, windows, source: "coach_action", now }));
+        // A move is logged only when the task actually came onto Today.
+        if ((action === "focus+today" || action === "today") && !wasOnToday) {
+          events.push(buildTaskMutationEvent("task_moved", task, { fromState: { horizonLevel: fromHorizon }, toState: { horizonLevel: "today" }, windows: liveWindows, source: "coach_action", now }));
         }
-        if (action === "park") events.push(buildTaskMutationEvent("task_parked", task, { windows, source: "coach_action", now }));
+        if (action === "park") events.push(buildTaskMutationEvent("task_parked", task, { windows: liveWindows, source: "coach_action", now }));
         if (endedFocusSession) {
           events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
         }
         if (wasParked && (action === "focus+today" || action === "today")) {
-          events.push(buildTaskMutationEvent("task_unparked", task, { windows, source: "coach_action", now }));
+          events.push(buildTaskMutationEvent("task_unparked", task, { windows: liveWindows, source: "coach_action", now }));
         }
         if (events.length) writeActivityEvents(eventsPatch(uid, events));
       })

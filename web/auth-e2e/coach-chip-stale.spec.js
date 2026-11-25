@@ -90,10 +90,12 @@ for (const c of CHIPS) {
     // The phone's change is kept on the server and on both devices, payload and base.
     expect(phone.read(await readServer(clients.request, a.uid))).toBe(phone.want);
     for (const client of [a, b]) {
-      await expect.poll(async () => { const p = await cache(client); return [phone.read(p), phone.read(p.base), c.effect(p.tasks.find(t => t.uuid === c.target))]; }).toEqual([phone.want, phone.want, true]);
+      await expect.poll(async () => { const p = await cache(client); return [phone.read(p), phone.read(p.base), c.effect(p.tasks.find(t => t.uuid === c.target)), c.effect((p.base.tasks || []).find(t => t.uuid === c.target))]; }).toEqual([phone.want, phone.want, true, true]);
     }
     await a.page.reload();
     await expect.poll(async () => phone.read(await cache(a))).toBe(phone.want);
+    const fresh = await clients.fresh(a.email);
+    await expect.poll(async () => { const p = await cache(fresh); return [phone.read(p), c.effect(p.tasks.find(t => t.uuid === c.target))]; }).toEqual([phone.want, true]);
     expect(phone.read(await readServer(clients.request, a.uid))).toBe(phone.want);
   });
 }
@@ -237,6 +239,22 @@ test("#680: the session's task completed on the phone while a chip's dialog is o
   await dialog.getByRole("button", { name: "Yes", exact: true }).click();
   await expect.poll(async () => (await readServer(clients.request, a.uid)).tasks.find(t => t.uuid === "seed-b").isNowFocus).toBe(true);
   await new Promise(r => setTimeout(r, 2500)); // settling wait for any late ledger write
-  expect(terminal(await eventsFor(clients, a, "seed-a")).length).toBeLessThanOrEqual(1);
+  // The phone's completion already stopped the laptop's session (observed:
+  // focus_started then task_completed, with no terminal event: existing
+  // behaviour, outside #680). The chip must not end it a second time.
+  expect(await eventsFor(clients, a, "seed-a")).toEqual(["focus_started", "task_completed"]);
   expect((await readServer(clients.request, a.uid)).tasks.find(t => t.uuid === "seed-a").isCompleted).toBe(true);
+});
+
+test("#680: a chip that turns out to do nothing leaves a session running on another task alone", async ({ clients }) => {
+  const a = await clients.open();
+  await seed(clients, a, "seed-b");
+  await startFocusThenLeave(clients, a);
+  const dialog = await openChip(a, "Park");
+  await commit(clients, a, { "tasks/1/isParked": true, "tasks/1/parkedAt": Date.now(), "tasks/1/lastUpdated": Date.now() });
+  await expect.poll(async () => (await cache(a)).base.tasks?.find(t => t.uuid === "seed-b")?.isParked).toBe(true);
+  await dialog.getByRole("button", { name: "Park it", exact: true }).click();
+  await new Promise(r => setTimeout(r, 2500)); // settling wait: a write or ledger event would follow within the debounce
+  expect(await eventsFor(clients, a, "seed-a")).toEqual(["focus_started"]); // no terminal event: the session was not ended
+  expect((await readServer(clients.request, a.uid)).tasks.find(t => t.uuid === "seed-a").isNowFocus).toBe(true);
 });

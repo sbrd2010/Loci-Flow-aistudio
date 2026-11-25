@@ -26,7 +26,7 @@ export function planTaskChip(live, action, taskUuid, { now, todayStr }) {
   if (focusing && isEventTask(target)) return null;
   const onToday = isOnToday(target, todayStr);
   const other = tasks.find(t => t.uuid !== taskUuid && t.isNowFocus && !t.isDeleted) || null;
-  const transition = { task: target, fromHorizon: target.horizonLevel, wasParked: !!target.isParked, unpinnedUuid: null };
+  const transition = { task: target, fromHorizon: target.horizonLevel, wasOnToday: onToday, wasParked: !!target.isParked, unpinnedUuid: null };
   let nextTasks;
   if (action === "focus") {
     if (!onToday || target.isNowFocus) return null;
