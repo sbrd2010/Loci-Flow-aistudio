@@ -29,6 +29,12 @@ describe("planTaskChip: what each chip does, from the live payload (#680)", () =
     expect(plan(live([task("t", { isParked: true })]), "focus+today").transition).toMatchObject({ wasOnToday: true, wasParked: true });
     keepsRest(p, r);
   });
+  it("focus+today takes the pin from another task, and names it as the one unpinned", () => {
+    const p = live([task("o", { isNowFocus: true }), task("t", { horizonLevel: "week" })]);
+    const r = plan(p, "focus+today");
+    expect(r.next.tasks.find(t => t.uuid === "o")).toMatchObject({ isNowFocus: false, lastUpdated: NOW });
+    expect(r.transition.unpinnedUuid).toBe("o");
+  });
   it("today: moves to Today without pinning, and unpins the target if it was the now task", () => {
     const p = live([task("t", { horizonLevel: "week", isNowFocus: true })]);
     const r = plan(p, "today");

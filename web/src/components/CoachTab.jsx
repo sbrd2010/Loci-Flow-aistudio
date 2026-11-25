@@ -1474,7 +1474,8 @@ export default function CoachTab({ namePrompt = null, payload, savePayload, save
   const taskChipsFor = (actions) => {
     const matched = (actions || []).filter(a => a.matched && a.task?.uuid && a.type !== "ADD_TASK");
     if (matched.length !== 1) return null;
-    const fresh = tasks.find(t => t.uuid === matched[0].task.uuid && !t.isDeleted);
+    // A finished task gets no chips: confirming one would do nothing (#680).
+    const fresh = tasks.find(t => t.uuid === matched[0].task.uuid && !t.isDeleted && !t.isCompleted);
     return fresh || null;
   };
 
@@ -1542,7 +1543,7 @@ export default function CoachTab({ namePrompt = null, payload, savePayload, save
         }
         if (action === "park") events.push(buildTaskMutationEvent("task_parked", task, { windows: liveWindows, source: "coach_action", now }));
         if (endedFocusSession) {
-          events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
+          events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows: liveWindows, now }));
         }
         if (wasParked && (action === "focus+today" || action === "today")) {
           events.push(buildTaskMutationEvent("task_unparked", task, { windows: liveWindows, source: "coach_action", now }));
