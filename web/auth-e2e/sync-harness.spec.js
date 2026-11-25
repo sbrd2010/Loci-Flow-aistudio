@@ -151,9 +151,10 @@ test("#680 harness: a no-op or refusal while a write is pending does not delay i
   const a = await openHarness(clients);
   const started = Date.now();
   await a.page.evaluate(t13 => window.__h.api.savePayload(p => ({ ...p, tasks: [...p.tasks, t13] })), task("h13", "Harness thirteen"));
-  await a.page.waitForTimeout(1000);
+  // Just before the 1.5 s debounce fires: a reset here would move the write to about 2.9 s.
+  await a.page.waitForTimeout(1400);
   await a.page.evaluate(() => { const { api } = window.__h; api.savePayload(() => null); api.savePayload(() => ({})); api.savePayload(() => { throw new Error("x"); }); });
   await expect.poll(() => serverUuids(clients, a), { intervals: [100] }).toContain("h13");
-  // The debounce is 1.5 s from the first save; a reset by the no-op at +1 s would push it past 2.5 s.
-  expect(Date.now() - started).toBeLessThan(2400);
+  // Unreset it lands at ~1.5 s + one round trip; the bound sits between the two.
+  expect(Date.now() - started).toBeLessThan(2700);
 });

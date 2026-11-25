@@ -83,6 +83,11 @@ describe("resolveFunctionalSave: the updater's result (#680)", () => {
     // live() has no chatHistory: the result may leave it out or add one.
     expect(resolveFunctionalSave({ update: p => ({ ...p }), live: live(), owner: owner() }).outcome).toBe("applied");
     expect(resolveFunctionalSave({ update: p => ({ ...p, chatHistory: [] }), live: live(), owner: owner() }).outcome).toBe("applied");
+    // Loopcheck of #681: a live value that is already not a list (e.g. RTDB
+    // returning a sparse list as an object) passes through unchanged.
+    const odd = { ...live(), chatHistory: { 0: { text: "Sample", isUser: true } } };
+    expect(resolveFunctionalSave({ update: p => ({ ...p, tasks: [...p.tasks] }), live: odd, owner: owner() }).outcome).toBe("applied");
+    expect(resolveFunctionalSave({ update: p => ({ ...p, chatHistory: { other: true } }), live: odd, owner: owner() }).outcome).toBe("refused:invalid");
     // A conversation cleared to null (CoachTab clearConversation) stays saveable.
     expect(resolveFunctionalSave({ update: p => ({ ...p }), live: { ...live(), chatHistory: null }, owner: owner() }).outcome).toBe("applied");
   });

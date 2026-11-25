@@ -52,8 +52,10 @@ export function resolveFunctionalSave({ update, live, owner }) {
   // ([]) is a legitimate result.
   for (const key of COLLECTIONS) {
     if (Array.isArray(live[key]) && !Array.isArray(next[key])) return { outcome: "refused:invalid" };
-    // null stays allowed where nothing was a list (chatHistory cleared to null).
-    if (next[key] != null && !Array.isArray(next[key])) return { outcome: "refused:invalid" };
+    // A non-list is refused only if the updater made it: null where nothing
+    // was a list (chatHistory cleared to null), or a live non-list passed
+    // through unchanged, stays valid.
+    if (next[key] != null && !Array.isArray(next[key]) && next[key] !== live[key]) return { outcome: "refused:invalid" };
   }
   return { outcome: "applied", next };
 }

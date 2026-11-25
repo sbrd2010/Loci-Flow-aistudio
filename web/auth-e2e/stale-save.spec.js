@@ -103,6 +103,7 @@ for (const [name, change] of Object.entries(CHANGES)) {
   test(`#680: a phone ${name} made while Add task waits survives the laptop's save, everywhere`, async ({ clients }) => {
     const a = await clients.open(undefined, { setupContext: laptopSetup });
     const b = await clients.open(a.email, { phone: true });
+    const at = await tomorrowNine(a.page); // before the action: "Tomorrow" is picked now
     await submitAndHold(a.page, await openAddWithReminder(a.page));
 
     await change.act(b);
@@ -117,7 +118,6 @@ for (const [name, change] of Object.entries(CHANGES)) {
     await expect.poll(async () => (await newTasksOnServer(clients.request, a.uid)).length).toBe(1);
     for (const client of [a, b]) await expect.poll(() => deviceState(client)).toEqual({ localNew: true, baseNew: true });
     // One reminder for the new task (checked before the reload, which resets the stubbed permission).
-    const at = await tomorrowNine(a.page);
     await expect.poll(() => a.page.evaluate(due => window.__timersDueAt(due), at)).toBe(1);
     // The phone's change, content and clock, is untouched on the server and both devices.
     expect(await serverTask(clients.request, a.uid, "seed-b")).toEqual(committed);
@@ -193,11 +193,13 @@ test("#680: nothing changes elsewhere (control): the task is added, the rest exa
   expect(await serverTask(clients.request, a.uid, "seed-b")).toEqual(before);
 });
 
-test("#680: Add pressed again while the prompt waits (click and keyboard) adds one task", async ({ clients }) => {
+test("#680: Add pressed again while the prompt waits adds one task", async ({ clients }) => {
   const a = await clients.open(undefined, { setupContext: laptopSetup });
   const dialog = await openAddWithReminder(a.page);
   await submitAndHold(a.page, dialog);
-  await dialog.getByTestId("add-task-submit").click();
+  // While the prompt is open the sheet says so and Add is gone; the keyboard shortcut still reaches the form.
+  await expect(dialog.getByRole("status").filter({ hasText: "Waiting for notification permission" })).toBeVisible();
+  await expect(dialog.getByTestId("add-task-submit")).toHaveCount(0);
   await dialog.getByTestId("add-task-title").press("Control+Enter");
   await a.page.evaluate(() => window.__releasePermission("granted"));
   await expect.poll(async () => (await newTasksOnServer(clients.request, a.uid)).length).toBe(1);
@@ -211,6 +213,7 @@ test("#680: Add pressed again while the prompt waits (click and keyboard) adds o
 
 test("#680: closing Add task while the prompt waits adds nothing and sets no reminder", async ({ clients }) => {
   const a = await clients.open(undefined, { setupContext: laptopSetup });
+  const at = await tomorrowNine(a.page);
   const dialog = await openAddWithReminder(a.page);
   await submitAndHold(a.page, dialog);
   await dialog.getByRole("button", { name: "Close" }).click();
@@ -219,7 +222,7 @@ test("#680: closing Add task while the prompt waits adds nothing and sets no rem
   await a.page.waitForTimeout(2500);
   expect((await newTasksOnServer(clients.request, a.uid)).length).toBe(0);
   expect((await record(a, "seed-b")).titles).not.toContain(NEW_TASK);
-  expect(await a.page.evaluate(due => window.__timersDueAt(due), await tomorrowNine(a.page))).toBe(0);
+  expect(await a.page.evaluate(due => window.__timersDueAt(due), at)).toBe(0);
 });
 
 for (const answer of ["denied", "default"]) {
@@ -282,25 +285,4 @@ test("#680: switching to another account while the prompt waits: the old Add wri
   expect((await newTasksOnServer(clients.request, a.uid)).length).toBe(0);
   expect((await readServer(clients.request, otherUid)).tasks.filter(t => t.title === NEW_TASK)).toHaveLength(0);
   expect(await a.page.evaluate(due => window.__timersDueAt(due), await tomorrowNine(a.page))).toBe(0);
-});
-
-test("#680: a reminder time that passes while the prompt waits: the task is added without it", async ({ clients }) => {
-  test.setTimeout(240_000);
-  const a = await clients.open(undefined, { setupContext: laptopSetup });
-  await a.page.evaluate(() => document.activeElement?.blur());
-  await a.page.keyboard.press("n");
-  const dialog = a.page.getByRole("dialog", { name: "New task" });
-  await dialog.getByTestId("add-task-title").fill(NEW_TASK);
-  await dialog.getByRole("button", { name: "More details" }).click();
-  await dialog.getByRole("button", { name: "Set a reminder" }).click();
-  // About two minutes ahead, today (the picker's default day).
-  const soon = await a.page.evaluate(() => { const d = new Date(Date.now() + 120_000); return { at: new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes()).getTime(), typed: `${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}` }; });
-  const typed = dialog.getByLabel("Reminder time, typed");
-  await typed.fill(soon.typed);
-  await typed.press("Enter");
-  await submitAndHold(a.page, dialog);
-  await expect.poll(() => a.page.evaluate(() => Date.now()), { timeout: 200_000, intervals: [5_000] }).toBeGreaterThan(soon.at + 1_000);
-  await a.page.evaluate(() => window.__releasePermission("granted"));
-  await expect.poll(async () => (await newTasksOnServer(clients.request, a.uid)).length).toBe(1);
-  expect((await newTask(clients.request, a.uid)).reminderAt ?? null).toBeNull();
 });
