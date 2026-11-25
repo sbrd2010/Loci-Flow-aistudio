@@ -1,0 +1,79 @@
+import { describe, it, expect, vi } from "vitest";
+import { resolveFunctionalSave } from "./functionalSave";
+
+// #680: a functional save is decided against the live payload, at apply time,
+// and only for the session that created it.
+const live = () => Object.freeze({
+  userId: "sample@example.test",
+  timestamp: 100,
+  tasks: Object.freeze([Object.freeze({ uuid: "a", title: "Sample A" })]),
+  config: Object.freeze({ userName: "Sample" }),
+  contributions: Object.freeze([]),
+  brainDump: Object.freeze([]),
+});
+const owner = (over = {}) => ({ uid: "u1", currentUid: "u1", payloadUid: "u1", session: 3, currentSession: 3, ...over });
+const add = (p) => ({ ...p, tasks: [...p.tasks, { uuid: "b", title: "Sample B" }] });
+
+describe("resolveFunctionalSave: owner and session first (#680)", () => {
+  for (const [name, over, current] of [
+    ["no uid", { uid: null }, live()],
+    ["another account is current", { currentUid: "u2" }, live()],
+    ["the live payload belongs to another account", { payloadUid: "u2" }, live()],
+    ["no live payload yet", {}, null],
+    ["a stale session (signed out and back in)", { session: 2 }, live()],
+  ]) {
+    it(`refuses, without calling the updater: ${name}`, () => {
+      const update = vi.fn(add);
+      expect(resolveFunctionalSave({ update, live: current, owner: owner(over) })).toEqual({ outcome: "refused:owner" });
+      expect(update).not.toHaveBeenCalled();
+    });
+  }
+});
+
+describe("resolveFunctionalSave: the updater's result (#680)", () => {
+  it("applies a complete payload, calling the updater once with the live copy", () => {
+    const update = vi.fn(add);
+    const current = live();
+    const r = resolveFunctionalSave({ update, live: current, owner: owner() });
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledWith(current);
+    expect(r.outcome).toBe("applied");
+    expect(r.next.tasks.map(t => t.uuid)).toEqual(["a", "b"]);
+  });
+  it("null is a deliberate no-op", () => {
+    expect(resolveFunctionalSave({ update: () => null, live: live(), owner: owner() })).toEqual({ outcome: "noop" });
+  });
+  it("a throw is refused, with the error kept", () => {
+    const r = resolveFunctionalSave({ update: () => { throw new Error("boom"); }, live: live(), owner: owner() });
+    expect(r.outcome).toBe("refused:threw");
+    expect(r.error.message).toBe("boom");
+  });
+  for (const [name, result] of [
+    ["undefined (forgot to return)", undefined],
+    ["an array", []],
+    ["a string", "tasks"],
+    ["a thenable", Promise.resolve({})],
+    ["{} (would empty everything through normalisation)", {}],
+    ["a partial object", { config: { userName: "Sample" } }],
+    ["tasks that aren't an array", { ...live(), tasks: {} }],
+    ["config that isn't an object", { ...live(), config: [] }],
+  ]) {
+    it(`refuses an incomplete or malformed result: ${name}`, () => {
+      expect(resolveFunctionalSave({ update: () => result, live: live(), owner: owner() }).outcome).toBe("refused:invalid");
+    });
+  }
+  it("refuses a result that drops a top-level key the live payload has", () => {
+    const { brainDump: _dropped, ...rest } = live();
+    expect(resolveFunctionalSave({ update: () => rest, live: live(), owner: owner() }).outcome).toBe("refused:invalid");
+  });
+  it("does not change the live payload (frozen inputs)", () => {
+    const current = live();
+    expect(() => resolveFunctionalSave({ update: add, live: current, owner: owner() })).not.toThrow();
+    expect(current.tasks.map(t => t.uuid)).toEqual(["a"]);
+  });
+  it("two functions in a row compose: the second sees the first's result", () => {
+    const first = resolveFunctionalSave({ update: add, live: live(), owner: owner() });
+    const second = resolveFunctionalSave({ update: p => ({ ...p, tasks: [...p.tasks, { uuid: "c" }] }), live: first.next, owner: owner() });
+    expect(second.next.tasks.map(t => t.uuid)).toEqual(["a", "b", "c"]);
+  });
+});

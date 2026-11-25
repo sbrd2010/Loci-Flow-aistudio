@@ -7,14 +7,15 @@ import { buildLocalSafetyReply } from "../utils/crisisSafety";
 import { buildAskAIRequest } from "../utils/aiTaskPrompts";
 import { retryUnreadable } from "../utils/aiRetry";
 import { safeUUID } from "../utils/uuid";
-import { scheduleReminder, formatReminderLabel } from "../utils/reminders";
+import { formatReminderLabel } from "../utils/reminders";
+import { addTaskToPayload } from "../utils/addTaskToPayload";
 import { notifPermissionState, requestNotifPermission as nativeRequestPermission } from "../utils/nativeNotifs";
 import { getFocusWindows, getLociDayStr } from "../utils/focusWindows";
 import { BUILT_IN_HORIZONS, horizonsFromConfig } from "../utils/horizons";
 import { frontsFromConfig, sortFronts } from "../utils/fronts";
 import { buildTaskMutationEvent, eventPatch } from "../utils/activityLog";
 import { IconCheck, IconChevronDown, IconChevronRight, IconClock, IconPencil, IconSmile, IconSparkles, IconX } from "./ui/icons";
-import { THOUGHTS_MAX, addThought, sameThoughtContent, thoughtTaskDraft } from "../utils/thoughts";
+import { THOUGHTS_MAX, addThought, thoughtTaskDraft } from "../utils/thoughts";
 import { escapeThought, plainThought } from "../utils/thoughtFormat";
 import ThoughtEditor, { THOUGHT_EMOJI } from "./ui/ThoughtEditor";
 import EstimatePicker from "./EstimatePicker";
@@ -33,6 +34,7 @@ function parseManualSubSteps(raw) {
 // What the estimate selector shows for a task that has none. Named because
 // the save path has to tell "the user chose 25" from "nobody chose anything".
 const DEFAULT_ESTIMATE_MINUTES = 25;
+const EVENING_GUARD_MESSAGE = "Evening Guard is on: no new tasks at or after 8 PM. Rest now.";
 
 export default function AddTaskDialog({ email, payload, savePayload, savePayloadAsync, userProfile, defaultHorizon, defaultFrontId = null, openedFrom = null, onClose, uid, writeActivityEvents, initialMode = "task", initialTitle = "", fromThoughtId = null, onThoughtSaved }) {
   const windows = getFocusWindows(payload.config || {});
@@ -179,11 +181,17 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
   const hasSubStepDraft = parsedSubStepDraft.length > 0;
   // Time: 15m · 30m · 1h · 2h · Other (45a). Other holds the rest.
 
+  // #680: the submit in flight. Set before any wait, so a second Add (click,
+  // Enter or ⌘↵) while the notification prompt is open is ignored; cleared
+  // on unmount, so closing the dialog during the prompt cancels the add.
+  const submitRef = useRef(null);
+  useEffect(() => () => { submitRef.current = null; }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     // Saved: the form stays up for a moment to say so. A second ⌘↵ (or a held
     // one) must not add the task again.
-    if (saved || !title.trim()) return;
+    if (saved || submitRef.current || !title.trim()) return;
     if (title.trim().length > 1000) { setFormError("Task titles can have up to 1,000 characters. Shorten the title, or save it as a thought."); return; }
 
     // Flush an in-progress sub-step edit that never hit its row-level ✓/Enter
@@ -195,18 +203,11 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
       : subSteps;
 
     // Evening Guard window block logic
-    const now = new Date();
-    if (isEveningGuardBlocked(payload.config, now)) {
-      setFormError("Evening Guard is on: no new tasks at or after 8 PM. Rest now.");
+    if (isEveningGuardBlocked(payload.config, new Date())) {
+      setFormError(EVENING_GUARD_MESSAGE);
       return;
     }
     setFormError("");
-
-    // Calculate orderIndex as size of active level tasks
-    const currentLevelTasks = (payload.tasks || []).filter(
-      (t) => t.horizonLevel === horizonLevel && !t.isDeleted
-    );
-    const orderIndex = currentLevelTasks.length;
 
     // Build reminderAt timestamp from picker values
     let reminderAt = null;
@@ -215,13 +216,20 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
       if (isNaN(reminderAt) || reminderAt <= Date.now()) reminderAt = null;
     }
 
-    // Request notification permission if a reminder is set
+    const op = {};
+    submitRef.current = op;
+    // Request notification permission if a reminder is set. The prompt can
+    // stay open for as long as the person likes: everything below is decided
+    // after it, against the live payload (#680).
     if (reminderAt && notifPermissionState() === "default") {
       await nativeRequestPermission();
+      if (submitRef.current !== op) return; // closed meanwhile
     }
+    const now = Date.now();
+    if (reminderAt && reminderAt <= now) reminderAt = null; // passed while the prompt was open
 
     const freshTask = {
-      id: Date.now(),
+      id: now,
       userId: email,
       uuid: safeUUID(),
       title: title.trim(),
@@ -239,27 +247,31 @@ export default function AddTaskDialog({ email, payload, savePayload, savePayload
       isCompleted: false,
       isParked: false,
       isNowFocus: false,
-      orderIndex,
       dateCompletedString: null,
       isDeleted: false,
-      lastUpdated: Date.now(),
+      lastUpdated: now,
       subSteps: effectiveSubSteps,
       ...(sourceDraft?.note ? { note: sourceDraft.note } : {}),
     };
 
-    if (reminderAt) scheduleReminder(freshTask);
-
-    const updatedTasks = [...(payload.tasks || []), freshTask];
-    const event = buildTaskMutationEvent("task_created", freshTask, { windows });
-    savePayloadAsync({
-      ...payload,
-      tasks: updatedTasks,
-      // Made from a thought: the thought is done with once it's a task.
-      ...(fromThoughtId ? { brainDump: (payload.brainDump || []).filter(d => d.id !== fromThoughtId || !sameThoughtContent(d, sourceThought)) } : {}),
-    })
-      .then(() => writeActivityEvents(eventPatch(uid, event)))
+    // Built from the live payload at apply time (orderIndex, the rest of the
+    // tasks, the Mind Box, settings), not this render's copy. The reminder is
+    // set by App from the accepted tasks, so a refused or cancelled add sets
+    // none. The ledger event follows the confirmed write.
+    const event = buildTaskMutationEvent("task_created", freshTask, { windows, now });
+    let outcome = null;
+    savePayloadAsync(
+      live => addTaskToPayload(live, freshTask, { at: new Date(now), fromThoughtId, sourceThought }),
+      { onLocalOutcome: o => { outcome = o; } },
+    )
+      .then(result => { if (result !== "noop") writeActivityEvents(eventPatch(uid, event)); })
       .catch(() => {});
 
+    if (outcome !== "applied") {
+      submitRef.current = null;
+      setFormError(outcome === "noop" ? EVENING_GUARD_MESSAGE : "Couldn't add this task. Try again.");
+      return;
+    }
     setSaved(true);
     setTimeout(onClose, 900);
   };
