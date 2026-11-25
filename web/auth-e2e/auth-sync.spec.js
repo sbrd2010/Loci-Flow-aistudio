@@ -20,6 +20,42 @@ test("a new Google-emulator account completes onboarding and keeps it after refr
   expect(config.challengeType).toBe("initiation");
 });
 
+// #653, signed in: the guided first task, end to end (the demo spec covers the
+// tour). Skipping the optional question leaves challengeType unset.
+test("a new account's guided first task is saved, made the one thing, and kept after reload and on a fresh client", async ({ clients }) => {
+  const a = await clients.open("alpha-guided@example.test", { onboarding: true });
+  await a.page.getByRole("button", { name: "Let’s begin", exact: true }).click();
+  await a.page.getByRole("button", { name: "Skip this question", exact: true }).click();
+  const sheet = a.page.getByRole("dialog", { name: "Write down one real thing" });
+  await sheet.getByLabel("What do you want to do?").fill("Sample first errand");
+  await sheet.getByRole("button", { name: "Next" }).click();
+  const stepSheet = a.page.getByRole("dialog", { name: "What’s the smallest thing you could do first?" });
+  await stepSheet.getByLabel("First step").fill("Open the sample folder");
+  await stepSheet.getByRole("button", { name: "Add task", exact: true }).click();
+  const own = a.page.locator('[data-guide-id="upnext"] [data-guide-own]');
+  await expect(own).toHaveCount(1);
+  await expect(own).toContainText("Sample first errand");
+  await own.click();
+  await a.page.getByRole("button", { name: /Do this now/ }).click();
+  await expect(a.page.getByRole("complementary", { name: "Guide" })).toContainText("Your task is ready");
+  await a.page.locator('[data-guide-id="start"]').click();
+  await expect(a.page.getByRole("complementary", { name: "Guide" })).toHaveCount(0);
+
+  const saved = async () => {
+    const server = await readServer(clients.request, a.uid);
+    const t = server.tasks.find(x => x.title === "Sample first errand");
+    return { done: server.config.isOnboardingCompleted, challenge: server.config.challengeType ?? null, step: t?.concreteStep ?? null, one: !!t?.isNowFocus };
+  };
+  await expect.poll(saved).toEqual({ done: true, challenge: null, step: "Open the sample folder", one: true });
+  await a.page.reload();
+  await appReady(a.page);
+  await expect(a.page.getByText("Sample first errand").first()).toBeVisible();
+  const fresh = await clients.fresh(a.email);
+  await expect(fresh.page.getByRole("heading", { name: "A calmer way to get things done." })).toHaveCount(0);
+  await expect(fresh.page.getByText("Sample first errand").first()).toBeVisible();
+  expect(await saved()).toEqual({ done: true, challenge: null, step: "Open the sample folder", one: true });
+});
+
 test("Google popup, saved task, refresh, and fresh-client persistence", async ({ clients }) => {
   const a = await clients.open();
   await addTask(a.page, "Pack the sample parcel");
