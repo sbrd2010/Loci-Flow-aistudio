@@ -23,7 +23,7 @@ import { horizonsFromConfig } from "../utils/horizons";
 import { requestNotifPermission } from "../utils/focusNotifications";
 import { getRemindersOwner, scheduleCoachCheckin } from "../utils/reminders";
 import { parseCheckinTag, pickCheckinNote, buildCoachCheckin, parseCheckinRequestFromMessage, buildCoachCheckinContext } from "../utils/coachCheckin";
-import { parseCoachActionTags, applyCoachActions, buildActionReplyText, buildSetNowFocusTasks, buildParkTaskTasks, findTaskByTitle, undoCoachAction, withoutChangeClaims } from "../utils/coachActions";
+import { parseCoachActionTags, applyCoachActions, buildActionReplyText, buildSetNowFocusTasks, findTaskByTitle, undoCoachAction, withoutChangeClaims } from "../utils/coachActions";
 import { buildPersonaInstruction } from "../utils/coachPersona";
 import { buildProfileContext } from "../utils/coachProfile";
 import { addPinnedFact, addRecentObservation, buildLociMemoryContext, describeMemoryChange, findForgetTargets, forgetFromMemory, isMemoryEnabled, isPlainQuestion, isStorableMemoryText, parseForgetRequest, parseMemoryTags, parseRememberRequest, isResurrectedMemoryEntry, savedNote, splitSavedNote, stripSavedNote } from "../utils/coachMemory";
@@ -46,6 +46,7 @@ import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import "../styles/coachUI.css";
 import { isOnToday } from "../utils/deferral";
+import { planTaskChip } from "../utils/taskChip";
 import { focusBlockSeconds } from "../utils/focusSession";
 import { cssZoom } from "../utils/cssZoom";
 import ClampedReply from "./ClampedReply";
@@ -1473,7 +1474,8 @@ export default function CoachTab({ namePrompt = null, payload, savePayload, save
   const taskChipsFor = (actions) => {
     const matched = (actions || []).filter(a => a.matched && a.task?.uuid && a.type !== "ADD_TASK");
     if (matched.length !== 1) return null;
-    const fresh = tasks.find(t => t.uuid === matched[0].task.uuid && !t.isDeleted);
+    // A finished task gets no chips: confirming one would do nothing (#680).
+    const fresh = tasks.find(t => t.uuid === matched[0].task.uuid && !t.isDeleted && !t.isCompleted);
     return fresh || null;
   };
 
@@ -1495,123 +1497,60 @@ export default function CoachTab({ namePrompt = null, payload, savePayload, save
     });
   };
 
+  // #680 Phase 1b: applied at confirm against the live payload (a functional
+  // save), not the payload of the render that opened the dialog, so a change
+  // another device made while it was open is kept. planTaskChip decides,
+  // purely, what the chip still means for the task as it is now (null:
+  // nothing to do). The focus session and the ledger follow the outcome:
+  // a session ends only once the save is applied, and only the one that
+  // belongs to the task this unpins; events only after the confirmed write.
   const applyTaskChip = (action, taskUuid) => {
-    const current = tasksRef.current;
-    const task = current.find(t => t.uuid === taskUuid && !t.isDeleted);
-    if (!task) return;
-    // Q36.3: checked again on confirm, not only when the chip was drawn — a
-    // sync can fix the task's time while the dialog is open (Codex review
-    // of #431).
-    if ((action === 'focus' || action === 'focus+today') && isEventTask(task)) return;
     const now = Date.now();
-    if (action === 'focus') {
-      // Same retargeting gap as 'focus+today' below — end whichever task's
-      // session was open before this pin takes over.
-      const previouslyFocused = current.find(t => t.uuid !== taskUuid && t.isNowFocus);
-      const endedFocusSession = previouslyFocused && typeof focusTimer.endFocusSession === "function"
-        ? focusTimer.endFocusSession("user_abandoned")
-        : null;
-      // Retargeting to a DIFFERENT task doesn't make activeTask null, so the
+    let planned = null;
+    let endedFocusSession = null;
+    const endSessionOf = (uuid) => {
+      const ft = focusTimerRef.current;
+      if (!uuid || ft?.focusSessionTaskUuid !== uuid || typeof ft.endFocusSession !== "function") return null;
+      const ended = ft.endFocusSession("user_abandoned");
+      // Retargeting to a different task doesn't make activeTask null, so the
       // hook's own "stop timer when activeTask disappears" effects never fire.
-      if (endedFocusSession) {
-        focusTimer.setIsTimerRunning?.(false);
-        focusTimer.setIsFocusMode?.(false);
-        focusTimer.setFocusSessionActive?.(false);
+      if (ended && (action === "focus" || action === "focus+today")) {
+        ft.setIsTimerRunning?.(false);
+        ft.setIsFocusMode?.(false);
+        ft.setFocusSessionActive?.(false);
       }
-      savePayloadAsync({ ...payload, tasks: buildSetNowFocusTasks(current, taskUuid, now) })
-        .then(() => {
-          if (endedFocusSession) {
-            const abandonEvent = buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now });
-            writeActivityEvents(eventPatch(uid, abandonEvent));
-          }
-        })
-        .catch(() => {});
-    } else if (action === 'focus+today') {
-      const todayActive = current.filter(t => t.horizonLevel === 'today' && !t.isDeleted);
-      const maxOrder = todayActive.reduce((m, t) => Math.max(m, t.orderIndex ?? 0), -1);
-      const event1 = buildTaskMutationEvent("task_moved", task, {
-        fromState: { horizonLevel: task.horizonLevel }, toState: { horizonLevel: "today" }, windows, source: "coach_action", now,
-      });
-      // Retargeting focus to `task` clears isNowFocus on whichever task
-      // currently holds it — if a real session is open for that task, end it
-      // here or it's left orphaned with no terminal event when this new pin
-      // takes over. (The new pin itself doesn't start a timer, so it doesn't
-      // mint its own session, same as the chat SET_NOW_FOCUS tag.)
-      const previouslyFocused = current.find(t => t.uuid !== taskUuid && t.isNowFocus);
-      const endedFocusSession = previouslyFocused && typeof focusTimer.endFocusSession === "function"
-        ? focusTimer.endFocusSession("user_abandoned")
-        : null;
-      // Retargeting to a DIFFERENT task doesn't make activeTask null, so the
-      // hook's own "stop timer when activeTask disappears" effects never fire.
-      if (endedFocusSession) {
-        focusTimer.setIsTimerRunning?.(false);
-        focusTimer.setIsFocusMode?.(false);
-        focusTimer.setFocusSessionActive?.(false);
-      }
-      // This also unparks `task` if it was parked — record that transition too.
-      const wasParked = !!task.isParked;
-      savePayloadAsync({ ...payload, tasks: current.map(t => {
-        if (t.uuid === taskUuid) return { ...t, horizonLevel: 'today', deferredUntil: null, isNowFocus: true, isParked: false, orderIndex: maxOrder + 1, lastUpdated: now };
-        return t.isNowFocus ? { ...t, isNowFocus: false, lastUpdated: now } : t;
-      })})
-        .then(() => {
-          const events = [event1];
-          if (endedFocusSession) {
-            events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
-          }
-          if (wasParked) {
-            events.push(buildTaskMutationEvent("task_unparked", task, { windows, source: "coach_action", now }));
-          }
-          writeActivityEvents(eventsPatch(uid, events));
-        })
-        .catch(() => {});
-    } else if (action === 'today') {
-      const todayActive = current.filter(t => t.horizonLevel === 'today' && !t.isDeleted);
-      const maxOrder = todayActive.reduce((m, t) => Math.max(m, t.orderIndex ?? 0), -1);
-      const event2 = buildTaskMutationEvent("task_moved", task, {
-        fromState: { horizonLevel: task.horizonLevel }, toState: { horizonLevel: "today" }, windows, source: "coach_action", now,
-      });
-      // This clears `task`'s own isNowFocus (moving it to Today without
-      // pinning it as focus) — end its session here if it was the one
-      // actively focused, same as the 'park' branch below.
-      const endedFocusSession = task.isNowFocus && typeof focusTimer.endFocusSession === "function"
-        ? focusTimer.endFocusSession("user_abandoned")
-        : null;
-      // This also unparks `task` if it was parked — record that transition too.
-      const wasParked = !!task.isParked;
-      savePayloadAsync({ ...payload, tasks: current.map(t =>
-        t.uuid === taskUuid
-          ? { ...t, horizonLevel: 'today', deferredUntil: null, isNowFocus: false, isParked: false, orderIndex: maxOrder + 1, lastUpdated: now }
-          : t
-      )})
-        .then(() => {
-          const events = [event2];
-          if (endedFocusSession) {
-            events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
-          }
-          if (wasParked) {
-            events.push(buildTaskMutationEvent("task_unparked", task, { windows, source: "coach_action", now }));
-          }
-          writeActivityEvents(eventsPatch(uid, events));
-        })
-        .catch(() => {});
-    } else if (action === 'park') {
-      const event3 = buildTaskMutationEvent("task_parked", task, { windows, source: "coach_action", now });
-      // buildParkTaskTasks clears isNowFocus on the parked task — end its
-      // session here if it was the one actively focused.
-      const endedFocusSession = task.isNowFocus && typeof focusTimer.endFocusSession === "function"
-        ? focusTimer.endFocusSession("user_abandoned")
-        : null;
-      savePayloadAsync({ ...payload, tasks: buildParkTaskTasks(current, taskUuid, now) })
-        .then(() => {
-          const events = [event3];
-          if (endedFocusSession) {
-            events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows, now }));
-          }
-          writeActivityEvents(eventsPatch(uid, events));
-        })
-        .catch(() => {});
-    }
+      return ended;
+    };
+    // The focus windows at confirm (live), so the ledger files this under
+    // the right Loci day even if they changed while the dialog was open.
+    let liveWindows = windows;
+    savePayloadAsync(live => {
+      liveWindows = getFocusWindows(live.config || {});
+      planned = planTaskChip(live, action, taskUuid, { now, todayStr: getLociDayStr(new Date(now), liveWindows) });
+      return planned ? planned.next : null;
+    }, {
+      onLocalOutcome: (outcome) => {
+        if (outcome === "applied" && planned) endedFocusSession = endSessionOf(planned.transition.unpinnedUuid);
+      },
+    })
+      .then((result) => {
+        if (result === "noop" || !planned) return;
+        const { task, fromHorizon, wasOnToday, wasParked } = planned.transition;
+        const events = [];
+        // A move is logged only when the task actually came onto Today.
+        if ((action === "focus+today" || action === "today") && !wasOnToday) {
+          events.push(buildTaskMutationEvent("task_moved", task, { fromState: { horizonLevel: fromHorizon }, toState: { horizonLevel: "today" }, windows: liveWindows, source: "coach_action", now }));
+        }
+        if (action === "park") events.push(buildTaskMutationEvent("task_parked", task, { windows: liveWindows, source: "coach_action", now }));
+        if (endedFocusSession) {
+          events.push(buildFocusTerminalEvent("focus_abandoned", endedFocusSession.task, endedFocusSession.focusSessionId, { ...endedFocusSession, windows: liveWindows, now }));
+        }
+        if (wasParked && (action === "focus+today" || action === "today")) {
+          events.push(buildTaskMutationEvent("task_unparked", task, { windows: liveWindows, source: "coach_action", now }));
+        }
+        if (events.length) writeActivityEvents(eventsPatch(uid, events));
+      })
+      .catch(() => {});
   };
 
   // -- Coach's brief (Q51, 62a–g) --------------------------------------------
